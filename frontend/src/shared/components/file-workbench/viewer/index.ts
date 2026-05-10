@@ -8,6 +8,7 @@ export {
 export { FileEditor } from './FileEditor';
 export { CodeTextEditor } from './CodeTextEditor';
 export { useFileViewerTabs } from './useFileViewerTabs';
+export { useManagedDocumentWorkbenchTabs } from './useManagedDocumentWorkbenchTabs';
 export { SharedImageViewer } from './SharedImageViewer';
 export { SharedDrawioViewer } from './SharedDrawioViewer';
 export { SharedMarkdownViewer } from './SharedMarkdownViewer';
@@ -18,6 +19,12 @@ export type {
 export type {
   UseFileViewerTabsReturn,
 } from './useFileViewerTabs';
+export type {
+  ManagedDocumentWorkbenchAdapter,
+  SkillsFileTreePersistenceAdapter,
+  UseManagedDocumentWorkbenchTabsOptions,
+  UseManagedDocumentWorkbenchTabsReturn,
+} from './useManagedDocumentWorkbenchTabs';
 export type {
   FileViewerWorkbenchAdapter,
   FileViewerWorkbenchCapabilities,

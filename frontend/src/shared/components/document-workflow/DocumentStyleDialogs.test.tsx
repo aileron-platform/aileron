@@ -88,8 +88,6 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'workspace.agentSettings.common.slashCommands.dialog.title.edit': 'Edit command',
         'workspace.agentSettings.common.slashCommands.dialog.description.create': 'Create command description',
         'workspace.agentSettings.common.slashCommands.dialog.description.edit': 'Edit command description',
-        'workspace.agentSettings.common.slashCommands.dialog.tabs.basic': 'Basic',
-        'workspace.agentSettings.common.slashCommands.dialog.tabs.editor': 'Editor',
         'workspace.agentSettings.common.slashCommands.dialog.fields.scope.label': 'Scope',
         'workspace.agentSettings.common.slashCommands.dialog.fields.fileName.label': 'File name',
         'workspace.agentSettings.common.slashCommands.dialog.fields.fileName.placeholder': 'command.md',
@@ -209,7 +207,7 @@ describe('document-style shared dialogs', () => {
     );
 
     await user.type(screen.getByPlaceholderText('command.md'), 'deploy');
-    await user.click(screen.getByRole('tab', { name: 'Editor' }));
+    await user.type(screen.getByPlaceholderText('ops'), 'ops');
     await user.type(screen.getByLabelText('Markdown content'), 'Deploy service');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
@@ -221,7 +219,7 @@ describe('document-style shared dialogs', () => {
       size: '1KB',
       metadata: {
         fileName: 'deploy.md',
-        namespace: undefined,
+        namespace: 'ops',
         format: 'markdown',
       },
     }));

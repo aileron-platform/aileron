@@ -25,6 +25,7 @@ import {
 } from '@/shared/components/file-workbench';
 import { MarketplaceEditorLeaveDialog } from '../../components/MarketplaceEditorLifecycleDialogs';
 import { MarketplaceFilesSection, shouldUpdateMarketplaceEditorFileContent } from '../../components/MarketplaceFilesSection';
+import { MarketplaceSkillsSection } from '../../components/MarketplaceSkillsSection';
 import { MarketplacePackageHeader } from '../../components/MarketplacePackageHeader';
 import { MarketplaceTopTabs } from '../../components/MarketplaceTopTabs';
 import { MarketplaceEditorBasicSection } from './MarketplaceEditorBasicSection';
@@ -368,9 +369,8 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
           </TabsContent>
 
           <TabsContent value="skills" className="flex-1 overflow-auto !m-0 !p-0">
-            <MarketplaceFilesSection
+            <MarketplaceSkillsSection
               key={skillsFileManagerKey}
-              mode="editor-skills"
               items={featureItems.skills}
               onDirty={markDirty}
               onPackageFilesChange={handleSkillsPackageFilesChange}

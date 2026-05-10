@@ -88,6 +88,87 @@ vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
       </div>
     );
   },
+  useManagedDocumentWorkbenchTabs: (options: {
+    adapter: {
+      getKey: (document: { path: string }) => string;
+      getName: (document: { path: string }) => string;
+      readFile: (document: { path: string }) => Promise<string>;
+      saveFile?: (document: { path: string }, content: string) => Promise<void>;
+      isWritable?: (document: { path: string }) => boolean;
+    };
+  }) => {
+    const [documents, setDocuments] = React.useState<Array<{ path: string }>>([]);
+    const [activeTabId, setActiveTabId] = React.useState<string | null>(null);
+    const [contents, setContents] = React.useState<Record<string, string>>({});
+    const [originalContents, setOriginalContents] = React.useState<Record<string, string>>({});
+
+    const getDocumentByPath = React.useCallback((path: string) => (
+      documents.find(document => options.adapter.getKey(document) === path)
+    ), [documents, options.adapter]);
+
+    const openDocument = React.useCallback((document: { path: string }) => {
+      const path = options.adapter.getKey(document);
+      setDocuments(prev => (prev.some(item => options.adapter.getKey(item) === path) ? prev : [...prev, document]));
+      setActiveTabId(path);
+      if (contents[path] === undefined) {
+        void options.adapter.readFile(document).then(content => {
+          setContents(prev => ({ ...prev, [path]: content }));
+          setOriginalContents(prev => ({ ...prev, [path]: content }));
+        });
+      }
+    }, [contents, options.adapter]);
+
+    const applyTabsChange = React.useCallback((nextTabs: Array<{ id: string; name: string; content: string; originalContent: string }>) => {
+      const nextPaths = new Set(nextTabs.map(tab => tab.id));
+      setDocuments(prev => prev.filter(document => nextPaths.has(options.adapter.getKey(document))));
+      setContents(Object.fromEntries(nextTabs.map(tab => [tab.id, tab.content])));
+      setOriginalContents(Object.fromEntries(nextTabs.map(tab => [tab.id, tab.originalContent])));
+      setActiveTabId(current => (current && nextPaths.has(current) ? current : nextTabs.at(-1)?.id ?? null));
+    }, [options.adapter]);
+
+    const tabs = documents.map(document => {
+      const path = options.adapter.getKey(document);
+      const name = options.adapter.getName(document);
+      const content = contents[path] ?? '';
+      const originalContent = originalContents[path] ?? '';
+      return {
+        id: path,
+        path,
+        name,
+        content,
+        originalContent,
+        isModified: content !== originalContent,
+      };
+    });
+
+    const adapter = {
+      readFile: async (path: string) => contents[path] ?? '',
+      saveFile: options.adapter.saveFile
+        ? async (path: string, content: string) => {
+            const document = getDocumentByPath(path);
+            if (!document) return;
+            await options.adapter.saveFile(document, content);
+            setContents(prev => ({ ...prev, [path]: content }));
+            setOriginalContents(prev => ({ ...prev, [path]: content }));
+          }
+        : undefined,
+    };
+
+    return {
+      tabs,
+      activeTabId,
+      activeTab: tabs.find(tab => tab.id === activeTabId) ?? null,
+      contents,
+      openDocument,
+      setActiveTabId,
+      applyTabsChange,
+      adapter,
+      isPathWritable: options.adapter.isWritable ?? (() => true),
+      isSavingActive: false,
+      canSaveActive: true,
+      getDocumentByPath,
+    };
+  },
 }));
 
 const buildFile = (path: string, scope: AgentSelectedFile['scope'] = 'project'): AgentSelectedFile => ({

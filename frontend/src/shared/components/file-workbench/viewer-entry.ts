@@ -7,6 +7,7 @@ export {
   FileEditor,
   CodeTextEditor,
   useFileViewerTabs,
+  useManagedDocumentWorkbenchTabs,
   SharedImageViewer,
   SharedDrawioViewer,
   SharedMarkdownViewer,
@@ -26,6 +27,10 @@ export type {
   FileViewerWorkbenchStatusMetadata,
   FileViewerWorkbenchTab,
   FileViewerWorkbenchContextValue,
+  ManagedDocumentWorkbenchAdapter,
+  SkillsFileTreePersistenceAdapter,
+  UseManagedDocumentWorkbenchTabsOptions,
+  UseManagedDocumentWorkbenchTabsReturn,
 } from './viewer';
 
 export type {

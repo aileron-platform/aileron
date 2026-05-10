@@ -76,6 +76,12 @@ export type {
   FileViewerWorkbenchTab,
 } from './viewer/types';
 
+export type {
+  ManagedDocumentWorkbenchAdapter,
+  UseManagedDocumentWorkbenchTabsOptions,
+  UseManagedDocumentWorkbenchTabsReturn,
+} from './viewer';
+
 export { StandardFileTreeLayout } from './layouts/StandardFileTreeLayout';
 export type { StandardFileTreeLayoutProps } from './layouts/StandardFileTreeLayout';
 
@@ -98,3 +104,5 @@ export { useFileTreeContextMenu } from './hooks/useFileTreeContextMenu';
 export type { FileTreeContextMenuConfig } from './hooks/useFileTreeContextMenu';
 
 export { FileTreeSearchBar } from './primitives/FileTreeSearchBar';
+
+export { useManagedDocumentWorkbenchTabs } from './viewer';

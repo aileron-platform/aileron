@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { MarketplacePackageDetail } from '@/shared/types/marketplace';
 import { MarketplaceFilesSection } from './MarketplaceFilesSection';
+import { MarketplaceSkillsSection } from './MarketplaceSkillsSection';
 
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
@@ -95,6 +96,123 @@ vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
       removePaths: vi.fn(),
       applyTabsChange: setTabs,
       setActiveTabId,
+    };
+  },
+  useManagedDocumentWorkbenchTabs: (options: {
+    adapter: {
+      getKey: (document: { path: string }) => string;
+      getName: (document: { name: string }) => string;
+      readFile: (document: { path: string; name: string }) => Promise<string>;
+      saveFile?: (document: { path: string; name: string }, content: string) => Promise<void>;
+      isWritable?: (document: { path: string; name: string }) => boolean;
+    };
+  }) => {
+    const [documents, setDocuments] = React.useState<Array<{ path: string; name: string }>>([]);
+    const [activeTabId, setActiveTabId] = React.useState<string | null>(null);
+    const [contents, setContents] = React.useState<Record<string, string>>({});
+    const [originalContents, setOriginalContents] = React.useState<Record<string, string>>({});
+
+    const getDocumentByPath = React.useCallback((path: string) => (
+      documents.find(document => options.adapter.getKey(document) === path)
+    ), [documents, options.adapter]);
+
+    const openDocument = React.useCallback((document: { path: string; name: string }) => {
+      const path = options.adapter.getKey(document);
+      setDocuments(prev => (prev.some(item => options.adapter.getKey(item) === path) ? prev : [...prev, document]));
+      setActiveTabId(path);
+      if (contents[path] === undefined) {
+        void options.adapter.readFile(document).then(content => {
+          setContents(prev => ({ ...prev, [path]: content }));
+          setOriginalContents(prev => ({ ...prev, [path]: content }));
+        });
+      }
+    }, [contents, options.adapter]);
+
+    const applyTabsChange = React.useCallback((nextTabs: Array<{ id: string; name: string; content: string; originalContent: string }>) => {
+      const nextPaths = new Set(nextTabs.map(tab => tab.id));
+      setDocuments(prev => prev.filter(document => nextPaths.has(options.adapter.getKey(document))));
+      setContents(Object.fromEntries(nextTabs.map(tab => [tab.id, tab.content])));
+      setOriginalContents(Object.fromEntries(nextTabs.map(tab => [tab.id, tab.originalContent])));
+      setActiveTabId(current => (current && nextPaths.has(current) ? current : nextTabs.at(-1)?.id ?? null));
+    }, [options.adapter]);
+
+    const renamePath = React.useCallback((oldPath: string, newPath: string, newName: string) => {
+      setDocuments(prev => prev.map(document => (
+        document.path === oldPath
+          ? { ...document, path: newPath, name: newName }
+          : document.path.startsWith(`${oldPath}/`)
+            ? { ...document, path: document.path.replace(oldPath, newPath) }
+            : document
+      )));
+      setContents(prev => Object.fromEntries(Object.entries(prev).map(([path, value]) => [
+        path === oldPath || path.startsWith(`${oldPath}/`) ? path.replace(oldPath, newPath) : path,
+        value,
+      ])));
+      setOriginalContents(prev => Object.fromEntries(Object.entries(prev).map(([path, value]) => [
+        path === oldPath || path.startsWith(`${oldPath}/`) ? path.replace(oldPath, newPath) : path,
+        value,
+      ])));
+      setActiveTabId(current => (current ? current.replace(oldPath, newPath) : current));
+    }, []);
+
+    const removePaths = React.useCallback((paths: string[]) => {
+      const isRemoved = (path: string) => paths.some(candidate => path === candidate || path.startsWith(`${candidate}/`));
+      setDocuments(prev => prev.filter(document => !isRemoved(document.path)));
+      setContents(prev => Object.fromEntries(Object.entries(prev).filter(([path]) => !isRemoved(path))));
+      setOriginalContents(prev => Object.fromEntries(Object.entries(prev).filter(([path]) => !isRemoved(path))));
+      setActiveTabId(current => (current && isRemoved(current) ? null : current));
+    }, []);
+
+    const setDocumentContent = React.useCallback((path: string, content: string) => {
+      setContents(prev => ({ ...prev, [path]: content }));
+      setOriginalContents(prev => (prev[path] === undefined ? { ...prev, [path]: content } : prev));
+    }, []);
+
+    const tabs = documents.map(document => {
+      const path = options.adapter.getKey(document);
+      const name = options.adapter.getName(document);
+      const content = contents[path] ?? '';
+      const originalContent = originalContents[path] ?? '';
+      return {
+        id: path,
+        path,
+        name,
+        content,
+        originalContent,
+        isModified: content !== originalContent,
+      };
+    });
+
+    const adapter = {
+      readFile: async (path: string) => contents[path] ?? '',
+      saveFile: options.adapter.saveFile
+        ? async (path: string, content: string) => {
+            const document = getDocumentByPath(path);
+            if (!document) return;
+            await options.adapter.saveFile(document, content);
+            setContents(prev => ({ ...prev, [path]: content }));
+            setOriginalContents(prev => ({ ...prev, [path]: content }));
+          }
+        : undefined,
+    };
+
+    return {
+      tabs,
+      activeTabId,
+      activeTab: tabs.find(tab => tab.id === activeTabId) ?? null,
+      contents,
+      openDocument,
+      setActiveTabId,
+      applyTabsChange,
+      renamePath,
+      removePaths,
+      setDocumentContent,
+      adapter,
+      isPathWritable: options.adapter.isWritable ?? (() => true),
+      isSavingActive: false,
+      canSaveActive: true,
+      getDocumentByPath,
+      getDocumentContent: (path: string) => contents[path] ?? '',
     };
   },
 }));
@@ -235,14 +353,13 @@ describe('MarketplaceFilesSection', () => {
     expect(screen.getByLabelText('config.toml')).toHaveValue('description = "Review config"');
   });
 
-  it('renders editable skill files through the shared files section', async () => {
+  it('renders editable skill files through the shared skills section', async () => {
     const user = userEvent.setup();
     const onDirty = vi.fn();
     const onPackageFilesChange = vi.fn();
 
     render(
-      <MarketplaceFilesSection
-        mode="editor-skills"
+      <MarketplaceSkillsSection
         items={[{
           id: 'review-config',
           path: 'skills/review/config.toml',
