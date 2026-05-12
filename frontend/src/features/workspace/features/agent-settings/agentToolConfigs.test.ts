@@ -38,6 +38,7 @@ describe('AGENT_TOOL_CONFIGS', () => {
       'hooks',
       'rules',
       'plugins',
+      'settings',
     ]);
   });
 
@@ -71,6 +72,7 @@ describe('AGENT_TOOL_CONFIGS', () => {
       'subagents',
       'hooks',
       'extensions',
+      'settings',
     ]);
   });
 });

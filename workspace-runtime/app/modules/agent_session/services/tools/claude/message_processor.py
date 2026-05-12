@@ -1,7 +1,6 @@
 """
 SDK Message Processor.
 
-References agor-main's message-processor.ts
 Processes Claude Agent SDK messages and converts them to structured events.
 
 Responsibilities:

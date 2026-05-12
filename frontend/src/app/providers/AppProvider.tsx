@@ -9,6 +9,7 @@
  */
 
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
+import { apiClient } from '@/shared/api/apiClient';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { createLogger } from '@/shared/services/logger';
 
@@ -273,38 +274,37 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   useEffect(() => {
     if (isAuthenticated && authUser) {
       // 呼叫 /oauth2/me 取得 local DB user ID
-      import('@/shared/api/apiClient').then(({ apiClient }) => {
-        apiClient.get<{ sub: string; preferred_username: string; email?: string; local_user_id?: string }>('/oauth2/me')
-          .then((me) => {
-            const nextUserInfo = {
-              id: me.local_user_id ?? me.sub,
-              name: authUser.name ?? authUser.preferred_username ?? authUser.email,
-              email: me.email ?? authUser.email,
-            };
-            if (
-              state.user.id !== nextUserInfo.id ||
-              state.user.name !== nextUserInfo.name ||
-              state.user.email !== nextUserInfo.email
-            ) {
-              dispatch({ type: 'SET_USER_INFO', payload: nextUserInfo });
-            }
-          })
-          .catch(() => {
-            // fallback：直接用 Keycloak sub
-            const nextUserInfo = {
-              id: authUser.sub,
-              name: authUser.name ?? authUser.preferred_username ?? authUser.email,
-              email: authUser.email,
-            };
-            if (
-              state.user.id !== nextUserInfo.id ||
-              state.user.name !== nextUserInfo.name ||
-              state.user.email !== nextUserInfo.email
-            ) {
-              dispatch({ type: 'SET_USER_INFO', payload: nextUserInfo });
-            }
-          });
-      });
+      apiClient
+        .get<{ sub: string; preferred_username: string; email?: string; local_user_id?: string }>('/oauth2/me')
+        .then((me) => {
+          const nextUserInfo = {
+            id: me.local_user_id ?? me.sub,
+            name: authUser.name ?? authUser.preferred_username ?? authUser.email,
+            email: me.email ?? authUser.email,
+          };
+          if (
+            state.user.id !== nextUserInfo.id ||
+            state.user.name !== nextUserInfo.name ||
+            state.user.email !== nextUserInfo.email
+          ) {
+            dispatch({ type: 'SET_USER_INFO', payload: nextUserInfo });
+          }
+        })
+        .catch(() => {
+          // fallback：直接用 Keycloak sub
+          const nextUserInfo = {
+            id: authUser.sub,
+            name: authUser.name ?? authUser.preferred_username ?? authUser.email,
+            email: authUser.email,
+          };
+          if (
+            state.user.id !== nextUserInfo.id ||
+            state.user.name !== nextUserInfo.name ||
+            state.user.email !== nextUserInfo.email
+          ) {
+            dispatch({ type: 'SET_USER_INFO', payload: nextUserInfo });
+          }
+        });
       return;
     }
 

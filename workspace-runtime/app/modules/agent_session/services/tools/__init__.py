@@ -1,7 +1,7 @@
 """
 Tools package for multi-SDK support.
 
-Architecture design modeled after agor-main.
+Architecture design for multi-SDK tool execution.
 """
 
 from .base.streaming_callbacks import StreamingCallbacks

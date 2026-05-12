@@ -317,7 +317,7 @@ const SUB_VIEW_LABEL_KEYS: Record<string, string> = {
   'output-styles': 'workspace.navigation.sub.claudeCodeSettings.outputStyles',
   'subagents': 'workspace.agentSettings.common.subViews.subagents',
   'skills': 'workspace.navigation.sub.claudeCodeSettings.skills',
-  'settings': 'workspace.navigation.sub.claudeCodeSettings.settings',
+  'settings': 'workspace.agentSettings.common.subViews.settings',
   'memory': 'workspace.agentSettings.common.subViews.memory',
 };
 

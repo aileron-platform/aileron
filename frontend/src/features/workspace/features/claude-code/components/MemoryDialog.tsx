@@ -28,16 +28,14 @@ const ensureMarkdownExtension = (fileName: string): string => {
 
 const MemoryDialog: React.FC<DocumentDialogProps> = ({
   open,
-  mode,
   initialValue,
   onClose,
   onSubmit,
 }) => {
   const { t } = useI18n();
-  const isEdit = mode === 'edit';
   const [fileName, setFileName] = useState('');
   const [content, setContent] = useState('');
-  const [errors, setErrors] = useState<{ fileName?: string; content?: string }>({});
+  const [errors, setErrors] = useState<{ content?: string }>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -51,10 +49,7 @@ const MemoryDialog: React.FC<DocumentDialogProps> = ({
   const estimatedSize = useMemo(() => formatSize(content), [content]);
 
   const validate = () => {
-    const nextErrors: { fileName?: string; content?: string } = {};
-    if (!fileName.trim()) {
-      nextErrors.fileName = t('workspace.claudeCode.memory.dialog.validation.fileName');
-    }
+    const nextErrors: { content?: string } = {};
     if (!content.trim()) {
       nextErrors.content = t('workspace.claudeCode.memory.dialog.validation.content');
     }
@@ -94,10 +89,10 @@ const MemoryDialog: React.FC<DocumentDialogProps> = ({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <NotebookPen className="h-5 w-5 text-primary" />
-              {t(`workspace.claudeCode.memory.dialog.title.${isEdit ? 'edit' : 'create'}`)}
+              {t('workspace.claudeCode.memory.dialog.title.edit')}
             </DialogTitle>
             <DialogDescription>
-              {t(`workspace.claudeCode.memory.dialog.description.${isEdit ? 'edit' : 'create'}`)}
+              {t('workspace.claudeCode.memory.dialog.description.edit')}
             </DialogDescription>
           </DialogHeader>
 
@@ -107,9 +102,7 @@ const MemoryDialog: React.FC<DocumentDialogProps> = ({
             </label>
             <Input
               value={fileName}
-              onChange={(event) => setFileName(event.target.value)}
-              placeholder={t('workspace.claudeCode.memory.dialog.fields.fileName.placeholder')}
-              disabled={isEdit || submitting}
+              disabled
             />
             <p className="text-xs text-muted-foreground">
               {t('workspace.claudeCode.memory.dialog.fields.fileName.helper')}
@@ -140,7 +133,7 @@ const MemoryDialog: React.FC<DocumentDialogProps> = ({
               {t('workspace.claudeCode.memory.dialog.actions.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {t(`workspace.claudeCode.memory.dialog.actions.${isEdit ? 'save' : 'create'}`)}
+              {t('workspace.claudeCode.memory.dialog.actions.save')}
             </Button>
           </DialogFooter>
         </form>

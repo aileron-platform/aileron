@@ -142,7 +142,7 @@ class MessageStatus(str, Enum):
 class PermissionMode(str, Enum):
     """Claude Code permission mode.
 
-    References agor design, uses Claude SDK native permission modes:
+    Uses Claude SDK native permission modes:
     - default: Prompt for every tool (strictest)
     - acceptEdits: Auto-accept file edits, prompt for other tools
     - bypassPermissions: Allow all operations (no prompt)

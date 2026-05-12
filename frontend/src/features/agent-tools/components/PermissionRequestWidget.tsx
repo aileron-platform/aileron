@@ -1,9 +1,6 @@
 /**
  * PermissionRequestWidget - permission request widget.
  *
- * Inspired by agor-main/apps/agor-ui/src/components/PermissionRequestBlock/PermissionRequestBlock.tsx
- * and agor-main/apps/agor-ui/src/components/PermissionModeSelector/PermissionModeSelector.tsx.
- *
  * Supports permission options for different agent SDKs:
  * - Claude Code: PermissionScope (ONCE, PROJECT, USER, LOCAL)
  * - Codex: PermissionScope (ONCE, SESSION)

@@ -61,6 +61,12 @@ const wizard = {
             codex: 'Codex',
             gemini: 'Gemini',
           },
+          descriptions: {
+            claudeCode: '建立 Claude Code 工作區，可使用 Claude 相容的對話、Hooks、MCP 與套件。',
+            codex: '建立 Codex 工作區，可使用 Codex 對話與 OpenAI 工作流程相容的 marketplace 套件。',
+            gemini: '建立 Gemini 工作區，可使用 Gemini 對話與 extension 類型的 marketplace 套件。',
+          },
+          selected: '已選取',
         },
       },
     },

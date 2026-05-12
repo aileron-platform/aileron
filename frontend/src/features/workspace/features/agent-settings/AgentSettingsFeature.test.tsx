@@ -50,6 +50,14 @@ vi.mock('./pages/CodexPluginsPage', () => ({
   default: () => <div data-testid="codex-plugins-page" />,
 }));
 
+vi.mock('../codex/pages/SettingsPage', () => ({
+  default: () => <div data-testid="codex-settings-page" />,
+}));
+
+vi.mock('../gemini/pages/SettingsPage', () => ({
+  default: () => <div data-testid="gemini-settings-page" />,
+}));
+
 vi.mock('./pages/CodexDocumentResourcePage', () => ({
   default: ({ resource }: { resource: string }) => <div data-testid={`codex-document-resource-${resource}`} />,
 }));
@@ -84,6 +92,7 @@ describe('AgentSettingsFeature shared rendering', () => {
       ['skills', 'skills-page'],
       ['subagents', 'subagents-page-gemini'],
       ['extensions', 'gemini-extensions-page'],
+      ['settings', 'gemini-settings-page'],
     ];
 
     for (const [subView, testId] of cases) {
@@ -122,6 +131,7 @@ describe('AgentSettingsFeature shared rendering', () => {
       ['rules', 'codex-rules-page'],
       ['hooks', 'codex-hooks-page'],
       ['plugins', 'codex-plugins-page'],
+      ['settings', 'codex-settings-page'],
       ['skills', 'skills-page'],
       ['subagents', 'codex-document-resource-subagents'],
       ['prompts', 'codex-document-resource-prompts'],

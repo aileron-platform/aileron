@@ -122,6 +122,18 @@ class GeminiExtensionToggleResponse(BaseModel):
     overrides: list[str] = Field(default_factory=list)
 
 
+class RawSettingsResponse(BaseModel):
+    """Raw Gemini settings response."""
+
+    content: dict[str, Any]
+
+
+class RawSettingsUpdateRequest(BaseModel):
+    """Raw Gemini settings update request."""
+
+    content: dict[str, Any]
+
+
 class GeminiExtensionCommandError(RuntimeError):
     """Gemini CLI subprocess failed."""
 

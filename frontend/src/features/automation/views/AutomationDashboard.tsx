@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiClient } from '@/shared/api/apiClient';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('AutomationDashboard');
@@ -194,8 +195,6 @@ export const AutomationDashboard: React.FC = () => {
 
     try {
       logger.debug('Fetching workspace detail for session', { workspaceId: job.workspaceId });
-      const { apiClient } = await import('@/shared/api/apiClient');
-
       interface WorkspaceRuntimeStatus {
         internalUrl?: string | null;
         externalUrl?: string | null;
@@ -247,8 +246,6 @@ export const AutomationDashboard: React.FC = () => {
     if (job.workspaceId) {
       try {
         logger.debug('Fetching workspace detail for', { workspaceId: job.workspaceId });
-        const { apiClient } = await import('@/shared/api/apiClient');
-
         interface WorkspaceRuntimeStatus {
           internalUrl?: string | null;
           externalUrl?: string | null;

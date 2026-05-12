@@ -29,8 +29,11 @@ describe('Agent tool navigation routing', () => {
     ['/workspaces/codex/hooks', 'hooks'],
     ['/workspaces/codex/rules', 'rules'],
     ['/workspaces/codex/plugins', 'plugins'],
+    ['/workspaces/codex/settings', 'settings'],
     ['/workspaces/codex/config', 'agents-md'],
     ['/workspaces/gemini', 'gemini-md'],
+    ['/workspaces/gemini/settings', 'settings'],
+    ['/workspaces/gemini/rules', 'gemini-md'],
     ['/workspaces/opencode', 'agents-md'],
   ])('resolves %s to %s', (pathname, expected) => {
     expect(getAgentToolSubView(pathname)).toBe(expected);

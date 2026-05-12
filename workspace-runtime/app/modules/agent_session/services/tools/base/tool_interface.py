@@ -1,7 +1,7 @@
 """
 ITool interface definition.
 
-References agor-main's ITool interface
+ITool interface for multi-SDK tool implementations.
 """
 
 from abc import ABC, abstractmethod

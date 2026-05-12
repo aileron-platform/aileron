@@ -369,7 +369,7 @@ class ToolDecisionService:
         """Cancel all pending permission requests for a given session.
 
         Called when permission is denied, automatically cancels all other pending requests in the session.
-        References agor's cancelPendingRequests implementation.
+        Cancels all other pending requests in the session.
 
         Args:
             session_id: Session ID

@@ -23,7 +23,7 @@ interface ClaudeCodeContextValue {
   slashCommands: DocumentCollectionController;
   outputStyles: DocumentCollectionController;
   subagents: DocumentCollectionController;
-  memory: DocumentCollectionController;
+  memory: Omit<DocumentCollectionController, 'create'>;
 }
 
 const createInitialState = (): DocumentCollectionState => ({
@@ -419,32 +419,6 @@ export const ClaudeCodeProvider: React.FC<ClaudeCodeProviderProps> = ({ isActive
     [ensureRuntimeReady, subagents.items],
   );
 
-  const createMemoryDocument = useCallback(
-    async (document: ClaudeDocument) => {
-      try {
-        const { runtimeBaseUrl: baseUrl, workspaceId: targetWorkspaceId } = ensureRuntimeReady();
-        const created = await claudeCodeApi.createMemoryDocument(baseUrl, targetWorkspaceId, document);
-        setMemory((prev) => {
-          const items = prev.items.some((item) => item.id === created.id)
-            ? prev.items.map((item) => (item.id === created.id ? created : item))
-            : [...prev.items, created];
-          return {
-            ...prev,
-            items: sortDocuments(items),
-            error: null,
-            selectedId: created.id,
-          };
-        });
-        return created;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : '新增 Memory 檔案失敗';
-        setMemory((prev) => ({ ...prev, error: message }));
-        throw error instanceof Error ? error : new Error(message);
-      }
-    },
-    [ensureRuntimeReady, sortDocuments],
-  );
-
   const updateMemoryDocument = useCallback(
     async (document: ClaudeDocument) => {
       try {
@@ -558,7 +532,6 @@ export const ClaudeCodeProvider: React.FC<ClaudeCodeProviderProps> = ({ isActive
       ...memory,
       select: selectMemory,
       refresh: refreshMemory,
-      create: createMemoryDocument,
       update: updateMemoryDocument,
       remove: deleteMemoryDocument,
     },
@@ -584,7 +557,6 @@ export const ClaudeCodeProvider: React.FC<ClaudeCodeProviderProps> = ({ isActive
     memory,
     selectMemory,
     refreshMemory,
-    createMemoryDocument,
     updateMemoryDocument,
     deleteMemoryDocument,
   ]);

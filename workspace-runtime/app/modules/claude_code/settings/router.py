@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Path, Query
 
 from app.core.openapi import build_responses
@@ -10,10 +12,17 @@ from .dependencies import get_settings_service
 from .models import (
     ClaudeCodeSettings,
     ClaudeCodeSettingsUpdateRequest,
+    RawSettingsResponse,
+    RawSettingsUpdateRequest,
 )
 from .service import SettingsService
 
 router = APIRouter(prefix="/settings", tags=["Claude Code - Settings"])
+RawSettingsScope = Literal["local", "user", "project"]
+
+
+def _raw_scope(value: RawSettingsScope) -> DocumentScope:
+    return DocumentScope(value)
 
 
 @router.get(
@@ -49,3 +58,33 @@ async def update_settings(
     service: SettingsService = Depends(get_settings_service),
 ) -> ClaudeCodeSettings:
     return service.update_settings(workspace_id, payload, scope)
+
+
+@router.get(
+    "/raw",
+    response_model=RawSettingsResponse,
+    summary="Get raw Claude Code settings",
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def get_raw_settings(
+    workspace_id: str = Path(..., description="Workspace ID"),
+    scope: RawSettingsScope = Query(..., description="Settings scope to read"),
+    service: SettingsService = Depends(get_settings_service),
+) -> RawSettingsResponse:
+    return RawSettingsResponse(content=service.get_raw_settings(workspace_id, _raw_scope(scope)))
+
+
+@router.put(
+    "/raw",
+    response_model=RawSettingsResponse,
+    summary="Update raw Claude Code settings",
+    responses=build_responses(400, 401, 403, 404, 422, 500),
+)
+async def update_raw_settings(
+    payload: RawSettingsUpdateRequest,
+    workspace_id: str = Path(..., description="Workspace ID"),
+    scope: RawSettingsScope = Query(..., description="Settings scope to write"),
+    service: SettingsService = Depends(get_settings_service),
+) -> RawSettingsResponse:
+    content = service.update_raw_settings(workspace_id, _raw_scope(scope), payload.content)
+    return RawSettingsResponse(content=content)

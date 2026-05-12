@@ -1,4 +1,4 @@
-"""Agent Session test for analyzing agor-main project.
+"""Agent Session test for analyzing a project.
 
 This test sends analysis prompts through Agent Session and records all response messages.
 """
@@ -33,11 +33,11 @@ class ProjectAnalysisRecorder:
         """Save all records to a JSON file."""
         output_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        output_file = output_dir / f"agor_main_analysis_{timestamp}.json"
+        output_file = output_dir / f"project_analysis_{timestamp}.json"
 
         report = {
             "analysis_info": {
-                "project": "agor-main",
+                "project": "ai-developer-hub",
                 "workspace_path": "/workspace",
                 "analysis_start": self.start_time.isoformat(),
                 "analysis_end": datetime.utcnow().isoformat(),
@@ -70,16 +70,16 @@ def analysis_recorder():
     return ProjectAnalysisRecorder()
 
 
-class TestAnalyzeAgorMain:
-    """Tests for analyzing the agor-main project."""
+class TestAnalyzeProject:
+    """Tests for analyzing the project."""
 
     @pytest.mark.asyncio
-    async def test_analyze_agor_main_project(self, analysis_recorder):
-        """Analyze the agor-main project and record all messages."""
+    async def test_analyze_project(self, analysis_recorder):
+        """Analyze the project and record all messages."""
 
         # 1. Simulate session creation
         session_data = {
-            "session_id": "agor-analysis-001",
+            "session_id": "project-analysis-001",
             "workspace_id": "workspace-001",
             "workspace_path": "/workspace",
             "agentic_tool": "claude-code",
@@ -98,7 +98,7 @@ class TestAnalyzeAgorMain:
         # 3. Simulate Agent analysis process
         agent_thinking = {
             "process": "Analyze project structure, configuration files, core code",
-            "workspace_mount": "/workspace (agor-main)",
+            "workspace_mount": "/workspace",
             "analysis_steps": [
                 "Read project structure",
                 "Check configuration files",
@@ -166,7 +166,7 @@ class TestAnalyzeAgorMain:
             "tool_id": "read_001",
             "file_path": "/workspace/README.md",
             "status": "completed",
-            "content_preview": "agor is a full-stack AI developer hub...",
+            "content_preview": "AI Developer Hub is a full-stack AI developer hub...",
             "key_sections": [
                 "Overview",
                 "Features",
@@ -188,7 +188,7 @@ class TestAnalyzeAgorMain:
 
         # 6. Agent processes results and generates analysis
         analysis_summary = {
-            "project_name": "agor",
+            "project_name": "ai-developer-hub",
             "description": "Full-stack AI developer hub",
             "project_type": "Full-stack web application",
             "primary_technologies": [
@@ -210,8 +210,8 @@ class TestAnalyzeAgorMain:
         }
 
         assistant_response = {
-            "message_id": "msg-agor-analysis",
-            "content": "I have completed the analysis of the agor project. This is a full-stack AI developer hub...",
+            "message_id": "msg-project-analysis",
+            "content": "I have completed the analysis of the project. This is a full-stack AI developer hub...",
             "analysis_result": analysis_summary,
             "confidence": 0.95,
         }
@@ -276,7 +276,6 @@ class TestAnalyzeAgorMain:
                 ".github": "CI/CD",
             },
             "key_config_files": [
-                ".agor.yml",
                 ".env.example",
                 "docker-compose.yml",
                 "tsconfig.json",

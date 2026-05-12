@@ -28,7 +28,6 @@ const MemoryPageContent: React.FC = () => {
       documents={memory.items}
       selectedId={memory.selectedId}
       onSelect={memory.select}
-      onCreate={memory.create}
       onUpdate={memory.update}
       onDelete={memory.remove}
       isLoading={memory.loading}
@@ -39,7 +38,7 @@ const MemoryPageContent: React.FC = () => {
       showSidebar={false}
       config={{
         metaKey: 'memory',
-        createButtonLabel: t('workspace.claudeCode.memory.actions.create'),
+        hideCreate: true,
         emptyStateTitle: t('workspace.claudeCode.memory.empty.title'),
         emptyStateDescription: t('workspace.claudeCode.memory.empty.description'),
         dialogTitle: t('workspace.claudeCode.memory.pageTitle'),

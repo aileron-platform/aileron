@@ -327,7 +327,7 @@ const UserMessageRenderer: React.FC<{ message: AgentMessage }> = ({ message }) =
  * Permission Request 訊息渲染
  * 用於渲染 type === 'permission_request' 的訊息
  *
- * 參考 agor 的做法：始終顯示 permission request，根據狀態呈現不同的視覺樣式：
+ * 始終顯示 permission request，根據狀態呈現不同的視覺樣式：
  * - pending + 匹配 pendingPermission: 顯示操作按鈕（批准/拒絕）
  * - pending + 不匹配 pendingPermission: 顯示等待狀態（任務已結束或等待前一個請求）
  * - approved: 顯示已批准狀態（綠色樣式，無按鈕）

@@ -5,11 +5,10 @@ from __future__ import annotations
 import json
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 
 from app.modules.claude_code.settings.service import SettingsService
 from app.modules.claude_code.settings.models import (
-    ClaudeCodeSettings,
     ClaudeCodeSettingsUpdateRequest,
     PermissionMode,
     PermissionRules,
@@ -184,6 +183,106 @@ class TestUpdateSettings:
 
         # Assert
         assert mock_write_json.called
+
+
+class TestRawSettings:
+    """Test raw settings passthrough functionality."""
+
+    @patch("app.modules.claude_code.settings.service.resolve_scope_root")
+    @patch("app.modules.claude_code.settings.service.read_json_file")
+    def test_get_raw_settings_returns_file_content(
+        self, mock_read_json, mock_resolve, settings_service, mock_workspace
+    ):
+        """Test reading raw settings content from a scope file."""
+        workspace_id, _tmp_path, user_root, project_root = mock_workspace
+
+        def resolve_side_effect(wid, scope):
+            if scope == DocumentScope.USER:
+                return user_root
+            return project_root
+
+        mock_resolve.side_effect = resolve_side_effect
+        mock_read_json.return_value = {
+            "model": "claude-sonnet-4-5",
+            "unknownField": {"nested": True},
+        }
+
+        result = settings_service.get_raw_settings(workspace_id, DocumentScope.LOCAL)
+
+        assert result == {
+            "model": "claude-sonnet-4-5",
+            "unknownField": {"nested": True},
+        }
+        mock_read_json.assert_called_once_with(project_root / "settings.local.json")
+
+    @patch("app.modules.claude_code.settings.service.resolve_scope_root")
+    @patch("app.modules.claude_code.settings.service.read_json_file")
+    def test_get_raw_settings_returns_empty_object_when_missing(
+        self, mock_read_json, mock_resolve, settings_service, mock_workspace
+    ):
+        """Test missing raw settings file returns empty content."""
+        workspace_id, _tmp_path, user_root, project_root = mock_workspace
+
+        def resolve_side_effect(wid, scope):
+            if scope == DocumentScope.USER:
+                return user_root
+            return project_root
+
+        mock_resolve.side_effect = resolve_side_effect
+        mock_read_json.return_value = {}
+
+        result = settings_service.get_raw_settings(workspace_id, DocumentScope.PROJECT)
+
+        assert result == {}
+        mock_read_json.assert_called_once_with(project_root / "settings.json")
+
+    @patch("app.modules.claude_code.settings.service.resolve_scope_root")
+    @patch("app.modules.claude_code.settings.service.write_json_file")
+    def test_update_raw_settings_writes_content(
+        self, mock_write_json, mock_resolve, settings_service, mock_workspace
+    ):
+        """Test raw settings update writes the provided content unchanged."""
+        workspace_id, _tmp_path, user_root, project_root = mock_workspace
+
+        def resolve_side_effect(wid, scope):
+            if scope == DocumentScope.USER:
+                return user_root
+            return project_root
+
+        mock_resolve.side_effect = resolve_side_effect
+        content = {"env": {"DEBUG": "1"}, "unknownField": [1, 2, 3]}
+
+        result = settings_service.update_raw_settings(
+            workspace_id, DocumentScope.USER, content
+        )
+
+        assert result == content
+        mock_write_json.assert_called_once_with(user_root / "settings.json", content)
+
+    @patch("app.modules.claude_code.settings.service.resolve_scope_root")
+    @patch("app.modules.claude_code.settings.service.write_json_file")
+    def test_update_raw_settings_empty_content_deletes_file(
+        self, mock_write_json, mock_resolve, settings_service, mock_workspace
+    ):
+        """Test empty raw settings content removes the scope file."""
+        workspace_id, _tmp_path, user_root, project_root = mock_workspace
+        settings_file = project_root / "settings.local.json"
+        settings_file.write_text('{"model": "old"}', encoding="utf-8")
+
+        def resolve_side_effect(wid, scope):
+            if scope == DocumentScope.USER:
+                return user_root
+            return project_root
+
+        mock_resolve.side_effect = resolve_side_effect
+
+        result = settings_service.update_raw_settings(
+            workspace_id, DocumentScope.LOCAL, {}
+        )
+
+        assert result == {}
+        assert not settings_file.exists()
+        mock_write_json.assert_not_called()
 
 
 class TestSettingsAggregation:

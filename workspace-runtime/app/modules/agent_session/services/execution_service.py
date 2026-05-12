@@ -1,7 +1,6 @@
 """
 Execution Service.
 
-Architected after agor-main using the ITool interface.
 Coordinates tool execution, message persistence, and WebSocket streaming.
 """
 
@@ -203,7 +202,6 @@ class ExecutionService:
     Execution Service.
 
     Coordinates tool execution, message persistence, and WebSocket streaming.
-    Architected after agor-main using the ITool interface.
     """
 
     # Maximum queue size
@@ -829,7 +827,6 @@ class ExecutionService:
     async def _process_queue(self, session_id: str) -> None:
         """Process next message in queue.
 
-        Reference agor implementation:
         1. Get or create session-specific lock
         2. Non-blocking check of lock, skip if already locked
         3. Get next queued message

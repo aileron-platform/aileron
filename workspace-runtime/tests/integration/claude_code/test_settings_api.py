@@ -23,6 +23,9 @@ class StubSettingsService:
     updated: list[tuple[str, ClaudeCodeSettingsUpdateRequest, DocumentScope]] = field(
         default_factory=list
     )
+    raw_content: dict | None = None
+    raw_reads: list[tuple[str, DocumentScope]] = field(default_factory=list)
+    raw_updates: list[tuple[str, DocumentScope, dict]] = field(default_factory=list)
 
     def get_settings(
         self, workspace_id: str, scope: DocumentScope | None = None
@@ -39,6 +42,17 @@ class StubSettingsService:
         self.updated.append((workspace_id, payload, scope))
         assert self.settings is not None
         return self.settings
+
+    def get_raw_settings(self, workspace_id: str, scope: DocumentScope) -> dict:
+        self.raw_reads.append((workspace_id, scope))
+        return self.raw_content or {}
+
+    def update_raw_settings(
+        self, workspace_id: str, scope: DocumentScope, content: dict
+    ) -> dict:
+        self.raw_updates.append((workspace_id, scope, content))
+        self.raw_content = content
+        return content
 
 
 def _sample_settings(mode: PermissionMode = PermissionMode.DEFAULT) -> ClaudeCodeSettings:
@@ -133,3 +147,63 @@ def test_cset_005_update_settings_user(client):
     assert response.status_code == 200
     assert len(service.updated) == 1
     assert service.updated[0][2] == DocumentScope.USER
+
+
+def test_cset_006_get_raw_settings(client):
+    service = StubSettingsService(raw_content={"model": "claude-sonnet-4-5"})
+
+    with override_dependency(get_settings_service, lambda: service):
+        response = client.get(
+            f"/api/v1/workspaces/{WORKSPACE_ID}/claude-code/settings/raw",
+            params={"scope": "local"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"content": {"model": "claude-sonnet-4-5"}}
+    assert service.raw_reads == [(WORKSPACE_ID, DocumentScope.LOCAL)]
+
+
+def test_cset_007_put_raw_settings(client):
+    service = StubSettingsService()
+    payload = {"content": {"env": {"DEBUG": "1"}, "unknownField": ["kept"]}}
+
+    with override_dependency(get_settings_service, lambda: service):
+        response = client.put(
+            f"/api/v1/workspaces/{WORKSPACE_ID}/claude-code/settings/raw",
+            params={"scope": "user"},
+            json=payload,
+        )
+
+    assert response.status_code == 200
+    assert response.json() == payload
+    assert service.raw_updates == [
+        (WORKSPACE_ID, DocumentScope.USER, payload["content"])
+    ]
+
+
+def test_cset_008_raw_settings_missing_scope_returns_422(client):
+    response = client.get(
+        f"/api/v1/workspaces/{WORKSPACE_ID}/claude-code/settings/raw"
+    )
+
+    assert response.status_code == 422
+
+
+def test_cset_009_raw_settings_invalid_scope_returns_422(client):
+    response = client.put(
+        f"/api/v1/workspaces/{WORKSPACE_ID}/claude-code/settings/raw",
+        params={"scope": "plugin"},
+        json={"content": {}},
+    )
+
+    assert response.status_code == 422
+
+
+def test_cset_010_raw_settings_malformed_body_returns_422(client):
+    response = client.put(
+        f"/api/v1/workspaces/{WORKSPACE_ID}/claude-code/settings/raw",
+        params={"scope": "project"},
+        json={"other": {}},
+    )
+
+    assert response.status_code == 422

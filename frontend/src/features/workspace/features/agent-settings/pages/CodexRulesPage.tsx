@@ -385,6 +385,7 @@ const CodexRulesPage: React.FC<CodexRulesPageProps> = ({
   const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
   const [activeDocument, setActiveDocument] = useState<RulesDocument | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const usesExternalSidebar = selectedIdProp !== undefined && onSelectProp !== undefined;
   const selectedId = selectedIdProp !== undefined ? selectedIdProp : internalSelectedId;
   const setSelectedId = onSelectProp ?? setInternalSelectedId;
 
@@ -744,7 +745,7 @@ const CodexRulesPage: React.FC<CodexRulesPageProps> = ({
       <MultiDocumentEditorShell
         title={t('workspace.agentSettings.codex.rules.title')}
         icon={FileCode2}
-        sidebar={sidebar}
+        sidebar={usesExternalSidebar ? undefined : sidebar}
         headerActions={headerActions}
         emptyState={documents.length === 0 ? mainArea : undefined}
         isLoading={documentsQuery.isFetching && documents.length === 0}

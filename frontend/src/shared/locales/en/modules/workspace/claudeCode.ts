@@ -3,10 +3,10 @@ const claudeCode = {
   unsupportedView: 'Unsupported view.',
   documents: {
     meta: {
-      'slash-commands': { title: 'Slash command settings' },
-      'output-styles': { title: 'Output style settings' },
-      subagents: { title: 'Subagent settings' },
-      memory: { title: 'Memory settings' },
+      'slash-commands': { title: 'Slash Commands' },
+      'output-styles': { title: 'Output Styles' },
+      subagents: { title: 'Subagents' },
+      memory: { title: 'Memory' },
     },
     actions: {
       refresh: 'Refresh',
@@ -47,7 +47,7 @@ const claudeCode = {
     },
   },
   outputStyles: {
-    pageTitle: 'Output style settings',
+    pageTitle: 'Output Styles',
     actions: {
       create: 'Add output style',
     },
@@ -99,6 +99,27 @@ const claudeCode = {
         create: 'Create item',
       },
     },
+  },
+
+  settings: {
+    header: {
+      title: 'Settings',
+    },
+    scope: {
+      local: 'Local',
+      user: 'User',
+      project: 'Project',
+    },
+    actions: {
+      refresh: 'Refresh',
+      save: 'Save settings',
+      saving: 'Saving...',
+    },
+    dirty: 'Unsaved changes',
+    unsavedChangesConfirm: 'Discard unsaved settings changes?',
+    parseError: 'The editor contains invalid JSON.',
+    saveSuccess: 'Settings saved.',
+    saveFailed: 'Unable to save settings.',
   },
 
   permissions: {
@@ -293,28 +314,22 @@ const claudeCode = {
     },
   },
   memory: {
-    pageTitle: 'Memory settings',
-    actions: {
-      create: 'Add memory file',
-    },
+    pageTitle: 'Memory',
     empty: {
       title: 'No memory files yet',
-      description: 'Create or select a Memory file from the left to browse and edit Claude Memory content.',
+      description: 'Select a memory file to view and edit its content.',
     },
     dialog: {
       title: {
-        create: 'Add memory file',
         edit: 'Edit memory file',
       },
       description: {
-        create: 'Create a new Claude Memory markdown file.',
         edit: 'Update the content of an existing Claude Memory markdown file.',
       },
       fields: {
         fileName: {
           label: 'File name',
-          placeholder: 'Enter file name',
-          helper: 'Only single-level Markdown files are supported. The .md extension is added automatically.',
+          helper: 'Only single-level Markdown files are supported.',
         },
         content: {
           label: 'Memory content',
@@ -322,13 +337,11 @@ const claudeCode = {
         },
       },
       validation: {
-        fileName: 'Please enter a file name.',
         content: 'Content cannot be empty.',
       },
       actions: {
         cancel: 'Cancel',
         save: 'Save changes',
-        create: 'Create file',
       },
     },
   },

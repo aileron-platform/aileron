@@ -61,6 +61,12 @@ const wizard = {
             codex: 'Codex',
             gemini: 'Gemini',
           },
+          descriptions: {
+            claudeCode: 'Create a Claude Code workspace with Claude-compatible sessions, hooks, MCP, and packages.',
+            codex: 'Create a Codex workspace with Codex sessions and marketplace packages for OpenAI workflows.',
+            gemini: 'Create a Gemini workspace with Gemini sessions and extension-oriented marketplace packages.',
+          },
+          selected: 'Selected',
         },
       },
     },

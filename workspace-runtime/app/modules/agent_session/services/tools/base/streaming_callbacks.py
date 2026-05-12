@@ -1,7 +1,7 @@
 """
 Streaming callback interface.
 
-Modeled after agor-main's StreamingCallbacks
+Streaming callback interface for SDK event handling.
 """
 
 from typing import Any, Dict, Optional, Protocol

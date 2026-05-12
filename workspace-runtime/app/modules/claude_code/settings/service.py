@@ -6,8 +6,6 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-logger = logging.getLogger(__name__)
-
 from ..common import DocumentScope, read_json_file, resolve_scope_root, write_json_file
 from .models import (
     ClaudeCodeSettings,
@@ -16,6 +14,8 @@ from .models import (
     PermissionMode,
     PermissionRules,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SettingsService:
@@ -200,6 +200,51 @@ class SettingsService:
                 raise
 
         return self.get_settings(workspace_id, scope)
+
+    def get_raw_settings(
+        self, workspace_id: str, scope: DocumentScope
+    ) -> Dict[str, Any]:
+        """Read a scope settings file without typed normalization"""
+
+        return read_json_file(self._settings_file(workspace_id, scope))
+
+    def update_raw_settings(
+        self, workspace_id: str, scope: DocumentScope, content: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Overwrite a scope settings file with raw content"""
+
+        file_path = self._settings_file(workspace_id, scope)
+        if content:
+            try:
+                write_json_file(file_path, content)
+            except (IOError, OSError, PermissionError) as e:
+                logger.error(
+                    "Failed to save raw settings file",
+                    extra={
+                        "file_path": str(file_path),
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "workspace_id": workspace_id,
+                        "scope": scope.value,
+                    },
+                )
+                raise
+        elif file_path.exists():
+            try:
+                file_path.unlink()
+            except (IOError, OSError, PermissionError) as e:
+                logger.error(
+                    "Failed to delete raw settings file",
+                    extra={
+                        "file_path": str(file_path),
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "workspace_id": workspace_id,
+                        "scope": scope.value,
+                    },
+                )
+                raise
+        return content
 
     # Internal Utilities ---------------------------------------
     def _aggregate_settings(self, workspace_id: str) -> ClaudeCodeSettings:

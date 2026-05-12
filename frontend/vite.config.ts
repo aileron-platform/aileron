@@ -4,6 +4,17 @@ import path from "path";
 
 const normalizeModuleId = (id: string) => id.split(path.sep).join('/');
 
+const getNodeModuleChunk = (id: string): string | undefined => {
+  const normalizedId = normalizeModuleId(id);
+  const match = normalizedId.match(/\/node_modules\/((?:@[^/]+\/[^/]+)|[^/]+)/);
+
+  if (!match) {
+    return undefined;
+  }
+
+  return `vendor-${match[1].replace('@', 'at-').replace('/', '-')}`;
+};
+
 const dependencyChunk = (id: string): string | undefined => {
   const normalizedId = normalizeModuleId(id);
   if (!normalizedId.includes('/node_modules/')) {
@@ -13,9 +24,6 @@ const dependencyChunk = (id: string): string | undefined => {
   if (/[\\/]node_modules[\\/](react|react-dom|react-router-dom|scheduler)[\\/]/.test(id)) {
     return 'vendor-react';
   }
-  if (normalizedId.includes('/node_modules/@radix-ui/') || normalizedId.includes('/node_modules/@headlessui/')) {
-    return 'vendor-ui';
-  }
   if (normalizedId.includes('/node_modules/@monaco-editor/') || normalizedId.includes('/node_modules/monaco-editor/')) {
     return 'vendor-monaco';
   }
@@ -23,7 +31,7 @@ const dependencyChunk = (id: string): string | undefined => {
     return 'vendor-terminal';
   }
 
-  return undefined;
+  return getNodeModuleChunk(normalizedId);
 };
 
 const optionalPreloadPattern = /^assets\/vendor-(mermaid|monaco|syntax-highlighter|terminal)-/;
@@ -92,6 +100,7 @@ export default defineConfig(({ mode }) => {
         polyfill: false,
         resolveDependencies: (_filename, deps) => deps.filter((dep) => !optionalPreloadPattern.test(dep)),
       },
+      chunkSizeWarningLimit: 2000,
       rollupOptions: {
         output: {
           manualChunks: dependencyChunk,

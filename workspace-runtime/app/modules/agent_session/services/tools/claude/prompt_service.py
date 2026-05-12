@@ -1,7 +1,6 @@
 """
 Claude Prompt Service.
 
-Architected after agor-main's prompt-service.ts.
 Handles real-time execution of Claude sessions.
 """
 
@@ -28,7 +27,6 @@ class ClaudePromptService:
     """
     Claude Prompt Service.
 
-    Architected after agor-main's ClaudePromptService.
     Handles real-time execution of Claude sessions.
 
     Stateless: does not hold DB sessions; all DB operations use short-lived sessions.
@@ -261,7 +259,7 @@ class ClaudePromptService:
                 # Normal completion
                 pass
             except Exception as e:
-                # Reference agor: catch AbortError and handle gracefully
+                # Catch AbortError and handle gracefully
                 error_name = type(e).__name__
                 error_msg = str(e).lower()
                 if 'abort' in error_name.lower() or 'abort' in error_msg or 'cancel' in error_msg or 'interrupt' in error_msg:

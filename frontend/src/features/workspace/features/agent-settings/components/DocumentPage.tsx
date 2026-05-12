@@ -43,19 +43,20 @@ export type DocumentDialogProps = DocumentWorkflowDialogProps<AgentDocument>;
 export interface DocumentPageConfig {
   metaKey: 'slash-commands' | 'output-styles' | 'subagents' | 'memory' | 'prompts';
   contentFormat?: 'markdown' | 'toml';
-  createButtonLabel: string;
+  createButtonLabel?: string;
   emptyStateTitle: string;
   emptyStateDescription: string;
   dialogTitle: string;
   hideScopeBadge?: boolean;
   showRawToml?: boolean;
+  hideCreate?: boolean;
 }
 
 export interface DocumentPageProps {
   documents: AgentDocument[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  onCreate: (document: AgentDocument) => Promise<AgentDocument>;
+  onCreate?: (document: AgentDocument) => Promise<AgentDocument>;
   onUpdate: (document: AgentDocument) => Promise<AgentDocument>;
   onDelete: (id: string) => Promise<void>;
   isLoading?: boolean;
@@ -262,6 +263,7 @@ export const DocumentPage: React.FC<DocumentPageProps> = ({
     try {
       setIsProcessing(true);
       if (dialogMode === 'create') {
+        if (!onCreate) return;
         const created = await onCreate(document);
         onSelect(created?.id ?? document.id);
       } else {
@@ -309,9 +311,11 @@ export const DocumentPage: React.FC<DocumentPageProps> = ({
       >
         <RefreshCw className="mr-1 h-3 w-3" /> {t(`${i18nNamespace}.documents.actions.refresh`)}
       </Button>
-      <Button size="sm" className="h-7 px-2 text-xs" onClick={handleCreateRequest} disabled={isProcessing}>
-        <Plus className="mr-1 h-3 w-3" /> {config.createButtonLabel}
-      </Button>
+      {!config.hideCreate ? (
+        <Button size="sm" className="h-7 px-2 text-xs" onClick={handleCreateRequest} disabled={isProcessing}>
+          <Plus className="mr-1 h-3 w-3" /> {config.createButtonLabel}
+        </Button>
+      ) : null}
     </div>
   );
 
@@ -364,9 +368,11 @@ export const DocumentPage: React.FC<DocumentPageProps> = ({
       <h3 className="text-base font-medium text-foreground">{config.emptyStateTitle}</h3>
       <p className="text-sm text-muted-foreground">{config.emptyStateDescription}</p>
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={handleCreateRequest} disabled={isProcessing}>
-          <Plus className="mr-1 h-4 w-4" /> {config.createButtonLabel}
-        </Button>
+        {!config.hideCreate ? (
+          <Button size="sm" onClick={handleCreateRequest} disabled={isProcessing}>
+            <Plus className="mr-1 h-4 w-4" /> {config.createButtonLabel}
+          </Button>
+        ) : null}
         {onRefresh ? (
           <Button size="sm" variant="ghost" onClick={() => void handleRefresh()} disabled={isProcessing || isLoading}>
             <RefreshCw className="mr-1 h-4 w-4" /> {t(`${i18nNamespace}.documents.actions.refresh`)}

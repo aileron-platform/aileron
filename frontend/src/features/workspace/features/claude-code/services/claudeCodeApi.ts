@@ -100,6 +100,10 @@ export interface ClaudeCodeSettingsUpdateRequest {
   deniedMcpServers?: ClaudeMcpServerPolicy[];
 }
 
+export interface ClaudeCodeRawSettingsResponse {
+  content: Record<string, unknown>;
+}
+
 interface SlashCommandSummary {
   fileName: string;
   namespace?: string | null;
@@ -377,6 +381,33 @@ export const claudeCodeApi = {
     });
   },
 
+  async getRawSettings(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    scope: ClaudeCodeSettingsScope,
+  ): Promise<ClaudeCodeRawSettingsResponse> {
+    return apiRequest<ClaudeCodeRawSettingsResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/claude-code/settings/raw?scope=${scope}`,
+    );
+  },
+
+  async updateRawSettings(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    scope: ClaudeCodeSettingsScope,
+    content: Record<string, unknown>,
+  ): Promise<ClaudeCodeRawSettingsResponse> {
+    return apiRequest<ClaudeCodeRawSettingsResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/claude-code/settings/raw?scope=${scope}`,
+      {
+        method: 'PUT',
+        body: { content },
+      },
+    );
+  },
+
   async listSlashCommands(runtimeBaseUrl: string, workspaceId: string): Promise<ClaudeDocument[]> {
     return collectDocuments<SlashCommandSummary, SlashCommandDocumentResponse>(
       runtimeBaseUrl,
@@ -592,20 +623,6 @@ export const claudeCodeApi = {
     );
 
     return documents.sort((a, b) => a.title.localeCompare(b.title));
-  },
-
-  async createMemoryDocument(
-    runtimeBaseUrl: string,
-    workspaceId: string,
-    document: ClaudeDocument,
-  ): Promise<ClaudeDocument> {
-    const fileName = (document.metadata?.fileName as string) ?? document.id.split(':').at(-1) ?? document.id;
-    const response = await apiRequest<MemoryDocumentResponse>(
-      runtimeBaseUrl,
-      `workspaces/${workspaceId}/claude-code/memory`,
-      { method: 'POST', body: { fileName, content: document.content } },
-    );
-    return mapMemoryDocument(response.document);
   },
 
   async updateMemoryDocument(

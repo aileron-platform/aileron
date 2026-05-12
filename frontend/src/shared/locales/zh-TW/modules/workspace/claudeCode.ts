@@ -3,10 +3,10 @@ const claudeCode = {
   unsupportedView: '未支援的視圖。',
   documents: {
     meta: {
-      'slash-commands': { title: 'Slash Command 設定' },
-      'output-styles': { title: 'Output Style 設定' },
-      subagents: { title: 'Subagent 設定' },
-      memory: { title: 'Memory 設定' },
+      'slash-commands': { title: 'Slash Commands' },
+      'output-styles': { title: 'Output Styles' },
+      subagents: { title: 'Subagents' },
+      memory: { title: 'Memory' },
     },
     actions: {
       refresh: '重整',
@@ -47,7 +47,7 @@ const claudeCode = {
     },
   },
   outputStyles: {
-    pageTitle: 'Output Style 設定',
+    pageTitle: 'Output Styles',
     actions: {
       create: '新增 Output Style',
     },
@@ -99,6 +99,27 @@ const claudeCode = {
         create: '建立項目',
       },
     },
+  },
+
+  settings: {
+    header: {
+      title: 'Settings',
+    },
+    scope: {
+      local: '本地',
+      user: '個人',
+      project: '專案',
+    },
+    actions: {
+      refresh: '重整',
+      save: '儲存設定',
+      saving: '儲存中...',
+    },
+    dirty: '尚未儲存的變更',
+    unsavedChangesConfirm: '要捨棄尚未儲存的設定變更嗎？',
+    parseError: '編輯器內容不是有效的 JSON。',
+    saveSuccess: '設定已儲存。',
+    saveFailed: '無法儲存設定。',
   },
 
   permissions: {
@@ -293,28 +314,22 @@ const claudeCode = {
     },
   },
   memory: {
-    pageTitle: 'Memory 設定',
-    actions: {
-      create: '新增 Memory 檔案',
-    },
+    pageTitle: 'Memory',
     empty: {
       title: '尚未建立任何 Memory 檔案',
-      description: '建立或選擇左側 Memory 檔案，以瀏覽與編輯 Claude Memory 內容。',
+      description: '選擇左側 Memory 檔案，以瀏覽與編輯內容。',
     },
     dialog: {
       title: {
-        create: '新增 Memory 檔案',
         edit: '編輯 Memory 檔案',
       },
       description: {
-        create: '建立新的 Claude Memory Markdown 檔案。',
         edit: '更新既有 Claude Memory Markdown 檔案內容。',
       },
       fields: {
         fileName: {
           label: '檔案名稱',
-          placeholder: '輸入檔案名稱',
-          helper: '僅支援單層 Markdown 檔案，會自動補上 .md。',
+          helper: '僅支援單層 Markdown 檔案。',
         },
         content: {
           label: 'Memory 內容',
@@ -322,13 +337,11 @@ const claudeCode = {
         },
       },
       validation: {
-        fileName: '請輸入檔案名稱。',
         content: '內容不可為空。',
       },
       actions: {
         cancel: '取消',
         save: '儲存變更',
-        create: '建立檔案',
       },
     },
   },

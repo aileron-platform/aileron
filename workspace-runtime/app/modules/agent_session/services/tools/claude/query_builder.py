@@ -1,7 +1,6 @@
 """
 Query Builder.
 
-References agor-main's query-builder.ts
 Builds Claude Agent SDK Query objects.
 """
 

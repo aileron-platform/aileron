@@ -45,7 +45,7 @@ const navigation = {
         scripts: 'Scripts',
         memory: 'Memory',
         subagents: 'Subagents',
-        settings: 'Basic Settings',
+        settings: 'Settings',
       },
       preview: {
         sessionResult: 'Conversation Result',

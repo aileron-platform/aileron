@@ -530,7 +530,6 @@ const agentSettings = {
     agentsMd: 'AGENTS.md',
   },
   codex: {
-    agentsMd: 'AGENTS.md',
     common: {
       actions: {
         refresh: '重新整理',
@@ -784,7 +783,7 @@ const agentSettings = {
       },
     },
     plugins: {
-      title: '擴充套件',
+      title: 'Extensions',
       loading: '正在載入擴充套件...',
       descriptionFallback: '此擴充套件未提供描述。',
       filters: {
@@ -875,9 +874,9 @@ const agentSettings = {
     },
     documents: {
       meta: {
-        prompts: { title: 'Prompt 設定' },
-        subagents: { title: 'Subagent 設定' },
-        rules: { title: 'Rules 設定' },
+        prompts: { title: 'Prompts' },
+        subagents: { title: 'Subagents' },
+        rules: { title: 'Rules' },
       },
       actions: { refresh: '重整', edit: '編輯', copyContent: '複製內容', download: '下載', delete: '刪除' },
       loading: '載入文件中…',
@@ -1016,7 +1015,6 @@ const agentSettings = {
       overview: '總覽',
       claudeMd: 'CLAUDE.md',
       geminiMd: 'GEMINI.md',
-      agentsMd: 'AGENTS.md',
       config: 'Config',
       profiles: 'Profiles',
       permissionsProfiles: 'Permissions Profiles',
@@ -1026,7 +1024,7 @@ const agentSettings = {
       rules: 'Rules',
       mcp: 'Model Context Protocol',
       hooks: 'Hooks',
-      plugins: '擴充套件',
+      plugins: 'Plugins',
       extensions: 'Extensions',
       slashCommands: 'Slash Commands',
       prompts: 'Prompts',
@@ -1037,7 +1035,7 @@ const agentSettings = {
       memory: 'Memory',
       outputStyles: 'Output Styles',
       settings: 'Settings',
-      unknown: '設定',
+      unknown: 'Settings',
     },
     scope: {
       project: '專案',
@@ -1093,7 +1091,7 @@ const agentSettings = {
       footer: { scope: '範圍：{{scope}}' },
     },
     hooks: {
-      header: { title: 'Hooks 設定' },
+      header: { title: 'Hooks' },
       filters: {
         scope: {
           label: '範圍',
@@ -1161,12 +1159,15 @@ const agentSettings = {
           placeholder: '請選擇範圍',
           options: { project: '專案', user: '個人', local: '本地' },
         },
+        name: { label: '名稱 *', placeholder: '例如：格式化 TypeScript 檔案' },
         event: { label: '事件類型 *', placeholder: '請選擇事件' },
         matcher: {
           sectionTitle: '匹配器配置',
           add: '新增匹配器',
           patternLabel: '匹配模式',
           patternPlaceholder: '工具名稱模式（例如 Write|Edit 或 * 代表全部）',
+          sequentialLabel: '依序執行 actions',
+          sequentialHelp: '讓符合條件的 actions 依序執行，而不是並行執行。',
           unsupported: '此事件不使用 matcher。',
           helper: {
             intro: '用於匹配工具名稱的模式（PostToolUse 會區分大小寫）',
@@ -1232,7 +1233,7 @@ const agentSettings = {
     },
     mcp: {
       header: {
-        title: 'Model Context Protocol 設定',
+        title: 'Model Context Protocol',
         actions: { refresh: '重整', import: '導入配置', create: '新增服務器' },
       },
       stats: {
@@ -1405,7 +1406,7 @@ const agentSettings = {
       },
     },
     slashCommands: {
-      pageTitle: 'Slash Command 設定',
+      pageTitle: 'Slash Commands',
       actions: { create: '新增 Slash Command' },
       empty: {
         title: '尚未建立任何 Slash Command',
@@ -1446,8 +1447,8 @@ const agentSettings = {
     },
     documents: {
       meta: {
-        'slash-commands': { title: 'Slash Command 設定' },
-        subagents: { title: 'Subagent 設定' },
+        'slash-commands': { title: 'Slash Commands' },
+        subagents: { title: 'Subagents' },
       },
       actions: { refresh: '重整', edit: '編輯', copyContent: '複製內容', download: '下載', delete: '刪除' },
       loading: '載入資料中…',
@@ -1474,7 +1475,7 @@ const agentSettings = {
       },
     },
     subagents: {
-      pageTitle: 'Subagent 設定',
+      pageTitle: 'Subagents',
       actions: { create: '新增 Subagent' },
       empty: {
         title: '尚未建立任何 Subagent',

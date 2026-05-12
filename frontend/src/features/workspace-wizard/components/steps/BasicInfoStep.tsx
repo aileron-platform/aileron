@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Folder, GitBranch, Info, RefreshCw } from 'lucide-react';
+import { Check, ChevronRight, Folder, GitBranch, Info, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Input } from '@/shared/components/ui/input';
 import { Textarea } from '@/shared/components/ui/textarea';
@@ -8,7 +8,7 @@ import { Label } from '@/shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { cn } from '@/shared/utils/cn';
 import { apiClient } from '@/shared/api/apiClient';
-import { BasicInfoForm } from '../../types';
+import { BasicInfoForm, CliType } from '../../types';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('BasicInfoStep');
@@ -21,6 +21,32 @@ interface BasicInfoStepProps {
   isSubmitting: boolean;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
+
+const cliTypeOptions: Array<{
+  value: CliType;
+  labelKey: string;
+  descriptionKey: string;
+  iconSrc: string;
+}> = [
+  {
+    value: 'claude-code',
+    labelKey: 'workspace.wizard.steps.basicInfo.fields.cliType.options.claudeCode',
+    descriptionKey: 'workspace.wizard.steps.basicInfo.fields.cliType.descriptions.claudeCode',
+    iconSrc: '/marketplace/providers/claude-code.png',
+  },
+  {
+    value: 'codex',
+    labelKey: 'workspace.wizard.steps.basicInfo.fields.cliType.options.codex',
+    descriptionKey: 'workspace.wizard.steps.basicInfo.fields.cliType.descriptions.codex',
+    iconSrc: '/marketplace/providers/codex.png',
+  },
+  {
+    value: 'gemini',
+    labelKey: 'workspace.wizard.steps.basicInfo.fields.cliType.options.gemini',
+    descriptionKey: 'workspace.wizard.steps.basicInfo.fields.cliType.descriptions.gemini',
+    iconSrc: '/marketplace/providers/gemini.svg',
+  },
+];
 
 export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   data,
@@ -36,7 +62,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   const [hasFetchedBranches, setHasFetchedBranches] = useState(false);
 
   const updateField = (field: keyof BasicInfoForm, value: string) => {
-    // 如果修改了 gitUrl，重置分支相關狀態
+    // Reset branch state when the Git URL changes.
     if (field === 'gitUrl') {
       setBranches([]);
       setHasFetchedBranches(false);
@@ -47,9 +73,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
     }
   };
 
-  // 驗證邏輯：
-  // 1. 基本欄位必填
-  // 2. 如果填寫了 gitUrl，則必須點擊整理按鈕並成功獲取分支
+  // Require core fields, and require a fetched branch when a Git URL is provided.
   const hasGitUrl = data.gitUrl.trim().length > 0;
   const isValid =
     data.name.trim().length > 0 &&
@@ -64,7 +88,6 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
     }
   };
 
-  // 從 Git URL 獲取分支列表
   const fetchBranches = async () => {
     if (!data.gitUrl.trim()) {
       setBranchError(t('workspace.wizard.steps.basicInfo.fields.gitUrl.errors.empty'));
@@ -77,7 +100,6 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
     setHasFetchedBranches(false);
 
     try {
-      // 使用 apiClient 調用後端 API 獲取分支列表（會自動加上 Authorization header）
       const result = await apiClient.get<{ branches: string[]; total: number }>(
         `/workspaces/temp/setup/git-branches?git_url=${encodeURIComponent(data.gitUrl)}`
       );
@@ -86,7 +108,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
       setBranches(fetchedBranches);
       setHasFetchedBranches(true);
 
-      // 如果當前沒有選擇分支，自動選擇第一個
+      // Select the first fetched branch when no branch has been selected yet.
       if (!data.branch && fetchedBranches.length > 0) {
         updateField('branch', fetchedBranches[0]);
       }
@@ -200,7 +222,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
               </p>
             </div>
 
-            {/* 分支選擇 - 只在成功獲取分支後顯示 */}
+            {/* Show branch choices only after branches are fetched. */}
             {branches.length > 0 && (
               <div className="space-y-2">
                 <Label htmlFor="wizard-basic-branch" className="text-sm font-medium">
@@ -229,19 +251,58 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="wizard-basic-cli" className="text-sm font-medium">
+              <Label className="text-sm font-medium">
                 {t('workspace.wizard.steps.basicInfo.fields.cliType.label')}
               </Label>
-              <Select value={data.cliType} onValueChange={(v) => updateField('cliType', v)}>
-                <SelectTrigger id="wizard-basic-cli">
-                  <SelectValue placeholder={t('workspace.wizard.steps.basicInfo.fields.cliType.placeholder')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="claude-code">{t('workspace.wizard.steps.basicInfo.fields.cliType.options.claudeCode')}</SelectItem>
-                  <SelectItem value="codex">{t('workspace.wizard.steps.basicInfo.fields.cliType.options.codex')}</SelectItem>
-                  <SelectItem value="gemini">{t('workspace.wizard.steps.basicInfo.fields.cliType.options.gemini')}</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                {cliTypeOptions.map((option) => {
+                  const isSelected = data.cliType === option.value;
+
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => updateField('cliType', option.value)}
+                      disabled={isSubmitting}
+                      className={cn(
+                        'group flex min-h-[132px] flex-col rounded-lg border bg-card p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+                        isSelected
+                          ? 'border-primary bg-primary/5 shadow-sm'
+                          : 'border-border hover:border-primary/60 hover:bg-accent/40'
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border border-border bg-background">
+                            <img src={option.iconSrc} alt="" className="h-7 w-7 object-contain" />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-foreground">
+                              {t(option.labelKey)}
+                            </div>
+                            {isSelected && (
+                              <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                                <Check className="h-3 w-3" />
+                                {t('workspace.wizard.steps.basicInfo.fields.cliType.selected')}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <ChevronRight
+                          className={cn(
+                            'mt-1 h-4 w-4 text-muted-foreground transition-colors',
+                            isSelected ? 'text-primary' : 'group-hover:text-primary'
+                          )}
+                        />
+                      </div>
+                      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                        {t(option.descriptionKey)}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
               <p className="text-xs text-muted-foreground">
                 {t('workspace.wizard.steps.basicInfo.fields.cliType.helper')}
               </p>

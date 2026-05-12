@@ -1,7 +1,7 @@
 """
 Common type definitions.
 
-Modeled after agor-main's types.ts
+
 """
 
 from dataclasses import dataclass
@@ -66,7 +66,7 @@ class TaskResult:
     was_stopped: bool = False
 
 
-# ProcessedEvent type definitions (modeled after agor-main's ProcessedEvent)
+# ProcessedEvent type definitions
 @dataclass
 class BaseProcessedEvent:
     """Base processing event."""

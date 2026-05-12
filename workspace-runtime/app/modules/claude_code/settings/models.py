@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -441,3 +440,14 @@ class ClaudeCodeSettingsUpdateRequest(BaseModel):
             self.api_key_helper = trimmed if trimmed else None
         return self
 
+
+class RawSettingsResponse(BaseModel):
+    """Raw Claude Code settings response"""
+
+    content: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RawSettingsUpdateRequest(BaseModel):
+    """Raw Claude Code settings update request"""
+
+    content: Dict[str, Any]

@@ -1,8 +1,6 @@
 """
 Claude Code Tool Implementation.
 
-Architected after agor-main's claude-tool.ts
-
 Current capabilities:
 - ✅ Live execution (via Anthropic SDK)
 - ✅ Permission request UI (via can_use_tool callback)
@@ -82,8 +80,6 @@ def _is_authentication_retry_event(content: list[dict[str, Any]]) -> bool:
 class ClaudeTool(ITool):
     """
     Claude Code Tool.
-
-    Architected after agor-main's ClaudeTool implementation.
 
     Stateless: doesn't hold DB sessions, each DB operation uses short-lived session
     (via async_session_scope) to avoid occupying connection pool during long-running tasks.

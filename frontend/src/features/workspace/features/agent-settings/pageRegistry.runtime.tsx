@@ -15,6 +15,8 @@ const CodexAgentsMdPage = React.lazy(() => import('./pages/CodexAgentsMdPage'));
 const CodexRulesPage = React.lazy(() => import('./pages/CodexRulesPage'));
 const CodexHooksPage = React.lazy(() => import('./pages/CodexHooksPage'));
 const CodexPluginsPage = React.lazy(() => import('./pages/CodexPluginsPage'));
+const CodexSettingsPage = React.lazy(() => import('../codex/pages/SettingsPage'));
+const GeminiSettingsPage = React.lazy(() => import('../gemini/pages/SettingsPage'));
 const ClaudePluginsPage = React.lazy(() => import('./pages/ClaudePluginsPage'));
 const CodexDocumentResourcePage = React.lazy(() => import('./pages/CodexDocumentResourcePage'));
 const SubagentsPage = React.lazy(() => import('./pages/SubagentsPage'));
@@ -199,6 +201,10 @@ export const PAGE_REGISTRY: Record<AgentToolType, Partial<Record<SubViewId, Page
       render: ({ loadingFallback }) => renderWithSuspense(loadingFallback, <GeminiExtensionsPage />),
       isSupported: (config) => config.id === 'gemini',
     },
+    settings: {
+      render: ({ loadingFallback }) => renderWithSuspense(loadingFallback, <GeminiSettingsPage />),
+      isSupported: (config) => config.id === 'gemini',
+    },
   },
   opencode: {
     'agents-md': {
@@ -316,6 +322,10 @@ export const PAGE_REGISTRY: Record<AgentToolType, Partial<Record<SubViewId, Page
     },
     plugins: {
       render: ({ loadingFallback }) => renderWithSuspense(loadingFallback, <CodexPluginsPage />),
+      isSupported: (config) => config.id === 'codex',
+    },
+    settings: {
+      render: ({ loadingFallback }) => renderWithSuspense(loadingFallback, <CodexSettingsPage />),
       isSupported: (config) => config.id === 'codex',
     },
   },

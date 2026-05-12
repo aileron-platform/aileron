@@ -2,7 +2,7 @@
 Permission Hooks for Claude Agent SDK.
 
 Handles can_use_tool callback for custom permission UI via WebSocket.
-Based on agor's permission-hooks.ts implementation.
+Handles can_use_tool callback routing via WebSocket.
 
 Flow:
 1. SDK calls can_use_tool when it needs permission
@@ -306,7 +306,7 @@ class PermissionHooks:
 
         This method is called within the permission lock to ensure
         only one request is processed at a time. Supports cancellation
-        via context.signal (AbortSignal pattern from agor).
+        via context.signal (AbortSignal pattern).
         """
         request_id = str(uuid.uuid4())
         timestamp = utcnow().isoformat()

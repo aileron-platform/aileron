@@ -1,7 +1,7 @@
 """
 Tool Decision Manager.
 
-Global Tool Decision Manager, references agor's permission-manager.ts design.
+Global Tool Decision Manager for routing permission decisions to sessions.
 Routes Tool Decision decisions to correct session.
 
 Responsibility separation explanation:

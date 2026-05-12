@@ -138,6 +138,7 @@ const codexSettingsSubViews = [
   'hooks',
   'rules',
   'plugins',
+  'settings',
 ];
 
 const claudeConfig: AgentToolConfig = {
@@ -163,7 +164,7 @@ const geminiConfig: AgentToolConfig = {
   navigationLabelKey: 'workspace.navigation.main.geminiSettings',
   navigationIcon: Sparkles,
   agentsMd: geminiCapabilities.instructions!,
-  availableSubViews: buildAvailableSubViews('gemini-md', geminiCapabilities, ['extensions']),
+  availableSubViews: buildAvailableSubViews('gemini-md', geminiCapabilities, ['extensions', 'settings']),
   apiPathPrefix: 'gemini',
   availableScopes: ['project', 'user', 'extension'],
   supportsToggle: false,

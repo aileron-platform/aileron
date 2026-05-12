@@ -169,8 +169,22 @@ export const getAgentToolSubView = (pathname: string): string => {
         'hooks',
         'rules',
         'plugins',
+        'settings',
       ]);
       return subView && allowedCodexSubViews.has(subView) ? subView : 'agents-md';
+    }
+    if (agent === 'gemini') {
+      const allowedGeminiSubViews = new Set([
+        'gemini-md',
+        'skills',
+        'slash-commands',
+        'subagents',
+        'mcp',
+        'hooks',
+        'extensions',
+        'settings',
+      ]);
+      return subView && allowedGeminiSubViews.has(subView) ? subView : 'gemini-md';
     }
     if (subView) {
       return subView;

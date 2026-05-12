@@ -281,6 +281,18 @@ describe('WorkspaceShell', () => {
     });
   });
 
+  it('uses the outer Codex document sidebar for rules so the page does not render a nested sidebar', async () => {
+    mocks.workspaceState.currentFeature = 'codex';
+    mocks.workspaceState.agentToolSettings.subView = 'rules';
+    mocks.workspaceRuntime.cliType = 'codex';
+
+    render(<WorkspaceShell />);
+
+    expect(await screen.findByTestId('agent-settings-feature')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-second-column')).toBeInTheDocument();
+    expect(screen.getByTestId('codex-document-sidebar')).toBeInTheDocument();
+  });
+
   it('passes Gemini slash-command sidebar selection into the settings content column', async () => {
     mocks.workspaceState.currentFeature = 'gemini';
     mocks.workspaceState.agentToolSettings.subView = 'slash-commands';

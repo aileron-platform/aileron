@@ -146,6 +146,25 @@ describe('CodexRulesPage', () => {
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith('project:default.rules'));
   });
 
+  it('does not render the built-in rules sidebar when controlled by the workspace sidebar', async () => {
+    const onSelect = vi.fn();
+    apiMock.listCodexRules
+      .mockResolvedValueOnce({
+        files: [{ name: 'default.rules', path: 'default.rules', sizeBytes: 8 }],
+      })
+      .mockResolvedValueOnce({ files: [] });
+
+    render(
+      <CodexRulesPage
+        selectedId="project:default.rules"
+        onSelect={onSelect}
+      />,
+    );
+
+    expect(await screen.findByText('default.rules')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('workspace.agentSettings.codex.documents.sidebar.searchPlaceholder')).not.toBeInTheDocument();
+  });
+
   it('validates the selected rules file and displays stdout', async () => {
     apiMock.listCodexRules
       .mockResolvedValueOnce({

@@ -88,7 +88,7 @@ describe('claudeCodeApi memory documents', () => {
     ]);
   });
 
-  it('creates, updates, and deletes memory documents without scope segments', async () => {
+  it('updates and deletes memory documents without scope segments', async () => {
     const document: ClaudeDocument = {
       id: 'user:notes.md',
       scope: 'user',
@@ -107,21 +107,6 @@ describe('claudeCodeApi memory documents', () => {
               fileName: 'notes.md',
               name: 'notes.md',
               description: '',
-              content: '# notes',
-              size: '12 B',
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            workspaceId: 'ws-1',
-            document: {
-              fileName: 'notes.md',
-              name: 'notes.md',
-              description: '',
               content: '# updated',
               size: '14 B',
             },
@@ -131,7 +116,6 @@ describe('claudeCodeApi memory documents', () => {
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
 
-    const created = await claudeCodeApi.createMemoryDocument('http://runtime.test', 'ws-1', document);
     const updated = await claudeCodeApi.updateMemoryDocument('http://runtime.test', 'ws-1', {
       ...document,
       content: '# updated',
@@ -140,14 +124,6 @@ describe('claudeCodeApi memory documents', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://runtime.test/api/v1/workspaces/ws-1/claude-code/memory',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ fileName: 'notes.md', content: '# notes' }),
-      }),
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
       'http://runtime.test/api/v1/workspaces/ws-1/claude-code/memory/notes.md',
       expect.objectContaining({
         method: 'PUT',
@@ -155,16 +131,50 @@ describe('claudeCodeApi memory documents', () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      2,
       'http://runtime.test/api/v1/workspaces/ws-1/claude-code/memory/notes.md',
       expect.objectContaining({ method: 'DELETE' }),
     );
-    expect(created).toEqual(
+    expect(updated.content).toBe('# updated');
+  });
+
+  it('reads and writes raw settings for the selected scope', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ content: { model: 'claude-sonnet-4-5' } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ content: { model: 'claude-opus-4-1' } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+    const raw = await claudeCodeApi.getRawSettings('http://runtime.test', 'ws-1', 'local');
+    const updated = await claudeCodeApi.updateRawSettings(
+      'http://runtime.test',
+      'ws-1',
+      'user',
+      { model: 'claude-opus-4-1' },
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://runtime.test/api/v1/workspaces/ws-1/claude-code/settings/raw?scope=local',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://runtime.test/api/v1/workspaces/ws-1/claude-code/settings/raw?scope=user',
       expect.objectContaining({
-        id: 'user:notes.md',
-        metadata: { fileName: 'notes.md' },
+        method: 'PUT',
+        body: JSON.stringify({ content: { model: 'claude-opus-4-1' } }),
       }),
     );
-    expect(updated.content).toBe('# updated');
+    expect(raw.content).toEqual({ model: 'claude-sonnet-4-5' });
+    expect(updated.content).toEqual({ model: 'claude-opus-4-1' });
   });
 });

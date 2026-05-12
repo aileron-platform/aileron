@@ -108,6 +108,7 @@ describe('WorkspaceSidebar', () => {
     expect(screen.getByText('workspace.navigation.sub.claudeCodeSettings.hooks')).toBeInTheDocument();
     expect(screen.getByText('workspace.agentSettings.common.subViews.rules')).toBeInTheDocument();
     expect(screen.getByText('workspace.agentSettings.common.subViews.plugins')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.common.subViews.settings')).toBeInTheDocument();
     expect(screen.queryByText('workspace.agentSettings.common.subViews.overview')).not.toBeInTheDocument();
     expect(screen.queryByText('workspace.agentSettings.common.subViews.config')).not.toBeInTheDocument();
     expect(screen.queryByText('workspace.agentSettings.common.subViews.permissionsProfiles')).not.toBeInTheDocument();

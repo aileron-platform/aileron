@@ -1,10 +1,10 @@
-"""Gemini extension API routes."""
+"""Gemini API routes."""
 
 from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from app.core.openapi import build_responses
 
@@ -20,13 +20,25 @@ from .models import (
     GeminiExtensionListResponse,
     GeminiExtensionSummary,
     GeminiExtensionToggleResponse,
+    RawSettingsResponse,
+    RawSettingsUpdateRequest,
 )
+from .service import GeminiSettingsScope, GeminiSettingsService
 
-router = APIRouter(prefix="/gemini/extensions", tags=["gemini - Extensions"])
+router = APIRouter(prefix="/gemini", tags=["gemini"])
+RawSettingsScope = Literal["user", "project"]
 
 
 def _resolver() -> GeminiExtensionResourceResolver:
     return GeminiExtensionResourceResolver()
+
+
+def get_gemini_settings_service() -> GeminiSettingsService:
+    return GeminiSettingsService()
+
+
+def _raw_scope(value: RawSettingsScope) -> GeminiSettingsScope:
+    return GeminiSettingsScope(value)
 
 
 def _summary(extension) -> GeminiExtensionSummary:
@@ -65,7 +77,7 @@ def _command_error(error: GeminiExtensionCommandError) -> HTTPException:
     )
 
 
-@router.get("", response_model=GeminiExtensionListResponse, responses=build_responses(400, 401, 422, 500))
+@router.get("/extensions", response_model=GeminiExtensionListResponse, responses=build_responses(400, 401, 422, 500))
 async def list_extensions(
     workspace_id: str = Path(..., description="Workspace ID"),
 ) -> GeminiExtensionListResponse:
@@ -74,7 +86,7 @@ async def list_extensions(
     return GeminiExtensionListResponse(workspaceId=workspace_id, extensions=extensions)
 
 
-@router.get("/{name}", response_model=GeminiExtensionDetailResponse, responses=build_responses(400, 401, 404, 422, 500))
+@router.get("/extensions/{name}", response_model=GeminiExtensionDetailResponse, responses=build_responses(400, 401, 404, 422, 500))
 async def get_extension(
     name: str = Path(..., description="Extension name"),
     workspace_id: str = Path(..., description="Workspace ID"),
@@ -88,7 +100,7 @@ async def get_extension(
     return GeminiExtensionDetailResponse(workspaceId=workspace_id, extension=extension)
 
 
-@router.post("/{name}/enable", response_model=GeminiExtensionToggleResponse, responses=build_responses(400, 401, 404, 422, 500))
+@router.post("/extensions/{name}/enable", response_model=GeminiExtensionToggleResponse, responses=build_responses(400, 401, 404, 422, 500))
 async def enable_extension(
     name: str = Path(..., description="Extension name"),
     workspace_id: str = Path(..., description="Workspace ID"),
@@ -110,7 +122,7 @@ async def enable_extension(
     )
 
 
-@router.post("/{name}/disable", response_model=GeminiExtensionToggleResponse, responses=build_responses(400, 401, 404, 422, 500))
+@router.post("/extensions/{name}/disable", response_model=GeminiExtensionToggleResponse, responses=build_responses(400, 401, 404, 422, 500))
 async def disable_extension(
     name: str = Path(..., description="Extension name"),
     workspace_id: str = Path(..., description="Workspace ID"),
@@ -130,3 +142,31 @@ async def disable_extension(
         enabledHere=extension.enabledHere,
         overrides=extension.overrides,
     )
+
+
+@router.get(
+    "/settings/raw",
+    response_model=RawSettingsResponse,
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def get_raw_settings(
+    workspace_id: str = Path(..., description="Workspace ID"),
+    scope: RawSettingsScope = Query(..., description="Settings scope to read"),
+    service: GeminiSettingsService = Depends(get_gemini_settings_service),
+) -> RawSettingsResponse:
+    return RawSettingsResponse(content=service.get_raw_settings(workspace_id, _raw_scope(scope)))
+
+
+@router.put(
+    "/settings/raw",
+    response_model=RawSettingsResponse,
+    responses=build_responses(400, 401, 403, 404, 422, 500),
+)
+async def update_raw_settings(
+    payload: RawSettingsUpdateRequest,
+    workspace_id: str = Path(..., description="Workspace ID"),
+    scope: RawSettingsScope = Query(..., description="Settings scope to write"),
+    service: GeminiSettingsService = Depends(get_gemini_settings_service),
+) -> RawSettingsResponse:
+    content = service.update_raw_settings(workspace_id, _raw_scope(scope), payload.content)
+    return RawSettingsResponse(content=content)

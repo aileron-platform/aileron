@@ -3,6 +3,8 @@ import navigation from './navigation';
 import sidebar from './sidebar';
 import layout from './layout';
 import claudeCode from './claudeCode';
+import codex from './codex';
+import gemini from './gemini';
 import fileManagement from './fileManagement';
 import versionControl from './versionControl';
 import containerManagement from './containerManagement';
@@ -20,6 +22,8 @@ const workspace = {
   sidebar,
   layout,
   claudeCode,
+  codex,
+  gemini,
   agentSettings,
   fileManagement,
   versionControl,

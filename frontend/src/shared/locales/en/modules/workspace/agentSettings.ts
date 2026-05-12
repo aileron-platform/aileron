@@ -530,7 +530,6 @@ const agentSettings = {
     agentsMd: 'AGENTS.md',
   },
   codex: {
-    agentsMd: 'AGENTS.md',
     common: {
       actions: {
         refresh: 'Refresh',
@@ -736,6 +735,7 @@ const agentSettings = {
           placeholder: 'Choose scope',
           options: { project: 'Project', user: 'User', local: 'Local' },
         },
+        name: { label: 'Name *', placeholder: 'e.g. Format TypeScript files' },
         event: { label: 'Event type *', placeholder: 'Choose event' },
         matcher: {
           sectionTitle: 'Matcher configuration',
@@ -883,9 +883,9 @@ const agentSettings = {
     },
     documents: {
       meta: {
-        prompts: { title: 'Prompt settings' },
-        subagents: { title: 'Subagent settings' },
-        rules: { title: 'Rules settings' },
+        prompts: { title: 'Prompts' },
+        subagents: { title: 'Subagents' },
+        rules: { title: 'Rules' },
       },
       actions: { refresh: 'Refresh', edit: 'Edit', copyContent: 'Copy content', download: 'Download', delete: 'Delete' },
       loading: 'Loading documents…',
@@ -1024,7 +1024,6 @@ const agentSettings = {
       overview: 'Overview',
       claudeMd: 'CLAUDE.md',
       geminiMd: 'GEMINI.md',
-      agentsMd: 'AGENTS.md',
       config: 'Config',
       profiles: 'Profiles',
       permissionsProfiles: 'Permissions Profiles',
@@ -1034,7 +1033,7 @@ const agentSettings = {
       rules: 'Rules',
       mcp: 'Model Context Protocol',
       hooks: 'Hooks',
-      plugins: 'Extensions',
+      plugins: 'Plugins',
       extensions: 'Extensions',
       slashCommands: 'Slash Commands',
       prompts: 'Prompts',
@@ -1101,7 +1100,7 @@ const agentSettings = {
       footer: { scope: 'Scope: {{scope}}' },
     },
     hooks: {
-      header: { title: 'Hooks settings' },
+      header: { title: 'Hooks' },
       filters: {
         scope: {
           label: 'Scope',
@@ -1169,12 +1168,15 @@ const agentSettings = {
           placeholder: 'Choose scope',
           options: { project: 'Project', user: 'User', local: 'Local' },
         },
+        name: { label: 'Name *', placeholder: 'e.g. Format TypeScript files' },
         event: { label: 'Event type *', placeholder: 'Choose event' },
         matcher: {
           sectionTitle: 'Matcher configuration',
           add: 'Add matcher',
           patternLabel: 'Match pattern',
           patternPlaceholder: 'Tool name pattern (e.g. Write|Edit or * for all)',
+          sequentialLabel: 'Run actions sequentially',
+          sequentialHelp: 'Run matched actions in order instead of concurrently.',
           unsupported: 'This event does not use a matcher.',
           helper: {
             intro: 'Pattern for matching tool names (case sensitive for PostToolUse)',
@@ -1232,7 +1234,7 @@ const agentSettings = {
     },
     mcp: {
       header: {
-        title: 'Model Context Protocol settings',
+        title: 'Model Context Protocol',
         actions: { refresh: 'Refresh', import: 'Import config', create: 'Add server' },
       },
       stats: {
@@ -1405,7 +1407,7 @@ const agentSettings = {
       },
     },
     slashCommands: {
-      pageTitle: 'Slash command settings',
+      pageTitle: 'Slash Commands',
       actions: { create: 'Add slash command' },
       empty: {
         title: 'No slash commands yet',
@@ -1446,8 +1448,8 @@ const agentSettings = {
     },
     documents: {
       meta: {
-        'slash-commands': { title: 'Slash command settings' },
-        subagents: { title: 'Subagent settings' },
+        'slash-commands': { title: 'Slash Commands' },
+        subagents: { title: 'Subagents' },
       },
       actions: { refresh: 'Refresh', edit: 'Edit', copyContent: 'Copy content', download: 'Download', delete: 'Delete' },
       loading: 'Loading documents…',
@@ -1474,7 +1476,7 @@ const agentSettings = {
       },
     },
     subagents: {
-      pageTitle: 'Subagent settings',
+      pageTitle: 'Subagents',
       actions: { create: 'Add subagent' },
       empty: {
         title: 'No subagents yet',
