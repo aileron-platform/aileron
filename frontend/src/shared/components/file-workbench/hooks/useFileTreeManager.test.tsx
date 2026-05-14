@@ -292,4 +292,84 @@ describe('useFileTreeManager', () => {
       expect(result.current.state.nodes[0]?.children?.map((node) => node.path)).toEqual(['/src/index.ts']);
     });
   });
+
+  it('re-fetches children for depth-truncated expanded directories on initial load', async () => {
+    const adapterKey = 'workspace:ws-a:hide-hidden';
+    window.localStorage.setItem(
+      `fileTree.expandedPaths.v1:${encodeURIComponent(adapterKey)}`,
+      JSON.stringify(['/src', '/src/lib', '/src/lib/inner']),
+    );
+
+    // Simulates the backend response when getTree(maxDepth=2) hits a deeply
+    // nested directory: children is [] but hasChildren is true.
+    const truncatedTree: FileTreeNode[] = [
+      {
+        id: '/src',
+        name: 'src',
+        path: '/src',
+        type: 'directory',
+        hasChildren: true,
+        children: [
+          {
+            id: '/src/lib',
+            name: 'lib',
+            path: '/src/lib',
+            type: 'directory',
+            hasChildren: true,
+            children: [
+              {
+                id: '/src/lib/inner',
+                name: 'inner',
+                path: '/src/lib/inner',
+                type: 'directory',
+                hasChildren: true,
+                children: [], // depth-truncated by maxDepth boundary
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const getChildrenMock = vi.fn(async (path: string): Promise<FileTreeNode[]> => {
+      if (path === '/src/lib/inner') {
+        return [
+          {
+            id: '/src/lib/inner/deep.ts',
+            name: 'deep.ts',
+            path: '/src/lib/inner/deep.ts',
+            type: 'file',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const { result } = renderHook(() =>
+      useFileTreeManager({
+        adapter: createAdapter(
+          vi.fn().mockResolvedValue(truncatedTree),
+          { getChildren: getChildrenMock },
+        ),
+        adapterKey,
+        autoLoad: false,
+      })
+    );
+
+    await act(async () => {
+      await result.current.loadTree();
+    });
+
+    await waitFor(() => {
+      expect(getChildrenMock).toHaveBeenCalledWith('/src/lib/inner');
+      expect(getChildrenMock).toHaveBeenCalledTimes(1);
+      expect(result.current.state.expandedIds.has('/src/lib/inner')).toBe(true);
+    });
+
+    const innerNode = result.current.state.nodes[0]?.children?.[0]?.children?.[0];
+    expect(innerNode?.path).toBe('/src/lib/inner');
+    expect(innerNode?.children?.map((node) => node.path)).toEqual([
+      '/src/lib/inner/deep.ts',
+    ]);
+  });
 });

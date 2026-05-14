@@ -5,7 +5,12 @@ const logger = createLogger('useFileTreeManager');
 import { useFileTreeState, type UseFileTreeStateOptions } from './useFileTreeState';
 import { useFileOperations, type UseFileOperationsOptions } from './useFileOperations';
 import { useFileEditor, type UseFileEditorOptions } from './useFileEditor';
-import { computeLoadedChildrenPaths, findNodeByPath, sortTreeNodes } from '../utils/fileTreeUtils';
+import {
+  computeLoadedChildrenPaths,
+  findNodeByPath,
+  isDepthTruncatedDirectory,
+  sortTreeNodes,
+} from '../utils/fileTreeUtils';
 import type { FileTreeDataAdapter, FileTreeNode } from '../types';
 
 const EXPANDED_PATHS_STORAGE_PREFIX = 'fileTree.expandedPaths.v1';
@@ -62,7 +67,10 @@ const restoreExpandedNodes = async (
 
     let children = node.children;
 
-    if (expandedPaths.has(node.path) && children === undefined && node.hasChildren !== false) {
+    const needsLoad =
+      children === undefined ||
+      isDepthTruncatedDirectory(node);
+    if (expandedPaths.has(node.path) && needsLoad && node.hasChildren !== false) {
       try {
         children = await adapter.getChildren(node.path);
       } catch (error) {
