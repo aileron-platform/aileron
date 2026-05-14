@@ -1,6 +1,7 @@
 import React from 'react';
 import { CheckCircle2, Download, Info, Play, RefreshCw, Terminal, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
+import { AlertDialogHeading, DialogHeading } from '@/shared/components/ui/dialog-heading';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -9,7 +10,6 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -18,7 +18,6 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
 } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
@@ -179,7 +178,9 @@ export const MarketplaceInstallDialog: React.FC<MarketplacePackageActionDialogPr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>{t('marketplace.install.title')}</DialogTitle>
+          <DialogHeading icon={Download}>
+            {t('marketplace.install.title')}
+          </DialogHeading>
           <DialogDescription>{t('marketplace.install.description', { commandName })}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -292,7 +293,9 @@ export const MarketplaceExportDialog: React.FC<MarketplacePackageActionDialogPro
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t('marketplace.export.title')}</DialogTitle>
+          <DialogHeading icon={Download}>
+            {t('marketplace.export.title')}
+          </DialogHeading>
           <DialogDescription>{t('marketplace.export.description')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -361,7 +364,9 @@ export const MarketplaceDeleteDialog: React.FC<MarketplaceDeleteDialogProps> = (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-lg">
         <AlertDialogHeader>
-          <AlertDialogTitle>{t('marketplace.delete.title')}</AlertDialogTitle>
+          <AlertDialogHeading icon={Trash2}>
+            {t('marketplace.delete.title')}
+          </AlertDialogHeading>
           <AlertDialogDescription>{t('marketplace.delete.description')}</AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-4">

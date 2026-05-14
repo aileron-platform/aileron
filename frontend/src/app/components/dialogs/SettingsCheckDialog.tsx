@@ -1,13 +1,7 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import { CheckCircle2, XCircle, AlertTriangle, Settings } from 'lucide-react';
@@ -65,10 +59,9 @@ export const SettingsCheckDialog: React.FC<SettingsCheckDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogHeading icon={CheckCircle2}>
             {validationResult.isValid ? (
               <>
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
                 {t('dialogs.settingsCheck.title.ready')}
               </>
             ) : (
@@ -77,7 +70,7 @@ export const SettingsCheckDialog: React.FC<SettingsCheckDialogProps> = ({
                 {t('dialogs.settingsCheck.title.incomplete')}
               </>
             )}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>
             {validationResult.isValid
               ? t('dialogs.settingsCheck.description.ready')

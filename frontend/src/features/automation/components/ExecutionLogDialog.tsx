@@ -4,8 +4,8 @@ import {
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle,
 } from '@/shared/components/ui/dialog';
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -72,11 +72,11 @@ export interface ExecutionLogDialogProps<TExecution extends ExecutionLogDialogEx
   createLogs: ExecutionLogBuilder<TExecution>;
 }
 
-const statusIconMap: Record<ExecutionLogStatus, React.ReactNode> = {
-  success: <CheckCircle2 className="h-4 w-4 text-primary" />,
-  failed: <XCircle className="h-4 w-4 text-rose-500" />,
-  running: <RefreshCw className="h-4 w-4 text-sky-500 animate-spin" />,
-  queued: <Clock className="h-4 w-4 text-amber-500" />,
+const statusHeadingIconMap = {
+  success: { icon: CheckCircle2, iconClassName: 'h-4 w-4 text-primary' },
+  failed: { icon: XCircle, iconClassName: 'h-4 w-4 text-rose-500' },
+  running: { icon: RefreshCw, iconClassName: 'h-4 w-4 text-sky-500 animate-spin' },
+  queued: { icon: Clock, iconClassName: 'h-4 w-4 text-amber-500' },
 };
 
 const statusBadgeClass: Record<ExecutionLogStatus, string> = {
@@ -172,7 +172,7 @@ export function ExecutionLogDialog<
     return null;
   }
 
-  const statusIcon = statusIconMap[execution.status];
+  const statusHeadingIcon = statusHeadingIconMap[execution.status];
   const statusClass = statusBadgeClass[execution.status];
   const statusLabel = copy.statusLabel(execution.status);
   const triggerLabel = copy.formatTrigger?.(execution) ?? execution.trigger;
@@ -187,13 +187,12 @@ export function ExecutionLogDialog<
     <Dialog open={isOpen} onOpenChange={open => { if (!open) onClose(); }}>
       <DialogContent className="max-w-3xl h-[70vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            {statusIcon}
+          <DialogHeading icon={statusHeadingIcon.icon} iconClassName={statusHeadingIcon.iconClassName}>
             <span className="text-sm md:text-base font-semibold" title={execution.summary}>{truncatedSummary}</span>
             <Badge className={`${statusClass} capitalize`}>
               {statusLabel}
             </Badge>
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>{copy.description}</DialogDescription>
         </DialogHeader>
 

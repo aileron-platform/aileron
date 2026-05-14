@@ -1,4 +1,5 @@
 import React from 'react';
+import { AlertTriangle } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -7,8 +8,8 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
+import { AlertDialogHeading } from '@/shared/components/ui/dialog-heading';
 import { useI18n } from '@/shared/hooks/useI18n';
 
 interface MarketplaceEditorLeaveDialogProps {
@@ -30,7 +31,9 @@ export const MarketplaceEditorLeaveDialog: React.FC<MarketplaceEditorLeaveDialog
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-md">
         <AlertDialogHeader>
-          <AlertDialogTitle>{t('marketplace.editor.unsaved.title')}</AlertDialogTitle>
+          <AlertDialogHeading icon={AlertTriangle}>
+            {t('marketplace.editor.unsaved.title')}
+          </AlertDialogHeading>
           <AlertDialogDescription>{t('marketplace.editor.unsaved.description')}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

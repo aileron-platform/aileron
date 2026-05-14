@@ -4,7 +4,8 @@ import { useApp } from '@/app/providers/AppProvider';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader } from '@/shared/components/ui/dialog';
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
@@ -232,10 +233,9 @@ const OpenSpecCustomizationFeature: React.FC = () => {
       <Dialog open={customizationDialog === 'validation'} onOpenChange={(open) => { if (!open) closeCustomizationDialog(); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-primary" />
+            <DialogHeading icon={ShieldCheck}>
               {t('workspace.openspec.customization.validationTitle')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>{customizationValidation?.targetPath ?? t('workspace.openspec.customization.diagnosticsPlaceholder')}</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh]">
@@ -256,10 +256,9 @@ const OpenSpecCustomizationFeature: React.FC = () => {
       <Dialog open={customizationDialog === 'debug'} onOpenChange={(open) => { if (!open) closeCustomizationDialog(); }}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Bug className="h-5 w-5 text-primary" />
+            <DialogHeading icon={Bug}>
               {t('workspace.openspec.customization.debugTitle')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>{customizationDebug?.targetPath ?? t('workspace.openspec.customization.diagnosticsPlaceholder')}</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh]">

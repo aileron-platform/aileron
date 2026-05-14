@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/components/ui/dialog';
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Badge } from '@/shared/components/ui/badge';
@@ -239,10 +240,9 @@ export const FileChooserDialog: React.FC<FileChooserDialogProps> = ({ open, onOp
       <DialogContent className="z-[100] flex h-[80vh] max-w-4xl flex-col p-0">
         <DialogHeader className="border-b px-6 py-4">
           <div className="flex items-center justify-between pr-8">
-            <DialogTitle className="flex items-center gap-2">
-              <Folder className="h-5 w-5 text-primary" />
+            <DialogHeading icon={Folder}>
               {t('workspace.chat.dialogs.fileChooser.title')}
-            </DialogTitle>
+            </DialogHeading>
             <Button
               variant="outline"
               size="sm"

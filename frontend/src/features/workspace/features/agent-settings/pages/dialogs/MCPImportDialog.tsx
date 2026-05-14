@@ -1,3 +1,4 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useState, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/shared/components/ui/dialog";
 import { Button } from "@/shared/components/ui/button";
@@ -131,10 +132,9 @@ const MCPImportDialog: React.FC<MCPImportDialogProps> = ({ open, onClose, onImpo
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
+          <DialogHeading icon={Upload}>
             {t(`${i18nNamespace}.mcp.dialogs.import.title`)}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>
             {t(`${i18nNamespace}.mcp.dialogs.import.description`)}
           </DialogDescription>

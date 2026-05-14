@@ -1,3 +1,4 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React from 'react';
 import { Check, Database, FolderTree, Link2, Plus, Unplug, Workflow } from 'lucide-react';
 import { apiClient } from '@/shared/api/apiClient';
@@ -12,14 +13,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/shared/components/ui/command';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
@@ -431,10 +425,9 @@ export const WorkspaceKnowledgeBasesSettings: React.FC = () => {
       >
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Link2 className="h-5 w-5 text-primary" />
+            <DialogHeading icon={Link2}>
               {t('workspace.workspaceSettings.knowledgeBases.dialog.title')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>
               {t('workspace.workspaceSettings.knowledgeBases.dialog.description')}
             </DialogDescription>

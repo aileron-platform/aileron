@@ -107,7 +107,12 @@ export const useManagedDocumentWorkbenchTabs = <TDocument,>({
 
   const applyTabsChange = useCallback((nextTabs: FileViewerWorkbenchTab[]) => {
     const nextPaths = new Set(nextTabs.map(tab => tab.id));
-    setDocuments(prev => prev.filter(document => nextPaths.has(adapter.getKey(document))));
+    setDocuments(prev => {
+      const documentsByPath = new Map(prev.map(document => [adapter.getKey(document), document]));
+      return nextTabs
+        .map(tab => documentsByPath.get(tab.id))
+        .filter((document): document is TDocument => Boolean(document));
+    });
     setContents(prev => {
       const nextContents: Record<string, string> = {};
       nextTabs.forEach(tab => {

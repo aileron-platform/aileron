@@ -3,14 +3,8 @@
  */
 
 import React, { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
@@ -101,10 +95,9 @@ export const FileCreateDialog: React.FC<FileCreateDialogProps> = ({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {type === 'file' ? <File className="h-5 w-5" /> : <Folder className="h-5 w-5" />}
+          <DialogHeading icon={type === 'file' ? File : Folder}>
             {t(`common.fileOperations.create.${type}.title`)}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>
             {t(`common.fileOperations.create.${type}.description`)}
           </DialogDescription>
@@ -236,10 +229,9 @@ export const FileRenameDialog: React.FC<FileRenameDialogProps> = ({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Edit3 className="h-5 w-5" />
+          <DialogHeading icon={Edit3}>
             {t('common.fileOperations.rename.title')}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>
             {t('common.fileOperations.rename.description')}
           </DialogDescription>
@@ -304,10 +296,9 @@ export const FileDeleteDialog: React.FC<FileDeleteDialogProps> = ({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="h-5 w-5" />
+          <DialogHeading icon={AlertTriangle} className="text-destructive" tone="destructive">
             {t('common.fileOperations.delete.title')}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>
             {t('common.fileOperations.delete.description')}
           </DialogDescription>
@@ -365,10 +356,9 @@ export const BatchDeleteDialog: React.FC<BatchDeleteDialogProps> = ({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="h-5 w-5" />
+          <DialogHeading icon={AlertTriangle} className="text-destructive" tone="destructive">
             {t('common.fileOperations.batchDelete.title')}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>
             {t('common.fileOperations.batchDelete.description')}
           </DialogDescription>

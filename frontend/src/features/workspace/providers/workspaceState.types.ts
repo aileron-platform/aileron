@@ -154,6 +154,7 @@ export type WorkspaceAction =
   | { type: 'OPEN_FILE_TAB'; payload: WorkspaceTab & { scope?: WorkspaceTabScope } }
   | { type: 'CLOSE_FILE_TAB'; payload: { tabId: string; scope?: WorkspaceTabScope } }
   | { type: 'CLOSE_ALL_TABS'; payload?: { scope?: WorkspaceTabScope } }
+  | { type: 'REORDER_FILE_TABS'; payload: { tabIds: string[]; scope?: WorkspaceTabScope } }
   | { type: 'SET_ACTIVE_TAB'; payload: { tabId: string; scope?: WorkspaceTabScope } }
   | { type: 'UPDATE_TAB_CONTENT'; payload: { tabId: string; content: string; scope?: WorkspaceTabScope } }
   | { type: 'SET_TAB_MODIFIED'; payload: { tabId: string; isModified: boolean; scope?: WorkspaceTabScope } }
@@ -460,6 +461,7 @@ export interface WorkspaceContextType {
     modifiedTabs: string[];
     originalContents: Record<string, string>;
     updateTabContent: (tabId: string, content: string, scope?: WorkspaceTabScope) => void;
+    reorderTabs: (tabIds: string[], scope?: WorkspaceTabScope) => void;
     setTabModified: (tabId: string, isModified: boolean, scope?: WorkspaceTabScope) => void;
     setOriginalContent: (tabId: string, content: string, scope?: WorkspaceTabScope) => void;
     saveFile: (tabId: string, scope?: WorkspaceTabScope) => Promise<{ success: boolean; error?: string }>;

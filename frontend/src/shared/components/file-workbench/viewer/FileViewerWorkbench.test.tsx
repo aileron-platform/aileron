@@ -239,6 +239,116 @@ describe('FileViewerWorkbench', () => {
     expect(onActiveTabChange).toHaveBeenCalledWith('/docs/b.ts');
   });
 
+  it('emits reordered tabs when a tab is dragged before another tab', () => {
+    const { onTabsChange, onActiveTabChange } = renderWorkbench({ activeTabId: '/docs/b.ts' });
+
+    fireEvent.dragStart(screen.getByText('c.mmd'));
+    fireEvent.dragOver(screen.getByText('a.md'));
+    fireEvent.drop(screen.getByText('a.md'));
+
+    expect(onTabsChange).toHaveBeenCalledWith([tabs[2], tabs[0], tabs[1]]);
+    expect(onActiveTabChange).not.toHaveBeenCalled();
+  });
+
+  it('emits reordered tabs when a tab is dragged after another tab', () => {
+    const { onTabsChange } = renderWorkbench();
+
+    fireEvent.dragStart(screen.getByText('a.md'));
+    fireEvent.dragOver(screen.getByText('c.mmd'));
+    fireEvent.drop(screen.getByText('c.mmd'));
+
+    expect(onTabsChange).toHaveBeenCalledWith([tabs[1], tabs[2], tabs[0]]);
+  });
+
+  it('shows the drop position while dragging over tabs and clears it after drop', () => {
+    renderWorkbench();
+
+    const sourceTab = screen.getByText('c.mmd').closest('[draggable="true"]');
+    const targetBeforeTab = screen.getByText('a.md').closest('[draggable="true"]');
+    const targetAfterTab = screen.getByText('b.ts').closest('[draggable="true"]');
+
+    expect(sourceTab).not.toBeNull();
+    expect(targetBeforeTab).not.toBeNull();
+    expect(targetAfterTab).not.toBeNull();
+
+    fireEvent.dragStart(sourceTab!);
+    fireEvent.dragOver(targetBeforeTab!);
+
+    expect(targetBeforeTab).toHaveAttribute('data-drop-position', 'before');
+
+    fireEvent.dragOver(targetAfterTab!);
+
+    expect(targetBeforeTab).not.toHaveAttribute('data-drop-position');
+    expect(targetAfterTab).toHaveAttribute('data-drop-position', 'before');
+
+    fireEvent.drop(targetAfterTab!);
+
+    expect(targetAfterTab).not.toHaveAttribute('data-drop-position');
+  });
+
+  it('shows an after drop position when dragging a tab forward', () => {
+    renderWorkbench();
+
+    const sourceTab = screen.getByText('a.md').closest('[draggable="true"]');
+    const targetTab = screen.getByText('c.mmd').closest('[draggable="true"]');
+
+    expect(sourceTab).not.toBeNull();
+    expect(targetTab).not.toBeNull();
+
+    fireEvent.dragStart(sourceTab!);
+    fireEvent.dragOver(targetTab!);
+
+    expect(targetTab).toHaveAttribute('data-drop-position', 'after');
+
+    fireEvent.dragEnd(sourceTab!);
+
+    expect(targetTab).not.toHaveAttribute('data-drop-position');
+  });
+
+  it('keeps tab order unchanged when a dragged tab is dropped onto itself', () => {
+    const { onTabsChange } = renderWorkbench();
+
+    fireEvent.dragStart(screen.getByText('b.ts'));
+    fireEvent.dragOver(screen.getByText('b.ts'));
+    fireEvent.drop(screen.getByText('b.ts'));
+
+    expect(onTabsChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps close buttons and context menus targeting the intended tab after reorder', () => {
+    const Harness: React.FC = () => {
+      const [tabState, setTabState] = React.useState<FileViewerWorkbenchTab[]>(tabs);
+      const [activeTabId, setActiveTabId] = React.useState<string | null>('/docs/a.md');
+      const adapter: FileViewerWorkbenchAdapter = React.useMemo(() => ({
+        readFile: vi.fn(),
+        saveFile: vi.fn().mockResolvedValue(undefined),
+      }), []);
+
+      return (
+        <FileViewerWorkbench
+          tabs={tabState}
+          activeTabId={activeTabId}
+          adapter={adapter}
+          onTabsChange={setTabState}
+          onActiveTabChange={setActiveTabId}
+        />
+      );
+    };
+
+    render(<Harness />);
+
+    fireEvent.dragStart(screen.getByText('c.mmd'));
+    fireEvent.dragOver(screen.getByText('a.md'));
+    fireEvent.drop(screen.getByText('a.md'));
+
+    fireEvent.contextMenu(screen.getByText('c.mmd'));
+    fireEvent.click(screen.getByText('shared.fileViewer.tabContextMenu.closeToTheRight'));
+
+    expect(screen.getByText('c.mmd')).toBeInTheDocument();
+    expect(screen.queryByText('a.md')).not.toBeInTheDocument();
+    expect(screen.queryByText('b.ts')).not.toBeInTheDocument();
+  });
+
   it('opens the workspace-style action menu for copy path and reveal', () => {
     const { adapter } = renderWorkbench();
 

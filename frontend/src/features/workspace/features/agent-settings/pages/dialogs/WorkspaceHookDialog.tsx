@@ -1,15 +1,9 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Workflow } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import {
@@ -538,10 +532,9 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="flex h-[85vh] max-h-[85vh] max-w-4xl flex-col p-0">
         <DialogHeader className="flex-shrink-0 px-6 pt-6">
-          <DialogTitle className="flex items-center gap-2">
-            <Workflow className="h-5 w-5 text-primary" />
+          <DialogHeading icon={Workflow}>
             {dialogTitle}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>
             {dialogDescription}
           </DialogDescription>

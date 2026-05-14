@@ -407,6 +407,10 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     dispatch({ type: 'UPDATE_TAB_CONTENT', payload: { tabId, content, scope } });
   }, [currentTabScope]);
 
+  const reorderTabs = useCallback((tabIds: string[], scope = currentTabScope) => {
+    dispatch({ type: 'REORDER_FILE_TABS', payload: { tabIds, scope } });
+  }, [currentTabScope]);
+
   const setTabModified = useCallback((tabId: string, isModified: boolean, scope = currentTabScope) => {
     dispatch({ type: 'SET_TAB_MODIFIED', payload: { tabId, isModified, scope } });
   }, [currentTabScope]);
@@ -572,6 +576,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
         modifiedTabs: getScopedTabState().modifiedTabs,
         originalContents: getScopedTabState().originalContents,
         updateTabContent,
+        reorderTabs,
         setTabModified,
         setOriginalContent,
         saveFile,
@@ -605,6 +610,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
       closeAllTabs,
       switchToTab,
       updateTabContent,
+      reorderTabs,
       setTabModified,
       setOriginalContent,
       saveFile,

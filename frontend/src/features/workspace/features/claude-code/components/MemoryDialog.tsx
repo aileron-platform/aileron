@@ -1,12 +1,6 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { MarkdownEditor } from '@/shared/components/markdown/MarkdownEditor';
@@ -87,10 +81,9 @@ const MemoryDialog: React.FC<DocumentDialogProps> = ({
       <DialogContent className="max-w-4xl">
         <form className="space-y-4" onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <NotebookPen className="h-5 w-5 text-primary" />
+            <DialogHeading icon={NotebookPen}>
               {t('workspace.claudeCode.memory.dialog.title.edit')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>
               {t('workspace.claudeCode.memory.dialog.description.edit')}
             </DialogDescription>

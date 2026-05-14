@@ -1,26 +1,11 @@
+import { AlertDialogHeading, DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React from 'react';
 import { BookOpen, CalendarClock, Database, FolderTree, GitBranch, Link2, Loader2, Network, Settings, Share2, Trash2 } from 'lucide-react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/shared/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader } from '@/shared/components/ui/alert-dialog';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Tabs } from '@/shared/components/ui/tabs';
@@ -335,10 +320,9 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Trash2 className="h-5 w-5 text-destructive" />
+            <AlertDialogHeading icon={Trash2} tone="destructive">
               {t('knowledgeBase.detail.delete.title')}
-            </AlertDialogTitle>
+            </AlertDialogHeading>
             <AlertDialogDescription>
               {t('knowledgeBase.detail.delete.description', { name: detail?.name ?? knowledgeBaseId })}
             </AlertDialogDescription>
@@ -444,10 +428,9 @@ const KnowledgeBaseSettingsDialog: React.FC<{
       <DialogContent className="sm:max-w-xl">
         <form className="space-y-5" onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5 text-primary" />
+            <DialogHeading icon={Settings}>
               {t('knowledgeBase.detail.settings.title')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>
               {t('knowledgeBase.detail.settings.description')}
             </DialogDescription>

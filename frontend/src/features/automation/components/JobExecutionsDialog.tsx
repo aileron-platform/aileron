@@ -1,11 +1,6 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { Input } from '@/shared/components/ui/input';
@@ -367,10 +362,9 @@ export const JobExecutionsDialog: React.FC<JobExecutionsDialogProps> = ({
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
         <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
-              <Clock className="h-5 w-5 text-primary" />
+            <DialogHeading icon={Clock} className="text-lg font-semibold">
               {dialogTitle}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription className="text-sm text-muted-foreground">{dialogDescription}</DialogDescription>
           </DialogHeader>
 

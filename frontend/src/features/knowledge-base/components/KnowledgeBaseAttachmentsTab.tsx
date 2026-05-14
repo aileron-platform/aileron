@@ -1,3 +1,4 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React from 'react';
 import { Box, Check, Clock, FolderTree, Link2, Plus, Unplug, Workflow } from 'lucide-react';
 import { apiClient } from '@/shared/api/apiClient';
@@ -12,14 +13,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/shared/components/ui/command';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
@@ -342,10 +336,9 @@ export const KnowledgeBaseAttachmentsTab: React.FC<KnowledgeBaseAttachmentsTabPr
       >
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Link2 className="h-5 w-5 text-primary" />
+            <DialogHeading icon={Link2}>
               {t('knowledgeBase.attachments.dialog.title')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>{t('knowledgeBase.attachments.dialog.description')}</DialogDescription>
           </DialogHeader>
 

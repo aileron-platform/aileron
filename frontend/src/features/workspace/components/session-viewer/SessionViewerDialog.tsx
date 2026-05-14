@@ -1,14 +1,9 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useEffect, useState, useCallback } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('SessionViewerDialog');
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader } from '@/shared/components/ui/dialog';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -151,10 +146,9 @@ export const SessionViewerDialog: React.FC<SessionViewerDialogProps> = ({
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-w-6xl h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0 pb-4 border-b">
-          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-primary" />
+          <DialogHeading icon={MessageSquare} className="text-lg font-semibold">
             {dialogTitle}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription className="text-sm text-muted-foreground mt-1">
             {sessionInfo?.title || dialogDescription}
           </DialogDescription>

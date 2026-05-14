@@ -1,3 +1,4 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 /**
  * MCPWidget - MCP tool display.
  */
@@ -6,12 +7,7 @@ import React from 'react';
 import { Package, Maximize2 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useI18n } from '@/shared/hooks/useI18n';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/components/ui/dialog';
 import { WidgetProps } from './types';
 import { ErrorDisplay } from './ErrorDisplay';
 
@@ -98,10 +94,9 @@ export const MCPWidget: React.FC<WidgetProps & { toolType: string }> = ({
       <Dialog open={showFullscreen} onOpenChange={setShowFullscreen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-mono text-sm">
-              <Package className="h-4 w-4" />
+            <DialogHeading icon={Package} className="font-mono text-sm" iconClassName="h-4 w-4">
               {mcpInfo.server} • {mcpInfo.method}
-            </DialogTitle>
+            </DialogHeading>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-gray-50 dark:bg-zinc-900 rounded p-4">
             <pre className="text-xs font-mono whitespace-pre-wrap text-gray-900 dark:text-zinc-100">

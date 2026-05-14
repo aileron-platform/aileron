@@ -1,3 +1,4 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
@@ -5,13 +6,7 @@ const logger = createLogger('WorkspaceCreationStep');
 import { ArrowLeft, CheckCircle, Copy, Loader2, Server, FileText, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader } from '@/shared/components/ui/dialog';
 import { Progress } from '@/shared/components/ui/progress';
 import { workspaceWizardService } from '../../services/workspaceWizardService';
 import { apiClient } from '@/shared/api/apiClient';
@@ -360,10 +355,9 @@ export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
       <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
         <DialogContent className="max-h-[80vh] max-w-2xl overflow-hidden">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
+            <DialogHeading icon={FileText}>
               {t('workspace.wizard.steps.workspaceCreation.logs.dialogTitle')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>
               {t('workspace.wizard.steps.workspaceCreation.logs.dialogDescription')}
             </DialogDescription>

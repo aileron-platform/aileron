@@ -72,6 +72,47 @@ const getViewerOwnerKey = (tab: FileViewerWorkbenchTab | null): string | null =>
   return null;
 };
 
+const reorderTabs = (
+  tabs: FileViewerWorkbenchTab[],
+  draggedTabId: string,
+  targetTabId: string,
+): FileViewerWorkbenchTab[] => {
+  if (draggedTabId === targetTabId) return tabs;
+
+  const draggedIndex = tabs.findIndex((tab) => tab.id === draggedTabId);
+  const targetIndex = tabs.findIndex((tab) => tab.id === targetTabId);
+  if (draggedIndex < 0 || targetIndex < 0) return tabs;
+
+  const draggedTab = tabs[draggedIndex];
+  const nextTabs = tabs.filter((tab) => tab.id !== draggedTabId);
+  const targetIndexAfterRemoval = nextTabs.findIndex((tab) => tab.id === targetTabId);
+  if (targetIndexAfterRemoval < 0) return tabs;
+
+  const insertIndex = draggedIndex < targetIndex
+    ? targetIndexAfterRemoval + 1
+    : targetIndexAfterRemoval;
+
+  return [
+    ...nextTabs.slice(0, insertIndex),
+    draggedTab,
+    ...nextTabs.slice(insertIndex),
+  ];
+};
+
+const getDropPosition = (
+  tabs: FileViewerWorkbenchTab[],
+  draggedTabId: string,
+  targetTabId: string,
+): 'before' | 'after' | null => {
+  if (draggedTabId === targetTabId) return null;
+
+  const draggedIndex = tabs.findIndex((tab) => tab.id === draggedTabId);
+  const targetIndex = tabs.findIndex((tab) => tab.id === targetTabId);
+  if (draggedIndex < 0 || targetIndex < 0) return null;
+
+  return draggedIndex < targetIndex ? 'after' : 'before';
+};
+
 export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   tabs,
   activeTabId,
@@ -97,12 +138,14 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const codeEditorRef = useRef<CodeTextEditorRef>(null);
+  const draggedTabIdRef = useRef<string | null>(null);
   const [showLeftScroll, setShowLeftScroll] = useState(false);
   const [showRightScroll, setShowRightScroll] = useState(false);
   const [tabContextMenuPosition, setTabContextMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [contextMenuTabId, setContextMenuTabId] = useState<string | null>(null);
   const [moreMenuPosition, setMoreMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [uncontrolledExpanded, setUncontrolledExpanded] = useState(false);
+  const [dropIndicator, setDropIndicator] = useState<{ tabId: string; position: 'before' | 'after' } | null>(null);
   const [formatActions, setFormatActions] = useState<RegisteredFormatActions>({
     key: EMPTY_FORMAT_ACTIONS_KEY,
     ownerKey: '',
@@ -352,6 +395,54 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
     setContextMenuTabId(tabId);
   };
 
+  const handleTabDragStart = (event: React.DragEvent, tabId: string) => {
+    draggedTabIdRef.current = tabId;
+    setDropIndicator(null);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', tabId);
+    }
+    closeTabContextMenu();
+    closeToolbarMenus();
+  };
+
+  const handleTabDragOver = (event: React.DragEvent, targetTabId: string) => {
+    const draggedTabId = draggedTabIdRef.current;
+    if (!draggedTabId) return;
+
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+
+    const position = getDropPosition(tabs, draggedTabId, targetTabId);
+    setDropIndicator((current) => {
+      if (!position) return null;
+      if (current?.tabId === targetTabId && current.position === position) return current;
+      return { tabId: targetTabId, position };
+    });
+  };
+
+  const handleTabDrop = (event: React.DragEvent, targetTabId: string) => {
+    const draggedTabId = draggedTabIdRef.current || event.dataTransfer?.getData('text/plain');
+    draggedTabIdRef.current = null;
+    setDropIndicator(null);
+    if (!draggedTabId) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const nextTabs = reorderTabs(tabs, draggedTabId, targetTabId);
+    if (nextTabs !== tabs) {
+      onTabsChange(nextTabs);
+    }
+  };
+
+  const handleTabDragEnd = () => {
+    draggedTabIdRef.current = null;
+    setDropIndicator(null);
+  };
+
   const openMoreMenu = () => {
     if (!moreButtonRef.current) return;
     const rect = moreButtonRef.current.getBoundingClientRect();
@@ -498,15 +589,30 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
               {tabs.map((tab) => (
                 <div
                   key={tab.id}
+                  draggable
+                  data-drop-position={dropIndicator?.tabId === tab.id ? dropIndicator.position : undefined}
                   onClick={() => onActiveTabChange(tab.id)}
                   onContextMenu={(event) => handleTabContextMenu(event, tab.id)}
+                  onDragStart={(event) => handleTabDragStart(event, tab.id)}
+                  onDragOver={(event) => handleTabDragOver(event, tab.id)}
+                  onDrop={(event) => handleTabDrop(event, tab.id)}
+                  onDragEnd={handleTabDragEnd}
                   className={cn(
-                    'flex h-full min-w-0 flex-shrink-0 cursor-pointer items-center border-r border-border transition-colors hover:bg-muted/50',
+                    'relative flex h-full min-w-0 flex-shrink-0 cursor-pointer items-center border-r border-border transition-colors hover:bg-muted/50',
                     activeTabId === tab.id
                       ? 'border-b-2 border-b-primary bg-background text-foreground'
                       : 'text-muted-foreground',
                   )}
                 >
+                  {dropIndicator?.tabId === tab.id && (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'pointer-events-none absolute bottom-1 top-1 z-10 w-0.5 rounded-full bg-primary shadow-sm',
+                        dropIndicator.position === 'before' ? 'left-0' : 'right-0',
+                      )}
+                    />
+                  )}
                   <div className="flex h-full min-w-0 items-center px-2.5">
                     <span className="mr-1.5 shrink-0">{getFileIcon(tab.name)}</span>
                     <span className="max-w-28 truncate text-sm" title={tab.path}>{tab.name}</span>
@@ -523,9 +629,11 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
                   {canCloseTabs && (
                     <button
                       type="button"
+                      draggable={false}
                       className="h-full px-1.5 text-muted-foreground hover:bg-muted/80 hover:text-foreground"
                       title={t('shared.fileViewer.tabs.close')}
                       aria-label={t('shared.fileViewer.tabs.close')}
+                      onDragStart={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation();
                         closeTab(tab.id);

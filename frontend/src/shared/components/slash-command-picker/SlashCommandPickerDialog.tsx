@@ -1,11 +1,6 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader } from '@/shared/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { Input } from '@/shared/components/ui/input';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
@@ -119,10 +114,9 @@ export const SlashCommandPickerDialog: React.FC<SlashCommandPickerDialogProps> =
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl h-[80vh] flex flex-col">
         <DialogHeader className="flex-shrink-0 space-y-1">
-          <DialogTitle className="flex items-center gap-2">
-            <Command className="h-5 w-5 text-primary" />
+          <DialogHeading icon={Command}>
             {resolvedLabels.title}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>{resolvedLabels.description}</DialogDescription>
         </DialogHeader>
 

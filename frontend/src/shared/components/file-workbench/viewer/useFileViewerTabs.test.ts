@@ -60,6 +60,33 @@ describe('useFileViewerTabs', () => {
     expect(result.current.tabs.map(tab => tab.id)).toEqual(['/pkg/a.md', '/pkg/b.md']);
   });
 
+  it('preserves incoming tab order when applying tabs change', () => {
+    const { result } = renderHook(() => useFileViewerTabs());
+
+    act(() => {
+      result.current.openFile(buildNode('/pkg/a.md'), 'A');
+      result.current.openFile(buildNode('/pkg/b.md'), 'B');
+      result.current.openFile(buildNode('/pkg/c.md'), 'C');
+    });
+
+    const reordered = [
+      result.current.tabs[2],
+      result.current.tabs[0],
+      result.current.tabs[1],
+    ];
+
+    act(() => {
+      result.current.applyTabsChange(reordered);
+    });
+
+    expect(result.current.tabs.map(tab => tab.id)).toEqual([
+      '/pkg/c.md',
+      '/pkg/a.md',
+      '/pkg/b.md',
+    ]);
+    expect(result.current.activeTabId).toBe('/pkg/c.md');
+  });
+
   it('clears active tab id when last tab is closed', () => {
     const { result } = renderHook(() => useFileViewerTabs());
 

@@ -4,6 +4,7 @@ import { CheckCircle2, Download, FileArchive, GitBranch, Info, LayoutGrid, List,
 import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { ColumnsLayout } from '@/shared/components/layout/ColumnsLayout';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
+import { AlertDialogHeading, DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
@@ -15,7 +16,6 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
 } from '@/shared/components/ui/alert-dialog';
 import {
   Dialog,
@@ -23,7 +23,6 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
 } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
@@ -722,7 +721,9 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(90vh,760px)] max-w-3xl flex-col overflow-hidden">
         <DialogHeader>
-          <DialogTitle>{t('marketplace.import.title')}</DialogTitle>
+          <DialogHeading icon={Upload}>
+          {t('marketplace.import.title')}
+        </DialogHeading>
           <DialogDescription>{t('marketplace.import.description')}</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
@@ -1127,6 +1128,11 @@ const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDialogPro
     export: 'marketplace.export.description',
     delete: 'marketplace.delete.description',
   }[action.type];
+  const actionHeading = {
+    install: { icon: Download, tone: 'primary' as const },
+    export: { icon: Download, tone: 'primary' as const },
+    delete: { icon: Trash2, tone: 'destructive' as const },
+  }[action.type];
 
   const runAction = async () => {
     setStatus('running');
@@ -1170,7 +1176,9 @@ const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDialogPro
     <AlertDialog open={Boolean(action)} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-lg">
         <AlertDialogHeader>
-          <AlertDialogTitle>{t(titleKey)}</AlertDialogTitle>
+          <AlertDialogHeading icon={actionHeading.icon} tone={actionHeading.tone}>
+            {t(titleKey)}
+          </AlertDialogHeading>
           <AlertDialogDescription>{t(descriptionKey, { commandName })}</AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-4">

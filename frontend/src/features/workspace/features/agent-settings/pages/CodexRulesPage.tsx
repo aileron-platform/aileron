@@ -1,3 +1,4 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, FileCode2, Play, Plus, RefreshCw } from 'lucide-react';
@@ -11,14 +12,7 @@ import {
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import {
   Select,
@@ -135,10 +129,9 @@ const CodexRulesValidationDialog: React.FC<CodexRulesValidationDialogProps> = ({
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-2xl flex-col overflow-hidden">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Play className="h-5 w-5 text-primary" />
+          <DialogHeading icon={Play}>
             {t('workspace.agentSettings.codex.rules.validationDialog.title')}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>
             {t('workspace.agentSettings.codex.rules.validationDialog.description')}
           </DialogDescription>
@@ -270,12 +263,11 @@ const CodexRulesDialog: React.FC<DocumentWorkflowDialogProps<RulesDocument>> = (
     <Dialog open={open} onOpenChange={(next) => !submitting && (!next ? onClose() : null)}>
       <DialogContent className="flex h-[85vh] max-h-[85vh] w-full max-w-4xl flex-col p-0">
         <DialogHeader className="flex-shrink-0 px-6 pt-6">
-          <DialogTitle className="flex items-center gap-2">
-            <FileCode2 className="h-5 w-5 text-primary" />
+          <DialogHeading icon={FileCode2}>
             {isEdit
               ? t('workspace.agentSettings.codex.rules.dialog.title.edit')
               : t('workspace.agentSettings.codex.rules.dialog.title.create')}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>
             {isEdit
               ? t('workspace.agentSettings.codex.rules.dialog.description.edit')

@@ -5,7 +5,8 @@ import yaml from 'js-yaml';
 import { useApp } from '@/app/providers/AppProvider';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
@@ -500,10 +501,9 @@ export const OpenSpecDesignerFeature: React.FC = () => {
               <Dialog open={isForkDialogOpen} onOpenChange={setIsForkDialogOpen}>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <GitFork className="h-5 w-5 text-primary" />
+                    <DialogHeading icon={GitFork}>
                       {t('workspace.openspec.designer.actions.forkSchema')}
-                    </DialogTitle>
+                    </DialogHeading>
                     <DialogDescription>{t('workspace.openspec.designer.schemasDescription')}</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
@@ -541,10 +541,9 @@ export const OpenSpecDesignerFeature: React.FC = () => {
               <Dialog open={isInitDialogOpen} onOpenChange={setIsInitDialogOpen}>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <Plus className="h-5 w-5 text-primary" />
+                    <DialogHeading icon={Plus}>
                       {t('workspace.openspec.designer.actions.initSchema')}
-                    </DialogTitle>
+                    </DialogHeading>
                     <DialogDescription>{t('workspace.openspec.designer.schemasDescription')}</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">

@@ -1,3 +1,4 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 /**
  * ReadWidget - file read display with Markdown parsing and code highlighting.
  */
@@ -8,12 +9,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { useI18n } from '@/shared/hooks/useI18n';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/components/ui/dialog';
 import { WidgetProps } from './types';
 import { ErrorDisplay } from './ErrorDisplay';
 import { useApp } from '@/app/providers/AppProvider';
@@ -360,10 +356,9 @@ export const ReadWidget: React.FC<WidgetProps> = ({ input, output, error, status
       <Dialog open={showFullscreen} onOpenChange={setShowFullscreen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-mono text-sm">
-              <FileText className="h-4 w-4" />
+            <DialogHeading icon={FileText} className="font-mono text-sm" iconClassName="h-4 w-4">
               {filePath}
-            </DialogTitle>
+            </DialogHeading>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-gray-50 dark:bg-zinc-900 rounded">
             {isMarkdown ? (

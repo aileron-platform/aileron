@@ -1,15 +1,9 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React from 'react';
 import { BookOpen, Briefcase, FileText, Heart, Loader2, Microscope, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/shared/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { useToast } from '@/shared/components/ui/use-toast';
@@ -111,10 +105,9 @@ export const KnowledgeBaseCreateDialog: React.FC<KnowledgeBaseCreateDialogProps>
         {step === 'template' ? (
           <div className="space-y-4">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-amber-500" />
+              <DialogHeading icon={Sparkles}>
                 {t('knowledgeBase.create.template.title')}
-              </DialogTitle>
+              </DialogHeading>
               <DialogDescription>{t('knowledgeBase.create.template.subtitle')}</DialogDescription>
             </DialogHeader>
 
@@ -155,10 +148,9 @@ export const KnowledgeBaseCreateDialog: React.FC<KnowledgeBaseCreateDialogProps>
         ) : (
           <form className="space-y-4" onSubmit={handleSubmit}>
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-amber-500" />
+              <DialogHeading icon={Sparkles}>
                 {t('knowledgeBase.create.dialogTitle')}
-              </DialogTitle>
+              </DialogHeading>
               <DialogDescription>{t('knowledgeBase.create.dialogDescription')}</DialogDescription>
             </DialogHeader>
 

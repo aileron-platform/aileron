@@ -1,14 +1,8 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, Server } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import {
@@ -227,10 +221,9 @@ export const MCPServerDialog = <TScope extends string = string>({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="flex h-[85vh] max-h-[85vh] max-w-2xl flex-col p-0">
         <DialogHeader className="flex-shrink-0 px-6 pt-6">
-          <DialogTitle className="flex items-center gap-2">
-            <Server className="h-5 w-5 text-primary" />
+          <DialogHeading icon={Server}>
             {isEdit ? labels.titleEdit : labels.titleCreate}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>{labels.description}</DialogDescription>
         </DialogHeader>
 

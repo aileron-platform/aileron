@@ -171,6 +171,17 @@ export const FileEditor: React.FC = () => {
 
   const handleTabsChange = useCallback((nextTabs: FileViewerWorkbenchTab[]) => {
     const nextById = new Map(nextTabs.map(tab => [tab.id, tab]));
+    const currentIds = workspace.openTabs.map(tab => tab.id);
+    const nextIds = nextTabs.map(tab => tab.id);
+    const hasSameTabs = currentIds.length === nextIds.length
+      && currentIds.every(id => nextById.has(id));
+    const hasOrderChanged = hasSameTabs
+      && currentIds.some((id, index) => id !== nextIds[index]);
+
+    if (hasOrderChanged) {
+      fileEditor.reorderTabs(nextIds);
+    }
+
     workspace.openTabs.forEach(tab => {
       if (!nextById.has(tab.id)) {
         closeTab(tab.id);

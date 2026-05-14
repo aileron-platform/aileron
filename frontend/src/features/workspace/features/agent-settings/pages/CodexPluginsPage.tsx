@@ -354,7 +354,7 @@ const CodexPluginsPage: React.FC = () => {
         onOpenChange={setDetailOpen}
         title={detail ? t(`${I18N_PREFIX}.detail.title`, { name: detail.displayName || detail.name }) : t(`${I18N_PREFIX}.detail.fallbackTitle`)}
         description={detail?.shortDescription ?? undefined}
-        icon={<Package className="h-5 w-5" />}
+        icon={Package}
       >
         <CodexPluginDetailPanel detail={detail} loading={detailQuery.isLoading} />
       </PluginDetailDialog>

@@ -365,6 +365,23 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
       }));
     }
 
+    case 'REORDER_FILE_TABS': {
+      const scope = action.payload.scope ?? 'file-management';
+      return updateTabStateForScope(state, scope, (tabState) => {
+        const tabsById = new Map(tabState.openTabs.map(tab => [tab.id, tab]));
+        const nextTabIds = new Set(action.payload.tabIds);
+        const reorderedTabs = action.payload.tabIds
+          .map(tabId => tabsById.get(tabId))
+          .filter((tab): tab is typeof tabState.openTabs[number] => Boolean(tab));
+        const remainingTabs = tabState.openTabs.filter(tab => !nextTabIds.has(tab.id));
+
+        return {
+          ...tabState,
+          openTabs: [...reorderedTabs, ...remainingTabs],
+        };
+      });
+    }
+
     case 'UPDATE_TAB_CONTENT': {
       const scope = action.payload.scope ?? 'file-management';
       return updateTabStateForScope(state, scope, (tabState) => ({

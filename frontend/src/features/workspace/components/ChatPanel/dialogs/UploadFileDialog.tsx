@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { CloudUpload, FileText, X } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader } from '@/shared/components/ui/dialog';
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { Button } from '@/shared/components/ui/button';
 import type { ChatUploadItem } from '../../types';
 import { formatFileSize } from '@/shared/utils/fileTypeUtils';
@@ -106,10 +107,9 @@ export const UploadFileDialog: React.FC<UploadFileDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CloudUpload className="h-5 w-5 text-primary" />
+          <DialogHeading icon={CloudUpload}>
             {t('workspace.chat.dialogs.upload.title')}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>{t('workspace.chat.dialogs.upload.description')}</DialogDescription>
         </DialogHeader>
 

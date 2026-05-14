@@ -4,8 +4,8 @@ import {
   DialogContent,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
 } from '@/shared/components/ui/dialog';
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { Input } from '@/shared/components/ui/input';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { Label } from '@/shared/components/ui/label';
@@ -164,12 +164,11 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
 
     return (
       <form className="flex flex-col min-h-0 flex-1" onSubmit={handleSubmit}>
-        <DialogHeader className="border-b border-border/60 px-6 py-5 flex flex-row items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <Clock className="h-5 w-5" />
-          </span>
+        <DialogHeader className="border-b border-border/60 px-6 py-5">
           <div className="space-y-1">
-            <DialogTitle className="text-base font-semibold">{t('automation.edit.title')}</DialogTitle>
+            <DialogHeading icon={Clock} className="text-base font-semibold">
+              {t('automation.edit.title')}
+            </DialogHeading>
             <p className="text-xs text-muted-foreground">{t('automation.edit.subtitle')}</p>
           </div>
         </DialogHeader>

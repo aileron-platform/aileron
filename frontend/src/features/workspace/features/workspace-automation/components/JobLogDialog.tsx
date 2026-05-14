@@ -4,8 +4,8 @@ import {
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle,
 } from '@/shared/components/ui/dialog';
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -132,11 +132,11 @@ const createMockLogs = (task: WorkerTaskItem, t: Translate, locale: string): Tas
   return baseLogs;
 };
 
-const statusIconMap: Record<string, React.ReactNode> = {
-  active: <CheckCircle className="h-4 w-4 text-green-500" />,
-  failed: <XCircle className="h-4 w-4 text-red-500" />,
-  paused: <Clock className="h-4 w-4 text-amber-500" />,
-  draft: <Clock className="h-4 w-4 text-gray-500" />,
+const statusHeadingIconMap = {
+  active: { icon: CheckCircle, iconClassName: 'h-4 w-4 text-green-500' },
+  failed: { icon: XCircle, iconClassName: 'h-4 w-4 text-red-500' },
+  paused: { icon: Clock, iconClassName: 'h-4 w-4 text-amber-500' },
+  draft: { icon: Clock, iconClassName: 'h-4 w-4 text-gray-500' },
 };
 
 const statusBadgeClass: Record<string, string> = {
@@ -219,7 +219,10 @@ export const JobLogDialog: React.FC<JobLogDialogProps> = ({ isOpen, onClose, tas
     }, 300);
   };
 
-  const statusIcon = statusIconMap[task.status] || <AlertCircle className="h-4 w-4 text-gray-500" />;
+  const statusHeadingIcon = statusHeadingIconMap[task.status] || {
+    icon: AlertCircle,
+    iconClassName: 'h-4 w-4 text-gray-500',
+  };
   const statusClass = statusBadgeClass[task.status] || 'bg-gray-100 text-gray-800';
   const statusLabel = t(`workspace.automation.status.${task.status}`);
 
@@ -227,13 +230,12 @@ export const JobLogDialog: React.FC<JobLogDialogProps> = ({ isOpen, onClose, tas
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            {statusIcon}
+          <DialogHeading icon={statusHeadingIcon.icon} iconClassName={statusHeadingIcon.iconClassName}>
             <span>{task.name}</span>
             <Badge className={statusClass}>
               {statusLabel}
             </Badge>
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>
             {t('workspace.automation.dialogs.taskLog.description')}
           </DialogDescription>

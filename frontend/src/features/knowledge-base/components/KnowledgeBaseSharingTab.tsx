@@ -1,3 +1,4 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React from 'react';
 import { Check, Shield, Share2, UserPlus, X } from 'lucide-react';
 import { apiClient } from '@/shared/api/apiClient';
@@ -12,14 +13,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/shared/components/ui/command';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
 import { Label } from '@/shared/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 import {
@@ -337,10 +331,9 @@ export const KnowledgeBaseSharingTab: React.FC<KnowledgeBaseSharingTabProps> = (
       >
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5 text-primary" />
+            <DialogHeading icon={UserPlus}>
               {t('knowledgeBase.sharing.candidate.title')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>{t('knowledgeBase.sharing.candidate.description')}</DialogDescription>
           </DialogHeader>
 

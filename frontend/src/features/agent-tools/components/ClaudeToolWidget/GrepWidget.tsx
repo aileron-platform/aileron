@@ -1,15 +1,11 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 /**
  * GrepWidget - content search display.
  */
 import React from 'react';
 import { SearchCode, Maximize2, FileText } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/components/ui/dialog';
 import { WidgetProps } from './types';
 import { ErrorDisplay } from './ErrorDisplay';
 
@@ -95,10 +91,9 @@ export const GrepWidget: React.FC<WidgetProps> = ({ input, output, error, status
       <Dialog open={showFullscreen} onOpenChange={setShowFullscreen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-mono text-sm">
-              <SearchCode className="h-4 w-4" />
+            <DialogHeading icon={SearchCode} className="font-mono text-sm" iconClassName="h-4 w-4">
               {pattern}
-            </DialogTitle>
+            </DialogHeading>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-gray-50 dark:bg-zinc-900 rounded">
             {renderMatchList(matches)}

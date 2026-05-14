@@ -5,8 +5,8 @@ import {
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle,
 } from '@/shared/components/ui/dialog';
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { Progress } from '@/shared/components/ui/progress';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import { Button } from '@/shared/components/ui/button';
@@ -41,17 +41,20 @@ export const TaskProgressDialog: React.FC<TaskProgressDialogProps> = ({
   const isRunning = progress.status === 'running' || progress.status === 'pending';
   const isCompleted = progress.status === 'completed';
   const isFailed = progress.status === 'failed';
+  const headingIcon = isRunning ? Loader2 : isCompleted ? CheckCircle2 : AlertCircle;
+  const headingIconClassName = isRunning
+    ? 'h-5 w-5 animate-spin'
+    : isCompleted
+      ? 'h-5 w-5 text-green-600'
+      : 'h-5 w-5 text-red-600';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {isRunning && <Loader2 className="h-5 w-5 animate-spin" />}
-            {isCompleted && <CheckCircle2 className="h-5 w-5 text-green-600" />}
-            {isFailed && <AlertCircle className="h-5 w-5 text-red-600" />}
+          <DialogHeading icon={headingIcon} iconClassName={headingIconClassName}>
             {resolvedTitle}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>
             {getStatusLabel(progress.status)}
           </DialogDescription>

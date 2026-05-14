@@ -1,12 +1,7 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, CheckCircle2, CircleHelp, Compass, Play, Search, Wrench } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Badge } from '@/shared/components/ui/badge';
@@ -325,10 +320,9 @@ export const OpenSpecActionPickerDialog: React.FC<OpenSpecActionPickerDialogProp
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="flex h-[82vh] flex-col sm:max-w-6xl">
           <DialogHeader className="space-y-1">
-            <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-primary" />
+            <DialogHeading icon={BookOpen}>
               {t('workspace.chat.dialogs.openspec.title')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>
               {t('workspace.chat.dialogs.openspec.description')}
             </DialogDescription>
@@ -653,10 +647,9 @@ export const OpenSpecActionPickerDialog: React.FC<OpenSpecActionPickerDialogProp
       <Dialog open={showExpandedGuide} onOpenChange={setShowExpandedGuide}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader className="space-y-2">
-            <DialogTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-primary" />
+            <DialogHeading icon={BookOpen}>
               {t('workspace.chat.dialogs.openspec.expandedGuide.title')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>
               {t('workspace.chat.dialogs.openspec.expandedGuide.description')}
             </DialogDescription>

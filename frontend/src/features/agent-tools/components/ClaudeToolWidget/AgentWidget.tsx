@@ -1,3 +1,4 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 /**
  * AgentWidget - sub-agent execution display.
  */
@@ -6,12 +7,7 @@ import { Bot, Cpu, Wrench, Timer, Hash, Maximize2 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
 import { useI18n } from '@/shared/hooks/useI18n';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/components/ui/dialog';
 import { WidgetProps } from './types';
 import { ErrorDisplay } from './ErrorDisplay';
 
@@ -193,10 +189,9 @@ export const AgentWidget: React.FC<WidgetProps> = ({ input, output, error, statu
       <Dialog open={showFullscreen} onOpenChange={setShowFullscreen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-mono text-sm">
-              <Bot className="h-4 w-4" />
+            <DialogHeading icon={Bot} className="font-mono text-sm" iconClassName="h-4 w-4">
               <span className="truncate">{description || `Agent (${subagentType})`}</span>
-            </DialogTitle>
+            </DialogHeading>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-white dark:bg-zinc-900 rounded p-6">
             <MarkdownContent content={resultContent || t('workspace.chat.widgets.agentTools.emptyResult')} variant="compact" />

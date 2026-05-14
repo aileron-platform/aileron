@@ -1,15 +1,11 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 /**
  * AcpWriteWidget - ACP file write display.
  */
 import React from 'react';
 import { FilePenLine, Maximize2 } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/components/ui/dialog';
 import type { WidgetProps } from '../ClaudeToolWidget/types';
 import { ErrorDisplay } from '../ClaudeToolWidget/ErrorDisplay';
 import { extractAcpDiff, extractAcpOutputText, extractAcpPath } from './acpRawPayload';
@@ -153,10 +149,9 @@ export const AcpWriteWidget: React.FC<WidgetProps> = ({ input, output, error, st
       <Dialog open={showFullscreen} onOpenChange={setShowFullscreen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-sm font-mono">
-              <FilePenLine className="h-4 w-4" />
+            <DialogHeading icon={FilePenLine} className="text-sm font-mono" iconClassName="h-4 w-4">
               {filePath || t('workspace.chat.widgets.agentTools.unknownFile')}
-            </DialogTitle>
+            </DialogHeading>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-gray-50 dark:bg-zinc-900 rounded">
             <table className="w-full text-xs font-mono">

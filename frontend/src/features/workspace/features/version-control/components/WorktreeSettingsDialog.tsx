@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Save } from 'lucide-react';
+import { GitBranch, Save } from 'lucide-react';
 import { apiClient } from '@/shared/api/apiClient';
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -8,8 +8,8 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
 } from '@/shared/components/ui/dialog';
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { useToast } from '@/shared/components/ui/use-toast';
@@ -150,7 +150,9 @@ export const WorktreeSettingsDialog: React.FC<WorktreeSettingsDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('workspace.versionControl.worktree.dialog.title')}</DialogTitle>
+          <DialogHeading icon={GitBranch}>
+            {t('workspace.versionControl.worktree.dialog.title')}
+          </DialogHeading>
           <DialogDescription>
             {t('workspace.versionControl.worktree.dialog.description')}
           </DialogDescription>

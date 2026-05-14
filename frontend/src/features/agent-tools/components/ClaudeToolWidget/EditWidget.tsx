@@ -1,3 +1,4 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 /**
  * EditWidget - single-column file edit diff display.
  */
@@ -5,12 +6,7 @@ import React from 'react';
 import { Edit3, Maximize2 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useI18n } from '@/shared/hooks/useI18n';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/components/ui/dialog';
 import { WidgetProps } from './types';
 import { ErrorDisplay } from './ErrorDisplay';
 
@@ -118,10 +114,9 @@ export const EditWidget: React.FC<WidgetProps> = ({ input, output, error, status
       <Dialog open={showFullscreen} onOpenChange={setShowFullscreen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-mono text-sm">
-              <Edit3 className="h-4 w-4" />
+            <DialogHeading icon={Edit3} className="font-mono text-sm" iconClassName="h-4 w-4">
               {filePath}
-            </DialogTitle>
+            </DialogHeading>
           </DialogHeader>
           <div className="flex-1 overflow-auto p-4 space-y-4">
             <div>

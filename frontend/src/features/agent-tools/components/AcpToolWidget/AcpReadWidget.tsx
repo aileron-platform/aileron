@@ -1,15 +1,11 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 /**
  * AcpReadWidget - ACP file read display.
  */
 import React from 'react';
 import { FileText, Maximize2 } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/components/ui/dialog';
 import type { WidgetProps } from '../ClaudeToolWidget/types';
 import { ErrorDisplay } from '../ClaudeToolWidget/ErrorDisplay';
 import { extractAcpOutputText, extractAcpPath, extractTextFromAcpNode } from './acpRawPayload';
@@ -108,10 +104,9 @@ export const AcpReadWidget: React.FC<WidgetProps> = ({ input, output, error, sta
       <Dialog open={showFullscreen && hasContent} onOpenChange={setShowFullscreen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-sm font-mono">
-              <FileText className="h-4 w-4" />
+            <DialogHeading icon={FileText} className="text-sm font-mono" iconClassName="h-4 w-4">
               {filePath || t('workspace.chat.widgets.agentTools.unknownFile')}
-            </DialogTitle>
+            </DialogHeading>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-gray-50 dark:bg-zinc-900 rounded">
             <table className="w-full text-xs font-mono">

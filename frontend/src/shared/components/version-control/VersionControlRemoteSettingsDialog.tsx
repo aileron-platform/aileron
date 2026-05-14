@@ -1,14 +1,9 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, GitPullRequest, Loader2, Save } from 'lucide-react';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import { Button } from '@/shared/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -105,10 +100,9 @@ export const VersionControlRemoteSettingsDialog: React.FC<VersionControlRemoteSe
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <GitPullRequest className="h-4 w-4" />
+          <DialogHeading icon={GitPullRequest} iconClassName="h-4 w-4">
             {t('shared.versionControl.remoteDialog.title')}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>{t('shared.versionControl.remoteDialog.description')}</DialogDescription>
         </DialogHeader>
 

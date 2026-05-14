@@ -22,7 +22,8 @@ import { cn } from '@/shared/utils/cn';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Badge } from '@/shared/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import { Label } from '@/shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
@@ -392,10 +393,9 @@ const OpenSpecCustomizationSidebar: React.FC = () => {
       <Dialog open={forkOpen} onOpenChange={setForkOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <GitFork className="h-5 w-5 text-primary" />
+            <DialogHeading icon={GitFork}>
               {t('workspace.openspec.customization.actions.forkSchema')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>{t('workspace.openspec.customization.dialogs.forkDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -431,10 +431,9 @@ const OpenSpecCustomizationSidebar: React.FC = () => {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5 text-primary" />
+            <DialogHeading icon={Plus}>
               {t('workspace.openspec.customization.actions.createSchema')}
-            </DialogTitle>
+            </DialogHeading>
             <DialogDescription>{t('workspace.openspec.customization.dialogs.createDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

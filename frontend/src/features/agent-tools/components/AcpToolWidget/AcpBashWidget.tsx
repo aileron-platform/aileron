@@ -1,15 +1,11 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 /**
  * AcpBashWidget - ACP terminal and batch output display.
  */
 import React from 'react';
 import { Terminal, Maximize2 } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/components/ui/dialog';
 import type { WidgetProps } from '../ClaudeToolWidget/types';
 import { ErrorDisplay } from '../ClaudeToolWidget/ErrorDisplay';
 import { extractAcpCommand, extractAcpErrorText, extractAcpOutputText } from './acpRawPayload';
@@ -86,10 +82,9 @@ export const AcpBashWidget: React.FC<WidgetProps> = ({ input, output, error, sta
       <Dialog open={showFullscreen} onOpenChange={setShowFullscreen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-sm font-mono">
-              <Terminal className="h-4 w-4" />
+            <DialogHeading icon={Terminal} className="text-sm font-mono" iconClassName="h-4 w-4">
               {command || t('workspace.chat.widgets.agentTools.noCommand')}
-            </DialogTitle>
+            </DialogHeading>
           </DialogHeader>
           <div className="flex-1 overflow-auto rounded border border-zinc-700 bg-zinc-900 p-4">
             <pre className="text-xs font-mono whitespace-pre-wrap break-all text-zinc-300">

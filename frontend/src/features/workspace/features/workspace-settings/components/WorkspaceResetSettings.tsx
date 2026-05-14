@@ -1,3 +1,4 @@
+import { AlertDialogHeading } from '@/shared/components/ui/dialog-heading';
 /**
  * WorkspaceResetSettings - 工作區生命週期與刪除操作
  */
@@ -9,17 +10,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Badge } from '@/shared/components/ui/badge';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/shared/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTrigger } from '@/shared/components/ui/alert-dialog';
 import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
@@ -552,10 +543,9 @@ export const WorkspaceResetSettings: React.FC = () => {
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle className="flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5 text-destructive" />
+                    <AlertDialogHeading icon={AlertTriangle} tone="destructive">
                       {t('workspace.workspaceSettings.reset.delete.dialog.title', { workspaceName })}
-                    </AlertDialogTitle>
+                    </AlertDialogHeading>
                     <AlertDialogDescription className="space-y-3">
                       <p>
                         {t('workspace.workspaceSettings.reset.delete.dialog.intro', { workspaceName })}

@@ -1,13 +1,9 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import * as React from 'react';
 import { cn } from '@/shared/utils/cn';
 import { Terminal, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/shared/components/ui/dialog';
 
 export interface ToolWidgetProps {
   title?: string;
@@ -148,8 +144,7 @@ export const ToolWidget = React.forwardRef<HTMLDivElement, ToolWidgetProps>(
               dark ? 'bg-zinc-900 border-zinc-800 text-zinc-100' : 'bg-white'
             )}>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 font-mono">
-                  <Terminal className="w-4 h-4" />
+                <DialogHeading icon={Terminal} className="font-mono" iconClassName="w-4 h-4">
                   {title}
                   {showStatus && (
                     <div className={cn(
@@ -159,7 +154,7 @@ export const ToolWidget = React.forwardRef<HTMLDivElement, ToolWidgetProps>(
                       statusColor === 'red' && 'bg-red-500'
                     )} />
                   )}
-                </DialogTitle>
+                </DialogHeading>
               </DialogHeader>
               <div className={cn(
                 'flex-1 overflow-y-auto font-mono text-sm p-4 rounded',

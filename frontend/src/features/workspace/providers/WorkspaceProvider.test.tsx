@@ -143,6 +143,21 @@ const TabIsolationProbe = () => {
       <button type="button" onClick={() => openFileInTab('/src/App.tsx', 'app', 'file-management')}>
         open-file-management-tab
       </button>
+      <button type="button" onClick={() => openFileInTab('/src/Other.ts', 'other', 'file-management')}>
+        open-second-file-management-tab
+      </button>
+      <button
+        type="button"
+        onClick={() => dispatch({
+          type: 'REORDER_FILE_TABS',
+          payload: {
+            scope: 'file-management',
+            tabIds: ['/src/Other.ts', '/src/App.tsx'],
+          },
+        })}
+      >
+        reorder-file-management-tabs
+      </button>
       <button
         type="button"
         onClick={() => dispatch({ type: 'SET_SELECTED_GIT_CONTEXT', payload: 'worktree:feature-auth' })}
@@ -160,6 +175,24 @@ const TabIsolationProbe = () => {
         onClick={() => openFileInTab('/openspec/changes/demo/tasks.md', 'tasks', 'openspec')}
       >
         open-openspec-tab
+      </button>
+      <button
+        type="button"
+        onClick={() => openFileInTab('/openspec/changes/demo/design.md', 'design', 'openspec')}
+      >
+        open-second-openspec-tab
+      </button>
+      <button
+        type="button"
+        onClick={() => dispatch({
+          type: 'REORDER_FILE_TABS',
+          payload: {
+            scope: 'openspec',
+            tabIds: ['/openspec/changes/demo/design.md', '/openspec/changes/demo/tasks.md'],
+          },
+        })}
+      >
+        reorder-openspec-tabs
       </button>
     </div>
   );
@@ -485,6 +518,69 @@ describe('WorkspaceProvider layout persistence', () => {
     expect(loadWorkspaceTabs('ws-tabs', 'openspec')?.activeTabId).toBe(
       '/openspec/changes/demo/tasks.md'
     );
+  });
+
+  it('persists reordered file-management tabs without changing openspec tab order', async () => {
+    const firstRender = render(
+      <WorkspaceProvider workspaceId="ws-reorder-tabs">
+        <TabIsolationProbe />
+      </WorkspaceProvider>,
+      { initialRoute: '/workspaces/file-management' }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'open-file-management-tab' }));
+    fireEvent.click(screen.getByRole('button', { name: 'open-second-file-management-tab' }));
+    fireEvent.click(screen.getByRole('button', { name: 'open-openspec-tab' }));
+    fireEvent.click(screen.getByRole('button', { name: 'open-second-openspec-tab' }));
+    fireEvent.click(screen.getByRole('button', { name: 'reorder-file-management-tabs' }));
+
+    expect(getAllTabsState()).toEqual({
+      fileManagementTabs: ['/src/Other.ts', '/src/App.tsx'],
+      openSpecTabs: ['/openspec/changes/demo/tasks.md', '/openspec/changes/demo/design.md'],
+    });
+
+    await waitFor(() => {
+      expect(loadWorkspaceTabs('ws-reorder-tabs', 'file-management')?.openTabs.map((tab) => tab.path)).toEqual([
+        '/src/Other.ts',
+        '/src/App.tsx',
+      ]);
+    });
+
+    firstRender.unmount();
+
+    render(
+      <WorkspaceProvider workspaceId="ws-reorder-tabs">
+        <TabIsolationProbe />
+      </WorkspaceProvider>,
+      { initialRoute: '/workspaces/file-management' }
+    );
+
+    await waitFor(() => {
+      expect(getAllTabsState()).toEqual({
+        fileManagementTabs: ['/src/Other.ts', '/src/App.tsx'],
+        openSpecTabs: ['/openspec/changes/demo/tasks.md', '/openspec/changes/demo/design.md'],
+      });
+    });
+  });
+
+  it('reorders openspec tabs without changing file-management tab order', async () => {
+    render(
+      <WorkspaceProvider workspaceId="ws-reorder-openspec-tabs">
+        <TabIsolationProbe />
+      </WorkspaceProvider>,
+      { initialRoute: '/workspaces/file-management' }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'open-file-management-tab' }));
+    fireEvent.click(screen.getByRole('button', { name: 'open-second-file-management-tab' }));
+    fireEvent.click(screen.getByRole('button', { name: 'open-openspec-tab' }));
+    fireEvent.click(screen.getByRole('button', { name: 'open-second-openspec-tab' }));
+    fireEvent.click(screen.getByRole('button', { name: 'reorder-openspec-tabs' }));
+
+    expect(getAllTabsState()).toEqual({
+      fileManagementTabs: ['/src/App.tsx', '/src/Other.ts'],
+      openSpecTabs: ['/openspec/changes/demo/design.md', '/openspec/changes/demo/tasks.md'],
+    });
   });
 
   it('reloads the file tree when switching workspaces even if the runtime base URL is unchanged', async () => {

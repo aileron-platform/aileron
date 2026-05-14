@@ -1,15 +1,9 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
 import React, { useEffect, useState } from 'react';
 import { GitBranch } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Checkbox } from '@/shared/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { useI18n } from '@/shared/hooks/useI18n';
 
@@ -66,10 +60,9 @@ export const VersionControlCreateBranchDialog: React.FC<VersionControlCreateBran
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <GitBranch className="h-4 w-4" />
+          <DialogHeading icon={GitBranch} iconClassName="h-4 w-4">
             {t('shared.versionControl.branchDialog.title')}
-          </DialogTitle>
+          </DialogHeading>
           <DialogDescription>{t('shared.versionControl.branchDialog.description')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
