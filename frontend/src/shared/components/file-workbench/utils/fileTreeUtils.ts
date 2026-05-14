@@ -217,6 +217,21 @@ export function getAllDirectoryNodes(nodes: FileTreeNode[]): FileTreeNode[] {
 }
 
 /**
+ * Returns true when the node is a directory whose response was truncated by
+ * the maxDepth limit. The backend signals this by returning `children: []`
+ * together with `hasChildren: true`, which the rest of the tree-restoration
+ * code uses to know it must call `getChildren` to load the real list.
+ */
+export function isDepthTruncatedDirectory(node: FileTreeNode): boolean {
+  return (
+    node.type === 'directory' &&
+    Array.isArray(node.children) &&
+    node.children.length === 0 &&
+    node.hasChildren === true
+  );
+}
+
+/**
  */
 export function getDescendantPaths(node: FileTreeNode): string[] {
   const paths: string[] = [node.path];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sortNodes, sortTreeNodes } from './fileTreeUtils';
+import { isDepthTruncatedDirectory, sortNodes, sortTreeNodes } from './fileTreeUtils';
 import type { FileTreeNode } from '../types';
 
 describe('fileTreeUtils sorting', () => {
@@ -45,5 +45,76 @@ describe('fileTreeUtils sorting', () => {
       'a.ts',
       'b.ts',
     ]);
+  });
+});
+
+describe('isDepthTruncatedDirectory', () => {
+  it('returns true for a directory with empty children and hasChildren true', () => {
+    const node: FileTreeNode = {
+      id: '/a',
+      name: 'a',
+      path: '/a',
+      type: 'directory',
+      hasChildren: true,
+      children: [],
+    };
+    expect(isDepthTruncatedDirectory(node)).toBe(true);
+  });
+
+  it('returns false for a directory with loaded children', () => {
+    const node: FileTreeNode = {
+      id: '/a',
+      name: 'a',
+      path: '/a',
+      type: 'directory',
+      hasChildren: true,
+      children: [
+        { id: '/a/b.ts', name: 'b.ts', path: '/a/b.ts', type: 'file' },
+      ],
+    };
+    expect(isDepthTruncatedDirectory(node)).toBe(false);
+  });
+
+  it('returns false for a directory that is truly empty (hasChildren false)', () => {
+    const node: FileTreeNode = {
+      id: '/a',
+      name: 'a',
+      path: '/a',
+      type: 'directory',
+      hasChildren: false,
+      children: [],
+    };
+    expect(isDepthTruncatedDirectory(node)).toBe(false);
+  });
+
+  it('returns false when children is undefined (both hasChildren true and false)', () => {
+    const truncatedHint: FileTreeNode = {
+      id: '/a',
+      name: 'a',
+      path: '/a',
+      type: 'directory',
+      hasChildren: true,
+    };
+    const noChildHint: FileTreeNode = {
+      id: '/a',
+      name: 'a',
+      path: '/a',
+      type: 'directory',
+      hasChildren: false,
+    };
+    expect(isDepthTruncatedDirectory(truncatedHint)).toBe(false);
+    expect(isDepthTruncatedDirectory(noChildHint)).toBe(false);
+  });
+
+  it('returns false for file nodes even if children is somehow an empty array', () => {
+    const node: FileTreeNode = {
+      id: '/a.ts',
+      name: 'a.ts',
+      path: '/a.ts',
+      type: 'file',
+      hasChildren: true,
+      children: [],
+    };
+    expect(isDepthTruncatedDirectory(node)).toBe(false);
   });
 });
