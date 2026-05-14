@@ -372,4 +372,133 @@ describe('useFileTreeManager', () => {
       '/src/lib/inner/deep.ts',
     ]);
   });
+
+  it('keeps deeply nested expansion across a refresh that re-serves a truncated tree', async () => {
+    const adapterKey = 'workspace:ws-a:hide-hidden';
+
+    // Two calls: first an "initial" tree with real children at depth 3,
+    // then a "refreshed" tree where the depth-3 directory is back to the
+    // truncated form (children=[], hasChildren=true) - exactly how
+    // getTree(maxDepth=2) would respond after a file inside is deleted.
+    const initialTree: FileTreeNode[] = [
+      {
+        id: '/src',
+        name: 'src',
+        path: '/src',
+        type: 'directory',
+        hasChildren: true,
+        children: [
+          {
+            id: '/src/lib',
+            name: 'lib',
+            path: '/src/lib',
+            type: 'directory',
+            hasChildren: true,
+            children: [
+              {
+                id: '/src/lib/inner',
+                name: 'inner',
+                path: '/src/lib/inner',
+                type: 'directory',
+                hasChildren: true,
+                children: [
+                  {
+                    id: '/src/lib/inner/old.ts',
+                    name: 'old.ts',
+                    path: '/src/lib/inner/old.ts',
+                    type: 'file',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const refreshedTree: FileTreeNode[] = [
+      {
+        id: '/src',
+        name: 'src',
+        path: '/src',
+        type: 'directory',
+        hasChildren: true,
+        children: [
+          {
+            id: '/src/lib',
+            name: 'lib',
+            path: '/src/lib',
+            type: 'directory',
+            hasChildren: true,
+            children: [
+              {
+                id: '/src/lib/inner',
+                name: 'inner',
+                path: '/src/lib/inner',
+                type: 'directory',
+                hasChildren: true,
+                children: [], // depth-truncated again on refresh
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const getTreeMock = vi
+      .fn<[], Promise<FileTreeNode[]>>()
+      .mockResolvedValueOnce(initialTree)
+      .mockResolvedValueOnce(refreshedTree);
+
+    const getChildrenMock = vi.fn(async (path: string): Promise<FileTreeNode[]> => {
+      if (path === '/src/lib/inner') {
+        return [
+          {
+            id: '/src/lib/inner/new.ts',
+            name: 'new.ts',
+            path: '/src/lib/inner/new.ts',
+            type: 'file',
+          },
+        ];
+      }
+      return [];
+    });
+
+    const { result } = renderHook(() =>
+      useFileTreeManager({
+        adapter: createAdapter(getTreeMock, { getChildren: getChildrenMock }),
+        adapterKey,
+        autoLoad: false,
+      })
+    );
+
+    await act(async () => {
+      await result.current.loadTree();
+    });
+
+    const innerNode = result.current.state.nodes[0]?.children?.[0]?.children?.[0];
+    expect(innerNode?.path).toBe('/src/lib/inner');
+
+    await act(async () => {
+      await result.current.toggleDirectory(innerNode!);
+    });
+
+    expect(result.current.state.expandedIds.has('/src/lib/inner')).toBe(true);
+
+    // Simulate a refresh, e.g. triggered by deleting a file in the workspace.
+    getChildrenMock.mockClear();
+    await act(async () => {
+      await result.current.loadTree();
+    });
+
+    expect(result.current.state.expandedIds.has('/src/lib/inner')).toBe(true);
+    expect(getChildrenMock).toHaveBeenCalledWith('/src/lib/inner');
+    expect(getChildrenMock).toHaveBeenCalledTimes(1);
+
+    const refreshedInner = result.current.state.nodes[0]?.children?.[0]?.children?.[0];
+    expect(refreshedInner?.path).toBe('/src/lib/inner');
+    expect(refreshedInner?.children?.map((node) => node.path)).toEqual([
+      '/src/lib/inner/new.ts',
+    ]);
+  });
 });
