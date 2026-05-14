@@ -170,6 +170,40 @@ class TestSyncService:
             assert "No Git settings need to sync" in result["git"]["message"]
 
     @pytest.mark.asyncio
+    async def test_sync_settings_to_runtime_gemini_null_account(
+        self, mock_workspace, mock_settings, httpx_response_factory
+    ):
+        """Test Gemini sync accepts a null account value"""
+        mock_settings.additional_settings["gemini"] = {
+            "authMethod": "subscription",
+            "account": None,
+            "accessToken": "access-token",
+            "environmentVariables": [],
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = httpx_response_factory()
+            captured_payload = {}
+
+            async def capture_post(url, **kwargs):
+                if "settings/gemini" in url:
+                    captured_payload.update(kwargs.get("json", {}))
+                return mock_response
+
+            mock_client.post = AsyncMock(side_effect=capture_post)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await SyncService.sync_settings_to_runtime(
+                mock_workspace, mock_settings
+            )
+
+        assert result["gemini"]["success"] is True
+        assert captured_payload["accountEmail"] is None
+
+    @pytest.mark.asyncio
     async def test_sync_settings_to_runtime_ssh_error(
         self, mock_workspace, mock_settings, httpx_response_factory
     ):

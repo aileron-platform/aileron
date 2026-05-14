@@ -243,11 +243,14 @@ class SyncService:
                 logger.info(f"Sync Gemini settings to workspace {workspace.id}")
 
                 additional_settings = settings.additional_settings or {}
-                gemini_settings = additional_settings.get("gemini", {})
+                gemini_settings = additional_settings.get("gemini") or {}
+                gemini_account = gemini_settings.get("account") or {}
+                if not isinstance(gemini_account, dict):
+                    gemini_account = {}
 
                 gemini_payload = {
                     "authMethod": gemini_settings.get("authMethod", "subscription"),
-                    "accountEmail": gemini_settings.get("account", {}).get("email"),
+                    "accountEmail": gemini_account.get("email"),
                     "accessToken": gemini_settings.get("accessToken"),
                     "refreshToken": gemini_settings.get("refreshToken"),
                     "idToken": gemini_settings.get("idToken"),
