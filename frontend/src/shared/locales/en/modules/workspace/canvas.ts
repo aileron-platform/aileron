@@ -18,26 +18,56 @@ const canvas = {
     routePlaceholder: 'Select or enter a route',
     iframeTitle: 'Workspace Web Canvas',
     loading: 'Loading Canvas...',
-    types: {
-      html: 'HTML',
-      nextjs: 'Next.js',
-      default: 'Default',
-    },
     manifest: {
-      missing: 'No manifest',
-      valid: 'Manifest ready',
-      invalid: 'Manifest error',
+      status: {
+        missing: 'No manifest',
+        valid: 'Manifest ready',
+        invalid: 'Manifest error',
+      },
+      statusNotice: {
+        skill: {
+          title: '{{title}}',
+          description: 'Active skill canvas from {{skillName}}.',
+        },
+        user: {
+          title: '{{title}}',
+          description: 'Active user canvas.',
+        },
+        details: 'Manifest: {{manifest}} · Runtime: {{runtime}}',
+      },
+      errors: {
+        invalid: {
+          title: 'Canvas manifest error',
+          description: 'The active canvas manifest is invalid. Fix canvas.json and sync Canvas again.',
+        },
+      },
+      actions: {},
+      warnings: {},
+    },
+    owner: {
+      skill: {
+        label: 'Skill canvas',
+      },
+      user: {
+        label: 'User canvas',
+      },
+    },
+    default: {
+      guidance: {
+        title: 'Default Canvas',
+        description: 'No active canvas manifest is present. Create /workspace/.aileron/canvas.json to activate one.',
+      },
+    },
+    runtime: {
+      healthy: 'Healthy',
+      starting: 'Starting',
+      errors: {
+        startupFailed: 'Startup failed',
+      },
     },
     error: {
       title: 'Canvas unavailable',
       defaultMessage: 'Canvas is not ready. Sync or reset the Canvas and try again.',
-    },
-    statusNotice: {
-      title: 'Canvas status',
-      defaultDescription: 'No directly renderable Web Canvas content has been detected yet.',
-      missingManifestDescription: 'No Canvas route manifest was found, so Canvas is shown in its default state.',
-      invalidManifestDescription: 'The Canvas route manifest has an issue. Fix it and sync Canvas again.',
-      details: 'Type: {{type}} · Manifest: {{manifest}}',
     },
     actions: {
       missingWorkspace: 'Workspace information is incomplete.',
@@ -46,9 +76,15 @@ const canvas = {
       sync: {
         label: 'Sync Canvas',
         successTitle: 'Canvas synced',
-        successDescription: 'The Canvas snapshot has been updated.',
+        successDescription: 'The Canvas manifest has been reloaded.',
         errorTitle: 'Canvas sync failed',
       },
+    },
+    disable: {
+      label: 'Deactivate active canvas',
+      successTitle: 'Active canvas deactivated',
+      successDescription: 'Canvas returned to the default view.',
+      errorTitle: 'Could not deactivate canvas',
     },
     review: {
       toolbar: {

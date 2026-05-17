@@ -53,6 +53,7 @@ import { useOpenSpecWorkspace } from '../../features/openspec/OpenSpecWorkspaceC
 import { buildSessionResultPreviewPayload } from './previewPayload';
 import { getEventDispatcher } from './agentSessionEvents';
 import { syncCanvas } from '../../services/workspaceRuntimeApi';
+import { hasCanvasArtifactSignal } from './canvasArtifactSignal';
 
 // ============================================================================
 // ChatPanel Component
@@ -494,7 +495,7 @@ export const ChatPanel: React.FC = () => {
         .map(b => (b as any).text as string)
         .join('\n') ?? '';
 
-      if (/<artifact[^>]*type="web-canvas"/.test(messageText)) {
+      if (hasCanvasArtifactSignal(messageText)) {
         dispatch({ type: 'SET_CANVAS_SUB_VIEW', payload: 'web-canvas' });
         dispatch({ type: 'SET_CURRENT_FEATURE', payload: 'canvas' });
         dispatch({ type: 'ENSURE_NAVIGATION_ITEM_EXPANDED', payload: 'canvas' });

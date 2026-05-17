@@ -9,6 +9,7 @@ from codex_app_server.generated.v2_all import (
     FileChangePatchUpdatedNotification,
     FileChangeThreadItem,
     FileUpdateChange,
+    ImageGenerationThreadItem,
     ItemCompletedNotification,
     ItemStartedNotification,
     PatchApplyStatus,
@@ -26,6 +27,7 @@ from app.modules.agent_session.services.tools.codex.notification_mapper import (
     FileChangeEnd,
     FileChangePatchUpdated,
     FileChangeStart,
+    ImageGenerationEnd,
     PlanDelta,
     TextDelta,
     TextFinal,
@@ -201,3 +203,33 @@ def test_notification_mapper_handles_file_reasoning_and_plan_events() -> None:
             turnId="turn-1",
         ),
     ) == PlanDelta(item_id="plan-1", delta="step")
+
+
+def test_notification_mapper_handles_image_generation_completion() -> None:
+    mapper = NotificationMapper()
+
+    event = mapper.dispatch(
+        "item/completed",
+        ItemCompletedNotification(
+            item=ImageGenerationThreadItem.model_validate(
+                {
+                    "id": "image-1",
+                    "type": "imageGeneration",
+                    "status": "completed",
+                    "result": "result-data",
+                    "revisedPrompt": "a tiny robot",
+                    "savedPath": "/home/developer/.codex/generated_images/image.png",
+                }
+            ),
+            threadId="thread-1",
+            turnId="turn-1",
+        ),
+    )
+
+    assert event == ImageGenerationEnd(
+        item_id="image-1",
+        status="completed",
+        result="result-data",
+        saved_path="/home/developer/.codex/generated_images/image.png",
+        revised_prompt="a tiny robot",
+    )

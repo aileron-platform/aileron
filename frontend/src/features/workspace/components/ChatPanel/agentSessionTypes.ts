@@ -143,9 +143,13 @@ export interface TextBlock {
 
 export interface ImageBlock {
   type: 'image';
-  source_type: 'base64' | 'url';
-  media_type: string;
-  data: string;
+  source: {
+    type: 'base64' | 'url';
+    media_type?: string;
+    data?: string;
+    url?: string;
+    path?: string;
+  };
 }
 
 export interface ToolUseBlock {

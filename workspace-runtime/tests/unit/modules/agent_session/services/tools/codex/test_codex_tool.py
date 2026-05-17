@@ -5,12 +5,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 from codex_app_server.generated.v2_all import (
+    AgentMessageThreadItem,
     CommandExecutionOutputDeltaNotification,
     CommandExecutionStatus,
     CommandExecutionThreadItem,
     FileChangePatchUpdatedNotification,
     FileChangeThreadItem,
     FileUpdateChange,
+    ImageGenerationThreadItem,
     ItemCompletedNotification,
     ItemStartedNotification,
     PatchApplyStatus,
@@ -28,6 +30,9 @@ from app.modules.agent_session.services.tools.codex.codex_tool import (
     CodexAuthenticationError,
     CodexExecutionError,
     CodexTool,
+)
+from app.modules.agent_session.services.tools.codex.notification_mapper import (
+    ImageGenerationEnd,
 )
 
 
@@ -230,6 +235,129 @@ async def test_execute_task_uses_command_delta_when_final_output_empty(monkeypat
     assert state.active_turn is None
     assert state.dispatcher._current is None
     assert decision_manager.unregistered == ["session-1"]
+
+
+@pytest.mark.asyncio
+async def test_execute_task_persists_image_generation_and_skips_empty_final_text(monkeypatch) -> None:
+    notifications = [
+        _notification(
+            "item/completed",
+            ItemCompletedNotification(
+                item=ImageGenerationThreadItem.model_validate(
+                    {
+                        "id": "image-1",
+                        "type": "imageGeneration",
+                        "status": "completed",
+                        "result": "result-data",
+                        "savedPath": "/tmp/image.png",
+                    }
+                ),
+                threadId="thread-1",
+                turnId="turn-1",
+            ),
+        ),
+        _notification(
+            "item/completed",
+            ItemCompletedNotification(
+                item=AgentMessageThreadItem(
+                    id="msg-1",
+                    text="",
+                    type="agentMessage",
+                ),
+                threadId="thread-1",
+                turnId="turn-1",
+            ),
+        ),
+    ]
+    handle = FakeHandle(notifications)
+    state = SessionState(
+        codex=SimpleNamespace(thread_start=AsyncMock(return_value=FakeThread(handle))),
+        dispatcher=CodexSessionApprovalDispatcher(),
+    )
+    tool = CodexTool(FakeManager(state))
+    persisted_images = []
+    finalized_text = AsyncMock()
+
+    monkeypatch.setattr(module, "global_tool_decision_manager", FakeDecisionManager())
+    monkeypatch.setattr(
+        tool,
+        "_load_session_context",
+        AsyncMock(return_value=(SimpleNamespace(sdk_session_id=None), None, "/workspace")),
+    )
+    monkeypatch.setattr(
+        tool,
+        "_persist_user_message",
+        AsyncMock(return_value={"message_id": "user-1"}),
+    )
+    monkeypatch.setattr(tool, "_save_sdk_session_id", AsyncMock())
+
+    async def persist_image(**kwargs):
+        persisted_images.append(kwargs)
+        return {"message_id": "assistant-image-1"}
+
+    monkeypatch.setattr(tool, "_persist_image_generation_message", persist_image)
+    monkeypatch.setattr(tool, "_finalize_text_message", finalized_text)
+
+    result = await tool.execute_task("session-1", "prompt")
+
+    assert result.assistant_message_ids == ["assistant-image-1"]
+    assert persisted_images[0]["event"].item_id == "image-1"
+    assert result.raw_sdk_response["generated_images"] == [
+        {
+            "item_id": "image-1",
+            "status": "completed",
+            "saved_path": "/tmp/image.png",
+            "revised_prompt": None,
+        }
+    ]
+    finalized_text.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_persist_image_generation_message_uses_base64_source(monkeypatch, tmp_path) -> None:
+    image_path = tmp_path / "image.png"
+    image_path.write_bytes(b"image-bytes")
+    tool = CodexTool(FakeManager(SimpleNamespace()))
+    persisted_blocks = []
+
+    async def persist_blocks(session_id, task_id, blocks):
+        persisted_blocks.append(
+            {"session_id": session_id, "task_id": task_id, "blocks": blocks}
+        )
+        return {"message_id": "assistant-image-1", "content_blocks": blocks}
+
+    monkeypatch.setattr(tool, "_persist_assistant_blocks", persist_blocks)
+
+    message = await tool._persist_image_generation_message(
+        session_id="session-1",
+        task_id="task-1",
+        event=ImageGenerationEnd(
+            item_id="image-1",
+            status="completed",
+            result="",
+            saved_path=str(image_path),
+            revised_prompt=None,
+        ),
+    )
+
+    assert message["message_id"] == "assistant-image-1"
+    assert persisted_blocks == [
+        {
+            "session_id": "session-1",
+            "task_id": "task-1",
+            "blocks": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": "aW1hZ2UtYnl0ZXM=",
+                        "path": str(image_path),
+                    },
+                }
+            ],
+        }
+    ]
 
 
 @pytest.mark.asyncio

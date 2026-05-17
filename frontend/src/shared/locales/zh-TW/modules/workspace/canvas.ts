@@ -18,26 +18,56 @@ const canvas = {
     routePlaceholder: '選擇或輸入路由',
     iframeTitle: '工作區網頁畫布',
     loading: '畫布載入中...',
-    types: {
-      html: 'HTML',
-      nextjs: 'Next.js',
-      default: '預設',
-    },
     manifest: {
-      missing: '無路由清單',
-      valid: '路由清單正常',
-      invalid: '路由清單錯誤',
+      status: {
+        missing: '無 manifest',
+        valid: 'manifest 正常',
+        invalid: 'manifest 錯誤',
+      },
+      statusNotice: {
+        skill: {
+          title: '{{title}}',
+          description: '目前顯示來自 {{skillName}} 的 skill 畫布。',
+        },
+        user: {
+          title: '{{title}}',
+          description: '目前顯示使用者啟用的畫布。',
+        },
+        details: 'Manifest：{{manifest}} · Runtime：{{runtime}}',
+      },
+      errors: {
+        invalid: {
+          title: '畫布 manifest 錯誤',
+          description: '目前的 canvas.json 無效，請修正後重新同步畫布。',
+        },
+      },
+      actions: {},
+      warnings: {},
+    },
+    owner: {
+      skill: {
+        label: 'Skill 畫布',
+      },
+      user: {
+        label: '使用者畫布',
+      },
+    },
+    default: {
+      guidance: {
+        title: '預設畫布',
+        description: '目前沒有 active canvas manifest。建立 /workspace/.aileron/canvas.json 後即可啟用畫布。',
+      },
+    },
+    runtime: {
+      healthy: '正常',
+      starting: '啟動中',
+      errors: {
+        startupFailed: '啟動失敗',
+      },
     },
     error: {
       title: '畫布無法使用',
       defaultMessage: '畫布尚未就緒，請同步或重置畫布後再試。',
-    },
-    statusNotice: {
-      title: '畫布狀態提示',
-      defaultDescription: '目前尚未偵測到可直接呈現的網頁畫布內容。',
-      missingManifestDescription: '目前沒有找到畫布路由清單，畫布會以預設狀態顯示。',
-      invalidManifestDescription: '畫布路由清單格式有問題，請修正後重新同步畫布。',
-      details: '類型：{{type}} · 路由清單：{{manifest}}',
     },
     actions: {
       missingWorkspace: '工作區資訊不完整。',
@@ -46,9 +76,15 @@ const canvas = {
       sync: {
         label: '同步畫布',
         successTitle: '畫布已同步',
-        successDescription: '畫布快照已更新。',
+        successDescription: '畫布 manifest 已重新載入。',
         errorTitle: '畫布同步失敗',
       },
+    },
+    disable: {
+      label: '停用 active canvas',
+      successTitle: '已停用 active canvas',
+      successDescription: '畫布已回到預設畫面。',
+      errorTitle: '無法停用畫布',
     },
     review: {
       toolbar: {

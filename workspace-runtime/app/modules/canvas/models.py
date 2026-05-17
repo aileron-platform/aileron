@@ -8,8 +8,11 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-CanvasType = Literal["html", "nextjs", "default"]
+CanvasType = Literal["active", "default"]
+CanvasKind = Literal["static", "nextjs"]
 CanvasManifestStatus = Literal["missing", "valid", "invalid"]
+CanvasRuntimeStatus = Literal["healthy", "starting", "unhealthy"]
+CanvasOwnerType = Literal["skill", "user"]
 CanvasReviewTargetType = Literal["element", "multi-element", "area"]
 CanvasReviewStatus = Literal["open", "seen", "applied", "dismissed"]
 CanvasReviewReplyRole = Literal["user", "agent"]
@@ -26,7 +29,16 @@ class CanvasRoute(BaseModel):
     """Canvas route information"""
 
     path: str = Field(..., description="Route path")
-    file: str | None = Field(default=None, description="Corresponding file for HTML renderer")
+    label: str | None = Field(default=None, description="Route label")
+
+    model_config = {"populate_by_name": True}
+
+
+class CanvasOwner(BaseModel):
+    """Canvas owner metadata from canvas.json."""
+
+    type: CanvasOwnerType
+    skill_name: str | None = Field(default=None, alias="skillName")
 
     model_config = {"populate_by_name": True}
 
@@ -36,7 +48,11 @@ class CanvasDetectResponse(BaseModel):
 
     workspace_id: str = Field(..., alias="workspaceId")
     type: CanvasType
+    kind: CanvasKind | None = None
+    title: str | None = None
+    owner: CanvasOwner | None = None
     manifest_status: CanvasManifestStatus = Field(..., alias="manifestStatus")
+    runtime_status: CanvasRuntimeStatus | None = Field(default=None, alias="runtimeStatus")
     default_path: str = Field("/", alias="defaultPath")
     routes: list[CanvasRoute] = Field(default_factory=list)
     error: str | None = None
@@ -50,7 +66,11 @@ class CanvasRoutesResponse(BaseModel):
 
     workspace_id: str = Field(..., alias="workspaceId")
     type: CanvasType = "default"
+    kind: CanvasKind | None = None
+    title: str | None = None
+    owner: CanvasOwner | None = None
     manifest_status: CanvasManifestStatus = Field("missing", alias="manifestStatus")
+    runtime_status: CanvasRuntimeStatus | None = Field(default=None, alias="runtimeStatus")
     default_path: str = Field("/", alias="defaultPath")
     routes: list[CanvasRoute] = Field(default_factory=list)
     total: int = Field(..., description="Total route count")
@@ -65,7 +85,9 @@ class CanvasHealthResponse(BaseModel):
     workspace_id: str = Field(..., alias="workspaceId")
     status: str
     type: CanvasType | None = None
+    kind: CanvasKind | None = None
     manifest_status: CanvasManifestStatus | None = Field(default=None, alias="manifestStatus")
+    runtime_status: CanvasRuntimeStatus | None = Field(default=None, alias="runtimeStatus")
     renderer_running: bool = Field(False, alias="rendererRunning")
     port_available: bool = Field(False, alias="portAvailable")
     message: str = ""
@@ -81,13 +103,26 @@ class CanvasActionResponse(BaseModel):
     workspace_id: str = Field(..., alias="workspaceId")
     status: str
     type: CanvasType | None = None
+    kind: CanvasKind | None = None
     manifest_status: CanvasManifestStatus | None = Field(default=None, alias="manifestStatus")
+    runtime_status: CanvasRuntimeStatus | None = Field(default=None, alias="runtimeStatus")
     message: str = ""
     synced_at: str | None = Field(default=None, alias="syncedAt")
     reset_at: str | None = Field(default=None, alias="resetAt")
     renderer_action: str | None = Field(default=None, alias="rendererAction")
     renderer_action_reason: str | None = Field(default=None, alias="rendererActionReason")
     details: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = {"populate_by_name": True}
+
+
+class CanvasManifestDeleteResponse(BaseModel):
+    """Canvas manifest deletion response."""
+
+    workspace_id: str = Field(..., alias="workspaceId")
+    deleted: bool
+    manifest_status: CanvasManifestStatus = Field(..., alias="manifestStatus")
+    runtime_status: CanvasRuntimeStatus | None = Field(default=None, alias="runtimeStatus")
 
     model_config = {"populate_by_name": True}
 

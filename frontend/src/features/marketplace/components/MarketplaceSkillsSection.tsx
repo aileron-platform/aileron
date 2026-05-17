@@ -29,6 +29,7 @@ import {
   type SkillsFileTreePersistenceAdapter,
 } from '@/shared/components/file-workbench/viewer-entry';
 import type { MarketplacePackageFile } from '@/shared/types/marketplace';
+import { getMimeType, isTextFile } from '@/shared/utils/fileTypeUtils';
 import { MarketplaceSectionSidebarShell } from './MarketplaceSectionSidebarShell';
 import { type MarketplaceEditorResourceItem } from '../features/marketplace-editor/marketplaceEditorResourceItems';
 import {
@@ -44,9 +45,77 @@ type MarketplaceFileDialogState =
   | { type: 'rename' | 'delete' | 'batch-delete'; node: FileTreeNode }
   | null;
 
-const TEXT_EXTENSIONS = new Set(['md', 'txt', 'yaml', 'yml', 'toml', 'json']);
+interface ZipFileEntry {
+  path: string;
+  content: string;
+  size: number;
+  binary?: boolean;
+  mimeType?: string;
+}
 
-interface ZipFileEntry { path: string; content: string; size: number }
+const isZipFileName = (name: string): boolean => name.toLowerCase().endsWith('.zip');
+
+const getArchiveDirectoryName = (name: string): string => {
+  const fileName = name.split('/').filter(Boolean).at(-1) ?? name;
+  return fileName.replace(/\.zip$/i, '') || fileName;
+};
+
+const normalizeZipEntryPaths = (entries: ZipFileEntry[], archiveName: string): ZipFileEntry[] => {
+  const hasRootLevelFile = entries.some(entry => entry.path.split('/').filter(Boolean).length === 1);
+  if (!hasRootLevelFile) {
+    return entries;
+  }
+
+  const archiveDirectory = getArchiveDirectoryName(archiveName);
+  return entries.map(entry => ({
+    ...entry,
+    path: marketplaceJoinPath(archiveDirectory, entry.path),
+  }));
+};
+
+const uint8ArrayToBase64 = (bytes: Uint8Array): string => {
+  let binary = '';
+  bytes.forEach(byte => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+};
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer): string => uint8ArrayToBase64(new Uint8Array(buffer));
+
+const base64ToUint8Array = (content: string): Uint8Array => {
+  const binary = atob(content);
+  return new Uint8Array(Array.from(binary, character => character.charCodeAt(0)));
+};
+
+const isIgnoredZipEntry = (zipPath: string): boolean => {
+  const parts = zipPath.split('/').filter(Boolean);
+  const fileName = parts.at(-1) ?? '';
+  return zipPath.endsWith('/')
+    || parts[0] === '__MACOSX'
+    || fileName.startsWith('._')
+    || fileName === '.DS_Store';
+};
+
+const readFileText = (file: File): Promise<string> => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = (event) => resolve(typeof event.target?.result === 'string' ? event.target.result : '');
+  reader.onerror = () => reject(new Error('marketplace.fileTree.error.upload'));
+  reader.readAsText(file);
+});
+
+const readFileBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    if (!(event.target?.result instanceof ArrayBuffer)) {
+      reject(new Error('marketplace.fileTree.error.upload'));
+      return;
+    }
+    resolve(arrayBufferToBase64(event.target.result));
+  };
+  reader.onerror = () => reject(new Error('marketplace.fileTree.error.upload'));
+  reader.readAsArrayBuffer(file);
+});
 
 const insertNodeIntoTree = (
   nodes: FileTreeNode[],
@@ -69,7 +138,7 @@ const addFilesToTree = (
   let result = [...existingNodes];
   const resolved: Array<ZipFileEntry & { node: FileTreeNode }> = [];
 
-  files.forEach(({ path, content, size }) => {
+  files.forEach(({ path, content, size, binary, mimeType }) => {
     const parts = path.split('/').filter(Boolean);
     for (let depth = 0; depth < parts.length - 1; depth += 1) {
       const dirPath = parts.slice(0, depth + 1).join('/');
@@ -99,15 +168,44 @@ const addFilesToTree = (
     }
     const fileNode: FileTreeNode = {
       id: resolvedPath, name: resolvedName, path: resolvedPath, type: 'file',
-      extension: resolvedName.split('.').pop(), size, metadata: { content },
+      extension: resolvedName.split('.').pop(),
+      size,
+      metadata: {
+        content,
+        binary: Boolean(binary),
+        mimeType,
+      },
     };
     result = insertNodeIntoTree(result, parentDir, fileNode);
     allPaths.add(resolvedPath);
-    resolved.push({ path: resolvedPath, content, size, node: fileNode });
+    resolved.push({ path: resolvedPath, content, size, binary, mimeType, node: fileNode });
   });
 
   return { nodes: result, resolved };
 };
+
+const extractTextFilesFromZip = (data: Uint8Array, archiveName: string): Promise<ZipFileEntry[]> => new Promise(resolve => {
+  unzip(data, (err, unzipped) => {
+    if (err) {
+      resolve([]);
+      return;
+    }
+
+    const entries = Object.entries(unzipped)
+      .filter(([zipPath]) => !isIgnoredZipEntry(zipPath))
+      .map(([zipPath, entryData]) => {
+        const binary = !isTextFile(zipPath);
+        return {
+          path: zipPath,
+          content: binary ? uint8ArrayToBase64(entryData) : new TextDecoder().decode(entryData),
+          size: entryData.length,
+          binary,
+          mimeType: getMimeType(zipPath),
+        };
+      });
+    resolve(normalizeZipEntryPaths(entries, archiveName));
+  });
+});
 
 const marketplaceParentPath = (path: string): string | null => {
   const normalized = path.replace(/\/$/, '');
@@ -314,41 +412,8 @@ export const MarketplaceSkillsSection: React.FC<MarketplaceSkillsSectionProps> =
   const handleUploadFiles = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     files.forEach(file => {
-      if (file.name.toLowerCase().endsWith('.zip')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const uint8Array = new Uint8Array(e.target?.result as ArrayBuffer);
-          unzip(uint8Array, (err, unzipped) => {
-            if (err) return;
-            const textFiles: ZipFileEntry[] = Object.entries(unzipped)
-              .filter(([zipPath]) => {
-                if (zipPath.endsWith('/')) return false;
-                const ext = zipPath.split('.').pop()?.toLowerCase() ?? '';
-                return TEXT_EXTENSIONS.has(ext);
-              })
-              .map(([zipPath, data]) => ({
-                path: zipPath,
-                content: new TextDecoder().decode(data),
-                size: data.length,
-              }));
-            if (textFiles.length === 0) return;
-            const { nodes: newNodes, resolved } = addFilesToTree(treeState.nodes, textFiles);
-            treeState.setNodes(newNodes);
-            resolved.forEach(({ path, content }) => workbench.setDocumentContent(path, content));
-            const last = resolved.at(-1);
-            if (last) {
-              treeState.selectNode(last.path);
-              workbench.openDocument(last.node);
-            }
-            onDirty();
-          });
-        };
-        reader.readAsArrayBuffer(file);
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = typeof e.target?.result === 'string' ? e.target.result : '';
+      const readContent = isZipFileName(file.name) ? readFileBase64(file) : readFileText(file);
+      void readContent.then(content => {
         const existingPaths = new Set(treeState.flatNodes.map(n => n.path));
         let name = file.name;
         let path = name;
@@ -365,18 +430,52 @@ export const MarketplaceSkillsSection: React.FC<MarketplaceSkillsSectionProps> =
         }
         const node: FileTreeNode = {
           id: path, name: path, path, type: 'file',
-          extension: path.split('.').pop(), size: file.size, metadata: { content },
+          extension: path.split('.').pop(),
+          size: file.size,
+          metadata: isZipFileName(file.name)
+            ? { content, binary: true, mimeType: file.type || 'application/zip' }
+            : { content },
         };
         treeState.addNode(null, node);
-        workbench.setDocumentContent(path, content);
+        if (!isZipFileName(file.name)) {
+          workbench.setDocumentContent(path, content);
+        }
         treeState.selectNode(path);
-        workbench.openDocument(node);
+        if (!isZipFileName(file.name)) {
+          workbench.openDocument(node);
+        }
         onDirty();
-      };
-      reader.readAsText(file);
+      });
     });
     event.target.value = '';
   }, [onDirty, treeState, workbench]);
+
+  const handleExtractArchive = React.useCallback(async (node: FileTreeNode) => {
+    const content = typeof node.metadata?.content === 'string'
+      ? node.metadata.content
+      : fullContents[node.path];
+    if (!content) return;
+
+    const data = node.metadata?.binary === true
+      ? base64ToUint8Array(content)
+      : new TextEncoder().encode(content);
+    const textFiles = await extractTextFilesFromZip(data, node.name);
+    if (textFiles.length === 0) return;
+
+    const { nodes: newNodes, resolved } = addFilesToTree(treeState.nodes, textFiles);
+    treeState.setNodes(newNodes);
+    resolved.forEach(({ path, content: extractedContent, binary }) => {
+      if (!binary) {
+        workbench.setDocumentContent(path, extractedContent);
+      }
+    });
+    const last = resolved.filter(item => !item.binary).at(-1);
+    if (last) {
+      treeState.selectNode(last.path);
+      workbench.openDocument(last.node);
+    }
+    onDirty();
+  }, [fullContents, onDirty, treeState, workbench]);
 
   const openFileInTab = React.useCallback((node: FileTreeNode) => {
     if (node.type !== 'file') return;
@@ -472,6 +571,7 @@ export const MarketplaceSkillsSection: React.FC<MarketplaceSkillsSectionProps> =
       paste: true,
       rename: true,
       delete: true,
+      extractArchive: true,
       refresh: true,
     },
     callbacks: {
@@ -504,6 +604,9 @@ export const MarketplaceSkillsSection: React.FC<MarketplaceSkillsSectionProps> =
       onBatchDelete: () => {
         const node = treeState.contextMenu?.node;
         if (node) setDialogState({ type: 'batch-delete', node });
+      },
+      onExtractArchive: node => {
+        void handleExtractArchive(node);
       },
       onRefresh: treeState.closeContextMenu,
       onClose: treeState.closeContextMenu,

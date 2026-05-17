@@ -1,237 +1,242 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 
+const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), "aileron-server-workspace-"));
+const canvasPort = 43003 + Math.floor(Math.random() * 1000);
+process.env.WORKSPACE_DIR = workspaceDir;
+process.env.PORT = String(canvasPort);
+process.env.NEXT_INTERNAL_PORT = String(canvasPort + 1);
+
 const {
-  REVIEW_BRIDGE_MARKER,
-  REVIEW_BRIDGE_SOURCE,
-  REVIEW_BRIDGE_VERSION,
-  buildRsyncCommand,
-  canvasReviewBridgeScript,
-  injectReviewBridge,
-  ownershipModeForSync,
-  selectDependencyPreparationAction,
+  BRIDGE_MARKER,
+  BRIDGE_SOURCE,
+  BRIDGE_VERSION,
+  CONTENT_SECURITY_POLICY,
+  buildNextjsDevServerConfig,
+  detectCanvas,
+  getAileronCanvasBridgeSource,
+  injectAileronCanvasBridge,
+  resolveStaticRequest,
+  resolveNextjsStartupTimeoutState,
   selectSyncRendererAction,
 } = require("./server");
 
-test("injectReviewBridge injects the review bridge before body close", () => {
-  const html = "<html><body><main>Canvas</main></body></html>";
-  const injected = injectReviewBridge(html);
+function writeJson(filePath, value) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
+}
 
-  assert.match(injected, new RegExp(REVIEW_BRIDGE_MARKER));
-  assert.ok(injected.indexOf(REVIEW_BRIDGE_MARKER) < injected.indexOf("</body>"));
+function writeStaticCanvas({ contentDir = "./canvases/demo", title = "Demo" } = {}) {
+  const root = path.join(workspaceDir, ".aileron");
+  const canvasDir = path.resolve(root, contentDir);
+  fs.mkdirSync(canvasDir, { recursive: true });
+  fs.writeFileSync(path.join(canvasDir, "index.html"), "<html><body><main>Canvas</main></body></html>");
+  writeJson(path.join(root, "canvas.json"), {
+    version: 1,
+    kind: "static",
+    contentDir,
+    title,
+    owner: { type: "user" },
+    routes: [{ path: "/", label: "Home" }],
+    defaultPath: "/",
+  });
+}
+
+function writeNextjsCanvas({ contentDir = "./canvases/next-app", title = "Next App" } = {}) {
+  const root = path.join(workspaceDir, ".aileron");
+  const canvasDir = path.resolve(root, contentDir);
+  fs.mkdirSync(path.join(canvasDir, "app"), { recursive: true });
+  fs.writeFileSync(path.join(canvasDir, "package.json"), JSON.stringify({ dependencies: { next: "15.0.0" } }));
+  fs.writeFileSync(path.join(canvasDir, "app", "page.tsx"), "export default function Page() { return <main>Next</main>; }");
+  writeJson(path.join(root, "canvas.json"), {
+    version: 1,
+    kind: "nextjs",
+    contentDir,
+    title,
+    owner: { type: "user" },
+    routes: [{ path: "/", label: "Home" }],
+    defaultPath: "/",
+  });
+  return canvasDir;
+}
+
+test.after(async () => {
+  fs.rmSync(workspaceDir, { recursive: true, force: true });
 });
 
-test("injectReviewBridge is idempotent", () => {
-  const html = injectReviewBridge("<html><body></body></html>");
+test("detectCanvas only uses canvas.json and ignores legacy web-canvas hints", () => {
+  fs.rmSync(path.join(workspaceDir, ".aileron"), { recursive: true, force: true });
+  fs.mkdirSync(path.join(workspaceDir, "web-canvas", ".next"), { recursive: true });
+  fs.writeFileSync(path.join(workspaceDir, "web-canvas", "route.json"), JSON.stringify({ version: 1, type: "html" }));
+  fs.writeFileSync(path.join(workspaceDir, "web-canvas", "index.html"), "<html></html>");
 
-  assert.equal(injectReviewBridge(html), html);
+  const detection = detectCanvas(workspaceDir);
+
+  assert.equal(detection.type, "default");
+  assert.equal(detection.manifestStatus, "missing");
 });
 
-test("review bridge script includes protocol constants and selection commands", () => {
-  const script = canvasReviewBridgeScript();
+test("detectCanvas returns active static manifest metadata", () => {
+  writeStaticCanvas({ title: "Static App" });
 
-  assert.match(script, new RegExp(REVIEW_BRIDGE_SOURCE));
-  assert.match(script, new RegExp(`VERSION = ${REVIEW_BRIDGE_VERSION}`));
+  const detection = detectCanvas(workspaceDir);
+
+  assert.equal(detection.type, "active");
+  assert.equal(detection.kind, "static");
+  assert.equal(detection.title, "Static App");
+  assert.equal(detection.owner.type, "user");
+  assert.equal(detection.manifestStatus, "valid");
+  assert.equal(detection.defaultPath, "/");
+});
+
+test("detectCanvas rejects invalid static content", () => {
+  const root = path.join(workspaceDir, ".aileron");
+  const canvasDir = path.join(root, "canvases", "empty");
+  fs.mkdirSync(canvasDir, { recursive: true });
+  writeJson(path.join(root, "canvas.json"), {
+    version: 1,
+    kind: "static",
+    contentDir: "./canvases/empty",
+    title: "Empty",
+    owner: { type: "user" },
+    routes: [{ path: "/" }],
+    defaultPath: "/",
+  });
+
+  const detection = detectCanvas(workspaceDir);
+
+  assert.equal(detection.manifestStatus, "invalid");
+  assert.equal(detection.errorCode, "STATIC_INDEX_MISSING");
+});
+
+test("Next.js dev server config starts from manifest contentDir", () => {
+  const canvasDir = writeNextjsCanvas();
+  const detection = detectCanvas(workspaceDir);
+  const config = buildNextjsDevServerConfig(detection.resolvedContentDir);
+
+  assert.equal(detection.manifestStatus, "valid");
+  assert.equal(detection.kind, "nextjs");
+  assert.equal(detection.resolvedContentDir, canvasDir);
+  assert.equal(config.command, "npx");
+  assert.deepEqual(config.args, ["next", "dev", "-p", String(canvasPort + 1)]);
+  assert.equal(config.options.cwd, canvasDir);
+  assert.doesNotMatch(config.options.cwd, /web-canvas/);
+});
+
+test("detectCanvas rejects invalid Next.js content", () => {
+  const root = path.join(workspaceDir, ".aileron");
+  const canvasDir = path.join(root, "canvases", "not-next");
+  fs.mkdirSync(canvasDir, { recursive: true });
+  fs.writeFileSync(path.join(canvasDir, "package.json"), JSON.stringify({ dependencies: { react: "19.0.0" } }));
+  writeJson(path.join(root, "canvas.json"), {
+    version: 1,
+    kind: "nextjs",
+    contentDir: "./canvases/not-next",
+    title: "Invalid Next",
+    owner: { type: "user" },
+    routes: [{ path: "/" }],
+    defaultPath: "/",
+  });
+
+  const detection = detectCanvas(workspaceDir);
+
+  assert.equal(detection.manifestStatus, "invalid");
+  assert.equal(detection.errorCode, "NEXTJS_PROJECT_INVALID");
+});
+
+test("bridge source and HTML injection use the external aileron-canvas-bridge contract", () => {
+  const script = getAileronCanvasBridgeSource();
+  const injected = injectAileronCanvasBridge("<html><body><main>Canvas</main></body></html>");
+
+  assert.match(script, new RegExp(BRIDGE_SOURCE));
+  assert.match(script, new RegExp(`VERSION = ${BRIDGE_VERSION}`));
+  assert.match(script, /window\.aileron\.bridge/);
+  assert.match(script, /SKILL_EVENT/);
   assert.match(script, /SET_MODE/);
-  assert.match(script, /SET_INTERACTION_PAUSED/);
-  assert.match(script, /CLEAR_SELECTION/);
-  assert.match(script, /WATCH_TARGETS/);
-  assert.match(script, /ROUTE_CHANGED/);
-  assert.match(script, /a\[href\]/);
-  assert.match(script, /pushState/);
-  assert.match(script, /popstate/);
   assert.match(script, /TARGET_SELECTED/);
-  assert.match(script, /TARGET_RECTS/);
+  assert.match(injected, new RegExp(BRIDGE_MARKER));
+  assert.match(injected, /<script src="\/__aileron\/bridge\.js"/);
+  assert.doesNotMatch(injected, /aileron-web-canvas-review/);
 });
 
-test("source sync applies ownership during transfer without full-tree chown command", () => {
-  const command = buildRsyncCommand("/workspace", "/web-canvas");
+test("selectSyncRendererAction restarts when manifest changes", () => {
+  const beforeDetection = {
+    type: "active",
+    kind: "static",
+    manifestStatus: "valid",
+    manifestValid: true,
+    contentDir: "./A",
+    resolvedContentDir: path.join(workspaceDir, ".aileron", "A"),
+    title: "A",
+    owner: { type: "user" },
+    routes: [{ path: "/" }],
+    defaultPath: "/",
+  };
+  const afterDetection = {
+    ...beforeDetection,
+    contentDir: "./B",
+    resolvedContentDir: path.join(workspaceDir, ".aileron", "B"),
+  };
 
-  assert.match(command, /--chown=developer:developer/);
-  assert.match(command, /--out-format=/);
-  assert.doesNotMatch(command, /chown -R/);
-  assert.match(command, /--exclude='node_modules'/);
-  assert.match(command, /"\/workspace\/" "\/web-canvas\/"/);
-});
-
-test("sync ownership mode reserves recursive ownership for reset recovery paths", () => {
-  assert.equal(ownershipModeForSync({ recursiveOwnership: false }), "transfer");
-  assert.equal(ownershipModeForSync({ recursiveOwnership: true }), "recursive");
-});
-
-const nextjsDetection = {
-  type: "nextjs",
-  manifestStatus: "valid",
-  manifestValid: true,
-};
-
-const nextjsRendererState = {
-  type: "nextjs",
-  renderer: "nextjs-dev",
-  source: "/web-canvas",
-  serviceStatus: "running",
-  manifestStatus: "valid",
-  hasRendererProcess: true,
-};
-
-const dependencyState = {
-  strategy: "standard",
-  signature: "signature-1",
-};
-
-test("selectSyncRendererAction reuses healthy Next.js renderer for source-only sync", () => {
   const result = selectSyncRendererAction({
     reset: false,
-    beforeState: nextjsRendererState,
-    beforeDetection: nextjsDetection,
-    afterDetection: nextjsDetection,
-    beforeDependencies: dependencyState,
-    afterDependencies: dependencyState,
+    beforeState: {
+      type: "active",
+      kind: "static",
+      source: beforeDetection.resolvedContentDir,
+      serviceStatus: "running",
+      hasRenderer: true,
+    },
+    beforeDetection,
+    afterDetection,
+    beforeDependencies: { strategy: "none", signature: null },
+    afterDependencies: { strategy: "none", signature: null },
   });
 
-  assert.deepEqual(result, { action: "reused", reason: "nextjs-source-only" });
+  assert.deepEqual(result, { action: "restarted", reason: "manifest-changed" });
 });
 
-test("selectSyncRendererAction restarts for dependency changes", () => {
-  const result = selectSyncRendererAction({
-    reset: false,
-    beforeState: nextjsRendererState,
-    beforeDetection: nextjsDetection,
-    afterDetection: nextjsDetection,
-    beforeDependencies: dependencyState,
-    afterDependencies: { ...dependencyState, signature: "signature-2" },
-  });
+test("bridge endpoint source is JavaScript served by management API route", () => {
+  const source = getAileronCanvasBridgeSource();
 
-  assert.deepEqual(result, { action: "restarted", reason: "dependencies-changed" });
+  assert.match(source, /window\.aileron\.bridge/);
+  assert.match(CONTENT_SECURITY_POLICY, /script-src 'self' 'unsafe-inline' 'unsafe-eval'/);
+  assert.match(CONTENT_SECURITY_POLICY, /style-src 'self' 'unsafe-inline'/);
 });
 
-test("selectSyncRendererAction restarts for Canvas type changes", () => {
-  const result = selectSyncRendererAction({
-    reset: false,
-    beforeState: nextjsRendererState,
-    beforeDetection: nextjsDetection,
-    afterDetection: { type: "html", manifestStatus: "valid", manifestValid: true },
-    beforeDependencies: dependencyState,
-    afterDependencies: dependencyState,
+test("Next.js startup timeout preserves an early renderer exit as unhealthy", () => {
+  const result = resolveNextjsStartupTimeoutState({
+    rendererExited: true,
+    runtimeStatus: "unhealthy",
+    statusMessage: "Canvas renderer exited with code 1",
   });
 
-  assert.deepEqual(result, { action: "restarted", reason: "canvas-type-changed" });
+  assert.deepEqual(result, {
+    preserveExitState: true,
+    serviceStatus: "stopped",
+    runtimeStatus: "unhealthy",
+    statusMessage: "Canvas renderer exited with code 1",
+  });
 });
 
-test("selectSyncRendererAction restarts for manifest validity changes", () => {
-  const result = selectSyncRendererAction({
-    reset: false,
-    beforeState: nextjsRendererState,
-    beforeDetection: nextjsDetection,
-    afterDetection: { type: "default", manifestStatus: "invalid", manifestValid: false },
-    beforeDependencies: dependencyState,
-    afterDependencies: dependencyState,
-  });
+test("static request resolver allows contentDir files and rejects traversal", () => {
+  writeStaticCanvas();
+  const detection = detectCanvas(workspaceDir);
 
-  assert.deepEqual(result, { action: "restarted", reason: "manifest-invalid" });
+  assert.equal(path.basename(resolveStaticRequest(detection.resolvedContentDir, "/")), "index.html");
+  assert.equal(resolveStaticRequest(detection.resolvedContentDir, "/../../etc/passwd"), null);
 });
 
-test("selectSyncRendererAction restarts when renderer is unavailable", () => {
-  const result = selectSyncRendererAction({
-    reset: false,
-    beforeState: { ...nextjsRendererState, hasRendererProcess: false },
-    beforeDetection: nextjsDetection,
-    afterDetection: nextjsDetection,
-    beforeDependencies: dependencyState,
-    afterDependencies: dependencyState,
-  });
+test("static request resolver rejects symlinked directories inside contentDir that resolve outside contentDir", () => {
+  writeStaticCanvas();
+  const detection = detectCanvas(workspaceDir);
+  const outsideDir = path.join(workspaceDir, "outside");
+  fs.mkdirSync(outsideDir, { recursive: true });
+  fs.writeFileSync(path.join(outsideDir, "secret.txt"), "secret");
+  fs.symlinkSync(outsideDir, path.join(detection.resolvedContentDir, "outside-link"), "dir");
 
-  assert.deepEqual(result, { action: "restarted", reason: "renderer-unavailable" });
-});
-
-test("selectSyncRendererAction restarts unhealthy renderers", () => {
-  const result = selectSyncRendererAction({
-    reset: false,
-    beforeState: { ...nextjsRendererState, serviceStatus: "error" },
-    beforeDetection: nextjsDetection,
-    afterDetection: nextjsDetection,
-    beforeDependencies: dependencyState,
-    afterDependencies: dependencyState,
-  });
-
-  assert.deepEqual(result, { action: "restarted", reason: "renderer-unavailable" });
-});
-
-test("selectSyncRendererAction restarts renderers serving a different source", () => {
-  const result = selectSyncRendererAction({
-    reset: false,
-    beforeState: { ...nextjsRendererState, source: "/workspace" },
-    beforeDetection: nextjsDetection,
-    afterDetection: nextjsDetection,
-    beforeDependencies: dependencyState,
-    afterDependencies: dependencyState,
-  });
-
-  assert.deepEqual(result, { action: "restarted", reason: "renderer-source-mismatch" });
-});
-
-test("selectSyncRendererAction restarts reset requests", () => {
-  const result = selectSyncRendererAction({
-    reset: true,
-    beforeState: nextjsRendererState,
-    beforeDetection: nextjsDetection,
-    afterDetection: nextjsDetection,
-    beforeDependencies: dependencyState,
-    afterDependencies: dependencyState,
-  });
-
-  assert.deepEqual(result, { action: "restarted", reason: "reset" });
-});
-
-test("dependency preparation reuses standard dependencies when signature is unchanged", () => {
-  const result = selectDependencyPreparationAction({
-    execDir: "/web-canvas",
-    nodeModulesExists: true,
-    lastSignature: "signature-1",
-    signature: "signature-1",
-    currentStrategy: "standard",
-    strategy: "standard",
-  });
-
-  assert.deepEqual(result, { action: "reuse", reason: "signature-unchanged" });
-});
-
-test("dependency preparation reuses extended dependencies when signature is unchanged", () => {
-  const result = selectDependencyPreparationAction({
-    execDir: "/web-canvas",
-    nodeModulesExists: true,
-    lastSignature: "signature-1",
-    signature: "signature-1",
-    currentStrategy: "extended",
-    strategy: "extended",
-  });
-
-  assert.deepEqual(result, { action: "reuse", reason: "signature-unchanged" });
-});
-
-test("dependency preparation seeds extended dependencies when signature changes", () => {
-  const result = selectDependencyPreparationAction({
-    execDir: "/web-canvas",
-    nodeModulesExists: true,
-    lastSignature: "signature-1",
-    signature: "signature-2",
-    currentStrategy: "extended",
-    strategy: "extended",
-  });
-
-  assert.deepEqual(result, { action: "seed-standard-and-install", reason: "extended-dependencies" });
-});
-
-test("dependency preparation replaces standard symlinks before custom installs", () => {
-  const result = selectDependencyPreparationAction({
-    execDir: "/default-canvas",
-    nodeModulesExists: true,
-    nodeModulesIsSymlink: true,
-    lastSignature: "signature-1",
-    signature: "signature-2",
-    currentStrategy: "standard",
-    strategy: "custom",
-  });
-
-  assert.deepEqual(result, { action: "replace-symlink-and-install", reason: "custom-dependencies" });
+  assert.equal(resolveStaticRequest(detection.resolvedContentDir, "/outside-link/secret.txt"), null);
 });

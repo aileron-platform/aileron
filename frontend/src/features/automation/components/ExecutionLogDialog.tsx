@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { TaskLog } from '@/shared/types/task';
 
-export type ExecutionLogStatus = 'success' | 'running' | 'failed' | 'queued';
+export type ExecutionLogStatus = 'success' | 'running' | 'failed' | 'queued' | 'waiting' | 'cancelled' | 'timeout';
 
 export interface ExecutionLogDialogExecution {
   id: string;
@@ -77,6 +77,9 @@ const statusHeadingIconMap = {
   failed: { icon: XCircle, iconClassName: 'h-4 w-4 text-rose-500' },
   running: { icon: RefreshCw, iconClassName: 'h-4 w-4 text-sky-500 animate-spin' },
   queued: { icon: Clock, iconClassName: 'h-4 w-4 text-amber-500' },
+  waiting: { icon: Clock, iconClassName: 'h-4 w-4 text-purple-500' },
+  cancelled: { icon: XCircle, iconClassName: 'h-4 w-4 text-gray-500' },
+  timeout: { icon: Clock, iconClassName: 'h-4 w-4 text-orange-500' },
 };
 
 const statusBadgeClass: Record<ExecutionLogStatus, string> = {
@@ -88,6 +91,12 @@ const statusBadgeClass: Record<ExecutionLogStatus, string> = {
     'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-400/40',
   queued:
     'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-400/40',
+  waiting:
+    'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/15 dark:text-purple-200 dark:border-purple-400/40',
+  cancelled:
+    'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-500/15 dark:text-gray-200 dark:border-gray-400/40',
+  timeout:
+    'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/15 dark:text-orange-200 dark:border-orange-400/40',
 };
 
 const logLevelColor = (level: string) => {

@@ -17,6 +17,7 @@ from codex_app_server.generated.v2_all import (
     FileChangePatchUpdatedNotification,
     FileChangeThreadItem,
     FileUpdateChange,
+    ImageGenerationThreadItem,
     ItemCompletedNotification,
     ItemStartedNotification,
     PatchApplyStatus,
@@ -91,6 +92,15 @@ class FileChangeEnd:
 
 
 @dataclass(frozen=True, slots=True)
+class ImageGenerationEnd:
+    item_id: str
+    status: str
+    result: str
+    saved_path: str | None
+    revised_prompt: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class ThinkingDelta:
     item_id: str
     delta: str
@@ -138,6 +148,7 @@ CodexEvent = Union[
     FileChangeOutputDelta,
     FileChangePatchUpdated,
     FileChangeEnd,
+    ImageGenerationEnd,
     ThinkingDelta,
     ThinkingPart,
     ThinkingEnd,
@@ -214,6 +225,19 @@ class NotificationMapper:
                     item_id=item.id,
                     changes=item.changes,
                     status=item.status,
+                )
+            if isinstance(item, ImageGenerationThreadItem):
+                saved_path = (
+                    str(self._unwrap_value(item.saved_path))
+                    if item.saved_path
+                    else None
+                )
+                return ImageGenerationEnd(
+                    item_id=item.id,
+                    status=item.status,
+                    result=item.result,
+                    saved_path=saved_path,
+                    revised_prompt=item.revised_prompt,
                 )
             if isinstance(item, ReasoningThreadItem):
                 return ThinkingEnd(item_id=item.id)

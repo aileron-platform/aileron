@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@/__tests__/utils/render';
 import { WORKSPACE_CHAT_INSERT_DRAFT_EVENT } from '../../components/ChatPanel/chatEvents';
 import { WebCanvasFeature } from './WebCanvasFeature';
+import {
+  AILERON_CANVAS_BRIDGE_SOURCE,
+  AILERON_CANVAS_BRIDGE_VERSION,
+} from './lib/aileronCanvasBridgeClient';
 
 const mocks = vi.hoisted(() => ({
   fetchWorkspaceDetail: vi.fn(),
@@ -12,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   createCanvasReviewNote: vi.fn(),
   updateCanvasReviewNoteStatus: vi.fn(),
   deleteCanvasReviewNote: vi.fn(),
+  deactivateCanvas: vi.fn(),
   syncCanvas: vi.fn(),
   toast: vi.fn(),
 }));
@@ -51,6 +56,7 @@ vi.mock('../../services/workspaceRuntimeApi', () => ({
   createCanvasReviewNote: mocks.createCanvasReviewNote,
   updateCanvasReviewNoteStatus: mocks.updateCanvasReviewNoteStatus,
   deleteCanvasReviewNote: mocks.deleteCanvasReviewNote,
+  deactivateCanvas: mocks.deactivateCanvas,
   syncCanvas: mocks.syncCanvas,
 }));
 
@@ -91,7 +97,7 @@ describe('WebCanvasFeature review mode', () => {
     });
     mocks.fetchCanvasRoutes.mockResolvedValue({
       workspaceId: 'ws-1',
-      type: 'html',
+      type: 'active',
       manifestStatus: 'valid',
       defaultPath: '/',
       routes: [{ path: '/' }],
@@ -101,7 +107,7 @@ describe('WebCanvasFeature review mode', () => {
     mocks.checkCanvasHealth.mockResolvedValue({
       workspaceId: 'ws-1',
       status: 'healthy',
-      type: 'html',
+      type: 'active',
       manifestStatus: 'valid',
       rendererRunning: true,
       portAvailable: true,
@@ -111,12 +117,18 @@ describe('WebCanvasFeature review mode', () => {
     mocks.syncCanvas.mockResolvedValue({
       workspaceId: 'ws-1',
       status: 'completed',
-      type: 'html',
+      type: 'active',
       manifestStatus: 'valid',
       message: 'Canvas renderer reused',
       rendererAction: 'reused',
-      rendererActionReason: 'nextjs-source-only',
+      rendererActionReason: 'manifest-unchanged',
       syncedAt: '2026-04-29T00:00:00Z',
+    });
+    mocks.deactivateCanvas.mockResolvedValue({
+      workspaceId: 'ws-1',
+      deleted: true,
+      manifestStatus: 'missing',
+      runtimeStatus: 'healthy',
     });
     mocks.createCanvasReviewNote.mockResolvedValue({
       id: 'note-1',
@@ -151,11 +163,48 @@ describe('WebCanvasFeature review mode', () => {
     });
   });
 
+  it('does not overlay a status notice for a healthy skill-owned active canvas', async () => {
+    mocks.fetchCanvasRoutes.mockResolvedValue({
+      workspaceId: 'ws-1',
+      type: 'active',
+      kind: 'static',
+      title: 'PPT Preview',
+      owner: { type: 'skill', skillName: 'ppt-image-first' },
+      manifestStatus: 'valid',
+      runtimeStatus: 'healthy',
+      defaultPath: '/',
+      routes: [{ path: '/' }],
+      total: 1,
+      scannedAt: '2026-04-28T00:00:00Z',
+    });
+
+    render(<WebCanvasFeature />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('workspace.canvas.webCanvas.manifest.statusNotice.skill.title')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText('workspace.canvas.webCanvas.manifest.statusNotice.skill.description')).not.toBeInTheDocument();
+  });
+
+  it('deactivates the active canvas through runtime manifest endpoint', async () => {
+    render(<WebCanvasFeature />);
+
+    const button = await screen.findByRole('button', {
+      name: 'workspace.canvas.webCanvas.disable.label',
+    });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(mocks.deactivateCanvas).toHaveBeenCalledWith('http://runtime.local', 'ws-1');
+    });
+  });
+
   it('refreshes Canvas route metadata after renderer reuse sync', async () => {
     mocks.fetchCanvasRoutes
       .mockResolvedValueOnce({
         workspaceId: 'ws-1',
-        type: 'nextjs',
+        type: 'active',
         manifestStatus: 'valid',
         defaultPath: '/',
         routes: [{ path: '/' }],
@@ -164,7 +213,7 @@ describe('WebCanvasFeature review mode', () => {
       })
       .mockResolvedValueOnce({
         workspaceId: 'ws-1',
-        type: 'nextjs',
+        type: 'active',
         manifestStatus: 'valid',
         defaultPath: '/products',
         routes: [{ path: '/products' }],
@@ -202,7 +251,7 @@ describe('WebCanvasFeature review mode', () => {
     mocks.syncCanvas.mockResolvedValueOnce({
       workspaceId: 'ws-1',
       status: 'completed',
-      type: 'html',
+      type: 'active',
       manifestStatus: 'valid',
       message: 'Canvas synced',
     });
@@ -226,7 +275,7 @@ describe('WebCanvasFeature review mode', () => {
     mocks.syncCanvas.mockResolvedValueOnce({
       workspaceId: 'ws-1',
       status: 'completed',
-      type: 'nextjs',
+      type: 'active',
       manifestStatus: 'valid',
       message: 'Canvas renderer restarted',
       rendererAction: 'restarted',
@@ -263,8 +312,8 @@ describe('WebCanvasFeature review mode', () => {
     window.dispatchEvent(new MessageEvent('message', {
       source: iframe.contentWindow,
       data: {
-        source: 'aileron-web-canvas-review',
-        version: 1,
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
         type: 'BRIDGE_READY',
         payload: { routePath: '/' },
       },
@@ -272,8 +321,8 @@ describe('WebCanvasFeature review mode', () => {
     window.dispatchEvent(new MessageEvent('message', {
       source: iframe.contentWindow,
       data: {
-        source: 'aileron-web-canvas-review',
-        version: 1,
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
         type: 'TARGET_SELECTED',
         payload: { routePath: '/', target: areaTarget },
       },
@@ -313,8 +362,8 @@ describe('WebCanvasFeature review mode', () => {
     window.dispatchEvent(new MessageEvent('message', {
       source: iframe.contentWindow,
       data: {
-        source: 'aileron-web-canvas-review',
-        version: 1,
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
         type: 'ROUTE_CHANGED',
         payload: { routePath: '/products' },
       },
@@ -332,8 +381,8 @@ describe('WebCanvasFeature review mode', () => {
     window.dispatchEvent(new MessageEvent('message', {
       source: iframe.contentWindow,
       data: {
-        source: 'aileron-web-canvas-review',
-        version: 1,
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
         type: 'TARGET_SELECTED',
         payload: { routePath: '/products', target: areaTarget },
       },
@@ -363,8 +412,8 @@ describe('WebCanvasFeature review mode', () => {
     window.dispatchEvent(new MessageEvent('message', {
       source: window,
       data: {
-        source: 'aileron-web-canvas-review',
-        version: 1,
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
         type: 'TARGET_SELECTED',
         payload: { routePath: '/', target: areaTarget },
       },
@@ -386,8 +435,8 @@ describe('WebCanvasFeature review mode', () => {
     window.dispatchEvent(new MessageEvent('message', {
       source: iframe.contentWindow,
       data: {
-        source: 'aileron-web-canvas-review',
-        version: 1,
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
         type: 'BRIDGE_READY',
         payload: { routePath: '/' },
       },
@@ -395,8 +444,8 @@ describe('WebCanvasFeature review mode', () => {
     window.dispatchEvent(new MessageEvent('message', {
       source: iframe.contentWindow,
       data: {
-        source: 'aileron-web-canvas-review',
-        version: 1,
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
         type: 'TARGET_SELECTED',
         payload: { routePath: '/', target: elementTarget },
       },
@@ -406,8 +455,8 @@ describe('WebCanvasFeature review mode', () => {
     window.dispatchEvent(new MessageEvent('message', {
       source: iframe.contentWindow,
       data: {
-        source: 'aileron-web-canvas-review',
-        version: 1,
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
         type: 'TARGET_SELECTED',
         payload: { routePath: '/', target: multiTarget },
       },
@@ -429,8 +478,8 @@ describe('WebCanvasFeature review mode', () => {
     window.dispatchEvent(new MessageEvent('message', {
       source: iframe.contentWindow,
       data: {
-        source: 'aileron-web-canvas-review',
-        version: 1,
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
         type: 'TARGET_SELECTED',
         payload: { routePath: '/', target: elementTarget },
       },
@@ -444,8 +493,8 @@ describe('WebCanvasFeature review mode', () => {
     window.dispatchEvent(new MessageEvent('message', {
       source: iframe.contentWindow,
       data: {
-        source: 'aileron-web-canvas-review',
-        version: 1,
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
         type: 'TARGET_RECTS',
         payload: {
           routePath: '/',
@@ -476,8 +525,8 @@ describe('WebCanvasFeature review mode', () => {
     window.dispatchEvent(new MessageEvent('message', {
       source: iframe.contentWindow,
       data: {
-        source: 'aileron-web-canvas-review',
-        version: 1,
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
         type: 'TARGET_SELECTED',
         payload: { routePath: '/', target: elementTarget },
       },

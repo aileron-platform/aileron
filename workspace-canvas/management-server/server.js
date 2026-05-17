@@ -2,9 +2,8 @@
  * Canvas container management API.
  *
  * Architecture:
- *   /workspace       source files shared with workspace runtime
- *   /web-canvas      isolated render snapshot
- *   /default-canvas  fallback app
+ *   /workspace/.aileron/canvas.json  active canvas manifest
+ *   /default-canvas                  fallback app
  */
 
 const crypto = require("crypto");
@@ -15,6 +14,20 @@ const http = require("http");
 const net = require("net");
 const path = require("path");
 
+const {
+  CanvasManifestError,
+  manifestPathForWorkspace,
+  normalizeRoutePath,
+  readCanvasManifest,
+} = require("./lib/canvasManifest");
+const {
+  BRIDGE_MARKER,
+  BRIDGE_SOURCE,
+  BRIDGE_VERSION,
+  getAileronCanvasBridgeSource,
+  injectAileronCanvasBridge,
+} = require("./lib/aileronCanvasBridge");
+
 const app = express();
 app.use(express.json());
 
@@ -22,21 +35,23 @@ const API_PORT = parseInt(process.env.API_PORT || "3013", 10);
 const CANVAS_PORT = parseInt(process.env.PORT || "3003", 10);
 const NEXT_INTERNAL_PORT = parseInt(process.env.NEXT_INTERNAL_PORT || String(CANVAS_PORT + 1), 10);
 const WORKSPACE_DIR = process.env.WORKSPACE_DIR || "/workspace";
-const WEB_CANVAS_DIR = "/web-canvas";
 const DEFAULT_CANVAS_DIR = "/default-canvas";
 const NEXTJS_TEMPLATE_DIR = process.env.NEXTJS_TEMPLATE_DIR || "/opt/canvas-nextjs-template";
-const NEXTJS_TEMPLATE_NODE_MODULES = path.join(NEXTJS_TEMPLATE_DIR, "node_modules");
 const NPM_CACHE_DIR = process.env.npm_config_cache || process.env.NPM_CONFIG_CACHE || "/home/developer/.npm";
+const CONTENT_SECURITY_POLICY = "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' ws: wss:; worker-src 'self' blob:;";
 const LOG_LIMIT = 500;
 
 let rendererProcess = null;
 let staticServer = null;
+let currentManifestSignature = null;
 let currentSource = null;
 let currentType = "default";
+let currentKind = null;
 let currentRenderer = "default-canvas";
 let serviceStatus = "stopped";
 let statusMessage = "";
 let manifestStatus = "missing";
+let runtimeStatus = "unhealthy";
 let lastSyncAt = null;
 let lastResetAt = null;
 let lastPackageSignature = null;
@@ -44,314 +59,6 @@ let currentDependencyStrategy = "none";
 let syncInProgress = false;
 let lastDependencyPreparationMs = 0;
 const logs = [];
-
-const REVIEW_BRIDGE_MARKER = "data-aileron-web-canvas-review-bridge";
-const REVIEW_BRIDGE_SOURCE = "aileron-web-canvas-review";
-const REVIEW_BRIDGE_VERSION = 1;
-const ENABLE_REVIEW_BRIDGE = process.env.ENABLE_CANVAS_REVIEW_BRIDGE !== "false";
-
-function canvasReviewBridgeScript() {
-  return `<script ${REVIEW_BRIDGE_MARKER}="true">
-(() => {
-  const SOURCE = "${REVIEW_BRIDGE_SOURCE}";
-  const VERSION = ${REVIEW_BRIDGE_VERSION};
-  const MAX_ELEMENTS = 20;
-  const MAX_PREVIEW = 2000;
-  if (window.__aileronWebCanvasReviewBridgeInstalled) return;
-  window.__aileronWebCanvasReviewBridgeInstalled = true;
-
-  let mode = "default";
-  let interactionPaused = false;
-  let selected = [];
-  let watched = [];
-  let dragStart = null;
-  let hoverBox = null;
-  let selectionBox = null;
-  let dragBox = null;
-  let lastRoutePath = location.pathname || "/";
-
-  const post = (type, payload = {}) => {
-    window.parent?.postMessage({ source: SOURCE, version: VERSION, type, payload }, "*");
-  };
-  const emitRouteChanged = () => {
-    const routePath = location.pathname || "/";
-    if (routePath === lastRoutePath) return;
-    lastRoutePath = routePath;
-    clear();
-    post("ROUTE_CHANGED", { routePath });
-    measureWatched();
-  };
-  const announceRoutePath = (routePath) => {
-    if (!routePath || routePath === lastRoutePath) return;
-    lastRoutePath = routePath;
-    clear();
-    post("ROUTE_CHANGED", { routePath });
-  };
-  const clampText = (value) => String(value || "").replace(/\\s+/g, " ").trim().slice(0, MAX_PREVIEW);
-  const rectPayload = (rect, coordinateSpace = "viewport") => ({
-    x: rect.x,
-    y: rect.y,
-    width: rect.width,
-    height: rect.height,
-    coordinateSpace,
-  });
-  const documentRect = (rect) => rectPayload({
-    x: rect.x + window.scrollX,
-    y: rect.y + window.scrollY,
-    width: rect.width,
-    height: rect.height,
-  }, "document");
-  const cssEscape = (value) => {
-    if (window.CSS?.escape) return window.CSS.escape(value);
-    return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\\\$&");
-  };
-  const isBridgeElement = (element) => element?.closest?.("[data-aileron-review-ui]");
-  const selectorFor = (element) => {
-    const canvasId = element.getAttribute("data-canvas-id");
-    if (canvasId) return { selector: \`[data-canvas-id="\${cssEscape(canvasId)}"]\`, selectorKind: "data-canvas-id" };
-    if (element.id) return { selector: \`#\${cssEscape(element.id)}\`, selectorKind: "id" };
-    const parts = [];
-    let node = element;
-    while (node && node.nodeType === 1 && node !== document.documentElement) {
-      const tag = node.tagName.toLowerCase();
-      const parent = node.parentElement;
-      if (!parent) break;
-      const siblings = Array.from(parent.children).filter((child) => child.tagName === node.tagName);
-      const nth = siblings.length > 1 ? \`:nth-of-type(\${siblings.indexOf(node) + 1})\` : "";
-      parts.unshift(\`\${tag}\${nth}\`);
-      const selector = parts.join(" > ");
-      try {
-        if (document.querySelectorAll(selector).length === 1) return { selector, selectorKind: "css" };
-      } catch {}
-      node = parent;
-    }
-    return { selector: xpathFor(element), selectorKind: "xpath" };
-  };
-  const xpathFor = (element) => {
-    const parts = [];
-    let node = element;
-    while (node && node.nodeType === 1) {
-      const tag = node.tagName.toLowerCase();
-      const siblings = node.parentElement ? Array.from(node.parentElement.children).filter((child) => child.tagName === node.tagName) : [];
-      const index = siblings.length > 1 ? \`[\${siblings.indexOf(node) + 1}]\` : "";
-      parts.unshift(\`\${tag}\${index}\`);
-      node = node.parentElement;
-    }
-    return \`/\${parts.join("/")}\`;
-  };
-  const elementTarget = (element) => {
-    const rect = element.getBoundingClientRect();
-    const selector = selectorFor(element);
-    return {
-      type: "element",
-      ...selector,
-      tagName: element.tagName.toLowerCase(),
-      textPreview: clampText(element.innerText || element.textContent || ""),
-      htmlPreview: clampText(element.outerHTML || ""),
-      parentHtmlPreview: clampText(element.parentElement?.outerHTML || ""),
-      rect: rectPayload(rect),
-      documentRect: documentRect(rect),
-    };
-  };
-  const ensureBox = (kind) => {
-    let box = kind === "hover" ? hoverBox : kind === "drag" ? dragBox : selectionBox;
-    if (box) return box;
-    box = document.createElement("div");
-    box.dataset.aileronReviewUi = kind;
-    box.style.cssText = "position:fixed;z-index:2147483647;pointer-events:none;border:2px solid #2563eb;background:rgba(37,99,235,.08);box-shadow:0 0 0 1px rgba(255,255,255,.8);display:none;";
-    if (kind === "hover") box.style.borderStyle = "dashed";
-    if (kind === "drag") box.style.background = "rgba(14,165,233,.12)";
-    document.documentElement.appendChild(box);
-    if (kind === "hover") hoverBox = box;
-    else if (kind === "drag") dragBox = box;
-    else selectionBox = box;
-    return box;
-  };
-  const paintBox = (box, rect) => {
-    box.style.display = rect && rect.width >= 0 && rect.height >= 0 ? "block" : "none";
-    if (!rect) return;
-    box.style.left = \`\${rect.x}px\`;
-    box.style.top = \`\${rect.y}px\`;
-    box.style.width = \`\${rect.width}px\`;
-    box.style.height = \`\${rect.height}px\`;
-  };
-  const boundingRect = (targets) => {
-    const rects = targets.map((target) => target.rect).filter(Boolean);
-    const left = Math.min(...rects.map((rect) => rect.x));
-    const top = Math.min(...rects.map((rect) => rect.y));
-    const right = Math.max(...rects.map((rect) => rect.x + rect.width));
-    const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
-    return { x: left, y: top, width: right - left, height: bottom - top, coordinateSpace: "viewport" };
-  };
-  const emitSelection = (target) => {
-    post("TARGET_SELECTED", { routePath: location.pathname || "/", target });
-  };
-  const selectElement = (element, event) => {
-    const target = elementTarget(element);
-    const multi = event.shiftKey || event.metaKey || event.ctrlKey;
-    if (!multi) {
-      selected = [target];
-      paintBox(ensureBox("selection"), target.rect);
-      emitSelection(target);
-      return;
-    }
-    const existing = selected.findIndex((item) => item.selector === target.selector);
-    if (existing >= 0) selected.splice(existing, 1);
-    else if (selected.length < MAX_ELEMENTS) selected.push(target);
-    if (selected.length === 0) {
-      paintBox(ensureBox("selection"), null);
-      post("TARGET_SELECTED", { routePath: location.pathname || "/", target: null });
-      return;
-    }
-    const rect = boundingRect(selected);
-    paintBox(ensureBox("selection"), rect);
-    emitSelection(selected.length === 1 ? selected[0] : { type: "multi-element", elements: selected, rect });
-  };
-  const clear = () => {
-    selected = [];
-    dragStart = null;
-    paintBox(ensureBox("hover"), null);
-    paintBox(ensureBox("selection"), null);
-    paintBox(ensureBox("drag"), null);
-  };
-  const elementFromEvent = (event) => {
-    const element = document.elementFromPoint(event.clientX, event.clientY);
-    if (!element || element === document.documentElement || element === document.body || isBridgeElement(element)) return null;
-    return element;
-  };
-  document.addEventListener("pointermove", (event) => {
-    if (mode !== "select" || interactionPaused) return;
-    if (dragStart) {
-      const rect = {
-        x: Math.min(dragStart.x, event.clientX),
-        y: Math.min(dragStart.y, event.clientY),
-        width: Math.abs(event.clientX - dragStart.x),
-        height: Math.abs(event.clientY - dragStart.y),
-      };
-      paintBox(ensureBox("drag"), rect);
-      return;
-    }
-    const element = elementFromEvent(event);
-    paintBox(ensureBox("hover"), element ? element.getBoundingClientRect() : null);
-  }, true);
-  document.addEventListener("pointerdown", (event) => {
-    if (mode !== "select" || interactionPaused || event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    dragStart = { x: event.clientX, y: event.clientY };
-  }, true);
-  document.addEventListener("pointerup", (event) => {
-    if (mode !== "select" || interactionPaused || !dragStart) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const dx = Math.abs(event.clientX - dragStart.x);
-    const dy = Math.abs(event.clientY - dragStart.y);
-    const start = dragStart;
-    dragStart = null;
-    paintBox(ensureBox("drag"), null);
-    if (dx > 6 || dy > 6) {
-      const rect = {
-        x: Math.min(start.x, event.clientX),
-        y: Math.min(start.y, event.clientY),
-        width: dx,
-        height: dy,
-        coordinateSpace: "viewport",
-      };
-      selected = [];
-      paintBox(ensureBox("selection"), rect);
-      emitSelection({ type: "area", rect, documentRect: { ...rect, x: rect.x + window.scrollX, y: rect.y + window.scrollY, coordinateSpace: "document" } });
-      return;
-    }
-    const element = elementFromEvent(event);
-    if (element) selectElement(element, event);
-  }, true);
-  document.addEventListener("keydown", (event) => {
-    if (mode === "select" && event.key === "Escape") clear();
-  }, true);
-  document.addEventListener("click", (event) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    const link = event.target?.closest?.("a[href]");
-    if (!link || link.target || link.hasAttribute("download")) return;
-    let url;
-    try {
-      url = new URL(link.getAttribute("href"), location.href);
-    } catch {
-      return;
-    }
-    if (url.origin !== location.origin) return;
-    announceRoutePath(url.pathname || "/");
-  }, true);
-  const measureWatched = () => {
-    if (mode !== "select" || watched.length === 0) return;
-    const rects = watched.slice(0, MAX_ELEMENTS).map((item) => {
-      try {
-        const element = document.querySelector(item.selector);
-        if (!element) return { id: item.id, selector: item.selector, resolved: false };
-        const rect = element.getBoundingClientRect();
-        return { id: item.id, selector: item.selector, resolved: true, rect: rectPayload(rect), documentRect: documentRect(rect) };
-      } catch {
-        return { id: item.id, selector: item.selector, resolved: false };
-      }
-    });
-    post("TARGET_RECTS", { routePath: location.pathname || "/", rects });
-  };
-  window.addEventListener("scroll", measureWatched, true);
-  window.addEventListener("resize", measureWatched);
-  const wrapHistoryMethod = (methodName) => {
-    const original = history[methodName];
-    if (typeof original !== "function") return;
-    history[methodName] = function wrappedHistoryMethod(...args) {
-      const result = original.apply(this, args);
-      window.setTimeout(emitRouteChanged, 0);
-      return result;
-    };
-  };
-  wrapHistoryMethod("pushState");
-  wrapHistoryMethod("replaceState");
-  window.addEventListener("popstate", () => window.setTimeout(emitRouteChanged, 0));
-  window.addEventListener("hashchange", () => window.setTimeout(emitRouteChanged, 0));
-  window.addEventListener("message", (event) => {
-    const message = event.data;
-    if (!message || message.source !== SOURCE || message.version !== VERSION || !message.type) return;
-    if (message.type === "SET_MODE") {
-      mode = message.payload?.mode === "select" ? "select" : "default";
-      if (mode !== "select") clear();
-      document.documentElement.style.cursor = mode === "select" && !interactionPaused ? "crosshair" : "";
-    } else if (message.type === "SET_INTERACTION_PAUSED") {
-      interactionPaused = message.payload?.paused === true;
-      dragStart = null;
-      paintBox(ensureBox("hover"), null);
-      paintBox(ensureBox("drag"), null);
-      document.documentElement.style.cursor = mode === "select" && !interactionPaused ? "crosshair" : "";
-    } else if (message.type === "CLEAR_SELECTION") {
-      clear();
-    } else if (message.type === "WATCH_TARGETS") {
-      watched = Array.isArray(message.payload?.targets) ? message.payload.targets : [];
-      measureWatched();
-    }
-  });
-  post("BRIDGE_READY", { routePath: lastRoutePath });
-})();
-</script>`;
-}
-
-function injectReviewBridge(html) {
-  if (!ENABLE_REVIEW_BRIDGE) return html;
-  if (typeof html !== "string" || html.includes(REVIEW_BRIDGE_MARKER)) return html;
-  const script = canvasReviewBridgeScript();
-  if (html.includes("</body>")) return html.replace("</body>", `${script}</body>`);
-  return `${html}${script}`;
-}
-
-function sendInjectedHtmlFile(res, filePath) {
-  fs.readFile(filePath, "utf8", (err, html) => {
-    if (err) {
-      res.status(404).send("Canvas HTML route not found");
-      return;
-    }
-    res.type("html").send(injectReviewBridge(html));
-  });
-}
 
 function pushLog(scope, message) {
   const entry = {
@@ -418,126 +125,99 @@ function hasNextjsProject(dir) {
   }
 }
 
-function hasHtmlFiles(dir) {
-  if (!fs.existsSync(dir)) return false;
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const entryPath = path.join(dir, entry.name);
-    if (entry.isFile() && entry.name.endsWith(".html")) return true;
-    if (entry.isDirectory() && !entry.name.startsWith(".") && hasHtmlFiles(entryPath)) {
-      return true;
+function scanNextjsRoutes(dir) {
+  const appDir = path.join(dir, "app");
+  if (!fs.existsSync(appDir)) return [];
+  const routes = [];
+  function walk(currentDir, routePath) {
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && /^page\.(tsx?|jsx?)$/.test(entry.name)) {
+        routes.push({ path: routePath || "/" });
+      }
+      if (entry.isDirectory() && !entry.name.startsWith("_")) {
+        walk(path.join(currentDir, entry.name), `${routePath}/${entry.name}`);
+      }
     }
   }
-  return false;
+  walk(appDir, "");
+  return routes;
 }
 
-function normalizeRoutePath(routePath) {
-  if (!routePath || typeof routePath !== "string") return "/";
-  return routePath.startsWith("/") ? routePath : `/${routePath}`;
+function manifestSignature(detection) {
+  if (detection.manifestStatus !== "valid") return detection.manifestStatus;
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify({
+      kind: detection.kind,
+      contentDir: detection.contentDir,
+      resolvedContentDir: detection.resolvedContentDir,
+      title: detection.title,
+      owner: detection.owner,
+      routes: detection.routes,
+      defaultPath: detection.defaultPath,
+    }))
+    .digest("hex");
 }
 
-function validateManifest(raw) {
-  if (!raw || typeof raw !== "object") {
-    throw new Error("route.json must be an object");
-  }
-  if (raw.version !== 1) {
-    throw new Error("route.json version must be 1");
-  }
-  if (!["html", "nextjs"].includes(raw.type)) {
-    throw new Error("route.json type must be html or nextjs");
-  }
-
-  const routes = Array.isArray(raw.routes)
-    ? raw.routes.map((route) => {
-        if (!route || typeof route !== "object") {
-          throw new Error("route entries must be objects");
-        }
-        if (!route.path || typeof route.path !== "string") {
-          throw new Error("route.path is required");
-        }
-        const normalized = {
-          path: normalizeRoutePath(route.path),
-        };
-        if (route.file != null) normalized.file = String(route.file);
-        if (route.title != null) normalized.title = String(route.title);
-        return normalized;
-      })
-    : [];
-
-  return {
-    version: 1,
-    type: raw.type,
-    defaultPath: normalizeRoutePath(raw.defaultPath || routes[0]?.path || "/"),
-    routes,
-  };
-}
-
-function loadManifest(dir) {
-  const manifestPath = path.join(dir, "route.json");
-  if (!fs.existsSync(manifestPath)) return null;
-  return validateManifest(readJson(manifestPath));
-}
-
-function detectCanvas(dir) {
+function detectCanvas(workspaceDir = WORKSPACE_DIR) {
   try {
-    const manifest = loadManifest(dir);
-    if (manifest) {
+    const manifest = readCanvasManifest(workspaceDir);
+    if (!manifest) {
       return {
-        type: manifest.type,
-        source: "manifest",
-        defaultPath: manifest.defaultPath,
-        hasManifest: true,
+        type: "default",
+        kind: null,
+        source: "default",
+        defaultPath: "/",
+        hasManifest: false,
         manifestValid: true,
-        manifestStatus: "valid",
-        routes: manifest.routes,
+        manifestStatus: "missing",
+        runtimeStatus,
+        routes: [{ path: "/" }],
       };
     }
+
+    if (manifest.kind === "static" && !fs.existsSync(path.join(manifest.resolvedContentDir, "index.html"))) {
+      throw new CanvasManifestError("STATIC_INDEX_MISSING", "kind=static requires contentDir/index.html");
+    }
+    if (manifest.kind === "nextjs" && !hasNextjsProject(manifest.resolvedContentDir)) {
+      throw new CanvasManifestError("NEXTJS_PROJECT_INVALID", "kind=nextjs requires package.json with next dependency");
+    }
+
+    const routes = manifest.routes.length > 0
+      ? manifest.routes
+      : scanNextjsRoutes(manifest.resolvedContentDir);
+
+    return {
+      type: "active",
+      kind: manifest.kind,
+      source: "manifest",
+      contentDir: manifest.contentDir,
+      resolvedContentDir: manifest.resolvedContentDir,
+      title: manifest.title,
+      owner: manifest.owner,
+      defaultPath: manifest.defaultPath,
+      hasManifest: true,
+      manifestValid: true,
+      manifestStatus: "valid",
+      runtimeStatus,
+      routes,
+    };
   } catch (err) {
     return {
       type: "default",
+      kind: null,
       source: "manifest",
       defaultPath: "/",
       hasManifest: true,
       manifestValid: false,
       manifestStatus: "invalid",
+      runtimeStatus: "unhealthy",
       error: err.message,
-      routes: [],
+      errorCode: err.code || "INVALID_MANIFEST",
+      routes: [{ path: "/" }],
     };
   }
-
-  if (hasNextjsProject(dir)) {
-    return {
-      type: "nextjs",
-      source: "package",
-      defaultPath: "/",
-      hasManifest: false,
-      manifestValid: true,
-      manifestStatus: "missing",
-      routes: [],
-    };
-  }
-
-  if (hasHtmlFiles(dir)) {
-    return {
-      type: "html",
-      source: "html",
-      defaultPath: "/",
-      hasManifest: false,
-      manifestValid: true,
-      manifestStatus: "missing",
-      routes: [],
-    };
-  }
-
-  return {
-    type: "default",
-    source: "default",
-    defaultPath: "/",
-    hasManifest: false,
-    manifestValid: true,
-    manifestStatus: "missing",
-    routes: [],
-  };
 }
 
 function cleanupPort(port) {
@@ -559,102 +239,6 @@ function roundTiming(value) {
   return Math.round(value * 1000) / 1000;
 }
 
-function buildRsyncCommand(sourceDir, targetDir = WEB_CANVAS_DIR) {
-  return `rsync -a --delete \
-      --chown=developer:developer \
-      --out-format='%i %n%L' \
-      --exclude='node_modules' \
-      --exclude='.next' \
-      --exclude='.git' \
-      "${sourceDir}/" "${targetDir}/"`;
-}
-
-function ownershipModeForSync({ recursiveOwnership = false } = {}) {
-  return recursiveOwnership ? "recursive" : "transfer";
-}
-
-function syncToCanvas(sourceDir, { recursiveOwnership = false } = {}) {
-  pushLog("management", `Syncing ${sourceDir} to ${WEB_CANVAS_DIR}`);
-  const startedAt = process.hrtime.bigint();
-  const transferStartedAt = process.hrtime.bigint();
-  execSync(buildRsyncCommand(sourceDir), {
-    timeout: 60000,
-    stdio: "pipe",
-    encoding: "utf8",
-  });
-  const fileTransferMs = elapsedMs(transferStartedAt);
-  let ownershipMs = 0;
-  const ownershipMode = ownershipModeForSync({ recursiveOwnership });
-  if (ownershipMode === "recursive") {
-    const ownershipStartedAt = process.hrtime.bigint();
-    execSync(`chown -R developer:developer "${WEB_CANVAS_DIR}"`, {
-      timeout: 10000,
-      stdio: "pipe",
-    });
-    ownershipMs = elapsedMs(ownershipStartedAt);
-  }
-  lastSyncAt = new Date().toISOString();
-  const timing = {
-    fileTransferMs: roundTiming(fileTransferMs),
-    ownershipMs: roundTiming(ownershipMs),
-    ownershipMode,
-    totalMs: roundTiming(elapsedMs(startedAt)),
-  };
-  pushLog("management", `Sync phase timing ${JSON.stringify(timing)}`);
-  return timing;
-}
-
-function dependencySnapshot(dir) {
-  const classification = classifyDependencyStrategy(dir);
-  return {
-    strategy: classification.strategy,
-    signature: dependencySignature(dir, classification.strategy),
-  };
-}
-
-function hasDependencyChanged(before, after) {
-  return before.strategy !== after.strategy || before.signature !== after.signature;
-}
-
-function rendererState() {
-  return {
-    type: currentType,
-    renderer: currentRenderer,
-    source: currentSource,
-    serviceStatus,
-    manifestStatus,
-    hasRendererProcess: rendererProcess !== null && !rendererProcess.killed,
-  };
-}
-
-function selectSyncRendererAction({ reset, beforeState, beforeDetection, afterDetection, beforeDependencies, afterDependencies }) {
-  if (reset) {
-    return { action: "restarted", reason: "reset" };
-  }
-  if (!afterDetection.manifestValid) {
-    return { action: "restarted", reason: "manifest-invalid" };
-  }
-  if (beforeState.type !== afterDetection.type) {
-    return { action: "restarted", reason: "canvas-type-changed" };
-  }
-  if (beforeDetection.manifestStatus !== afterDetection.manifestStatus) {
-    return { action: "restarted", reason: "manifest-status-changed" };
-  }
-  if (hasDependencyChanged(beforeDependencies, afterDependencies)) {
-    return { action: "restarted", reason: "dependencies-changed" };
-  }
-  if (afterDetection.type !== "nextjs") {
-    return { action: "restarted", reason: `${afterDetection.type}-renderer-refresh` };
-  }
-  if (beforeState.renderer !== "nextjs-dev" || beforeState.source !== WEB_CANVAS_DIR) {
-    return { action: "restarted", reason: "renderer-source-mismatch" };
-  }
-  if (!beforeState.hasRendererProcess || beforeState.serviceStatus !== "running") {
-    return { action: "restarted", reason: "renderer-unavailable" };
-  }
-  return { action: "reused", reason: "nextjs-source-only" };
-}
-
 function dependencySignature(dir, strategy) {
   const files = ["package.json", "package-lock.json", "npm-shrinkwrap.json"];
   const hash = crypto.createHash("sha256");
@@ -672,6 +256,7 @@ function dependencySignature(dir, strategy) {
 }
 
 function classifyDependencyStrategy(execDir) {
+  const templateNodeModules = path.join(NEXTJS_TEMPLATE_DIR, "node_modules");
   let templatePkg;
   let workspacePkg;
   try {
@@ -685,7 +270,7 @@ function classifyDependencyStrategy(execDir) {
     };
   }
 
-  if (!templatePkg || !workspacePkg || !fs.existsSync(NEXTJS_TEMPLATE_NODE_MODULES)) {
+  if (!templatePkg || !workspacePkg || !fs.existsSync(templateNodeModules)) {
     return {
       strategy: "custom",
       reason: "template-or-workspace-missing",
@@ -713,6 +298,43 @@ function classifyDependencyStrategy(execDir) {
   };
 }
 
+function hasDependencyChanged(before, after) {
+  return before.strategy !== after.strategy || before.signature !== after.signature;
+}
+
+function dependencySnapshot(dir) {
+  if (!dir || !fs.existsSync(dir)) return { strategy: "none", signature: null };
+  const classification = classifyDependencyStrategy(dir);
+  return {
+    strategy: classification.strategy,
+    signature: dependencySignature(dir, classification.strategy),
+  };
+}
+
+function selectSyncRendererAction({ reset, beforeState, beforeDetection, afterDetection, beforeDependencies, afterDependencies }) {
+  if (reset) return { action: "restarted", reason: "reset" };
+  if (!afterDetection.manifestValid) return { action: "restarted", reason: "manifest-invalid" };
+  if (beforeDetection.manifestStatus !== afterDetection.manifestStatus) {
+    return { action: "restarted", reason: "manifest-status-changed" };
+  }
+  if (manifestSignature(beforeDetection) !== manifestSignature(afterDetection)) {
+    return { action: "restarted", reason: "manifest-changed" };
+  }
+  if (beforeState.type !== afterDetection.type || beforeState.kind !== afterDetection.kind) {
+    return { action: "restarted", reason: "canvas-kind-changed" };
+  }
+  if (beforeState.source !== (afterDetection.resolvedContentDir || DEFAULT_CANVAS_DIR)) {
+    return { action: "restarted", reason: "renderer-source-mismatch" };
+  }
+  if (afterDetection.kind === "nextjs" && hasDependencyChanged(beforeDependencies, afterDependencies)) {
+    return { action: "restarted", reason: "dependencies-changed" };
+  }
+  if (!beforeState.hasRenderer || beforeState.serviceStatus !== "running") {
+    return { action: "restarted", reason: "renderer-unavailable" };
+  }
+  return { action: "reused", reason: "manifest-unchanged" };
+}
+
 function selectDependencyPreparationAction({
   execDir,
   nodeModulesExists,
@@ -727,18 +349,10 @@ function selectDependencyPreparationAction({
     || (signature && signature !== lastSignature)
     || currentStrategy !== strategy;
 
-  if (!needsInstall) {
-    return { action: "reuse", reason: "signature-unchanged" };
-  }
-  if (execDir === WEB_CANVAS_DIR && strategy === "standard") {
-    return { action: "link-standard", reason: "standard-dependencies" };
-  }
-  if (execDir === WEB_CANVAS_DIR && strategy === "extended") {
-    return { action: "seed-standard-and-install", reason: "extended-dependencies" };
-  }
-  if (nodeModulesIsSymlink) {
-    return { action: "replace-symlink-and-install", reason: "custom-dependencies" };
-  }
+  if (!needsInstall) return { action: "reuse", reason: "signature-unchanged" };
+  if (strategy === "standard") return { action: "link-standard", reason: "standard-dependencies" };
+  if (strategy === "extended") return { action: "seed-standard-and-install", reason: "extended-dependencies" };
+  if (nodeModulesIsSymlink) return { action: "replace-symlink-and-install", reason: "custom-dependencies" };
   return { action: "install", reason: "custom-dependencies" };
 }
 
@@ -764,62 +378,106 @@ function runNpmInstall(execDir) {
   });
 }
 
-function chownDeveloper(targetPath) {
-  execSync(`chown -R developer:developer "${targetPath}"`, {
-    timeout: 30000,
-    stdio: "pipe",
-  });
-}
-
-function scanNextjsRoutes(dir) {
-  const appDir = path.join(dir, "app");
-  if (!fs.existsSync(appDir)) return [];
-  const routes = [];
-  function walk(currentDir, routePath) {
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isFile() && /^page\.(tsx?|jsx?)$/.test(entry.name)) {
-        routes.push({ path: routePath || "/" });
-      }
-      if (entry.isDirectory() && !entry.name.startsWith("_")) {
-        walk(path.join(currentDir, entry.name), `${routePath}/${entry.name}`);
-      }
+function ensureDependencies(execDir) {
+  const startedAt = process.hrtime.bigint();
+  const nodeModulesPath = path.join(execDir, "node_modules");
+  const templateNodeModules = path.join(NEXTJS_TEMPLATE_DIR, "node_modules");
+  try {
+    const existingNodeModules = fs.existsSync(nodeModulesPath) ? fs.lstatSync(nodeModulesPath) : null;
+    const classification = classifyDependencyStrategy(execDir);
+    const signature = dependencySignature(execDir, classification.strategy);
+    const preparationAction = selectDependencyPreparationAction({
+      execDir,
+      nodeModulesExists: Boolean(existingNodeModules),
+      nodeModulesIsSymlink: existingNodeModules?.isSymbolicLink() === true,
+      lastSignature: lastPackageSignature,
+      signature,
+      currentStrategy: currentDependencyStrategy,
+      strategy: classification.strategy,
+    });
+    if (preparationAction.action === "reuse") {
+      pushLog("management", `Dependency strategy ${classification.strategy} unchanged for ${execDir}`);
+      return;
     }
-  }
-  walk(appDir, "");
-  return routes;
-}
 
-function scanHtmlRoutes(dir) {
-  const routes = [];
-  function walk(currentDir) {
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      const entryPath = path.join(currentDir, entry.name);
-      if (entry.isDirectory() && !entry.name.startsWith(".")) {
-        walk(entryPath);
-      } else if (entry.isFile() && entry.name.endsWith(".html")) {
-        const rel = path.relative(dir, entryPath);
-        const routePath = rel === "index.html" ? "/" : `/${rel}`;
-        routes.push({ path: routePath, file: rel });
-      }
+    pushLog("management", `Dependency strategy for ${execDir}: ${classification.strategy} (${classification.reason})`);
+    currentDependencyStrategy = classification.strategy;
+
+    if (preparationAction.action === "link-standard") {
+      removeNodeModules(nodeModulesPath);
+      fs.symlinkSync(templateNodeModules, nodeModulesPath, "dir");
+      pushLog("management", `Linked standard dependencies from ${templateNodeModules}`);
+    } else if (preparationAction.action === "seed-standard-and-install") {
+      removeNodeModules(nodeModulesPath);
+      statusMessage = "Seeding dependencies...";
+      pushLog("management", `Seeding standard dependencies for extended project; extras=${classification.extras.join(",") || "none"}`);
+      execSync(`cp -a "${templateNodeModules}" "${nodeModulesPath}"`, {
+        timeout: 120000,
+        stdio: "pipe",
+      });
+      execSync(`chown -R developer:developer "${nodeModulesPath}"`, {
+        timeout: 30000,
+        stdio: "pipe",
+      });
+      runNpmInstall(execDir);
+    } else {
+      if (preparationAction.action === "replace-symlink-and-install") removeNodeModules(nodeModulesPath);
+      runNpmInstall(execDir);
     }
+
+    lastPackageSignature = signature;
+  } finally {
+    lastDependencyPreparationMs += elapsedMs(startedAt);
   }
-  if (fs.existsSync(dir)) walk(dir);
-  return routes;
 }
 
-function routesForSnapshot() {
-  const detection = detectCanvas(WEB_CANVAS_DIR);
-  if (detection.routes.length > 0) return detection;
-  if (detection.type === "nextjs") {
-    detection.routes = scanNextjsRoutes(WEB_CANVAS_DIR);
-  } else if (detection.type === "html") {
-    detection.routes = scanHtmlRoutes(WEB_CANVAS_DIR);
-  } else {
-    detection.routes = [{ path: "/" }];
+function buildNextjsDevServerConfig(execDir) {
+  return {
+    command: "npx",
+    args: ["next", "dev", "-p", String(NEXT_INTERNAL_PORT)],
+    options: {
+      cwd: execDir,
+      uid: 1000,
+      gid: 1000,
+      detached: true,
+      env: {
+        ...process.env,
+        PORT: String(NEXT_INTERNAL_PORT),
+        HOME: "/home/developer",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  };
+}
+
+function resolveNextjsStartupTimeoutState({ rendererExited, runtimeStatus: currentRuntimeStatus, statusMessage: currentStatusMessage }) {
+  if (rendererExited && currentRuntimeStatus === "unhealthy") {
+    return {
+      preserveExitState: true,
+      serviceStatus: "stopped",
+      runtimeStatus: "unhealthy",
+      statusMessage: currentStatusMessage,
+    };
   }
-  return detection;
+  return {
+    preserveExitState: false,
+    serviceStatus: "starting",
+    runtimeStatus: "starting",
+    statusMessage: "Canvas Next.js renderer is still starting...",
+  };
+}
+
+function rendererState() {
+  return {
+    type: currentType,
+    kind: currentKind,
+    renderer: currentRenderer,
+    source: currentSource,
+    serviceStatus,
+    manifestStatus,
+    runtimeStatus,
+    hasRenderer: (rendererProcess !== null && !rendererProcess.killed) || staticServer !== null,
+  };
 }
 
 async function waitForPortRelease(port, maxWait = 10000) {
@@ -833,6 +491,7 @@ async function waitForPortRelease(port, maxWait = 10000) {
 
 async function stopRenderer() {
   serviceStatus = "stopping";
+  runtimeStatus = "unhealthy";
   statusMessage = "Stopping Canvas renderer...";
 
   if (staticServer) {
@@ -869,43 +528,81 @@ async function stopRenderer() {
   statusMessage = "Canvas renderer stopped";
 }
 
-function assertHtmlRouteFiles(detection) {
-  for (const route of detection.routes) {
-    if (!route.file) continue;
-    const filePath = path.join(WEB_CANVAS_DIR, route.file);
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`HTML route file not found: ${route.file}`);
-    }
-  }
+function setCanvasHeaders(res) {
+  res.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
 }
 
-async function startHtmlRenderer(detection) {
-  assertHtmlRouteFiles(detection);
-  const htmlRoutes = detection.routes.length > 0 ? detection.routes : scanHtmlRoutes(WEB_CANVAS_DIR);
-  const routeMap = new Map(htmlRoutes.filter((r) => r.file).map((r) => [normalizeRoutePath(r.path), r.file]));
-  const staticApp = express();
-
-  staticApp.get("*", (req, res, next) => {
-    const cleanPath = normalizeRoutePath(req.path);
-    const mappedFile = routeMap.get(cleanPath);
-    if (mappedFile) {
-      sendInjectedHtmlFile(res, path.join(WEB_CANVAS_DIR, mappedFile));
+function sendInjectedHtmlFile(res, filePath) {
+  fs.readFile(filePath, "utf8", (err, html) => {
+    if (err) {
+      res.status(404).send("Canvas HTML route not found");
       return;
     }
+    setCanvasHeaders(res);
+    res.type("html").send(injectAileronCanvasBridge(html));
+  });
+}
+
+function resolveStaticRequest(contentDir, requestPath) {
+  const relativePath = decodeURIComponent(requestPath.split("?")[0]).replace(/^\/+/, "");
+  if (relativePath.includes("..")) return null;
+  const requested = path.resolve(contentDir, relativePath || "index.html");
+  const relative = path.relative(contentDir, requested);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return null;
+  if (!fs.existsSync(requested)) return null;
+  if (fs.lstatSync(requested).isSymbolicLink()) return null;
+  const realContentDir = fs.realpathSync(contentDir);
+  const realRequested = fs.realpathSync(requested);
+  const realRelative = path.relative(realContentDir, realRequested);
+  if (realRelative.startsWith("..") || path.isAbsolute(realRelative)) return null;
+  return requested;
+}
+
+async function startStaticRenderer(detection) {
+  const contentDir = detection.resolvedContentDir;
+  const routeMap = new Map(detection.routes.map((route) => [normalizeRoutePath(route.path), route.path === "/" ? "index.html" : route.path.replace(/^\/+/, "")]));
+  const staticApp = express();
+
+  staticApp.get("/__aileron/bridge.js", (_req, res) => {
+    res.type("application/javascript; charset=utf-8").send(getAileronCanvasBridgeSource());
+  });
+  staticApp.use((req, res, next) => {
+    setCanvasHeaders(res);
     next();
   });
-  staticApp.get("*.html", (req, res, next) => {
-    const relativePath = req.path.replace(/^\/+/, "");
-    const requested = path.resolve(WEB_CANVAS_DIR, relativePath);
-    if (fs.existsSync(requested) && requested.startsWith(`${WEB_CANVAS_DIR}${path.sep}`)) {
+  staticApp.get("*", (req, res, next) => {
+    const cleanPath = normalizeRoutePath(req.path);
+    const mapped = routeMap.get(cleanPath);
+    if (!mapped) {
+      next();
+      return;
+    }
+    const requested = resolveStaticRequest(contentDir, mapped);
+    if (requested && requested.endsWith(".html")) {
       sendInjectedHtmlFile(res, requested);
       return;
     }
     next();
   });
-  staticApp.use(express.static(WEB_CANVAS_DIR));
+  staticApp.get("*.html", (req, res, next) => {
+    const requested = resolveStaticRequest(contentDir, req.path);
+    if (requested) {
+      sendInjectedHtmlFile(res, requested);
+      return;
+    }
+    next();
+  });
+  staticApp.get("*", (req, res, next) => {
+    const requested = resolveStaticRequest(contentDir, req.path);
+    if (!requested) {
+      next();
+      return;
+    }
+    setCanvasHeaders(res);
+    res.sendFile(requested);
+  });
   staticApp.get("*", (_req, res) => {
-    const indexPath = path.join(WEB_CANVAS_DIR, "index.html");
+    const indexPath = path.join(contentDir, "index.html");
     if (fs.existsSync(indexPath)) {
       sendInjectedHtmlFile(res, indexPath);
       return;
@@ -914,66 +611,23 @@ async function startHtmlRenderer(detection) {
   });
 
   staticServer = staticApp.listen(CANVAS_PORT, "0.0.0.0");
-  currentRenderer = "html-static";
+  currentRenderer = "static";
+  currentType = "active";
+  currentKind = "static";
+  currentSource = contentDir;
   serviceStatus = "running";
-  statusMessage = "Canvas HTML renderer is running";
-}
-
-function ensureDependencies(execDir) {
-  const startedAt = process.hrtime.bigint();
-  const nodeModulesPath = path.join(execDir, "node_modules");
-  try {
-    const existingNodeModules = fs.existsSync(nodeModulesPath) ? fs.lstatSync(nodeModulesPath) : null;
-    const classification = execDir === WEB_CANVAS_DIR
-      ? classifyDependencyStrategy(execDir)
-      : { strategy: "custom", reason: "non-web-canvas", extras: [] };
-    const signature = dependencySignature(execDir, classification.strategy);
-    const preparationAction = selectDependencyPreparationAction({
-      execDir,
-      nodeModulesExists: Boolean(existingNodeModules),
-      nodeModulesIsSymlink: existingNodeModules?.isSymbolicLink() === true,
-      lastSignature: lastPackageSignature,
-      signature,
-      currentStrategy: currentDependencyStrategy,
-      strategy: classification.strategy,
-    });
-    if (preparationAction.action === "reuse") {
-      pushLog("management", `Dependency strategy ${classification.strategy} unchanged for ${execDir}`);
-      return;
-    }
-
-    pushLog("management", `Dependency strategy for ${execDir}: ${classification.strategy} (${classification.reason})`);
-    currentDependencyStrategy = classification.strategy;
-
-    if (preparationAction.action === "link-standard") {
-      removeNodeModules(nodeModulesPath);
-      fs.symlinkSync(NEXTJS_TEMPLATE_NODE_MODULES, nodeModulesPath, "dir");
-      pushLog("management", `Linked standard dependencies from ${NEXTJS_TEMPLATE_NODE_MODULES}`);
-    } else if (preparationAction.action === "seed-standard-and-install") {
-      removeNodeModules(nodeModulesPath);
-      statusMessage = "Seeding dependencies...";
-      pushLog("management", `Seeding standard dependencies for extended project; extras=${classification.extras.join(",") || "none"}`);
-      execSync(`cp -a "${NEXTJS_TEMPLATE_NODE_MODULES}" "${nodeModulesPath}"`, {
-        timeout: 120000,
-        stdio: "pipe",
-      });
-      chownDeveloper(nodeModulesPath);
-      runNpmInstall(execDir);
-    } else {
-      if (preparationAction.action === "replace-symlink-and-install") {
-        removeNodeModules(nodeModulesPath);
-      }
-      runNpmInstall(execDir);
-    }
-
-    lastPackageSignature = signature;
-  } finally {
-    lastDependencyPreparationMs += elapsedMs(startedAt);
-  }
+  runtimeStatus = "healthy";
+  statusMessage = "Canvas static renderer is running";
 }
 
 function startNextProxy(targetPort) {
   const server = http.createServer((req, res) => {
+    if (req.url === "/__aileron/bridge.js") {
+      res.writeHead(200, { "content-type": "application/javascript; charset=utf-8" });
+      res.end(getAileronCanvasBridgeSource());
+      return;
+    }
+
     const upstreamHeaders = {
       ...req.headers,
       host: `127.0.0.1:${targetPort}`,
@@ -994,6 +648,7 @@ function startNextProxy(targetPort) {
         const responseHeaders = {
           ...proxyRes.headers,
           connection: "close",
+          "content-security-policy": CONTENT_SECURITY_POLICY,
         };
         delete responseHeaders["transfer-encoding"];
 
@@ -1012,7 +667,7 @@ function startNextProxy(targetPort) {
         proxyRes.on("data", (chunk) => chunks.push(chunk));
         proxyRes.on("end", () => {
           const body = Buffer.concat(chunks);
-          const html = injectReviewBridge(body.toString("utf8"));
+          const html = injectAileronCanvasBridge(body.toString("utf8"));
           delete responseHeaders["content-length"];
           res.writeHead(proxyRes.statusCode || 200, {
             ...responseHeaders,
@@ -1055,27 +710,19 @@ function startNextProxy(targetPort) {
   staticServer = server.listen(CANVAS_PORT, "0.0.0.0");
 }
 
-async function startNextjsRenderer(execDir) {
+async function startNextjsRenderer(execDir, { defaultCanvas = false } = {}) {
   ensureDependencies(execDir);
   statusMessage = "Starting Canvas Next.js renderer...";
-  rendererProcess = spawn("npx", ["next", "dev", "-p", String(NEXT_INTERNAL_PORT)], {
-    cwd: execDir,
-    uid: 1000,
-    gid: 1000,
-    detached: true,
-    env: {
-      ...process.env,
-      PORT: String(NEXT_INTERNAL_PORT),
-      HOME: "/home/developer",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  runtimeStatus = "starting";
+  const nextConfig = buildNextjsDevServerConfig(execDir);
+  rendererProcess = spawn(nextConfig.command, nextConfig.args, nextConfig.options);
 
   rendererProcess.stdout.on("data", (data) => {
     const line = data.toString().trim();
     if (line) pushLog("renderer", line);
     if (line.includes("Ready") || line.includes("ready") || line.includes(`localhost:${NEXT_INTERNAL_PORT}`)) {
       serviceStatus = "running";
+      runtimeStatus = "healthy";
       statusMessage = "Canvas Next.js renderer is running";
     }
   });
@@ -1088,46 +735,58 @@ async function startNextjsRenderer(execDir) {
     rendererProcess = null;
     if (serviceStatus !== "stopping") {
       serviceStatus = "stopped";
+      runtimeStatus = "unhealthy";
       statusMessage = `Canvas renderer exited with code ${code}`;
     }
   });
 
   currentRenderer = "nextjs-dev";
+  currentType = defaultCanvas ? "default" : "active";
+  currentKind = defaultCanvas ? null : "nextjs";
+  currentSource = execDir;
   const startTime = Date.now();
   while (Date.now() - startTime < 60000) {
     if (await checkPort(NEXT_INTERNAL_PORT)) {
       startNextProxy(NEXT_INTERNAL_PORT);
       serviceStatus = "running";
+      runtimeStatus = "healthy";
       statusMessage = "Canvas Next.js renderer is running";
       return;
     }
     await new Promise((r) => setTimeout(r, 2000));
   }
-  serviceStatus = "starting";
-  statusMessage = "Canvas Next.js renderer is still starting...";
+  const timeoutState = resolveNextjsStartupTimeoutState({
+    rendererExited: rendererProcess === null,
+    runtimeStatus,
+    statusMessage,
+  });
+  serviceStatus = timeoutState.serviceStatus;
+  runtimeStatus = timeoutState.runtimeStatus;
+  statusMessage = timeoutState.statusMessage;
 }
 
-async function startRendererFromSnapshot() {
-  const detection = detectCanvas(WEB_CANVAS_DIR);
+async function startRendererFromDetection(detection) {
   manifestStatus = detection.manifestStatus;
   if (!detection.manifestValid) {
     currentType = "default";
+    currentKind = null;
+    currentSource = DEFAULT_CANVAS_DIR;
     currentRenderer = "manifest-error";
     serviceStatus = "manifest_error";
-    statusMessage = detection.error || "Invalid route.json";
+    runtimeStatus = "unhealthy";
+    statusMessage = detection.error || "Invalid canvas.json";
     return detection;
   }
 
-  currentType = detection.type;
-  currentSource = WEB_CANVAS_DIR;
-  if (detection.type === "html") {
-    await startHtmlRenderer(detection);
-  } else if (detection.type === "nextjs") {
-    await startNextjsRenderer(WEB_CANVAS_DIR);
+  if (detection.kind === "static") {
+    await startStaticRenderer(detection);
+  } else if (detection.kind === "nextjs") {
+    await startNextjsRenderer(detection.resolvedContentDir);
   } else {
     currentType = "default";
+    currentKind = null;
     currentSource = DEFAULT_CANVAS_DIR;
-    await startNextjsRenderer(DEFAULT_CANVAS_DIR);
+    await startNextjsRenderer(DEFAULT_CANVAS_DIR, { defaultCanvas: true });
   }
   return detection;
 }
@@ -1136,24 +795,21 @@ async function syncAndStart({ reset = false } = {}) {
   const totalStartedAt = process.hrtime.bigint();
   lastDependencyPreparationMs = 0;
   const beforeState = rendererState();
-  const beforeDetection = detectCanvas(WEB_CANVAS_DIR);
-  const beforeDependencies = dependencySnapshot(WEB_CANVAS_DIR);
+  const beforeDetection = detectCanvas(WORKSPACE_DIR);
+  const beforeDependencies = dependencySnapshot(beforeDetection.resolvedContentDir);
 
   serviceStatus = "starting";
+  runtimeStatus = "starting";
   if (reset) {
     await stopRenderer();
     serviceStatus = "starting";
-    pushLog("management", "Resetting Canvas snapshot and caches");
-    execSync(`rm -rf "${WEB_CANVAS_DIR}"/* "${WEB_CANVAS_DIR}"/.[!.]* "${WEB_CANVAS_DIR}"/..?*`, {
-      stdio: "pipe",
-      shell: "/bin/bash",
-    });
+    runtimeStatus = "starting";
     lastPackageSignature = null;
     lastResetAt = new Date().toISOString();
   }
-  const syncTiming = syncToCanvas(WORKSPACE_DIR, { recursiveOwnership: reset });
-  const detection = detectCanvas(WEB_CANVAS_DIR);
-  const afterDependencies = dependencySnapshot(WEB_CANVAS_DIR);
+
+  const detection = detectCanvas(WORKSPACE_DIR);
+  const afterDependencies = dependencySnapshot(detection.resolvedContentDir);
   const rendererStartedAt = process.hrtime.bigint();
   const rendererAction = selectSyncRendererAction({
     reset,
@@ -1166,48 +822,67 @@ async function syncAndStart({ reset = false } = {}) {
 
   if (rendererAction.action === "reused") {
     currentType = detection.type;
-    currentSource = WEB_CANVAS_DIR;
+    currentKind = detection.kind;
+    currentSource = detection.resolvedContentDir || DEFAULT_CANVAS_DIR;
     manifestStatus = detection.manifestStatus;
+    runtimeStatus = "healthy";
     serviceStatus = "running";
-    statusMessage = "Canvas Next.js renderer reused";
+    statusMessage = "Canvas renderer reused";
+    lastSyncAt = new Date().toISOString();
+    currentManifestSignature = manifestSignature(detection);
     pushLog("management", `Reused Canvas renderer after sync (${rendererAction.reason})`);
-    const syncTimings = {
-      fileTransferMs: syncTiming.fileTransferMs,
-      ownershipMs: syncTiming.ownershipMs,
-      ownershipMode: syncTiming.ownershipMode,
-      dependencyPreparationMs: roundTiming(lastDependencyPreparationMs),
-      rendererReconciliationMs: roundTiming(elapsedMs(rendererStartedAt)),
-      totalMs: roundTiming(elapsedMs(totalStartedAt)),
+    return {
+      detection: { ...detection, runtimeStatus },
+      rendererAction,
+      syncTimings: {
+        dependencyPreparationMs: roundTiming(lastDependencyPreparationMs),
+        rendererReconciliationMs: roundTiming(elapsedMs(rendererStartedAt)),
+        totalMs: roundTiming(elapsedMs(totalStartedAt)),
+      },
     };
-    pushLog("management", `Sync timing summary ${JSON.stringify(syncTimings)}`);
-    return { detection, rendererAction, syncTimings };
   }
 
   pushLog("management", `Restarting Canvas renderer after sync (${rendererAction.reason})`);
   await stopRenderer();
   serviceStatus = "starting";
-  const startedDetection = await startRendererFromSnapshot();
-  const syncTimings = {
-    fileTransferMs: syncTiming.fileTransferMs,
-    ownershipMs: syncTiming.ownershipMs,
-    ownershipMode: syncTiming.ownershipMode,
-    dependencyPreparationMs: roundTiming(lastDependencyPreparationMs),
-    rendererReconciliationMs: roundTiming(elapsedMs(rendererStartedAt)),
-    totalMs: roundTiming(elapsedMs(totalStartedAt)),
+  runtimeStatus = "starting";
+  const startedDetection = await startRendererFromDetection(detection);
+  lastSyncAt = new Date().toISOString();
+  currentManifestSignature = manifestSignature(startedDetection);
+  return {
+    detection: { ...startedDetection, runtimeStatus },
+    rendererAction,
+    syncTimings: {
+      dependencyPreparationMs: roundTiming(lastDependencyPreparationMs),
+      rendererReconciliationMs: roundTiming(elapsedMs(rendererStartedAt)),
+      totalMs: roundTiming(elapsedMs(totalStartedAt)),
+    },
   };
-  pushLog("management", `Sync timing summary ${JSON.stringify(syncTimings)}`);
-  return { detection: startedDetection, rendererAction, syncTimings };
 }
 
+function routesForCurrentCanvas() {
+  const detection = detectCanvas(WORKSPACE_DIR);
+  return { ...detection, runtimeStatus };
+}
+
+app.get("/__aileron/bridge.js", (_req, res) => {
+  res.type("application/javascript; charset=utf-8").send(getAileronCanvasBridgeSource());
+});
+
 app.get("/detect", (_req, res) => {
-  const detection = detectCanvas(fs.existsSync(path.join(WEB_CANVAS_DIR, "route.json")) ? WEB_CANVAS_DIR : WORKSPACE_DIR);
-  res.json(detection);
+  res.json({ ...detectCanvas(WORKSPACE_DIR), runtimeStatus });
 });
 
 app.get("/routes", (_req, res) => {
-  const detection = routesForSnapshot();
+  const detection = routesForCurrentCanvas();
   res.json({
     type: detection.type,
+    kind: detection.kind,
+    contentDir: detection.contentDir,
+    title: detection.title,
+    owner: detection.owner,
+    manifestStatus: detection.manifestStatus,
+    runtimeStatus,
     defaultPath: detection.defaultPath,
     routes: detection.routes,
     total: detection.routes.length,
@@ -1233,10 +908,12 @@ app.get("/health", async (_req, res) => {
   res.json({
     status,
     type: currentType,
+    kind: currentKind,
     renderer: currentRenderer,
     renderer_running: healthy || processAlive,
     port_available: portAvailable,
     manifest_status: manifestStatus,
+    runtime_status: runtimeStatus,
     dependency_strategy: currentDependencyStrategy,
     message: healthy ? "Canvas is running" : statusMessage || "Canvas is not running",
     source: currentSource,
@@ -1250,10 +927,13 @@ app.get("/status", async (_req, res) => {
     serviceStatus,
     statusMessage,
     type: currentType,
+    kind: currentKind,
     renderer: currentRenderer,
     portAvailable: await checkPort(CANVAS_PORT),
     currentSource,
     manifestStatus,
+    runtimeStatus,
+    currentManifestSignature,
     dependencyStrategy: currentDependencyStrategy,
     lastSyncAt,
     lastResetAt,
@@ -1278,7 +958,9 @@ app.post("/sync", async (_req, res) => {
     res.json({
       status: "completed",
       type: currentType,
+      kind: currentKind,
       manifestStatus,
+      runtimeStatus,
       detection,
       message: statusMessage,
       syncedAt: lastSyncAt,
@@ -1288,6 +970,7 @@ app.post("/sync", async (_req, res) => {
     });
   } catch (err) {
     serviceStatus = "error";
+    runtimeStatus = "unhealthy";
     statusMessage = err.message;
     pushLog("error", err.stack || err.message);
     res.status(500).json({ status: "failed", error: err.message });
@@ -1307,7 +990,9 @@ app.post("/reset", async (_req, res) => {
     res.json({
       status: "completed",
       type: currentType,
+      kind: currentKind,
       manifestStatus,
+      runtimeStatus,
       detection,
       message: statusMessage,
       resetAt: lastResetAt,
@@ -1317,6 +1002,7 @@ app.post("/reset", async (_req, res) => {
     });
   } catch (err) {
     serviceStatus = "error";
+    runtimeStatus = "unhealthy";
     statusMessage = err.message;
     pushLog("error", err.stack || err.message);
     res.status(500).json({ status: "failed", error: err.message });
@@ -1328,15 +1014,18 @@ app.post("/reset", async (_req, res) => {
 app.post("/restart", async (_req, res) => {
   try {
     await stopRenderer();
-    await startRendererFromSnapshot();
+    await startRendererFromDetection(detectCanvas(WORKSPACE_DIR));
     res.json({
       status: "completed",
       type: currentType,
+      kind: currentKind,
       manifestStatus,
+      runtimeStatus,
       message: statusMessage,
     });
   } catch (err) {
     serviceStatus = "error";
+    runtimeStatus = "unhealthy";
     statusMessage = err.message;
     pushLog("error", err.stack || err.message);
     res.status(500).json({ status: "failed", error: err.message });
@@ -1346,11 +1035,12 @@ app.post("/restart", async (_req, res) => {
 if (require.main === module) {
   app.listen(API_PORT, "0.0.0.0", () => {
     pushLog("management", `Canvas management API listening on port ${API_PORT}`);
-    pushLog("management", `Architecture: /workspace -> ${WEB_CANVAS_DIR}`);
+    pushLog("management", `Architecture: ${manifestPathForWorkspace(WORKSPACE_DIR)} -> active canvas`);
   });
 
   syncAndStart().catch((err) => {
     serviceStatus = "error";
+    runtimeStatus = "unhealthy";
     statusMessage = err.message;
     pushLog("error", `Auto-start failed: ${err.stack || err.message}`);
   });
@@ -1369,14 +1059,18 @@ if (require.main === module) {
 }
 
 module.exports = {
-  REVIEW_BRIDGE_MARKER,
-  REVIEW_BRIDGE_SOURCE,
-  REVIEW_BRIDGE_VERSION,
-  ENABLE_REVIEW_BRIDGE,
-  canvasReviewBridgeScript,
-  buildRsyncCommand,
-  ownershipModeForSync,
+  BRIDGE_MARKER,
+  BRIDGE_SOURCE,
+  BRIDGE_VERSION,
+  CONTENT_SECURITY_POLICY,
+  app,
+  buildNextjsDevServerConfig,
+  detectCanvas,
+  getAileronCanvasBridgeSource,
+  injectAileronCanvasBridge,
+  resolveNextjsStartupTimeoutState,
+  resolveStaticRequest,
   selectDependencyPreparationAction,
   selectSyncRendererAction,
-  injectReviewBridge,
+  syncAndStart,
 };

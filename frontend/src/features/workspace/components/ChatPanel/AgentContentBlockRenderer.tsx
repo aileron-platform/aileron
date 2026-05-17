@@ -13,7 +13,7 @@ import { MarkdownRenderer } from '@/features/workspace/components/MarkdownRender
 import { createLogger } from '@/shared/services/logger';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import type { AgentMessage, ContentBlock, ToolUseBlock, ToolResultBlock, ThinkingBlock, SystemBlock, SystemCompleteBlock, SystemStatusBlock, AgenticTool, PermissionRequest, UserInputRequest, ToolDecisionType, ToolDecisionOutcome } from './agentSessionTypes';
+import type { AgentMessage, ContentBlock, ImageBlock, ToolUseBlock, ToolResultBlock, ThinkingBlock, SystemBlock, SystemCompleteBlock, SystemStatusBlock, AgenticTool, PermissionRequest, UserInputRequest, ToolDecisionType, ToolDecisionOutcome } from './agentSessionTypes';
 import { resolveAcpToolWidgetTypeWithKind } from './agentSessionTypes';
 import { splitOnQuestionForms, parseSubmittedAnswers } from './question-form';
 import { QuestionFormView } from './QuestionFormView';
@@ -115,6 +115,33 @@ const TextBlockRenderer: React.FC<{ block: ContentBlock }> = ({ block }) => {
   return (
     <div className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
       <MarkdownRenderer content={textContent} />
+    </div>
+  );
+};
+
+function imageBlockSrc(block: ImageBlock): string | null {
+  const { source } = block;
+  if (!source) return null;
+  if (source.type === 'base64' && source.data) {
+    return `data:${source.media_type || 'image/png'};base64,${source.data}`;
+  }
+  if (source.type === 'url') {
+    return source.url || source.data || null;
+  }
+  return null;
+}
+
+const ImageBlockRenderer: React.FC<{ block: ImageBlock }> = ({ block }) => {
+  const { t } = useI18n();
+  const src = imageBlockSrc(block);
+  if (!src) return null;
+  return (
+    <div className="max-w-full overflow-hidden rounded-md border border-border/60 bg-muted/20">
+      <img
+        src={src}
+        alt={t('workspace.chat.generatedImage.alt')}
+        className="block max-h-[480px] w-auto max-w-full object-contain"
+      />
     </div>
   );
 };
@@ -558,6 +585,9 @@ const AssistantMessageRenderer: React.FC<{
         }
         if (block.type === 'thinking') {
           return <ThinkingBlockRenderer key={idx} block={block} isMessageActive={isMessageActive} />;
+        }
+        if (block.type === 'image') {
+          return <ImageBlockRenderer key={idx} block={block as ImageBlock} />;
         }
         if (block.type === 'tool_use') {
           return (

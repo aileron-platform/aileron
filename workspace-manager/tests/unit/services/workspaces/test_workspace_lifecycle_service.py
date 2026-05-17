@@ -433,6 +433,40 @@ class TestRestartBrowser:
         assert sample_workspace.browser_status == "error"
 
 
+@pytest.mark.unit
+@pytest.mark.workspace
+class TestRestartCanvas:
+    """Restart Canvas Tests"""
+
+    def test_restart_canvas_recreates_with_latest_configured_image(
+        self, lifecycle_service, mock_db_session, sample_workspace
+    ):
+        sample_workspace.canvas_container_id = "canvas-container-abc"
+        mock_db_session.get.return_value = sample_workspace
+        image_service = MagicMock()
+        image_service.get_canvas_image_name.return_value = "ailerondocker/workspace-canvas:dev"
+
+        with patch(
+            "app.services.workspace_lifecycle_service.get_container_image_service",
+            return_value=image_service,
+        ):
+            with patch.object(
+                lifecycle_service,
+                "_recreate_container",
+                return_value="canvas-container-new",
+            ) as mock_recreate:
+                lifecycle_service.restart_canvas_task("workspace-123")
+
+        mock_recreate.assert_called_once_with(
+            "canvas-container-abc",
+            "workspace-123",
+            image_override="ailerondocker/workspace-canvas:dev",
+        )
+        assert sample_workspace.canvas_container_id == "canvas-container-new"
+        assert sample_workspace.canvas_status == "running"
+        mock_db_session.commit.assert_called()
+
+
 # ============================================================================
 # Container Operations Tests
 # ============================================================================

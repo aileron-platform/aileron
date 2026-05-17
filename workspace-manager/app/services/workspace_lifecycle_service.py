@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
 from app.db import models as db_models
+from app.services.container_image_service import get_container_image_service
 
 logger = logging.getLogger(__name__)
 
@@ -217,8 +218,11 @@ class WorkspaceLifecycleService:
             self._log_event(workspace_id, "canvas_restarting", "Starting to rebuild canvas container")
 
             if workspace.canvas_container_id:
+                image_service = get_container_image_service()
                 new_id = self._recreate_container(
-                    workspace.canvas_container_id, workspace_id
+                    workspace.canvas_container_id,
+                    workspace_id,
+                    image_override=image_service.get_canvas_image_name(),
                 )
 
                 if new_id:
@@ -293,7 +297,14 @@ class WorkspaceLifecycleService:
         service = WorkspaceCustomResourceService(self.db)
         service.request_canvas_restart(workspace.id)
 
-    def _recreate_container(self, container_id: str, workspace_id: str, *, env_override: list[str] | None = None) -> Optional[str]:
+    def _recreate_container(
+        self,
+        container_id: str,
+        workspace_id: str,
+        *,
+        env_override: list[str] | None = None,
+        image_override: str | None = None,
+    ) -> Optional[str]:
         """Recreate docker container (use latest image)
 
         Stop and remove old container, then create a new container with the same
@@ -321,7 +332,7 @@ class WorkspaceLifecycleService:
             attrs = container.attrs
             config = attrs["Config"]
             host_config = attrs["HostConfig"]
-            image = config["Image"]
+            image = image_override or config["Image"]
 
             logger.info(f"Recreating container {name} ({container_id[:12]}) with image {image}")
             self._log_event(workspace_id, "container_recreating",

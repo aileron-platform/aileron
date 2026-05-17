@@ -20,22 +20,30 @@ class StubCanvasService:
     def detect(self, workspace_id: str) -> CanvasDetectResponse:
         return CanvasDetectResponse(
             workspaceId=workspace_id,
-            type="html",
+            type="active",
+            kind="static",
+            title="Demo",
+            owner={"type": "user"},
             manifestStatus="valid",
+            runtimeStatus="healthy",
             defaultPath="/",
-            routes=[CanvasRoute(path="/", file="index.html")],
+            routes=[CanvasRoute(path="/", label="Home")],
             detectedAt=datetime(2026, 4, 25),
         )
 
     def routes(self, workspace_id: str) -> CanvasRoutesResponse:
         routes = [
-            CanvasRoute(path="/", file="index.html"),
-            CanvasRoute(path="/docs", file="docs.html"),
+            CanvasRoute(path="/", label="Home"),
+            CanvasRoute(path="/docs", label="Docs"),
         ]
         return CanvasRoutesResponse(
             workspaceId=workspace_id,
-            type="html",
+            type="active",
+            kind="static",
+            title="Demo",
+            owner={"type": "user"},
             manifestStatus="valid",
+            runtimeStatus="healthy",
             defaultPath="/",
             routes=routes,
             total=len(routes),
@@ -46,19 +54,22 @@ class StubCanvasService:
         return CanvasActionResponse(
             workspaceId=workspace_id,
             status="ok",
-            type="html",
+            type="active",
+            kind="static",
             manifestStatus="valid",
+            runtimeStatus="healthy",
             message="synced",
             syncedAt="2026-04-29T00:00:00Z",
             rendererAction="reused",
-            rendererActionReason="nextjs-source-only",
+            rendererActionReason="manifest-unchanged",
         )
 
     def reset(self, workspace_id: str) -> CanvasActionResponse:
         return CanvasActionResponse(
             workspaceId=workspace_id,
             status="ok",
-            type="html",
+            type="active",
+            kind="static",
             manifestStatus="valid",
             message="reset",
         )
@@ -67,8 +78,10 @@ class StubCanvasService:
         return CanvasHealthResponse(
             workspaceId=workspace_id,
             status="healthy",
-            type="html",
+            type="active",
+            kind="static",
             manifestStatus="valid",
+            runtimeStatus="healthy",
             rendererRunning=True,
             portAvailable=True,
             message="Canvas service is healthy",
@@ -92,7 +105,8 @@ def test_canvas_detect_and_routes(client) -> None:
         routes_response = client.get(f"/api/v1/workspaces/{workspace_id}/canvas/routes")
 
     assert detect_response.status_code == 200
-    assert detect_response.json()["type"] == "html"
+    assert detect_response.json()["type"] == "active"
+    assert detect_response.json()["kind"] == "static"
     assert detect_response.json()["manifestStatus"] == "valid"
 
     assert routes_response.status_code == 200

@@ -26,6 +26,7 @@ import { dispatchInsertDraftEvent } from '../../components/ChatPanel/chatEvents'
 import { resolvePreferredWorkspaceUrl } from '../../services/workspacePublicUrl';
 import {
   createCanvasReviewNote,
+  deactivateCanvas,
   deleteCanvasReviewNote,
   fetchCanvasReviewNotes,
   checkCanvasHealth,
@@ -36,40 +37,17 @@ import {
   type CanvasRoute,
   type CanvasReviewNote,
   type CanvasReviewTarget,
-  type CanvasType,
 } from '../../services/workspaceRuntimeApi';
+import {
+  AILERON_CANVAS_BRIDGE_SOURCE,
+  AILERON_CANVAS_BRIDGE_VERSION,
+  createAileronCanvasBridgeMessageHandler,
+} from './lib/aileronCanvasBridgeClient';
 
 const logger = createLogger('WebCanvas');
-const REVIEW_BRIDGE_SOURCE = 'aileron-web-canvas-review';
-const REVIEW_BRIDGE_VERSION = 1;
 const CANVAS_REVIEW_ENABLED = import.meta.env.VITE_ENABLE_CANVAS_REVIEW !== 'false';
 
 type BridgeMode = 'default' | 'select';
-
-type BridgeMessage =
-  | { source: typeof REVIEW_BRIDGE_SOURCE; version: typeof REVIEW_BRIDGE_VERSION; type: 'BRIDGE_READY'; payload?: { routePath?: string } }
-  | { source: typeof REVIEW_BRIDGE_SOURCE; version: typeof REVIEW_BRIDGE_VERSION; type: 'ROUTE_CHANGED'; payload?: { routePath?: string } }
-  | { source: typeof REVIEW_BRIDGE_SOURCE; version: typeof REVIEW_BRIDGE_VERSION; type: 'TARGET_SELECTED'; payload?: { routePath?: string; target?: CanvasReviewTarget | null } }
-  | { source: typeof REVIEW_BRIDGE_SOURCE; version: typeof REVIEW_BRIDGE_VERSION; type: 'TARGET_RECTS'; payload?: { routePath?: string; rects?: BridgeRectUpdate[] } }
-  | { source: typeof REVIEW_BRIDGE_SOURCE; version: typeof REVIEW_BRIDGE_VERSION; type: 'BRIDGE_ERROR'; payload?: { errorCode?: string } };
-
-type BridgeRectUpdate = {
-  id?: string;
-  selector?: string;
-  resolved?: boolean;
-  rect?: CanvasReviewTarget['rect'];
-  documentRect?: CanvasReviewTarget['rect'];
-};
-
-const isBridgeMessage = (value: unknown): value is BridgeMessage => {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as { source?: unknown; version?: unknown; type?: unknown };
-  return (
-    candidate.source === REVIEW_BRIDGE_SOURCE
-    && candidate.version === REVIEW_BRIDGE_VERSION
-    && typeof candidate.type === 'string'
-  );
-};
 
 const getTargetRect = (target: CanvasReviewTarget | null | undefined) => target?.rect ?? null;
 
@@ -108,8 +86,10 @@ export const WebCanvasFeature: React.FC = () => {
   const [isWorking, setIsWorking] = useState(false);
   const [healthStatus, setHealthStatus] = useState<string>('checking');
   const [healthMessage, setHealthMessage] = useState('');
-  const [canvasType, setCanvasType] = useState<CanvasType>('default');
   const [manifestStatus, setManifestStatus] = useState<string>('missing');
+  const [runtimeStatus, setRuntimeStatus] = useState<string>('unhealthy');
+  const [canvasTitle, setCanvasTitle] = useState<string | null>(null);
+  const [canvasOwner, setCanvasOwner] = useState<{ type: 'skill' | 'user'; skillName?: string | null } | null>(null);
   const [reviewMode, setReviewMode] = useState<BridgeMode>('default');
   const [bridgeReady, setBridgeReady] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<CanvasReviewTarget | null>(null);
@@ -140,8 +120,8 @@ export const WebCanvasFeature: React.FC = () => {
   );
   const postBridgeCommand = (type: string, payload: Record<string, unknown> = {}) => {
     iframeRef.current?.contentWindow?.postMessage({
-      source: REVIEW_BRIDGE_SOURCE,
-      version: REVIEW_BRIDGE_VERSION,
+      source: AILERON_CANVAS_BRIDGE_SOURCE,
+      version: AILERON_CANVAS_BRIDGE_VERSION,
       type,
       payload,
     }, '*');
@@ -289,8 +269,10 @@ export const WebCanvasFeature: React.FC = () => {
       );
       setRoutes(routesData.routes);
       setFilteredRoutes(routesData.routes);
-      setCanvasType(routesData.type);
       setManifestStatus(routesData.manifestStatus);
+      setRuntimeStatus(routesData.runtimeStatus ?? 'unhealthy');
+      setCanvasTitle(routesData.title ?? null);
+      setCanvasOwner(routesData.owner ?? null);
 
       const availablePaths = new Set(routesData.routes.map((route) => route.path));
       const defaultPath = routesData.defaultPath || routesData.routes[0]?.path || '/';
@@ -311,11 +293,11 @@ export const WebCanvasFeature: React.FC = () => {
       );
       setHealthStatus(health.status);
       setHealthMessage(health.message || '');
-      if (health.type) {
-        setCanvasType(health.type);
-      }
       if (health.manifestStatus) {
         setManifestStatus(health.manifestStatus);
+      }
+      if (health.runtimeStatus) {
+        setRuntimeStatus(health.runtimeStatus);
       }
       await loadReviewNotes(nextPath);
       return nextIframeSrc;
@@ -357,58 +339,53 @@ export const WebCanvasFeature: React.FC = () => {
 
   useEffect(() => {
     const handleBridgeMessage = (event: MessageEvent) => {
-      if (event.source !== iframeRef.current?.contentWindow || !isBridgeMessage(event.data)) {
-        return;
-      }
-      if (event.data.type === 'BRIDGE_READY') {
-        syncRouteFromBridge(event.data.payload?.routePath);
-        setBridgeReady(true);
-        postBridgeCommand('SET_MODE', { mode: reviewMode });
-        postBridgeCommand('SET_INTERACTION_PAUSED', { paused: bridgeInteractionPaused });
-        return;
-      }
-      if (event.data.type === 'ROUTE_CHANGED') {
-        syncRouteFromBridge(event.data.payload?.routePath);
-        return;
-      }
-      if (event.data.type === 'TARGET_SELECTED') {
-        syncRouteFromBridge(event.data.payload?.routePath);
-        const target = event.data.payload?.target;
-        setSelectedTarget(target ?? null);
-        setReviewInstruction('');
-        setReviewErrorKey(null);
-        return;
-      }
-      if (event.data.type === 'TARGET_RECTS') {
-        syncRouteFromBridge(event.data.payload?.routePath, { resetReviewState: false });
-        const updates = event.data.payload?.rects ?? [];
-        setReviewNotes((prev) => {
-          let changed = false;
-          const next = prev.map((note) => {
-            const update = updates.find((item) => item.id === note.id && item.resolved && item.rect);
-            if (!update?.rect) return note;
-            if (note.target.type === 'element') {
-              const current = note.target.rect;
-              if (
-                current.x === update.rect.x
-                && current.y === update.rect.y
-                && current.width === update.rect.width
-                && current.height === update.rect.height
-              ) {
-                return note;
+      createAileronCanvasBridgeMessageHandler(iframeRef.current, {
+        onBridgeReady: (payload) => {
+          syncRouteFromBridge(payload?.routePath);
+          setBridgeReady(true);
+          postBridgeCommand('SET_MODE', { mode: reviewMode });
+          postBridgeCommand('SET_INTERACTION_PAUSED', { paused: bridgeInteractionPaused });
+        },
+        onRouteChanged: (payload) => {
+          syncRouteFromBridge(payload?.routePath);
+        },
+        onTargetSelected: (payload) => {
+          syncRouteFromBridge(payload?.routePath);
+          const target = payload?.target;
+          setSelectedTarget(target ?? null);
+          setReviewInstruction('');
+          setReviewErrorKey(null);
+        },
+        onTargetRects: (payload) => {
+          syncRouteFromBridge(payload?.routePath, { resetReviewState: false });
+          const updates = payload?.rects ?? [];
+          setReviewNotes((prev) => {
+            let changed = false;
+            const next = prev.map((note) => {
+              const update = updates.find((item) => item.id === note.id && item.resolved && item.rect);
+              if (!update?.rect) return note;
+              if (note.target.type === 'element') {
+                const current = note.target.rect;
+                if (
+                  current.x === update.rect.x
+                  && current.y === update.rect.y
+                  && current.width === update.rect.width
+                  && current.height === update.rect.height
+                ) {
+                  return note;
+                }
+                changed = true;
+                return { ...note, target: { ...note.target, rect: update.rect, documentRect: update.documentRect } };
               }
-              changed = true;
-              return { ...note, target: { ...note.target, rect: update.rect, documentRect: update.documentRect } };
-            }
-            return note;
+              return note;
+            });
+            return changed ? next : prev;
           });
-          return changed ? next : prev;
-        });
-        return;
-      }
-      if (event.data.type === 'BRIDGE_ERROR') {
-        setReviewErrorKey('workspace.canvas.webCanvas.review.errors.bridge');
-      }
+        },
+        onBridgeError: () => {
+          setReviewErrorKey('workspace.canvas.webCanvas.review.errors.bridge');
+        },
+      })(event);
     };
     window.addEventListener('message', handleBridgeMessage);
     return () => window.removeEventListener('message', handleBridgeMessage);
@@ -477,11 +454,11 @@ export const WebCanvasFeature: React.FC = () => {
       const nextSrc = buildCanvasUrl(currentPath);
       if (syncResult.rendererAction === 'reused') {
         const loadedSrc = await loadCanvasData(currentPath);
-        if (syncResult.type) {
-          setCanvasType(syncResult.type);
-        }
         if (syncResult.manifestStatus) {
           setManifestStatus(syncResult.manifestStatus);
+        }
+        if (syncResult.runtimeStatus) {
+          setRuntimeStatus(syncResult.runtimeStatus);
         }
         setHealthStatus('healthy');
         setHealthMessage(syncResult.message || '');
@@ -498,6 +475,42 @@ export const WebCanvasFeature: React.FC = () => {
     } catch (error) {
       toast({
         title: t('workspace.canvas.webCanvas.actions.sync.errorTitle'),
+        description: error instanceof Error ? error.message : t('workspace.canvas.webCanvas.actions.unknownError'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const handleDeactivateCanvas = async () => {
+    if (!workspaceRuntime.runtimeBaseUrl || !workspaceRuntime.workspaceId) {
+      toast({
+        title: t('workspace.canvas.webCanvas.actions.errorTitle'),
+        description: t('workspace.canvas.webCanvas.actions.missingWorkspace'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsWorking(true);
+    try {
+      clearTransientReviewState();
+      const result = await deactivateCanvas(workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId);
+      setManifestStatus(result.manifestStatus);
+      if (result.runtimeStatus) {
+        setRuntimeStatus(result.runtimeStatus);
+      }
+      const loadedSrc = await loadCanvasData('/');
+      reloadIframe(loadedSrc || buildCanvasUrl('/'));
+      toast({
+        title: t('workspace.canvas.webCanvas.disable.successTitle'),
+        description: t('workspace.canvas.webCanvas.disable.successDescription'),
+        variant: 'success',
+      });
+    } catch (error) {
+      toast({
+        title: t('workspace.canvas.webCanvas.disable.errorTitle'),
         description: error instanceof Error ? error.message : t('workspace.canvas.webCanvas.actions.unknownError'),
         variant: 'destructive',
       });
@@ -644,20 +657,27 @@ export const WebCanvasFeature: React.FC = () => {
     setReviewNotes((prev) => prev.filter((item) => item.id !== note.id));
   };
 
-  const statusText = t(`workspace.canvas.webCanvas.types.${canvasType}`);
-  const manifestText = t(`workspace.canvas.webCanvas.manifest.${manifestStatus}`);
+  const statusNoticeTitleKey = manifestStatus === 'valid'
+    ? canvasOwner?.type === 'skill'
+      ? 'workspace.canvas.webCanvas.manifest.statusNotice.skill.title'
+      : 'workspace.canvas.webCanvas.manifest.statusNotice.user.title'
+    : manifestStatus === 'invalid'
+      ? 'workspace.canvas.webCanvas.manifest.errors.invalid.title'
+      : 'workspace.canvas.webCanvas.default.guidance.title';
+  const statusNoticeDescriptionKey = manifestStatus === 'valid'
+    ? canvasOwner?.type === 'skill'
+      ? 'workspace.canvas.webCanvas.manifest.statusNotice.skill.description'
+      : 'workspace.canvas.webCanvas.manifest.statusNotice.user.description'
+    : manifestStatus === 'invalid'
+      ? 'workspace.canvas.webCanvas.manifest.errors.invalid.description'
+      : 'workspace.canvas.webCanvas.default.guidance.description';
   const showStatusNotice = (
     !isLoading
     && healthStatus !== 'checking'
     && healthStatus !== 'starting'
     && healthStatus !== 'unhealthy'
-    && (canvasType === 'default' || manifestStatus === 'missing' || manifestStatus === 'invalid')
+    && manifestStatus !== 'valid'
   );
-  const statusNoticeDescriptionKey = manifestStatus === 'invalid'
-    ? 'workspace.canvas.webCanvas.statusNotice.invalidManifestDescription'
-    : manifestStatus === 'missing'
-      ? 'workspace.canvas.webCanvas.statusNotice.missingManifestDescription'
-      : 'workspace.canvas.webCanvas.statusNotice.defaultDescription';
 
   return (
     <div className={cn('flex h-full flex-col bg-background', isFullscreen && 'fixed inset-0 z-50 bg-background')}>
@@ -737,6 +757,19 @@ export const WebCanvasFeature: React.FC = () => {
               variant="ghost"
               size="icon"
               className="h-7 w-7"
+              onClick={() => {
+                void handleDeactivateCanvas();
+              }}
+              disabled={isWorking || manifestStatus !== 'valid'}
+              title={t('workspace.canvas.webCanvas.disable.label')}
+              aria-label={t('workspace.canvas.webCanvas.disable.label')}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
               onClick={() => setIsFullscreen((prev) => !prev)}
               title={
                 isFullscreen
@@ -785,15 +818,25 @@ export const WebCanvasFeature: React.FC = () => {
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 space-y-1">
                 <div className="font-medium text-foreground">
-                  {t('workspace.canvas.webCanvas.statusNotice.title')}
+                  {t(statusNoticeTitleKey, {
+                    title: canvasTitle ?? '',
+                    skillName: canvasOwner?.skillName ?? '',
+                  })}
                 </div>
                 <div className="text-muted-foreground">
-                  {t(statusNoticeDescriptionKey)}
+                  {t(statusNoticeDescriptionKey, {
+                    title: canvasTitle ?? '',
+                    skillName: canvasOwner?.skillName ?? '',
+                  })}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {t('workspace.canvas.webCanvas.statusNotice.details', {
-                    type: statusText,
-                    manifest: manifestText,
+                  {t('workspace.canvas.webCanvas.manifest.statusNotice.details', {
+                    manifest: t(`workspace.canvas.webCanvas.manifest.status.${manifestStatus}`),
+                    runtime: runtimeStatus === 'starting'
+                      ? t('workspace.canvas.webCanvas.runtime.starting')
+                      : runtimeStatus === 'unhealthy'
+                        ? t('workspace.canvas.webCanvas.runtime.errors.startupFailed')
+                        : t('workspace.canvas.webCanvas.runtime.healthy'),
                   })}
                 </div>
               </div>

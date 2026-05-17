@@ -616,18 +616,30 @@ export const downloadArchiveBlob = async (
   return await client.getBlob(normalizeArchiveDownloadPath(downloadUrl));
 };
 
-export type CanvasType = 'html' | 'nextjs' | 'default';
+export type CanvasType = 'active' | 'default';
+export type CanvasKind = 'static' | 'nextjs';
 export type CanvasManifestStatus = 'missing' | 'valid' | 'invalid';
+export type CanvasRuntimeStatus = 'healthy' | 'starting' | 'unhealthy';
+export type CanvasOwnerType = 'skill' | 'user';
+
+export interface CanvasOwner {
+  type: CanvasOwnerType;
+  skillName?: string | null;
+}
 
 export interface CanvasRoute {
   path: string;
-  file?: string | null;
+  label?: string | null;
 }
 
 export interface CanvasRoutesResponse {
   workspaceId: string;
   type: CanvasType;
+  kind?: CanvasKind | null;
+  title?: string | null;
+  owner?: CanvasOwner | null;
   manifestStatus: CanvasManifestStatus;
+  runtimeStatus?: CanvasRuntimeStatus | null;
   defaultPath: string;
   routes: CanvasRoute[];
   total: number;
@@ -637,7 +649,11 @@ export interface CanvasRoutesResponse {
 export interface CanvasDetectResponse {
   workspaceId: string;
   type: CanvasType;
+  kind?: CanvasKind | null;
+  title?: string | null;
+  owner?: CanvasOwner | null;
   manifestStatus: CanvasManifestStatus;
+  runtimeStatus?: CanvasRuntimeStatus | null;
   defaultPath: string;
   routes: CanvasRoute[];
   error?: string | null;
@@ -648,7 +664,9 @@ export interface CanvasHealthResponse {
   workspaceId: string;
   status: 'healthy' | 'unhealthy' | 'standby' | 'starting' | 'checking' | string;
   type?: CanvasType | null;
+  kind?: CanvasKind | null;
   manifestStatus?: CanvasManifestStatus | null;
+  runtimeStatus?: CanvasRuntimeStatus | null;
   rendererRunning: boolean;
   portAvailable: boolean;
   message: string;
@@ -659,12 +677,21 @@ export interface CanvasActionResponse {
   workspaceId: string;
   status: string;
   type?: CanvasType | null;
+  kind?: CanvasKind | null;
   manifestStatus?: CanvasManifestStatus | null;
+  runtimeStatus?: CanvasRuntimeStatus | null;
   message: string;
   syncedAt?: string | null;
   resetAt?: string | null;
   rendererAction?: 'reused' | 'restarted' | string | null;
   rendererActionReason?: string | null;
+}
+
+export interface CanvasManifestDeleteResponse {
+  workspaceId: string;
+  deleted: boolean;
+  manifestStatus: CanvasManifestStatus;
+  runtimeStatus?: CanvasRuntimeStatus | null;
 }
 
 export interface CanvasLogsResponse {
@@ -783,6 +810,14 @@ export const resetCanvas = async (
 ): Promise<CanvasActionResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
   return await client.post(`/api/v1/workspaces/${workspaceId}/canvas/reset`);
+};
+
+export const deactivateCanvas = async (
+  runtimeBaseUrl: string,
+  workspaceId: string
+): Promise<CanvasManifestDeleteResponse> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  return await client.delete(`/api/v1/canvases/${workspaceId}/manifest`);
 };
 
 export const fetchCanvasLogs = async (

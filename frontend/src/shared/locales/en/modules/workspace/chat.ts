@@ -51,6 +51,9 @@ const chat = {
     title: 'Assistant is responding',
     subtitle: 'Generating a reply...'
   },
+  generatedImage: {
+    alt: 'Generated image',
+  },
   input: {
     placeholder: 'Type a message or press "/" for commands...',
     attachments: 'Upload file',

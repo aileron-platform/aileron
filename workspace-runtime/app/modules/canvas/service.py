@@ -17,6 +17,7 @@ from .models import (
     CanvasDetectResponse,
     CanvasHealthResponse,
     CanvasLogsResponse,
+    CanvasManifestDeleteResponse,
     CanvasReviewNote,
     CanvasReviewNoteCreate,
     CanvasReviewNoteRecord,
@@ -51,7 +52,11 @@ class CanvasService:
         return CanvasDetectResponse(
             workspaceId=workspace_id,
             type=data.get("type", "default"),
+            kind=data.get("kind"),
+            title=data.get("title"),
+            owner=data.get("owner"),
             manifestStatus=data.get("manifestStatus", data.get("manifest_status", "missing")),
+            runtimeStatus=data.get("runtimeStatus", data.get("runtime_status")),
             defaultPath=data.get("defaultPath", data.get("default_path", "/")),
             routes=self._routes_from_payload(data),
             error=data.get("error"),
@@ -67,7 +72,11 @@ class CanvasService:
         return CanvasRoutesResponse(
             workspaceId=workspace_id,
             type=data.get("type", "default"),
+            kind=data.get("kind"),
+            title=data.get("title"),
+            owner=data.get("owner"),
             manifestStatus=data.get("manifestStatus", data.get("manifest_status", "missing")),
+            runtimeStatus=data.get("runtimeStatus", data.get("runtime_status")),
             defaultPath=data.get("defaultPath", data.get("default_path", "/")),
             routes=routes,
             total=len(routes),
@@ -89,7 +98,9 @@ class CanvasService:
             workspaceId=workspace_id,
             status=data.get("status", "checking"),
             type=data.get("type"),
+            kind=data.get("kind"),
             manifestStatus=data.get("manifestStatus", data.get("manifest_status")),
+            runtimeStatus=data.get("runtimeStatus", data.get("runtime_status")),
             rendererRunning=bool(data.get("rendererRunning", data.get("renderer_running", False))),
             portAvailable=bool(data.get("portAvailable", data.get("port_available", False))),
             message=data.get("message", ""),
@@ -102,6 +113,24 @@ class CanvasService:
 
     def reset(self, workspace_id: str) -> CanvasActionResponse:
         return self._action(workspace_id, "/reset")
+
+    def delete_manifest(self, workspace_id: str) -> CanvasManifestDeleteResponse:
+        manifest_path = self._workspace_base / ".aileron" / "canvas.json"
+        deleted = False
+        try:
+            manifest_path.unlink()
+            deleted = True
+        except FileNotFoundError:
+            deleted = False
+
+        data = self._post_json("/sync", timeout=60.0) or {}
+        detection = data.get("detection") if isinstance(data.get("detection"), dict) else data
+        return CanvasManifestDeleteResponse(
+            workspaceId=workspace_id,
+            deleted=deleted,
+            manifestStatus=detection.get("manifestStatus", data.get("manifestStatus", "missing")),
+            runtimeStatus=detection.get("runtimeStatus", data.get("runtimeStatus")),
+        )
 
     def logs(self, workspace_id: str) -> CanvasLogsResponse:
         data = self._get_json("/logs", timeout=10.0) or {}
@@ -212,7 +241,9 @@ class CanvasService:
             workspaceId=workspace_id,
             status=data.get("status", "ok"),
             type=data.get("type"),
+            kind=data.get("kind"),
             manifestStatus=data.get("manifestStatus", data.get("manifest_status")),
+            runtimeStatus=data.get("runtimeStatus", data.get("runtime_status")),
             message=data.get("message", ""),
             syncedAt=data.get("syncedAt", data.get("synced_at")),
             resetAt=data.get("resetAt", data.get("reset_at")),
@@ -242,14 +273,18 @@ class CanvasService:
             return None
 
     def _detect_local(self) -> dict[str, Any]:
-        manifest_path = self._workspace_base / "route.json"
+        manifest_path = self._workspace_base / ".aileron" / "canvas.json"
         if manifest_path.exists():
             try:
                 data = json.loads(manifest_path.read_text(encoding="utf-8"))
                 routes = data.get("routes") if isinstance(data.get("routes"), list) else []
                 return {
-                    "type": data.get("type", "default"),
+                    "type": "active",
+                    "kind": data.get("kind"),
+                    "title": data.get("title"),
+                    "owner": data.get("owner"),
                     "manifestStatus": "valid",
+                    "runtimeStatus": "unhealthy",
                     "defaultPath": data.get("defaultPath", "/"),
                     "routes": routes,
                 }
@@ -257,36 +292,16 @@ class CanvasService:
                 return {
                     "type": "default",
                     "manifestStatus": "invalid",
+                    "runtimeStatus": "unhealthy",
                     "defaultPath": "/",
                     "routes": [],
                     "error": str(exc),
                 }
 
-        html_files = sorted(self._workspace_base.glob("*.html"))
-        if html_files:
-            routes = [
-                {"path": "/" if item.name == "index.html" else f"/{item.stem}", "file": item.name}
-                for item in html_files
-            ]
-            return {
-                "type": "html",
-                "manifestStatus": "missing",
-                "defaultPath": routes[0]["path"],
-                "routes": routes,
-            }
-
-        package_json = self._workspace_base / "package.json"
-        if package_json.exists() and "next" in package_json.read_text(encoding="utf-8", errors="ignore"):
-            return {
-                "type": "nextjs",
-                "manifestStatus": "missing",
-                "defaultPath": "/",
-                "routes": [{"path": "/"}],
-            }
-
         return {
             "type": "default",
             "manifestStatus": "missing",
+            "runtimeStatus": "unhealthy",
             "defaultPath": "/",
             "routes": [{"path": "/"}],
         }
@@ -301,7 +316,7 @@ class CanvasService:
             if isinstance(item, str):
                 result.append(CanvasRoute(path=item))
             elif isinstance(item, dict) and item.get("path"):
-                result.append(CanvasRoute(path=item["path"], file=item.get("file")))
+                result.append(CanvasRoute(path=item["path"], label=item.get("label")))
         return result
 
     def _string_list(self, value: Any) -> list[str]:

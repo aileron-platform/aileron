@@ -43,10 +43,14 @@ class TestDetectionAndRoutes:
             mock_client = MagicMock()
             mock_client.get.return_value = _mock_response(
                 {
-                    "type": "html",
+                    "type": "active",
+                    "kind": "static",
+                    "title": "Demo",
+                    "owner": {"type": "skill", "skillName": "ppt-image-first"},
                     "manifestStatus": "valid",
+                    "runtimeStatus": "healthy",
                     "defaultPath": "/",
-                    "routes": [{"path": "/", "file": "index.html"}],
+                    "routes": [{"path": "/", "label": "Home"}],
                 }
             )
             mock_client_class.return_value.__enter__.return_value = mock_client
@@ -54,17 +58,27 @@ class TestDetectionAndRoutes:
             response = canvas_service.detect("ws-1")
 
         assert response.workspace_id == "ws-1"
-        assert response.type == "html"
+        assert response.type == "active"
+        assert response.kind == "static"
+        assert response.title == "Demo"
+        assert response.owner is not None
+        assert response.owner.skill_name == "ppt-image-first"
         assert response.manifest_status == "valid"
+        assert response.runtime_status == "healthy"
         assert [route.path for route in response.routes] == ["/"]
+        assert response.routes[0].label == "Home"
 
     def test_routes_remote_success(self, canvas_service: CanvasService) -> None:
         with patch("app.modules.canvas.service.httpx.Client") as mock_client_class:
             mock_client = MagicMock()
             mock_client.get.return_value = _mock_response(
                 {
-                    "type": "nextjs",
+                    "type": "active",
+                    "kind": "nextjs",
+                    "title": "Next App",
+                    "owner": {"type": "user"},
                     "manifestStatus": "valid",
+                    "runtimeStatus": "healthy",
                     "defaultPath": "/",
                     "routes": [{"path": "/"}, {"path": "/about"}],
                 }
@@ -74,7 +88,11 @@ class TestDetectionAndRoutes:
             response = canvas_service.routes("ws-1")
 
         assert response.workspace_id == "ws-1"
-        assert response.type == "nextjs"
+        assert response.type == "active"
+        assert response.kind == "nextjs"
+        assert response.title == "Next App"
+        assert response.owner is not None
+        assert response.owner.type == "user"
         assert [route.path for route in response.routes] == ["/", "/about"]
         assert response.total == 2
 
@@ -110,12 +128,14 @@ class TestActionsAndHealth:
             mock_client.post.return_value = _mock_response(
                 {
                     "status": "ok",
-                    "type": "html",
+                    "type": "active",
+                    "kind": "static",
                     "manifestStatus": "valid",
+                    "runtimeStatus": "healthy",
                     "message": "synced",
                     "syncedAt": "2026-04-29T00:00:00Z",
                     "rendererAction": "reused",
-                    "rendererActionReason": "nextjs-source-only",
+                    "rendererActionReason": "manifest-unchanged",
                 }
             )
             mock_client_class.return_value.__enter__.return_value = mock_client
@@ -124,20 +144,22 @@ class TestActionsAndHealth:
 
         assert response.workspace_id == "ws-1"
         assert response.status == "ok"
-        assert response.type == "html"
+        assert response.type == "active"
         assert response.synced_at == "2026-04-29T00:00:00Z"
+        assert response.kind == "static"
+        assert response.runtime_status == "healthy"
         assert response.renderer_action == "reused"
-        assert response.renderer_action_reason == "nextjs-source-only"
+        assert response.renderer_action_reason == "manifest-unchanged"
         assert response.details["rendererAction"] == "reused"
         mock_client.post.assert_called_once_with("http://localhost:3013/sync")
 
-    def test_sync_preserves_backward_compatible_missing_metadata(self, canvas_service: CanvasService) -> None:
+    def test_sync_allows_missing_optional_metadata(self, canvas_service: CanvasService) -> None:
         with patch("app.modules.canvas.service.httpx.Client") as mock_client_class:
             mock_client = MagicMock()
             mock_client.post.return_value = _mock_response(
                 {
                     "status": "ok",
-                    "type": "html",
+                    "type": "active",
                     "manifestStatus": "valid",
                     "message": "synced",
                 }
@@ -163,8 +185,10 @@ class TestActionsAndHealth:
             mock_client.get.return_value = _mock_response(
                 {
                     "status": "healthy",
-                    "type": "html",
+                    "type": "active",
+                    "kind": "static",
                     "manifestStatus": "valid",
+                    "runtimeStatus": "healthy",
                     "rendererRunning": True,
                     "portAvailable": True,
                     "message": "OK",
@@ -176,6 +200,9 @@ class TestActionsAndHealth:
             result = canvas_service.health("ws-1")
 
         assert result.status == "healthy"
+        assert result.type == "active"
+        assert result.kind == "static"
+        assert result.runtime_status == "healthy"
         assert result.renderer_running is True
         assert result.port_available is True
         assert result.source == "remote"
@@ -204,6 +231,34 @@ class TestActionsAndHealth:
         assert result.logs == ["management"]
         assert result.renderer_logs == ["renderer"]
         assert result.total == 2
+
+    def test_delete_manifest_is_idempotent_and_syncs(self, canvas_service: CanvasService, tmp_path: Path) -> None:
+        canvas_service._workspace_base = tmp_path
+        manifest_path = tmp_path / ".aileron" / "canvas.json"
+        manifest_path.parent.mkdir(parents=True)
+        manifest_path.write_text("{}", encoding="utf-8")
+
+        with patch("app.modules.canvas.service.httpx.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.post.return_value = _mock_response(
+                {
+                    "status": "completed",
+                    "detection": {
+                        "manifestStatus": "missing",
+                        "runtimeStatus": "healthy",
+                    },
+                }
+            )
+            mock_client_class.return_value.__enter__.return_value = mock_client
+
+            response = canvas_service.delete_manifest("ws-1")
+            second = canvas_service.delete_manifest("ws-1")
+
+        assert response.deleted is True
+        assert response.manifest_status == "missing"
+        assert response.runtime_status == "healthy"
+        assert second.deleted is False
+        assert mock_client.post.call_count == 2
 
 
 class TestCanvasReviewNotes:

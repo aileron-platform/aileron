@@ -51,6 +51,9 @@ const chat = {
     title: '助理正在回覆',
     subtitle: '產生回覆中...'
   },
+  generatedImage: {
+    alt: '生成圖片',
+  },
   input: {
     placeholder: '輸入訊息或按 "/" 顯示命令...',
     attachments: '上傳檔案',

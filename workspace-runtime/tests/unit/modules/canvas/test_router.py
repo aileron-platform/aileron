@@ -10,6 +10,7 @@ from app.modules.canvas.models import (
     CanvasDetectResponse,
     CanvasHealthResponse,
     CanvasLogsResponse,
+    CanvasManifestDeleteResponse,
     CanvasRoute,
     CanvasRoutesResponse,
 )
@@ -20,8 +21,12 @@ class FakeCanvasService:
     def detect(self, workspace_id: str) -> CanvasDetectResponse:
         return CanvasDetectResponse(
             workspaceId=workspace_id,
-            type="html",
+            type="active",
+            kind="static",
+            title="Demo",
+            owner={"type": "user"},
             manifestStatus="valid",
+            runtimeStatus="healthy",
             defaultPath="/",
             routes=[CanvasRoute(path="/")],
             detectedAt=datetime(2026, 3, 28),
@@ -30,8 +35,12 @@ class FakeCanvasService:
     def routes(self, workspace_id: str) -> CanvasRoutesResponse:
         return CanvasRoutesResponse(
             workspaceId=workspace_id,
-            type="html",
+            type="active",
+            kind="static",
+            title="Demo",
+            owner={"type": "user"},
             manifestStatus="valid",
+            runtimeStatus="healthy",
             defaultPath="/",
             routes=[CanvasRoute(path="/"), CanvasRoute(path="/about")],
             total=2,
@@ -42,8 +51,10 @@ class FakeCanvasService:
         return CanvasHealthResponse(
             workspaceId=workspace_id,
             status="healthy",
-            type="html",
+            type="active",
+            kind="static",
             manifestStatus="valid",
+            runtimeStatus="healthy",
             rendererRunning=True,
             portAvailable=True,
             message="ok",
@@ -61,8 +72,10 @@ class FakeCanvasService:
         return CanvasActionResponse(
             workspaceId=workspace_id,
             status="ok",
-            type="html",
+            type="active",
+            kind="static",
             manifestStatus="valid",
+            runtimeStatus="healthy",
             message="synced",
             syncedAt="2026-04-29T00:00:00Z",
             rendererAction="reused",
@@ -73,9 +86,18 @@ class FakeCanvasService:
         return CanvasActionResponse(
             workspaceId=workspace_id,
             status="ok",
-            type="html",
+            type="active",
+            kind="static",
             manifestStatus="valid",
             message="reset",
+        )
+
+    def delete_manifest(self, workspace_id: str) -> CanvasManifestDeleteResponse:
+        return CanvasManifestDeleteResponse(
+            workspaceId=workspace_id,
+            deleted=True,
+            manifestStatus="missing",
+            runtimeStatus="healthy",
         )
 
 
@@ -95,7 +117,8 @@ def test_canvas_router_happy_paths() -> None:
 
     response = client.get("/workspaces/ws-1/canvas/detect")
     assert response.status_code == 200
-    assert response.json()["type"] == "html"
+    assert response.json()["type"] == "active"
+    assert response.json()["kind"] == "static"
 
     response = client.get("/workspaces/ws-1/canvas/routes")
     assert response.status_code == 200
@@ -117,6 +140,15 @@ def test_canvas_router_happy_paths() -> None:
     response = client.post("/workspaces/ws-1/canvas/reset")
     assert response.status_code == 202
     assert response.json()["message"] == "reset"
+
+    response = client.delete("/canvases/ws-1/manifest")
+    assert response.status_code == 200
+    assert response.json()["deleted"] is True
+    assert response.json()["manifestStatus"] == "missing"
+
+    response = client.delete("/workspaces/ws-1/canvas/manifest")
+    assert response.status_code == 200
+    assert response.json()["runtimeStatus"] == "healthy"
 
 
 def test_old_preview_routes_are_removed() -> None:

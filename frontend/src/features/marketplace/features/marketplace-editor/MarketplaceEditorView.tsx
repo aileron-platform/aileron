@@ -210,11 +210,12 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
     }
     try {
       if (mode === 'create') {
+        const createDescription = description.trim() || requiredDraft?.manifestDescription.trim() || '';
         const created = await createPackage({
           provider,
           packageId: packageId.trim(),
           displayName: displayName.trim() || packageId.trim(),
-          description: description.trim(),
+          description: createDescription,
         });
         setRevision(created.revision);
       } else {

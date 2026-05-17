@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
+import mimetypes
+from pathlib import Path
 from typing import Any, Optional
 
 from codex_app_server.generated.v2_all import CommandExecutionStatus, PatchApplyStatus
@@ -47,6 +50,7 @@ from .notification_mapper import (
     FileChangeOutputDelta,
     FileChangePatchUpdated,
     FileChangeStart,
+    ImageGenerationEnd,
     IgnoredEvent,
     PlanDelta,
     StreamError,
@@ -166,6 +170,8 @@ class CodexTool(ITool):
                         await streaming_callbacks.on_stream_chunk(message_id, event.delta)
 
                 elif isinstance(event, TextFinal):
+                    if not event.text and event.item_id not in text_message_ids:
+                        continue
                     await self._finalize_text_message(
                         session_id,
                         task_id,
@@ -174,6 +180,25 @@ class CodexTool(ITool):
                         assistant_message_ids,
                         streaming_callbacks,
                     )
+
+                elif isinstance(event, ImageGenerationEnd):
+                    message = await self._persist_image_generation_message(
+                        session_id=session_id,
+                        task_id=task_id,
+                        event=event,
+                    )
+                    if message:
+                        assistant_message_ids.append(message["message_id"])
+                        raw_events.setdefault("generated_images", []).append(
+                            {
+                                "item_id": event.item_id,
+                                "status": event.status,
+                                "saved_path": event.saved_path,
+                                "revised_prompt": event.revised_prompt,
+                            }
+                        )
+                        if streaming_callbacks:
+                            await streaming_callbacks.on_message_created(message)
 
                 elif isinstance(event, CommandToolStart):
                     command_output_buffers[event.item_id] = []
@@ -492,6 +517,57 @@ class CodexTool(ITool):
                     if b.get("type") == "tool_use"
                 ],
             )
+
+    async def _persist_image_generation_message(
+        self,
+        session_id: str,
+        task_id: str | None,
+        event: ImageGenerationEnd,
+    ) -> dict[str, Any] | None:
+        source = self._image_source_from_generation(event)
+        if not source:
+            logger.warning(
+                "Codex image generation completed without readable image item_id=%s status=%s",
+                event.item_id,
+                event.status,
+            )
+            return None
+
+        return await self._persist_assistant_blocks(
+            session_id,
+            task_id,
+            [{"type": "image", "source": source}],
+        )
+
+    @staticmethod
+    def _image_source_from_generation(event: ImageGenerationEnd) -> dict[str, Any] | None:
+        media_type = "image/png"
+        if event.saved_path:
+            path = Path(event.saved_path)
+            if path.exists() and path.is_file():
+                guessed_type = mimetypes.guess_type(path.name)[0]
+                media_type = guessed_type or media_type
+                return {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": base64.b64encode(path.read_bytes()).decode("ascii"),
+                    "path": event.saved_path,
+                }
+
+        if event.result:
+            result = event.result
+            if result.startswith("data:") and ";base64," in result:
+                header, data = result.split(";base64,", 1)
+                media_type = header.removeprefix("data:") or media_type
+                result = data
+            return {
+                "type": "base64",
+                "media_type": media_type,
+                "data": result,
+                "path": event.saved_path,
+            }
+
+        return None
 
     async def _persist_tool_result_message(
         self,

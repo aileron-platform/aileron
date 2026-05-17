@@ -21,13 +21,24 @@ vi.mock('fflate', async (importOriginal) => {
   return {
     ...actual,
     unzip: vi.fn((
-      _data: Uint8Array,
+      data: Uint8Array,
       callback: (err: Error | null, unzipped: Record<string, Uint8Array>) => void,
-    ) => callback(null, {
-      'review/SKILL.md': actual.strToU8('# Imported skill'),
-      'review/config.toml': actual.strToU8('enabled = true'),
-      'review/logo.png': new Uint8Array([1, 2, 3]),
-    })),
+    ) => {
+      if (data[0] === 2) {
+        callback(null, {
+          'SKILL.md': actual.strToU8('# Root skill'),
+          'config.toml': actual.strToU8('enabled = true'),
+        });
+        return;
+      }
+
+      callback(null, {
+        'review/SKILL.md': actual.strToU8('# Imported skill'),
+        'review/config.toml': actual.strToU8('enabled = true'),
+        'review/scripts/render_review_markup.py': actual.strToU8('print("ok")'),
+        'review/logo.png': new Uint8Array([1, 2, 3]),
+      });
+    }),
   };
 });
 
@@ -393,10 +404,11 @@ describe('MarketplaceFilesSection', () => {
     expect(onPackageFilesChange).toHaveBeenCalled();
   });
 
-  it('imports text files from zip uploads into editable skill package files', async () => {
+  it('stores uploaded skill zip files until the user extracts them', async () => {
     const user = userEvent.setup();
     const onDirty = vi.fn();
     const onPackageFilesChange = vi.fn();
+    const { unzip } = await import('fflate');
 
     render(
       <MarketplaceSkillsSection
@@ -427,6 +439,60 @@ describe('MarketplaceFilesSection', () => {
           content: '# Existing skill',
         }),
         expect.objectContaining({
+          path: 'skills/skills.zip',
+          binary: true,
+          mimeType: 'application/zip',
+        }),
+      ]));
+      expect(latestFiles).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: 'skills/review/SKILL-1.md' }),
+        expect.objectContaining({ path: 'skills/review/config.toml' }),
+        expect.objectContaining({ path: 'skills/review/logo.png' }),
+      ]));
+    });
+    await waitFor(() => expect(onDirty).toHaveBeenCalled());
+    expect(unzip).not.toHaveBeenCalled();
+    expect(screen.getByText('skills.zip')).toBeInTheDocument();
+  });
+
+  it('extracts uploaded skill zip files from the context menu', async () => {
+    const user = userEvent.setup();
+    const onDirty = vi.fn();
+    const onPackageFilesChange = vi.fn();
+
+    render(
+      <MarketplaceSkillsSection
+        items={[{
+          id: 'review-skill',
+          path: 'skills/review/SKILL.md',
+          content: '# Existing skill',
+        }]}
+        onDirty={onDirty}
+        onPackageFilesChange={onPackageFilesChange}
+      />,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    Object.defineProperty(input!, 'files', {
+      configurable: true,
+      value: [new File([new Uint8Array([1])], 'skills.zip', { type: 'application/zip' })],
+    });
+    fireEvent.change(input!);
+
+    await screen.findByText('skills.zip');
+    fireEvent.contextMenu(screen.getByText('skills.zip'));
+    await user.click(screen.getByRole('button', { name: 'common.fileTree.contextMenu.extractArchive' }));
+
+    await waitFor(() => {
+      const latestFiles = onPackageFilesChange.mock.calls.at(-1)?.[0] ?? [];
+      expect(latestFiles).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          path: 'skills/review/SKILL.md',
+          content: '# Existing skill',
+        }),
+        expect.objectContaining({
           path: 'skills/review/SKILL-1.md',
           content: '# Imported skill',
         }),
@@ -434,13 +500,74 @@ describe('MarketplaceFilesSection', () => {
           path: 'skills/review/config.toml',
           content: 'enabled = true',
         }),
-      ]));
-      expect(latestFiles).not.toEqual(expect.arrayContaining([
-        expect.objectContaining({ path: 'skills/review/logo.png' }),
+        expect.objectContaining({
+          path: 'skills/review/scripts/render_review_markup.py',
+          content: 'print("ok")',
+          binary: false,
+        }),
+        expect.objectContaining({
+          path: 'skills/skills.zip',
+          binary: true,
+        }),
+        expect.objectContaining({
+          path: 'skills/review/logo.png',
+          content: 'AQID',
+          binary: true,
+          mimeType: 'image/png',
+        }),
       ]));
     });
-    await waitFor(() => expect(onDirty).toHaveBeenCalled());
-    expect(screen.getByLabelText('config.toml')).toHaveValue('enabled = true');
+    expect(screen.getByLabelText('render_review_markup.py')).toHaveValue('print("ok")');
+  });
+
+  it('extracts root-level skill zip entries under the archive directory', async () => {
+    const user = userEvent.setup();
+    const onDirty = vi.fn();
+    const onPackageFilesChange = vi.fn();
+
+    render(
+      <MarketplaceSkillsSection
+        items={[]}
+        onDirty={onDirty}
+        onPackageFilesChange={onPackageFilesChange}
+      />,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    Object.defineProperty(input!, 'files', {
+      configurable: true,
+      value: [new File([new Uint8Array([2])], 'root-skill.zip', { type: 'application/zip' })],
+    });
+    fireEvent.change(input!);
+
+    await screen.findByText('root-skill.zip');
+    fireEvent.contextMenu(screen.getByText('root-skill.zip'));
+    await user.click(screen.getByRole('button', { name: 'common.fileTree.contextMenu.extractArchive' }));
+
+    await waitFor(() => {
+      const latestFiles = onPackageFilesChange.mock.calls.at(-1)?.[0] ?? [];
+      expect(latestFiles).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          path: 'skills/root-skill.zip',
+          binary: true,
+        }),
+        expect.objectContaining({
+          path: 'skills/root-skill/SKILL.md',
+          content: '# Root skill',
+        }),
+        expect.objectContaining({
+          path: 'skills/root-skill/config.toml',
+          content: 'enabled = true',
+        }),
+      ]));
+      expect(latestFiles).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: 'skills/SKILL.md' }),
+        expect.objectContaining({ path: 'skills/config.toml' }),
+      ]));
+    });
+    expect(screen.getByText('root-skill')).toBeInTheDocument();
   });
 
   it('renders editable package files through the shared files section', async () => {

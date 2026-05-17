@@ -941,7 +941,7 @@ describe('MarketplaceEditorView', () => {
     expect(screen.queryByRole('tab', { name: 'marketplace.editor.required.json.tabs.plugin' })).not.toBeInTheDocument();
   });
 
-  it('reports create save validation and successful saves', async () => {
+  it('reports create save validation and uses the manifest description fallback for Codex packages', async () => {
     const user = userEvent.setup();
     renderCreateEditor();
 
@@ -956,7 +956,7 @@ describe('MarketplaceEditorView', () => {
       provider: 'codex',
       packageId: 'new-plugin',
       displayName: 'new-plugin',
-      description: '',
+      description: 'marketplace.editor.defaults.description',
     });
   });
 

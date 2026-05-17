@@ -299,7 +299,7 @@ const GeminiExtensionsPage: React.FC = () => {
         onOpenChange={setDetailOpen}
         title={detail ? t(`${I18N_PREFIX}.detail.title`, { name: detail.name }) : t(`${I18N_PREFIX}.detail.fallbackTitle`)}
         description={detail?.installInfo?.source ?? t(`${I18N_PREFIX}.detail.noInstallSource`)}
-        icon={<Sparkles className="h-5 w-5" />}
+        icon={Sparkles}
       >
         <ExtensionDetailPanel detail={detail} loading={detailQuery.isLoading} />
       </PluginDetailDialog>
