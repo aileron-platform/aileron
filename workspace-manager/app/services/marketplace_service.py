@@ -111,7 +111,7 @@ class MarketplaceImportSourceError(ValueError):
         super().__init__(code)
 
 
-MarketplaceValidationAction = Literal["save", "export", "install", "importCopy"]
+MarketplaceValidationAction = Literal["create", "save", "export", "install", "importCopy"]
 
 
 class MarketplaceService:
@@ -1390,8 +1390,26 @@ class MarketplaceService:
             package_path = self.resolve_package_path(user_id, request.provider, request.package_id)
             if package_path.exists():
                 raise FileExistsError("marketplace.package.already_exists")
-            package_path.mkdir(parents=True)
             adapter = self._get_adapter(request.provider)
+            # Validate the prospective manifest against provider requirements before
+            # touching disk so callers cannot create packages in an invalid state.
+            prospective_manifest = {
+                "name": request.package_id,
+                "version": "0.1.0",
+                "description": request.description,
+            }
+            relative_manifest_path = str(
+                adapter.manifest_path(package_path).relative_to(package_path),
+            )
+            self._raise_if_validation_blocks(
+                adapter.validate_manifest_data(
+                    package_id=request.package_id,
+                    manifest=prospective_manifest,
+                    file_path=relative_manifest_path,
+                ),
+                "create",
+            )
+            package_path.mkdir(parents=True)
             adapter.create_package(package_path, request)
             if request.provider == "claude-code":
                 adapter.upsert_listing_entry(
@@ -1456,20 +1474,25 @@ class MarketplaceService:
                 adapter.upsert_listing_entry(self.get_registry_root(user_id), request.package_id, listing)
 
             if request.manifest is not None:
+                # Validate up front; defer the write until after package_files sync
+                # so the explicit manifest is not clobbered by a stale entry.
                 manifest_validation = adapter.validate_manifest_data(  # type: ignore[attr-defined]
                     package_id=request.package_id,
                     manifest=request.manifest,
                     file_path=str(adapter.manifest_path(package_path).relative_to(package_path)),
                 )
                 self._raise_if_validation_blocks(manifest_validation, "save")
-                manifest_path = adapter.manifest_path(package_path)
-                self._atomic_write_json(manifest_path, request.manifest)
-
-            if request.readme_markdown is not None:
-                (package_path / "README.md").write_text(request.readme_markdown, encoding="utf-8")
 
             if request.package_files is not None:
                 self._sync_package_files(package_path, request.package_files)
+
+            # Apply explicit field writes after package_files sync so they win
+            # over any stale copies carried in the package_files payload.
+            if request.manifest is not None:
+                self._atomic_write_json(adapter.manifest_path(package_path), request.manifest)
+
+            if request.readme_markdown is not None:
+                (package_path / "README.md").write_text(request.readme_markdown, encoding="utf-8")
 
             self.invalidate_package_index(user_id)
             updated = self.get_package_detail(user_id, request.provider, request.package_id)
@@ -3252,7 +3275,7 @@ class MarketplaceService:
         action: MarketplaceValidationAction,
     ) -> list[dict[str, Any]]:
         """Return validation results that block the requested action."""
-        if action not in {"save", "export", "install", "importCopy"}:
+        if action not in {"create", "save", "export", "install", "importCopy"}:
             return []
         return [
             result

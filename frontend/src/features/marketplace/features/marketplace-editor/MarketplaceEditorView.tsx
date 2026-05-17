@@ -164,11 +164,11 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
     [packageFiles, packageRoot, provider, resolvedDisplayName],
   );
 
-  const markDirty = () => {
+  const markDirty = React.useCallback(() => {
     setIsDirty(true);
     setSaveStatus('idle');
     setSaveErrorDetail(null);
-  };
+  }, []);
   const handleMcpItemsChange = React.useCallback((items: MarketplaceEditorResourceItem[]) => {
     setPackageFiles(prev => marketplaceApplyMcpItemsToPackageFiles(prev, items));
   }, []);

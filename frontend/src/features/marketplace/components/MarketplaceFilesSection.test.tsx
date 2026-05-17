@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { MarketplacePackageDetail } from '@/shared/types/marketplace';
@@ -15,6 +15,21 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 vi.mock('@/shared/components/ui/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
+
+vi.mock('fflate', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fflate')>();
+  return {
+    ...actual,
+    unzip: vi.fn((
+      _data: Uint8Array,
+      callback: (err: Error | null, unzipped: Record<string, Uint8Array>) => void,
+    ) => callback(null, {
+      'review/SKILL.md': actual.strToU8('# Imported skill'),
+      'review/config.toml': actual.strToU8('enabled = true'),
+      'review/logo.png': new Uint8Array([1, 2, 3]),
+    })),
+  };
+});
 
 vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
   FileViewerWorkbench: ({ tabs, activeTabId, adapter, capabilities, readOnly, onActiveTabChange, onTabsChange }: {
@@ -376,6 +391,56 @@ describe('MarketplaceFilesSection', () => {
 
     expect(screen.getByLabelText('config.toml')).toHaveValue('description = "Review config"');
     expect(onPackageFilesChange).toHaveBeenCalled();
+  });
+
+  it('imports text files from zip uploads into editable skill package files', async () => {
+    const user = userEvent.setup();
+    const onDirty = vi.fn();
+    const onPackageFilesChange = vi.fn();
+
+    render(
+      <MarketplaceSkillsSection
+        items={[{
+          id: 'review-skill',
+          path: 'skills/review/SKILL.md',
+          content: '# Existing skill',
+        }]}
+        onDirty={onDirty}
+        onPackageFilesChange={onPackageFilesChange}
+      />,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    Object.defineProperty(input!, 'files', {
+      configurable: true,
+      value: [new File([new Uint8Array([1])], 'skills.zip', { type: 'application/zip' })],
+    });
+    fireEvent.change(input!);
+
+    await waitFor(() => {
+      const latestFiles = onPackageFilesChange.mock.calls.at(-1)?.[0] ?? [];
+      expect(latestFiles).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          path: 'skills/review/SKILL.md',
+          content: '# Existing skill',
+        }),
+        expect.objectContaining({
+          path: 'skills/review/SKILL-1.md',
+          content: '# Imported skill',
+        }),
+        expect.objectContaining({
+          path: 'skills/review/config.toml',
+          content: 'enabled = true',
+        }),
+      ]));
+      expect(latestFiles).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: 'skills/review/logo.png' }),
+      ]));
+    });
+    await waitFor(() => expect(onDirty).toHaveBeenCalled());
+    expect(screen.getByLabelText('config.toml')).toHaveValue('enabled = true');
   });
 
   it('renders editable package files through the shared files section', async () => {

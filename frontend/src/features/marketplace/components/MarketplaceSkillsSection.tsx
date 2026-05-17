@@ -1,4 +1,5 @@
 import React from 'react';
+import { unzip } from 'fflate';
 import { FolderPlus, Plus, RefreshCw, Upload, Wand2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -15,6 +16,7 @@ import {
   FileRenameDialog,
   FileTreeContextMenu,
   FileTreePanel,
+  flattenTree,
   sortTreeNodes,
   useFileTreeContextMenu,
   useFileTreeState,
@@ -32,7 +34,7 @@ import { type MarketplaceEditorResourceItem } from '../features/marketplace-edit
 import {
   marketplaceJoinPath,
   marketplaceFileContentsFromTree,
-  marketplacePackageFilesFromTree,
+  marketplaceFeaturePackageFilesFromTree,
   marketplaceRenameNode,
 } from '../adapters/marketplaceFileTreeAdapter';
 import { getMarketplaceItemFileName } from '../features/marketplace-editor/marketplaceEditorResourceItems';
@@ -41,6 +43,71 @@ type MarketplaceFileDialogState =
   | { type: 'create-file' | 'create-folder'; parentPath: string | null }
   | { type: 'rename' | 'delete' | 'batch-delete'; node: FileTreeNode }
   | null;
+
+const TEXT_EXTENSIONS = new Set(['md', 'txt', 'yaml', 'yml', 'toml', 'json']);
+
+interface ZipFileEntry { path: string; content: string; size: number }
+
+const insertNodeIntoTree = (
+  nodes: FileTreeNode[],
+  parentPath: string | null,
+  node: FileTreeNode,
+): FileTreeNode[] => {
+  if (!parentPath) return sortTreeNodes([...nodes, node]);
+  return nodes.map(n => {
+    if (n.path === parentPath) return { ...n, children: sortTreeNodes([...(n.children ?? []), node]) };
+    if (n.children) return { ...n, children: insertNodeIntoTree(n.children, parentPath, node) };
+    return n;
+  });
+};
+
+const addFilesToTree = (
+  existingNodes: FileTreeNode[],
+  files: ZipFileEntry[],
+): { nodes: FileTreeNode[]; resolved: Array<ZipFileEntry & { node: FileTreeNode }> } => {
+  const allPaths = new Set(flattenTree(existingNodes).map(n => n.path));
+  let result = [...existingNodes];
+  const resolved: Array<ZipFileEntry & { node: FileTreeNode }> = [];
+
+  files.forEach(({ path, content, size }) => {
+    const parts = path.split('/').filter(Boolean);
+    for (let depth = 0; depth < parts.length - 1; depth += 1) {
+      const dirPath = parts.slice(0, depth + 1).join('/');
+      if (!allPaths.has(dirPath)) {
+        const parentDir = depth === 0 ? null : parts.slice(0, depth).join('/');
+        result = insertNodeIntoTree(result, parentDir, {
+          id: dirPath, name: parts[depth], path: dirPath, type: 'directory', children: [],
+        });
+        allPaths.add(dirPath);
+      }
+    }
+    const baseName = parts.at(-1) ?? path;
+    const parentDir = parts.length > 1 ? parts.slice(0, -1).join('/') : null;
+    let resolvedName = baseName;
+    let resolvedPath = parentDir ? `${parentDir}/${resolvedName}` : resolvedName;
+    let copyIndex = 1;
+    while (allPaths.has(resolvedPath)) {
+      const nameParts = baseName.split('.');
+      if (nameParts.length > 1) {
+        const ext = nameParts.pop();
+        resolvedName = `${nameParts.join('.')}-${copyIndex}.${ext}`;
+      } else {
+        resolvedName = `${baseName}-${copyIndex}`;
+      }
+      resolvedPath = parentDir ? `${parentDir}/${resolvedName}` : resolvedName;
+      copyIndex += 1;
+    }
+    const fileNode: FileTreeNode = {
+      id: resolvedPath, name: resolvedName, path: resolvedPath, type: 'file',
+      extension: resolvedName.split('.').pop(), size, metadata: { content },
+    };
+    result = insertNodeIntoTree(result, parentDir, fileNode);
+    allPaths.add(resolvedPath);
+    resolved.push({ path: resolvedPath, content, size, node: fileNode });
+  });
+
+  return { nodes: result, resolved };
+};
 
 const marketplaceParentPath = (path: string): string | null => {
   const normalized = path.replace(/\/$/, '');
@@ -198,6 +265,12 @@ export const MarketplaceSkillsSection: React.FC<MarketplaceSkillsSectionProps> =
   const [clipboardItem, setClipboardItem] = React.useState<FileTreeNode | null>(null);
   const lastPackageFilesSnapshotRef = React.useRef<string | null>(null);
 
+  const uploadInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleUpload = React.useCallback(() => {
+    uploadInputRef.current?.click();
+  }, []);
+
   const workbench = useManagedDocumentWorkbenchTabs<FileTreeNode>({
     adapter: {
       getKey: node => node.path,
@@ -221,7 +294,7 @@ export const MarketplaceSkillsSection: React.FC<MarketplaceSkillsSectionProps> =
   );
 
   const packageFiles = React.useMemo(
-    () => marketplacePackageFilesFromTree(treeState.nodes, 'skills', fullContents),
+    () => marketplaceFeaturePackageFilesFromTree(treeState.nodes, 'skills', fullContents),
     [fullContents, treeState.nodes],
   );
 
@@ -231,16 +304,79 @@ export const MarketplaceSkillsSection: React.FC<MarketplaceSkillsSectionProps> =
   );
 
   React.useEffect(() => {
+    if (lastPackageFilesSnapshotRef.current === packageFilesSnapshot) return;
+    const isFirstSync = lastPackageFilesSnapshotRef.current === null;
+    lastPackageFilesSnapshotRef.current = packageFilesSnapshot;
     onPackageFilesChange(packageFiles);
-    if (lastPackageFilesSnapshotRef.current === null) {
-      lastPackageFilesSnapshotRef.current = packageFilesSnapshot;
-      return;
-    }
-    if (lastPackageFilesSnapshotRef.current !== packageFilesSnapshot) {
-      onDirty();
-      lastPackageFilesSnapshotRef.current = packageFilesSnapshot;
-    }
+    if (!isFirstSync) onDirty();
   }, [onDirty, onPackageFilesChange, packageFiles, packageFilesSnapshot]);
+
+  const handleUploadFiles = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    files.forEach(file => {
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const uint8Array = new Uint8Array(e.target?.result as ArrayBuffer);
+          unzip(uint8Array, (err, unzipped) => {
+            if (err) return;
+            const textFiles: ZipFileEntry[] = Object.entries(unzipped)
+              .filter(([zipPath]) => {
+                if (zipPath.endsWith('/')) return false;
+                const ext = zipPath.split('.').pop()?.toLowerCase() ?? '';
+                return TEXT_EXTENSIONS.has(ext);
+              })
+              .map(([zipPath, data]) => ({
+                path: zipPath,
+                content: new TextDecoder().decode(data),
+                size: data.length,
+              }));
+            if (textFiles.length === 0) return;
+            const { nodes: newNodes, resolved } = addFilesToTree(treeState.nodes, textFiles);
+            treeState.setNodes(newNodes);
+            resolved.forEach(({ path, content }) => workbench.setDocumentContent(path, content));
+            const last = resolved.at(-1);
+            if (last) {
+              treeState.selectNode(last.path);
+              workbench.openDocument(last.node);
+            }
+            onDirty();
+          });
+        };
+        reader.readAsArrayBuffer(file);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = typeof e.target?.result === 'string' ? e.target.result : '';
+        const existingPaths = new Set(treeState.flatNodes.map(n => n.path));
+        let name = file.name;
+        let path = name;
+        let copyIndex = 1;
+        while (existingPaths.has(path)) {
+          const parts = name.split('.');
+          if (parts.length > 1) {
+            const ext = parts.pop();
+            path = `${parts.join('.')}-${copyIndex}.${ext}`;
+          } else {
+            path = `${name}-${copyIndex}`;
+          }
+          copyIndex += 1;
+        }
+        const node: FileTreeNode = {
+          id: path, name: path, path, type: 'file',
+          extension: path.split('.').pop(), size: file.size, metadata: { content },
+        };
+        treeState.addNode(null, node);
+        workbench.setDocumentContent(path, content);
+        treeState.selectNode(path);
+        workbench.openDocument(node);
+        onDirty();
+      };
+      reader.readAsText(file);
+    });
+    event.target.value = '';
+  }, [onDirty, treeState, workbench]);
 
   const openFileInTab = React.useCallback((node: FileTreeNode) => {
     if (node.type !== 'file') return;
@@ -339,7 +475,10 @@ export const MarketplaceSkillsSection: React.FC<MarketplaceSkillsSectionProps> =
       refresh: true,
     },
     callbacks: {
-      onUpload: treeState.closeContextMenu,
+      onUpload: () => {
+        treeState.closeContextMenu();
+        handleUpload();
+      },
       onCreateFile: () => {
         const node = treeState.contextMenu?.node;
         setDialogState({ type: 'create-file', parentPath: node?.type === 'directory' ? node.path : marketplaceParentPath(node?.path ?? '') });
@@ -383,12 +522,21 @@ export const MarketplaceSkillsSection: React.FC<MarketplaceSkillsSectionProps> =
       >
         <RefreshCw className="h-4 w-4" />
       </Button>
+      <input
+        ref={uploadInputRef}
+        type="file"
+        accept=".md,.txt,.zip"
+        multiple
+        className="hidden"
+        onChange={handleUploadFiles}
+      />
       <Button
         size="sm"
         variant="ghost"
         className="h-7 w-7 p-0"
         title={t('marketplace.editor.fileManager.sidebar.upload')}
         aria-label={t('marketplace.editor.fileManager.sidebar.upload')}
+        onClick={handleUpload}
       >
         <Upload className="h-4 w-4" />
       </Button>
@@ -454,7 +602,7 @@ export const MarketplaceSkillsSection: React.FC<MarketplaceSkillsSectionProps> =
               }}
               onCreateFile={() => setDialogState({ type: 'create-file', parentPath: null })}
               onCreateFolder={() => setDialogState({ type: 'create-folder', parentPath: null })}
-              onUpload={() => undefined}
+              onUpload={handleUpload}
               onRefresh={() => undefined}
               onBatchDelete={() => {
                 const node = treeState.selectedNodes[0];

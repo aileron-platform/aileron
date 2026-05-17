@@ -1195,6 +1195,54 @@ def test_save_package_blocks_provider_manifest_validation_errors_before_write(ma
     assert json.loads(manifest_path.read_text()) == original_manifest
 
 
+def test_save_package_writes_explicit_manifest_after_package_files_sync(marketplace_service):
+    created = marketplace_service.create_package(
+        "user-1",
+        MarketplacePackageCreateRequest(
+            provider="codex",
+            package_id="figma-context",
+            display_name="Figma Context",
+            description="Figma MCP package",
+        ),
+    )
+    root = marketplace_service.get_registry_root("user-1")
+    manifest_path = root / "codex" / "plugins" / "figma-context" / ".codex-plugin" / "plugin.json"
+
+    result = marketplace_service.save_package(
+        "user-1",
+        MarketplacePackageSaveRequest(
+            provider="codex",
+            package_id="figma-context",
+            revision=created.revision,
+            manifest={
+                "name": "figma-context",
+                "version": "0.2.0",
+                "description": "Explicit manifest",
+            },
+            package_files=[
+                {
+                    "path": ".codex-plugin/plugin.json",
+                    "content": json.dumps({
+                        "name": "figma-context",
+                        "version": "0.1.0",
+                        "description": "Stale package file manifest",
+                    }),
+                    "binary": False,
+                    "mimeType": "application/json",
+                    "size": 104,
+                }
+            ],
+        ),
+    )
+
+    assert result.revision != created.revision
+    assert json.loads(manifest_path.read_text()) == {
+        "name": "figma-context",
+        "version": "0.2.0",
+        "description": "Explicit manifest",
+    }
+
+
 def test_save_package_rejects_listing_projection_for_different_package(marketplace_service):
     created = marketplace_service.create_package(
         "user-1",
@@ -1247,10 +1295,12 @@ def test_validation_taxonomy_blocks_only_error_results_for_mutating_actions(mark
     ]
 
     assert marketplace_service.validation_blocks_action(results[:2], "save") is False
+    assert marketplace_service.validation_blocks_action(results[:2], "create") is False
     assert marketplace_service.validation_blocks_action(results[:2], "export") is False
     assert marketplace_service.validation_blocks_action(results[:2], "install") is False
     assert marketplace_service.validation_blocks_action(results[:2], "importCopy") is False
     assert marketplace_service.validation_blocks_action(results, "save") is True
+    assert marketplace_service.validation_blocks_action(results, "create") is True
     assert marketplace_service.validation_blocks_action(results, "export") is True
     assert marketplace_service.validation_blocks_action(results, "install") is True
     assert marketplace_service.validation_blocks_action(results, "importCopy") is True
