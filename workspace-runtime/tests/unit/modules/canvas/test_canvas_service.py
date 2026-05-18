@@ -46,7 +46,7 @@ class TestDetectionAndRoutes:
                     "type": "active",
                     "kind": "static",
                     "title": "Demo",
-                    "owner": {"type": "skill", "skillName": "ppt-image-first"},
+                    "owner": {"skillName": "ppt-image-first"},
                     "manifestStatus": "valid",
                     "runtimeStatus": "healthy",
                     "defaultPath": "/",
@@ -76,7 +76,7 @@ class TestDetectionAndRoutes:
                     "type": "active",
                     "kind": "nextjs",
                     "title": "Next App",
-                    "owner": {"type": "user"},
+                    "owner": {},
                     "manifestStatus": "valid",
                     "runtimeStatus": "healthy",
                     "defaultPath": "/",
@@ -92,7 +92,7 @@ class TestDetectionAndRoutes:
         assert response.kind == "nextjs"
         assert response.title == "Next App"
         assert response.owner is not None
-        assert response.owner.type == "user"
+        assert response.owner.skill_name is None
         assert [route.path for route in response.routes] == ["/", "/about"]
         assert response.total == 2
 

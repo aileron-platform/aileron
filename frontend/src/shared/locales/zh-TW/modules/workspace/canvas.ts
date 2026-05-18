@@ -80,12 +80,6 @@ const canvas = {
         errorTitle: '畫布同步失敗',
       },
     },
-    disable: {
-      label: '停用 active canvas',
-      successTitle: '已停用 active canvas',
-      successDescription: '畫布已回到預設畫面。',
-      errorTitle: '無法停用畫布',
-    },
     review: {
       toolbar: {
         toggle: '選取畫布元素新增修改指示',

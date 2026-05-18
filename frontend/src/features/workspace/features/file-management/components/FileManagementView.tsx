@@ -956,19 +956,25 @@ export const FileManagementView: React.FC = () => {
 
       try {
         const selectedFiles = Array.from(files);
-        const result = await operations.uploadFiles({
+        const results = await operations.uploadFiles({
           targetPath: uploadTargetPath,
           files: selectedFiles,
           ...resolveUploadOptions(),
         });
-        if (!result.success) {
-          throw new Error(result.message);
+        const failedItems = results.filter((item) => !item.success);
+        if (failedItems.length > 0) {
+          const detail = failedItems
+            .map((item) => item.error || item.fileName)
+            .filter(Boolean)
+            .join(', ');
+          throw new Error(detail);
         }
         toast({
           title: t('workspace.fileManagement.tree.notifications.uploadSuccess'),
-          description: result.message,
+          description: t('workspace.fileManagement.tree.notifications.uploadDescription', {
+            count: results.length,
+          }),
         });
-        await refreshVersionControl({ includeBranches: true });
       } catch (error) {
         toast({
           title: t('workspace.fileManagement.tree.notifications.uploadFailed'),
@@ -980,6 +986,12 @@ export const FileManagementView: React.FC = () => {
           fileInputRef.current.value = '';
         }
       }
+
+      // Version control refresh runs after upload feedback is finalized so a
+      // transient git status/changes failure cannot mask a successful upload.
+      void refreshVersionControl({ includeBranches: true }).catch((error) => {
+        logger.warn('Refresh version control after upload failed', { error });
+      });
     },
     [ensureRuntimeReady, operations, refreshVersionControl, resolveUploadOptions, uploadTargetPath, t, toast]
   );
@@ -998,19 +1010,25 @@ export const FileManagementView: React.FC = () => {
       }
       const targetDirectory = resolveTargetDirectory(managerState.selectedId ?? '/');
       try {
-        const result = await operations.uploadFiles({
+        const results = await operations.uploadFiles({
           targetPath: targetDirectory,
           files,
           ...resolveUploadOptions(),
         });
-        if (!result.success) {
-          throw new Error(result.message);
+        const failedItems = results.filter((item) => !item.success);
+        if (failedItems.length > 0) {
+          const detail = failedItems
+            .map((item) => item.error || item.fileName)
+            .filter(Boolean)
+            .join(', ');
+          throw new Error(detail);
         }
         toast({
           title: t('workspace.fileManagement.tree.notifications.uploadSuccess'),
-          description: result.message,
+          description: t('workspace.fileManagement.tree.notifications.uploadDescription', {
+            count: results.length,
+          }),
         });
-        await refreshVersionControl({ includeBranches: true });
       } catch (error) {
         toast({
           title: t('workspace.fileManagement.tree.notifications.uploadFailed'),
@@ -1018,6 +1036,12 @@ export const FileManagementView: React.FC = () => {
           variant: 'destructive',
         });
       }
+
+      // Version control refresh runs after upload feedback is finalized so a
+      // transient git status/changes failure cannot mask a successful upload.
+      void refreshVersionControl({ includeBranches: true }).catch((error) => {
+        logger.warn('Refresh version control after paste upload failed', { error });
+      });
     },
     [ensureRuntimeReady, managerState.selectedId, operations, refreshVersionControl, resolveTargetDirectory, resolveUploadOptions, t, toast]
   );

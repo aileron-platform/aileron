@@ -35,7 +35,6 @@ import {
   fetchExtractArchiveStatus,
   fetchArchiveDownloadStatus,
   createCanvasReviewNote,
-  deactivateCanvas,
   deleteCanvasReviewNote,
   fetchCanvasReviewNotes,
   resolveRuntimeBaseUrl,
@@ -288,20 +287,5 @@ describe('workspaceRuntimeApi.resolveRuntimeBaseUrl', () => {
       { status: 'seen' },
     );
     expect(deleteMock).toHaveBeenCalledWith('/api/v1/workspaces/ws-1/canvas/review-notes/note-1');
-  });
-
-  it('deactivates active canvas through workspace runtime manifest endpoint', async () => {
-    deleteMock.mockResolvedValue({
-      workspaceId: 'ws-1',
-      deleted: true,
-      manifestStatus: 'missing',
-      runtimeStatus: 'healthy',
-    });
-
-    const result = await deactivateCanvas('http://runtime.local', 'ws-1');
-
-    expect(deleteMock).toHaveBeenCalledWith('/api/v1/canvases/ws-1/manifest');
-    expect(result.deleted).toBe(true);
-    expect(result.manifestStatus).toBe('missing');
   });
 });

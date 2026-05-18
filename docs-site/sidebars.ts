@@ -39,7 +39,6 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: '功能',
       items: [
-        'features/canvas',
         'features/workspace-lifecycle',
         'features/openspec',
         'features/claude-integration',

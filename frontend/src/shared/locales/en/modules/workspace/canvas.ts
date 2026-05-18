@@ -80,12 +80,6 @@ const canvas = {
         errorTitle: 'Canvas sync failed',
       },
     },
-    disable: {
-      label: 'Deactivate active canvas',
-      successTitle: 'Active canvas deactivated',
-      successDescription: 'Canvas returned to the default view.',
-      errorTitle: 'Could not deactivate canvas',
-    },
     review: {
       toolbar: {
         toggle: 'Select Canvas elements to add edit instructions',

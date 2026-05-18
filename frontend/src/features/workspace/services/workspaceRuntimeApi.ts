@@ -620,10 +620,7 @@ export type CanvasType = 'active' | 'default';
 export type CanvasKind = 'static' | 'nextjs';
 export type CanvasManifestStatus = 'missing' | 'valid' | 'invalid';
 export type CanvasRuntimeStatus = 'healthy' | 'starting' | 'unhealthy';
-export type CanvasOwnerType = 'skill' | 'user';
-
 export interface CanvasOwner {
-  type: CanvasOwnerType;
   skillName?: string | null;
 }
 
@@ -685,13 +682,6 @@ export interface CanvasActionResponse {
   resetAt?: string | null;
   rendererAction?: 'reused' | 'restarted' | string | null;
   rendererActionReason?: string | null;
-}
-
-export interface CanvasManifestDeleteResponse {
-  workspaceId: string;
-  deleted: boolean;
-  manifestStatus: CanvasManifestStatus;
-  runtimeStatus?: CanvasRuntimeStatus | null;
 }
 
 export interface CanvasLogsResponse {
@@ -810,14 +800,6 @@ export const resetCanvas = async (
 ): Promise<CanvasActionResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
   return await client.post(`/api/v1/workspaces/${workspaceId}/canvas/reset`);
-};
-
-export const deactivateCanvas = async (
-  runtimeBaseUrl: string,
-  workspaceId: string
-): Promise<CanvasManifestDeleteResponse> => {
-  const client = createRuntimeClient(runtimeBaseUrl);
-  return await client.delete(`/api/v1/canvases/${workspaceId}/manifest`);
 };
 
 export const fetchCanvasLogs = async (

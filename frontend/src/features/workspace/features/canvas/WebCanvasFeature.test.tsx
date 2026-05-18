@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   createCanvasReviewNote: vi.fn(),
   updateCanvasReviewNoteStatus: vi.fn(),
   deleteCanvasReviewNote: vi.fn(),
-  deactivateCanvas: vi.fn(),
   syncCanvas: vi.fn(),
   toast: vi.fn(),
 }));
@@ -56,7 +55,6 @@ vi.mock('../../services/workspaceRuntimeApi', () => ({
   createCanvasReviewNote: mocks.createCanvasReviewNote,
   updateCanvasReviewNoteStatus: mocks.updateCanvasReviewNoteStatus,
   deleteCanvasReviewNote: mocks.deleteCanvasReviewNote,
-  deactivateCanvas: mocks.deactivateCanvas,
   syncCanvas: mocks.syncCanvas,
 }));
 
@@ -89,6 +87,7 @@ const multiTarget = {
 describe('WebCanvasFeature review mode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    document.documentElement.classList.remove('dark');
     mocks.fetchWorkspaceDetail.mockResolvedValue({
       runtimeStatus: {
         canvasExternalUrl: 'http://canvas.local',
@@ -123,12 +122,6 @@ describe('WebCanvasFeature review mode', () => {
       rendererAction: 'reused',
       rendererActionReason: 'manifest-unchanged',
       syncedAt: '2026-04-29T00:00:00Z',
-    });
-    mocks.deactivateCanvas.mockResolvedValue({
-      workspaceId: 'ws-1',
-      deleted: true,
-      manifestStatus: 'missing',
-      runtimeStatus: 'healthy',
     });
     mocks.createCanvasReviewNote.mockResolvedValue({
       id: 'note-1',
@@ -184,20 +177,6 @@ describe('WebCanvasFeature review mode', () => {
       expect(screen.queryByText('workspace.canvas.webCanvas.manifest.statusNotice.skill.title')).not.toBeInTheDocument();
     });
     expect(screen.queryByText('workspace.canvas.webCanvas.manifest.statusNotice.skill.description')).not.toBeInTheDocument();
-  });
-
-  it('deactivates the active canvas through runtime manifest endpoint', async () => {
-    render(<WebCanvasFeature />);
-
-    const button = await screen.findByRole('button', {
-      name: 'workspace.canvas.webCanvas.disable.label',
-    });
-    await waitFor(() => expect(button).toBeEnabled());
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(mocks.deactivateCanvas).toHaveBeenCalledWith('http://runtime.local', 'ws-1');
-    });
   });
 
   it('refreshes Canvas route metadata after renderer reuse sync', async () => {
@@ -403,6 +382,49 @@ describe('WebCanvasFeature review mode', () => {
           instruction: 'Move it on products',
         }),
       );
+    });
+  });
+
+  it('syncs the resolved app theme to the canvas iframe', async () => {
+    render(<WebCanvasFeature />);
+
+    const iframe = await screen.findByTitle('workspace.canvas.webCanvas.iframeTitle') as HTMLIFrameElement;
+    const contentWindow = { postMessage: vi.fn() } as unknown as Window;
+    Object.defineProperty(iframe, 'contentWindow', {
+      configurable: true,
+      value: contentWindow,
+    });
+    document.documentElement.classList.add('dark');
+
+    window.dispatchEvent(new MessageEvent('message', {
+      source: contentWindow,
+      data: {
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
+        type: 'BRIDGE_READY',
+        payload: { routePath: '/' },
+      },
+    }));
+
+    await waitFor(() => {
+      expect(contentWindow.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
+        type: 'SET_THEME',
+        payload: { theme: 'dark' },
+      }), '*');
+    });
+
+    vi.mocked(contentWindow.postMessage).mockClear();
+    document.documentElement.classList.remove('dark');
+
+    await waitFor(() => {
+      expect(contentWindow.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+        source: AILERON_CANVAS_BRIDGE_SOURCE,
+        version: AILERON_CANVAS_BRIDGE_VERSION,
+        type: 'SET_THEME',
+        payload: { theme: 'light' },
+      }), '*');
     });
   });
 

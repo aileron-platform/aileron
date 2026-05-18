@@ -81,6 +81,7 @@ CLAUDE.md
 # Runtime and Temporary Files
 .services.pid
 tmp/
+/.aileron/
 
 # Database files
 *.db

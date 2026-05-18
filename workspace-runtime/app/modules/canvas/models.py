@@ -12,7 +12,6 @@ CanvasType = Literal["active", "default"]
 CanvasKind = Literal["static", "nextjs"]
 CanvasManifestStatus = Literal["missing", "valid", "invalid"]
 CanvasRuntimeStatus = Literal["healthy", "starting", "unhealthy"]
-CanvasOwnerType = Literal["skill", "user"]
 CanvasReviewTargetType = Literal["element", "multi-element", "area"]
 CanvasReviewStatus = Literal["open", "seen", "applied", "dismissed"]
 CanvasReviewReplyRole = Literal["user", "agent"]
@@ -35,12 +34,17 @@ class CanvasRoute(BaseModel):
 
 
 class CanvasOwner(BaseModel):
-    """Canvas owner metadata from canvas.json."""
+    """Canvas owner metadata from canvas.json.
 
-    type: CanvasOwnerType
+    Pure attribution metadata. Only ``skillName`` is meaningful — when set, the
+    Canvas tab status notice attributes the canvas to that skill; when absent,
+    the canvas is treated as user-authored. Renderer, bridge, security rules,
+    and the deactivate endpoint do NOT branch on this value.
+    """
+
     skill_name: str | None = Field(default=None, alias="skillName")
 
-    model_config = {"populate_by_name": True}
+    model_config = {"populate_by_name": True, "extra": "ignore"}
 
 
 class CanvasDetectResponse(BaseModel):

@@ -1024,6 +1024,7 @@ const agentSettings = {
       overview: 'Overview',
       claudeMd: 'CLAUDE.md',
       geminiMd: 'GEMINI.md',
+      agentsMd: 'AGENTS.md',
       config: 'Config',
       profiles: 'Profiles',
       permissionsProfiles: 'Permissions Profiles',
