@@ -63,6 +63,7 @@ class TestDockerOrchestrator:
         assert call_args["image"] == "test-image"
         assert call_args["environment"] == {"KEY": "VALUE"}
         assert call_args["network"] == "test-net"
+        assert call_args["security_opt"] == ["seccomp=unconfined"]
 
     def test_create_workspace_runtime_removes_existing(self, docker_orchestrator, sample_workspace, sample_context):
         # Arrange

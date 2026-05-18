@@ -108,6 +108,7 @@ class DockerOrchestrator(ContainerOrchestrator):
                 # network_mode=network_mode, # network and network_mode can conflict
                 log_config=log_config,
                 cap_add=["NET_ADMIN"], # Keep original cap_add
+                security_opt=["seccomp=unconfined"],
                 command=context.labels.get("command"), # Optional command override
                 working_dir=context.labels.get("working_dir"),
             )

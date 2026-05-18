@@ -213,6 +213,8 @@ services:
     command: /workspace-runtime/start_services.sh
     cap_add:
       - NET_ADMIN
+    security_opt:
+      - seccomp=unconfined
     environment:
       - PORT=3002
       - NODE_ENV=development
