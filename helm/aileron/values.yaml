@@ -37,6 +37,9 @@ kubernetes:
   nodePort: null
   nodeAddress: 127.0.0.1
   pvcName: workspace-runtime-pvc
+  agentState:
+    pvcName: workspace-runtime-pvc
+    subPathRoot: agent-state
   knowledgeBases:
     pvcName: knowledge-bases-pvc
     size: 20Gi

@@ -10,6 +10,10 @@ import yaml
 
 
 def _find_ops_path() -> Path:
+    container_ops_path = Path("/repo-root/scripts/dev/docker/ops.py")
+    if container_ops_path.is_file():
+        return container_ops_path
+
     current = Path(__file__).resolve()
     for parent in current.parents:
         candidate = parent / "scripts" / "dev" / "docker" / "ops.py"
@@ -102,7 +106,7 @@ def test_build_compose_env_includes_cross_platform_host_paths(monkeypatch: pytes
     monkeypatch.delenv("HOST_WORKSPACE_RUNTIME_DIR", raising=False)
     monkeypatch.delenv("HOST_WORKSPACES_DIR", raising=False)
     monkeypatch.delenv("HOST_WORKSPACE_SCRIPTS_DIR", raising=False)
-    monkeypatch.delenv("HOST_CLAUDE_DATA_DIR", raising=False)
+    monkeypatch.delenv("HOST_AGENT_STATE_DIR", raising=False)
     monkeypatch.delenv("HOST_MARKETPLACE_INSTALL_DIR", raising=False)
     monkeypatch.delenv("HOST_KNOWLEDGE_BASES_DIR", raising=False)
 
@@ -112,7 +116,7 @@ def test_build_compose_env_includes_cross_platform_host_paths(monkeypatch: pytes
     assert env["HOST_WORKSPACE_RUNTIME_DIR"] == str(tmp_path / "workspace-runtime")
     assert env["HOST_WORKSPACES_DIR"] == str(tmp_path / "data" / "workspace-data")
     assert env["HOST_WORKSPACE_SCRIPTS_DIR"] == str(tmp_path / "data" / "workspace-scripts")
-    assert env["HOST_CLAUDE_DATA_DIR"] == str(tmp_path / "data" / "claude-data")
+    assert env["HOST_AGENT_STATE_DIR"] == str(tmp_path / "data" / "agent-state")
     assert env["HOST_MARKETPLACE_INSTALL_DIR"] == str(tmp_path / "data" / "marketplace-install")
     assert env["HOST_KNOWLEDGE_BASES_DIR"] == str(tmp_path / "data" / "knowledge-bases")
 

@@ -45,10 +45,10 @@ def mock_settings():
     settings = MagicMock()
     settings.HOST_WORKSPACES_DIR = "/tmp/workspaces"
     settings.HOST_WORKSPACE_SCRIPTS_DIR = "/tmp/workspace-scripts"
-    settings.HOST_CLAUDE_DATA_DIR = "/tmp/claude-data"
+    settings.HOST_AGENT_STATE_DIR = "/tmp/agent-state"
     settings.MANAGER_WORKSPACES_DIR = "/mnt/workspaces"
     settings.MANAGER_WORKSPACE_SCRIPTS_DIR = "/mnt/workspace-scripts"
-    settings.MANAGER_CLAUDE_DATA_DIR = "/mnt/claude-data"
+    settings.MANAGER_AGENT_STATE_DIR = "/mnt/agent-state"
     settings.MANAGER_MARKETPLACE_INSTALL_DIR = "/mnt/marketplace-install"
     return settings
 
@@ -609,7 +609,7 @@ class TestVolumeCleanup:
                 assert removed_paths == [
                     Path("/mnt/workspaces/workspace_123_456"),
                     Path("/mnt/workspace-scripts/workspace_123_456"),
-                    Path("/mnt/claude-data/workspace_123_456"),
+                    Path("/mnt/agent-state/workspace_123_456"),
                     Path("/mnt/marketplace-install/workspace_123_456"),
                 ]
 

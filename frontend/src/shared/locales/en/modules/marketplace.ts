@@ -1159,7 +1159,7 @@ const marketplace = {
           },
           input: {
             label: 'Input JSON',
-            placeholder: '{\\n  \"file_path\": \"${tool_input.file_path}\"\\n}',
+            placeholder: '{\\n  "file_path": "${tool_input.file_path}"\\n}',
             help: 'JSON input passed to the MCP tool.',
           },
           promptField: {

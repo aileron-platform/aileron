@@ -162,7 +162,7 @@ describe('WebCanvasFeature review mode', () => {
       type: 'active',
       kind: 'static',
       title: 'PPT Preview',
-      owner: { type: 'skill', skillName: 'ppt-image-first' },
+      owner: { skillName: 'ppt-image-first' },
       manifestStatus: 'valid',
       runtimeStatus: 'healthy',
       defaultPath: '/',

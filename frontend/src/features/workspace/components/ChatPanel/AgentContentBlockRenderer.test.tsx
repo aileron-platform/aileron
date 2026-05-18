@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +7,9 @@ import type { AgentMessage, PermissionRequest } from './agentSessionTypes';
 
 const translations: Record<string, string> = {
   'workspace.chat.generatedImage.alt': 'Generated image',
+  'workspace.chat.generatedImage.previewAction': 'Open generated image preview',
+  'workspace.chat.generatedImage.previewDescription': 'Preview generated image at a larger size',
+  'workspace.chat.generatedImage.previewTitle': 'Generated image preview',
   'workspace.chat.widgets.permission.title.active': 'Permission required',
   'workspace.chat.widgets.permission.subtitle.active': 'The agent needs your approval to continue',
   'workspace.chat.widgets.permission.codex.scope.once.label': 'Approve once',
@@ -102,6 +105,46 @@ describe('AgentContentBlockRenderer', () => {
 
     const image = screen.getByRole('img', { name: 'Generated image' });
     expect(image).toHaveAttribute('src', 'data:image/png;base64,aW1hZ2U=');
+  });
+
+  it('opens generated image blocks in a dialog preview', async () => {
+    const user = userEvent.setup();
+    const message = {
+      message_id: 'msg-image',
+      session_id: 'session-1',
+      task_id: 'task-1',
+      created_at: '2026-05-17T00:00:00Z',
+      index: 0,
+      role: 'assistant',
+      type: 'assistant',
+      content_blocks: [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: 'image/png',
+            data: 'aW1hZ2U=',
+          },
+        },
+      ],
+      queued: false,
+    } as AgentMessage;
+
+    render(
+      <AgentContentBlockRenderer
+        message={message}
+        allMessages={[message]}
+        agentTool="codex"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Open generated image preview' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Generated image preview' });
+    expect(within(dialog).getByRole('img', { name: 'Generated image' })).toHaveAttribute(
+      'src',
+      'data:image/png;base64,aW1hZ2U=',
+    );
   });
 
   it('renders Codex permission requests with the Codex permission widget', async () => {

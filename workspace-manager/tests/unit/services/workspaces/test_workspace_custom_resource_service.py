@@ -31,6 +31,8 @@ def mock_settings(tmp_path: Path):
     settings.RUNTIME_K8S_NAMESPACE = "workspace-system"
     settings.RUNTIME_K8S_CR_NAMESPACE = "aileron"
     settings.RUNTIME_K8S_IMAGE = "ailerondocker/workspace-runtime:latest"
+    settings.RUNTIME_K8S_AGENT_STATE_PVC_NAME = "workspace-runtime-pvc"
+    settings.RUNTIME_K8S_AGENT_STATE_SUB_PATH_ROOT = "agent-state"
     settings.RUNTIME_K8S_BROWSER_IMAGE = "ailerondocker/workspace-browser:latest"
     settings.RUNTIME_K8S_CANVAS_IMAGE = "ailerondocker/workspace-canvas:latest"
     settings.RUNTIME_K8S_RUNTIME_RESOURCES = {
@@ -96,6 +98,32 @@ def test_build_workspace_custom_resource_manifest(custom_resource_service, sampl
     assert manifest["spec"]["runtime"]["imageKey"] == "universal"
     assert manifest["spec"]["runtime"]["resources"]["requests"]["cpu"] == "500m"
     assert manifest["spec"]["runtime"]["resources"]["limits"]["memory"] == "4Gi"
+    assert manifest["spec"]["runtime"]["agentState"] == {
+        "pvcName": "workspace-runtime-pvc",
+        "subPathRoot": "agent-state",
+        "mounts": [
+            {
+                "provider": "claude",
+                "sourceSubPath": "agent-state/workspace_123/claude/home",
+                "mountPath": "/home/developer/.claude",
+            },
+            {
+                "provider": "codex",
+                "sourceSubPath": "agent-state/workspace_123/codex/home",
+                "mountPath": "/home/developer/.codex",
+            },
+            {
+                "provider": "codex-sessions",
+                "sourceSubPath": "agent-state/workspace_123/codex/sessions",
+                "mountPath": "/home/developer/.codex-sessions",
+            },
+            {
+                "provider": "gemini",
+                "sourceSubPath": "agent-state/workspace_123/gemini/home",
+                "mountPath": "/home/developer/.gemini",
+            },
+        ],
+    }
     assert manifest["spec"]["browser"]["image"] == "ailerondocker/workspace-browser:latest"
     assert manifest["spec"]["browser"]["resources"]["limits"]["memory"] == "2Gi"
     assert manifest["spec"]["canvas"]["image"] == "ailerondocker/workspace-canvas:latest"

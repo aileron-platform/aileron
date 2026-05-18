@@ -167,6 +167,7 @@ RUN chown -R developer:developer /workspace-runtime /workspace /workspace-termin
 # Anthropic settings are injected at runtime, not baked into the image.
 
 ENV PYTHONPATH="/workspace-runtime:/workspace"
+ENV PATH="/workspace-runtime/.venv/bin:${PATH}"
 ENV DISABLE_AUTOUPDATER=1
 ENV OPENSPEC_AUTO_INIT=1
 ENV OPENSPEC_INIT_TOOLS="claude,codex,opencode,gemini"

@@ -81,13 +81,9 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
     void loadKnowledgeBaseAttachments(knowledgeBaseId);
   }, [knowledgeBaseId, loadKnowledgeBaseDetail, loadKnowledgeBaseShares, loadKnowledgeBaseAttachments]);
 
-  if (!knowledgeBaseId) {
-    return <Navigate to={ROUTES.KNOWLEDGE_BASES} replace />;
-  }
-
-  const detail = detailById[knowledgeBaseId];
-  const shares = sharesById[knowledgeBaseId] ?? [];
-  const attachments = attachmentsById[knowledgeBaseId] ?? [];
+  const detail = knowledgeBaseId ? detailById[knowledgeBaseId] : undefined;
+  const shares = knowledgeBaseId ? sharesById[knowledgeBaseId] ?? [] : [];
+  const attachments = knowledgeBaseId ? attachmentsById[knowledgeBaseId] ?? [] : [];
   const storageInfo = detail
     ? `${formatFileSize(detail.currentSizeBytes)} / ${detail.quotaBytes ? formatFileSize(detail.quotaBytes) : t('knowledgeBase.detail.cards.quotaUnlimited')}`
     : '--';
@@ -146,6 +142,10 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
       });
     }
   }, [deleteKnowledgeBase, detail, knowledgeBaseId, navigate, t, toast]);
+
+  if (!knowledgeBaseId) {
+    return <Navigate to={ROUTES.KNOWLEDGE_BASES} replace />;
+  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">

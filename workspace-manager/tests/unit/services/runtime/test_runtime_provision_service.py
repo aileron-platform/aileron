@@ -48,13 +48,13 @@ def mock_settings():
     settings.RUNTIME_SCRIPT_ROOT = "/tmp/workspace-scripts"
     settings.HOST_WORKSPACES_DIR = "/tmp/workspaces"
     settings.HOST_WORKSPACE_SCRIPTS_DIR = "/tmp/workspace-scripts-host"
-    settings.HOST_CLAUDE_DATA_DIR = "/tmp/claude-data"
+    settings.HOST_AGENT_STATE_DIR = "/tmp/agent-state"
     settings.HOST_MARKETPLACE_INSTALL_DIR = "/tmp/marketplace-install"
     settings.HOST_KNOWLEDGE_BASES_DIR = "/tmp/knowledge-bases"
     settings.BROWSER_WEBRTC_RESERVED_UDP_RANGES = ["50000-52321"]
     settings.MANAGER_WORKSPACES_DIR = "/mnt/workspaces"
     settings.MANAGER_WORKSPACE_SCRIPTS_DIR = "/mnt/workspace-scripts"
-    settings.MANAGER_CLAUDE_DATA_DIR = "/mnt/claude-data"
+    settings.MANAGER_AGENT_STATE_DIR = "/mnt/agent-state"
     settings.MANAGER_MARKETPLACE_INSTALL_DIR = "/mnt/marketplace-install"
     settings.MANAGER_KNOWLEDGE_BASES_DIR = "/mnt/knowledge-bases"
     settings.DOCKER_NETWORK = "workspace-network"
@@ -216,19 +216,19 @@ class TestRuntimeProvisionService:
             # Template rendered
             mock_template_engine.render_to_file.assert_called_once()
 
-    def test_build_volumes_uses_workspace_scripts_and_claude_roots(
+    def test_build_volumes_uses_workspace_scripts_and_agent_state_roots(
         self, provision_service, sample_workspace, mock_settings, tmp_path: Path
     ):
         mock_settings.HOST_WORKSPACES_DIR = str(tmp_path / "workspaces")
         mock_settings.HOST_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "workspace-scripts")
-        mock_settings.HOST_CLAUDE_DATA_DIR = str(tmp_path / "claude-data")
+        mock_settings.HOST_AGENT_STATE_DIR = str(tmp_path / "agent-state")
         mock_settings.HOST_MARKETPLACE_INSTALL_DIR = str(tmp_path / "marketplace-install")
         mock_settings.HOST_KNOWLEDGE_BASES_DIR = str(tmp_path / "knowledge-bases")
         mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
         mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(
             tmp_path / "mounted-workspace-scripts"
         )
-        mock_settings.MANAGER_CLAUDE_DATA_DIR = str(tmp_path / "mounted-claude-data")
+        mock_settings.MANAGER_AGENT_STATE_DIR = str(tmp_path / "mounted-agent-state")
         mock_settings.MANAGER_MARKETPLACE_INSTALL_DIR = str(
             tmp_path / "mounted-marketplace-install"
         )
@@ -244,7 +244,16 @@ class TestRuntimeProvisionService:
             tmp_path / "workspace-scripts" / "workspace_123"
         )
         assert sources["/home/developer/.claude"] == str(
-            tmp_path / "claude-data" / "workspace_123"
+            tmp_path / "agent-state" / "workspace_123" / "claude" / "home"
+        )
+        assert sources["/home/developer/.codex"] == str(
+            tmp_path / "agent-state" / "workspace_123" / "codex" / "home"
+        )
+        assert sources["/home/developer/.codex-sessions"] == str(
+            tmp_path / "agent-state" / "workspace_123" / "codex" / "sessions"
+        )
+        assert sources["/home/developer/.gemini"] == str(
+            tmp_path / "agent-state" / "workspace_123" / "gemini" / "home"
         )
         assert sources["/marketplace-install"] == str(
             tmp_path / "marketplace-install" / "workspace_123"
@@ -253,6 +262,9 @@ class TestRuntimeProvisionService:
             tmp_path / "mounted-workspace-scripts" / "workspace_123" / "custom-setup.sh"
         ).is_file()
         assert (tmp_path / "mounted-marketplace-install" / "workspace_123").is_dir()
+        assert (
+            tmp_path / "mounted-agent-state" / "workspace_123" / "codex" / "sessions"
+        ).is_dir()
 
     def test_build_volumes_resolves_relative_host_mount_paths(
         self,
@@ -264,14 +276,14 @@ class TestRuntimeProvisionService:
     ):
         mock_settings.HOST_WORKSPACES_DIR = "data/workspace-data"
         mock_settings.HOST_WORKSPACE_SCRIPTS_DIR = "data/workspace-scripts"
-        mock_settings.HOST_CLAUDE_DATA_DIR = "data/claude-data"
+        mock_settings.HOST_AGENT_STATE_DIR = "data/agent-state"
         mock_settings.HOST_MARKETPLACE_INSTALL_DIR = "data/marketplace-install"
         mock_settings.HOST_KNOWLEDGE_BASES_DIR = "data/knowledge-bases"
         mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
         mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(
             tmp_path / "mounted-workspace-scripts"
         )
-        mock_settings.MANAGER_CLAUDE_DATA_DIR = str(tmp_path / "mounted-claude-data")
+        mock_settings.MANAGER_AGENT_STATE_DIR = str(tmp_path / "mounted-agent-state")
         mock_settings.MANAGER_MARKETPLACE_INSTALL_DIR = str(
             tmp_path / "mounted-marketplace-install"
         )
@@ -290,7 +302,13 @@ class TestRuntimeProvisionService:
             tmp_path / "project-root" / "data" / "workspace-scripts" / "workspace_123"
         )
         assert sources["/home/developer/.claude"] == str(
-            tmp_path / "project-root" / "data" / "claude-data" / "workspace_123"
+            tmp_path
+            / "project-root"
+            / "data"
+            / "agent-state"
+            / "workspace_123"
+            / "claude"
+            / "home"
         )
         assert sources["/marketplace-install"] == str(
             tmp_path / "project-root" / "data" / "marketplace-install" / "workspace_123"
@@ -352,13 +370,13 @@ class TestRuntimeProvisionService:
     ):
         mock_settings.HOST_WORKSPACES_DIR = str(tmp_path / "workspaces")
         mock_settings.HOST_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "workspace-scripts")
-        mock_settings.HOST_CLAUDE_DATA_DIR = str(tmp_path / "claude-data")
+        mock_settings.HOST_AGENT_STATE_DIR = str(tmp_path / "agent-state")
         mock_settings.HOST_KNOWLEDGE_BASES_DIR = str(tmp_path / "knowledge-bases")
         mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
         mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(
             tmp_path / "mounted-workspace-scripts"
         )
-        mock_settings.MANAGER_CLAUDE_DATA_DIR = str(tmp_path / "mounted-claude-data")
+        mock_settings.MANAGER_AGENT_STATE_DIR = str(tmp_path / "mounted-agent-state")
         mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(
             tmp_path / "mounted-knowledge-bases"
         )

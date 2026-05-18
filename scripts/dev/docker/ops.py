@@ -44,7 +44,7 @@ DATA_DIRS = (
     "data/keycloak",
     "data/workspace-data",
     "data/workspace-scripts",
-    "data/claude-data",
+    "data/agent-state",
     "data/marketplace-install",
     "data/knowledge-bases",
 )
@@ -296,7 +296,7 @@ def build_compose_env(profile: StartupProfile) -> dict[str, str]:
             "HOST_WORKSPACE_RUNTIME_DIR": str(env.get("HOST_WORKSPACE_RUNTIME_DIR", repo_root / "workspace-runtime")),
             "HOST_WORKSPACES_DIR": str(env.get("HOST_WORKSPACES_DIR", data_root / "workspace-data")),
             "HOST_WORKSPACE_SCRIPTS_DIR": str(env.get("HOST_WORKSPACE_SCRIPTS_DIR", data_root / "workspace-scripts")),
-            "HOST_CLAUDE_DATA_DIR": str(env.get("HOST_CLAUDE_DATA_DIR", data_root / "claude-data")),
+            "HOST_AGENT_STATE_DIR": str(env.get("HOST_AGENT_STATE_DIR", data_root / "agent-state")),
             "HOST_MARKETPLACE_INSTALL_DIR": str(env.get("HOST_MARKETPLACE_INSTALL_DIR", data_root / "marketplace-install")),
             "HOST_KNOWLEDGE_BASES_DIR": str(env.get("HOST_KNOWLEDGE_BASES_DIR", data_root / "knowledge-bases")),
         }
@@ -703,7 +703,7 @@ def clean_temp_directories(repo_root: Path) -> int:
     temp_dirs = [
         repo_root / "workspace-runtime" / "tmp",
         Path("/tmp/workspaces"),
-        Path("/tmp/claude-data"),
+        Path("/tmp/agent-state"),
     ]
     cleaned = 0
     for target_dir in temp_dirs:

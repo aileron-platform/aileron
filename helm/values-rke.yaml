@@ -29,6 +29,9 @@ kubernetes:
   serviceType: ClusterIP
   nodeAddress: 192.168.50.241
   pvcName: workspace-runtime-pvc
+  agentState:
+    pvcName: workspace-runtime-pvc
+    subPathRoot: agent-state
   knowledgeBases:
     # RKE 測試叢集目前未提供 RWX StorageClass，先以 local-path/RWO 驗證核心服務部署。
     # 正式環境請改回 NFS / CephFS / Longhorn RWX 等共享儲存。

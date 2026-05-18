@@ -331,6 +331,7 @@ class WorkspaceCustomResourceService:
                     "image": self.settings.RUNTIME_K8S_IMAGE,
                     "imageKey": workspace.runtime,
                     "resources": self._runtime_resources_spec(workspace),
+                    "agentState": self._agent_state_spec(workspace),
                 },
                 "canvas": {
                     "enabled": True,
@@ -393,6 +394,36 @@ class WorkspaceCustomResourceService:
 
     def _runtime_resources_spec(self, workspace: db_models.Workspace) -> dict:
         return workspace.runtime_resources or self.settings.RUNTIME_K8S_RUNTIME_RESOURCES
+
+    def _agent_state_spec(self, workspace: db_models.Workspace) -> dict[str, object]:
+        workspace_id = workspace.id.replace("-", "_")
+        sub_path_root = self.settings.RUNTIME_K8S_AGENT_STATE_SUB_PATH_ROOT.strip("/")
+        return {
+            "pvcName": self.settings.RUNTIME_K8S_AGENT_STATE_PVC_NAME,
+            "subPathRoot": sub_path_root,
+            "mounts": [
+                {
+                    "provider": "claude",
+                    "sourceSubPath": f"{sub_path_root}/{workspace_id}/claude/home",
+                    "mountPath": "/home/developer/.claude",
+                },
+                {
+                    "provider": "codex",
+                    "sourceSubPath": f"{sub_path_root}/{workspace_id}/codex/home",
+                    "mountPath": "/home/developer/.codex",
+                },
+                {
+                    "provider": "codex-sessions",
+                    "sourceSubPath": f"{sub_path_root}/{workspace_id}/codex/sessions",
+                    "mountPath": "/home/developer/.codex-sessions",
+                },
+                {
+                    "provider": "gemini",
+                    "sourceSubPath": f"{sub_path_root}/{workspace_id}/gemini/home",
+                    "mountPath": "/home/developer/.gemini",
+                },
+            ],
+        }
 
     def _request_restart_operation(
         self,

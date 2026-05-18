@@ -1419,7 +1419,7 @@ describe('MarketplaceEditorView', () => {
         ...baseDetail.featureContent,
         skills: [
           { id: 'review-main', name: 'Review Main', path: 'skills/review/README.md', content: '# Review Main' },
-          { id: 'review-config', name: 'Review Config', path: 'skills/review/config.toml', content: 'title = \"Review config\"' },
+          { id: 'review-config', name: 'Review Config', path: 'skills/review/config.toml', content: 'title = "Review config"' },
           { id: 'auth', name: 'Auth', path: 'skills/auth/SKILL.md', content: '# Auth' },
         ],
       },

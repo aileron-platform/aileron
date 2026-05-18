@@ -28,6 +28,8 @@ data:
   RUNTIME_K8S_SERVICE_TYPE: {{ .Values.kubernetes.serviceType | quote }}
   RUNTIME_K8S_NODE_ADDRESS: {{ .Values.kubernetes.nodeAddress | quote }}
   RUNTIME_K8S_PVC_NAME: {{ .Values.kubernetes.pvcName | quote }}
+  RUNTIME_K8S_AGENT_STATE_PVC_NAME: {{ .Values.kubernetes.agentState.pvcName | quote }}
+  RUNTIME_K8S_AGENT_STATE_SUB_PATH_ROOT: {{ .Values.kubernetes.agentState.subPathRoot | quote }}
   KNOWLEDGE_BASES_PVC_NAME: {{ .Values.kubernetes.knowledgeBases.pvcName | quote }}
   RUNTIME_K8S_IMAGE: {{ .Values.workspaceOperator.runtimeImage | quote }}
   RUNTIME_K8S_BROWSER_IMAGE: {{ .Values.kubernetes.browserImage | quote }}

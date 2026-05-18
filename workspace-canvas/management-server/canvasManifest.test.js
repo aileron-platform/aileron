@@ -21,7 +21,7 @@ function validManifest(overrides = {}) {
     kind: "static",
     contentDir: "./canvases/demo",
     title: "Demo Canvas",
-    owner: { type: "skill", skillName: "ppt-image-first" },
+    owner: { skillName: "ppt-image-first" },
     routes: [{ path: "/", label: "Home" }],
     defaultPath: "/",
     ...overrides,
@@ -35,7 +35,6 @@ test("valid manifest is normalized", () => {
   assert.equal(manifest.version, 1);
   assert.equal(manifest.kind, "static");
   assert.equal(manifest.resolvedContentDir, contentDir);
-  assert.equal(manifest.owner.type, "skill");
   assert.equal(manifest.owner.skillName, "ppt-image-first");
   assert.deepEqual(manifest.routes, [{ path: "/", label: "Home" }]);
 });
@@ -97,13 +96,21 @@ test("contentDir symlink is rejected", () => {
   );
 });
 
-test("owner.skillName is required for skill owner", () => {
+test("owner.type is rejected", () => {
   const { workspaceDir, manifestDir } = makeWorkspace();
 
   assert.throws(
     () => validateManifest(validManifest({ owner: { type: "skill" } }), { workspaceDir, manifestDir }),
-    /owner.skillName is required/,
+    /owner.type is not supported/,
   );
+});
+
+test("empty owner is treated as user-authored", () => {
+  const { workspaceDir, manifestDir } = makeWorkspace();
+
+  const manifest = validateManifest(validManifest({ owner: {} }), { workspaceDir, manifestDir });
+
+  assert.deepEqual(manifest.owner, {});
 });
 
 test("defaultPath must match routes", () => {

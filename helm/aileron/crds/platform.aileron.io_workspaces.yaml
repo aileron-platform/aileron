@@ -61,6 +61,32 @@ spec:
                     resources:
                       type: object
                       x-kubernetes-preserve-unknown-fields: true
+                    agentState:
+                      type: object
+                      required:
+                        - pvcName
+                        - subPathRoot
+                        - mounts
+                      properties:
+                        pvcName:
+                          type: string
+                        subPathRoot:
+                          type: string
+                        mounts:
+                          type: array
+                          items:
+                            type: object
+                            required:
+                              - provider
+                              - sourceSubPath
+                              - mountPath
+                            properties:
+                              provider:
+                                type: string
+                              sourceSubPath:
+                                type: string
+                              mountPath:
+                                type: string
                 browser:
                   type: object
                   properties:

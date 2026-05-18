@@ -10,6 +10,7 @@ import ClaudeToolWidget, { ClaudeToolType, PermissionScope } from '@/features/ag
 import AcpToolWidget from '@/features/agent-tools/components/AcpToolWidget';
 import AcpDecisionWidget from '@/features/agent-tools/components/AcpDecisionWidget';
 import { MarkdownRenderer } from '@/features/workspace/components/MarkdownRenderer';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/shared/components/ui/dialog';
 import { createLogger } from '@/shared/services/logger';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -133,16 +134,42 @@ function imageBlockSrc(block: ImageBlock): string | null {
 
 const ImageBlockRenderer: React.FC<{ block: ImageBlock }> = ({ block }) => {
   const { t } = useI18n();
+  const [previewOpen, setPreviewOpen] = React.useState(false);
   const src = imageBlockSrc(block);
   if (!src) return null;
+  const imageAlt = t('workspace.chat.generatedImage.alt');
   return (
-    <div className="max-w-full overflow-hidden rounded-md border border-border/60 bg-muted/20">
-      <img
-        src={src}
-        alt={t('workspace.chat.generatedImage.alt')}
-        className="block max-h-[480px] w-auto max-w-full object-contain"
-      />
-    </div>
+    <>
+      <button
+        type="button"
+        aria-label={t('workspace.chat.generatedImage.previewAction')}
+        className="max-w-full overflow-hidden rounded-md border border-border/60 bg-muted/20 transition hover:border-border focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        onClick={() => setPreviewOpen(true)}
+      >
+        <img
+          src={src}
+          alt={imageAlt}
+          className="block max-h-[480px] w-auto max-w-full object-contain"
+        />
+      </button>
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-h-[92vh] max-w-[92vw] overflow-hidden p-0">
+          <DialogTitle className="sr-only">
+            {t('workspace.chat.generatedImage.previewTitle')}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {t('workspace.chat.generatedImage.previewDescription')}
+          </DialogDescription>
+          <div className="flex max-h-[92vh] max-w-[92vw] items-center justify-center bg-background p-2 sm:p-4">
+            <img
+              src={src}
+              alt={imageAlt}
+              className="max-h-[88vh] max-w-[88vw] object-contain"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

@@ -53,6 +53,9 @@ const chat = {
   },
   generatedImage: {
     alt: '生成圖片',
+    previewAction: '開啟生成圖片預覽',
+    previewDescription: '以較大尺寸預覽生成圖片',
+    previewTitle: '生成圖片預覽',
   },
   input: {
     placeholder: '輸入訊息或按 "/" 顯示命令...',

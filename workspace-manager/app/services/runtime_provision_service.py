@@ -40,6 +40,13 @@ PORT_RANGE_MAX = 60000
 
 TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "jinja_templates" / "runtime"
 
+AGENT_STATE_MOUNTS = {
+    "claude/home": "/home/developer/.claude",
+    "codex/home": "/home/developer/.codex",
+    "codex/sessions": "/home/developer/.codex-sessions",
+    "gemini/home": "/home/developer/.gemini",
+}
+
 
 class RuntimeProvisionService:
     """Service responsible for scheduling workspace runtime provisioning."""
@@ -427,10 +434,7 @@ class RuntimeProvisionService:
             self._resolve_host_mount_path(self.settings.HOST_WORKSPACE_SCRIPTS_DIR)
             / safe_workspace_id
         )
-        host_claude = (
-            self._resolve_host_mount_path(self.settings.HOST_CLAUDE_DATA_DIR)
-            / safe_workspace_id
-        )
+        host_agent_state = self._agent_state_host_root(safe_workspace_id)
         host_marketplace_install = (
             self._resolve_host_mount_path(self.settings.HOST_MARKETPLACE_INSTALL_DIR)
             / safe_workspace_id
@@ -441,13 +445,14 @@ class RuntimeProvisionService:
         manager_scripts = (
             Path(self.settings.MANAGER_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id
         )
-        manager_claude = Path(self.settings.MANAGER_CLAUDE_DATA_DIR) / safe_workspace_id
+        manager_agent_state = self._agent_state_manager_root(safe_workspace_id)
         manager_marketplace_install = Path(self.settings.MANAGER_MARKETPLACE_INSTALL_DIR) / safe_workspace_id
         manager_knowledge_bases = Path(self.settings.MANAGER_KNOWLEDGE_BASES_DIR)
 
         manager_workspace.mkdir(parents=True, exist_ok=True)
         manager_scripts.mkdir(parents=True, exist_ok=True)
-        manager_claude.mkdir(parents=True, exist_ok=True)
+        for provider_path in AGENT_STATE_MOUNTS:
+            (manager_agent_state / provider_path).mkdir(parents=True, exist_ok=True)
         manager_marketplace_install.mkdir(parents=True, exist_ok=True)
         manager_knowledge_bases.mkdir(parents=True, exist_ok=True)
 
@@ -459,8 +464,7 @@ class RuntimeProvisionService:
         volumes = [
             VolumeMount(source=str(host_workspace), target="/workspace"),
             VolumeMount(source=str(host_scripts), target="/scripts"),
-            # Persist ~/.claude (Claude Code session files, settings, etc.), avoid --resume failure after container restart
-            VolumeMount(source=str(host_claude), target="/home/developer/.claude"),
+            *self._agent_state_volume_mounts(host_agent_state),
             VolumeMount(source=str(host_marketplace_install), target="/marketplace-install"),
             # Docker socket
             VolumeMount(source="/var/run/docker.sock", target="/var/run/docker.sock"),
@@ -557,6 +561,21 @@ class RuntimeProvisionService:
                 )
 
         return volumes
+
+    def _agent_state_host_root(self, safe_workspace_id: str) -> Path:
+        return (
+            self._resolve_host_mount_path(self.settings.HOST_AGENT_STATE_DIR)
+            / safe_workspace_id
+        )
+
+    def _agent_state_manager_root(self, safe_workspace_id: str) -> Path:
+        return Path(self.settings.MANAGER_AGENT_STATE_DIR) / safe_workspace_id
+
+    def _agent_state_volume_mounts(self, host_agent_state: Path) -> list[VolumeMount]:
+        return [
+            VolumeMount(source=str(host_agent_state / provider_path), target=target)
+            for provider_path, target in AGENT_STATE_MOUNTS.items()
+        ]
 
     def _resolve_host_mount_path(self, value: str) -> Path:
         path = Path(value).expanduser()

@@ -106,11 +106,11 @@ def kb_runtime_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         "RUNTIME_SCRIPT_ROOT": root / "runtime-scripts",
         "HOST_WORKSPACES_DIR": root / "host-workspaces",
         "HOST_WORKSPACE_SCRIPTS_DIR": root / "host-workspace-scripts",
-        "HOST_CLAUDE_DATA_DIR": root / "host-claude-data",
+        "HOST_AGENT_STATE_DIR": root / "host-agent-state",
         "HOST_KNOWLEDGE_BASES_DIR": root / "knowledge-bases",
         "MANAGER_WORKSPACES_DIR": root / "manager-workspaces",
         "MANAGER_WORKSPACE_SCRIPTS_DIR": root / "manager-workspace-scripts",
-        "MANAGER_CLAUDE_DATA_DIR": root / "manager-claude-data",
+        "MANAGER_AGENT_STATE_DIR": root / "manager-agent-state",
         "MANAGER_KNOWLEDGE_BASES_DIR": root / "knowledge-bases",
     }
     for key, path in paths.items():

@@ -470,7 +470,7 @@ class WorkspaceLifecycleService:
         directories_to_remove = [
             Path(self.settings.MANAGER_WORKSPACES_DIR) / safe_workspace_id,
             Path(self.settings.MANAGER_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id,
-            Path(self.settings.MANAGER_CLAUDE_DATA_DIR) / safe_workspace_id,
+            Path(self.settings.MANAGER_AGENT_STATE_DIR) / safe_workspace_id,
             Path(self.settings.MANAGER_MARKETPLACE_INSTALL_DIR) / safe_workspace_id,
         ]
         

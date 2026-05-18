@@ -117,7 +117,8 @@ class CodexClientManager:
                         session_id[:8],
                         exc,
                     )
-                    await self._clear_persisted_thread_id(session_id)
+                    if not self._has_persisted_session_state(session_id):
+                        await self._clear_persisted_thread_id(session_id)
 
             await self._log_server_version(codex)
             if not await self._ensure_codex_auth(codex):
@@ -213,7 +214,7 @@ class CodexClientManager:
     def _build_codex_env(self, session_id: str) -> dict[str, str]:
         env = {
             "CODEX_HOME": CODEX_HOME,
-            "AILERON_CODEX_SESSION_STATE_DIR": f"{CODEX_SESSION_STATE_ROOT}/{session_id}",
+            "AILERON_CODEX_SESSION_STATE_DIR": str(self._codex_session_state_dir(session_id)),
         }
         for key in self._synced_codex_env_keys():
             value = os.environ.get(key)
@@ -223,6 +224,12 @@ class CodexClientManager:
         if model:
             env["CODEX_MODEL"] = model
         return env
+
+    def _codex_session_state_dir(self, session_id: str) -> Path:
+        return Path(CODEX_SESSION_STATE_ROOT) / session_id
+
+    def _has_persisted_session_state(self, session_id: str) -> bool:
+        return self._codex_session_state_dir(session_id).exists()
 
     def _synced_codex_env_keys(self) -> list[str]:
         return [

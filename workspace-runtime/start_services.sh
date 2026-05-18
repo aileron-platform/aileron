@@ -4,9 +4,11 @@
 
 set -e
 
+export PATH="/workspace-runtime/.venv/bin:$PATH"
+
 # Remove empty environment variables so blank .env entries such as ANTHROPIC_AUTH_TOKEN= do not affect container behavior.
 while IFS= read -r line; do
-    [[ "$line" =~ ^([^=]+)=$ ]] && unset "${BASH_REMATCH[1]}"
+    [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=$ ]] && unset "${BASH_REMATCH[1]}"
 done < <(env)
 
 echo "🚀 Starting Aileron Workspace Runtime..."
@@ -31,6 +33,7 @@ echo ""
 echo "🔧 Configuring language runtimes..."
 if [ -f "/opt/codex/setup_universal.sh" ]; then
     source /opt/codex/setup_universal.sh
+    export PATH="/workspace-runtime/.venv/bin:$PATH"
     echo "✅ Language runtime configuration complete"
 else
     echo "⚠️  setup_universal.sh does not exist; skipping language runtime configuration"
@@ -42,18 +45,14 @@ echo ""
 # ============================================================================
 echo "📦 Syncing Python dependencies..."
 cd /workspace-runtime
-if [ ! -f ".venv/bin/python" ]; then
-    if [ "${NODE_ENV}" = "production" ]; then
-        echo "📦 Using uv sync --no-dev (production mode)"
-        uv sync --no-dev
-    else
-        echo "📦 Using uv sync --dev (development mode)"
-        uv sync --dev
-    fi
-    echo "✅ Python dependencies installed"
+if [ "${NODE_ENV}" = "production" ]; then
+    echo "📦 Using uv sync --no-dev (production mode)"
+    uv sync --no-dev
 else
-    echo "✅ Python dependencies are already installed; skipping sync"
+    echo "📦 Using uv sync --dev (development mode)"
+    uv sync --dev
 fi
+echo "✅ Python dependencies synced"
 echo ""
 
 # ============================================================================
@@ -82,10 +81,14 @@ echo ""
 # 5. Configure directory permissions
 # ============================================================================
 echo "📁 Configuring workspace directory permissions..."
-mkdir -p /home/developer/.codex /home/developer/.codex-sessions
-chown -R developer:developer /workspace /workspace-runtime /workspace-terminal 2>/dev/null || true
+mkdir -p /home/developer/.claude /home/developer/.codex /home/developer/.codex-sessions /home/developer/.gemini
+chown -R developer:developer /workspace /workspace-terminal 2>/dev/null || true
+chown developer:developer /workspace-runtime 2>/dev/null || true
+chown -R developer:developer /workspace-runtime/.venv /workspace-runtime/scripts 2>/dev/null || true
+chown -R developer:developer /home/developer/.claude 2>/dev/null || true
 chown -R developer:developer /home/developer/.codex 2>/dev/null || true
 chown -R developer:developer /home/developer/.codex-sessions 2>/dev/null || true
+chown -R developer:developer /home/developer/.gemini 2>/dev/null || true
 # Bind mounts can remove +x from host scripts, overriding Dockerfile chmod; restore it here.
 chmod +x /workspace-runtime/scripts/*.sh 2>/dev/null || true
 
@@ -186,8 +189,7 @@ if [ -n "${GIT_REPO_URL:-}" ]; then
 
         cd /tmp
         git clone --branch "$GIT_BRANCH" "$GIT_REPO_URL" /tmp/repo-clone
-        cp -r /tmp/repo-clone/* /workspace/ 2>/dev/null || true
-        cp -r /tmp/repo-clone/.git /workspace/ 2>/dev/null || true
+        cp -a /tmp/repo-clone/. /workspace/
         rm -rf /tmp/repo-clone
 
         git config --global --add safe.directory /workspace
@@ -217,7 +219,7 @@ if [ "${OPENSPEC_AUTO_INIT:-1}" = "1" ]; then
             echo "📋 Running OpenSpec initialization..."
             if HOME=/home/developer XDG_CONFIG_HOME=/home/developer/.config su developer -s /bin/bash -c "export PATH=/home/developer/.local/bin:/home/developer/.npm-global/bin:/home/developer/.cargo/bin:\$PATH; cd /workspace && openspec init --tools ${OPENSPEC_INIT_TOOLS}"; then
                 echo "✅ OpenSpec initialization complete"
-                chown -R developer:developer /workspace /home/developer/.config /home/developer/.claude /home/developer/.codex 2>/dev/null || true
+                chown -R developer:developer /workspace /home/developer/.config /home/developer/.claude /home/developer/.codex /home/developer/.codex-sessions /home/developer/.gemini 2>/dev/null || true
             else
                 echo "⚠️  OpenSpec initialization failed; skipping automatic initialization"
             fi

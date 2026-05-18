@@ -53,6 +53,9 @@ const chat = {
   },
   generatedImage: {
     alt: 'Generated image',
+    previewAction: 'Open generated image preview',
+    previewDescription: 'Preview generated image at a larger size',
+    previewTitle: 'Generated image preview',
   },
   input: {
     placeholder: 'Type a message or press "/" for commands...',

@@ -143,12 +143,12 @@ services:
       - HOST_WORKSPACE_RUNTIME_DIR=${HOST_WORKSPACE_RUNTIME_DIR:-./workspace-runtime}
       - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
       - HOST_WORKSPACE_SCRIPTS_DIR=${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}
-      - HOST_CLAUDE_DATA_DIR=${HOST_CLAUDE_DATA_DIR:-./data/claude-data}
+      - HOST_AGENT_STATE_DIR=${HOST_AGENT_STATE_DIR:-./data/agent-state}
       - HOST_MARKETPLACE_INSTALL_DIR=${HOST_MARKETPLACE_INSTALL_DIR:-./data/marketplace-install}
       - HOST_KNOWLEDGE_BASES_DIR=${HOST_KNOWLEDGE_BASES_DIR:-./data/knowledge-bases}
       - MANAGER_WORKSPACES_DIR=/host/workspace-data
       - MANAGER_WORKSPACE_SCRIPTS_DIR=/host/workspace-scripts
-      - MANAGER_CLAUDE_DATA_DIR=/host/claude-data
+      - MANAGER_AGENT_STATE_DIR=/host/agent-state
       - MANAGER_MARKETPLACE_INSTALL_DIR=/host/marketplace-install
       - MANAGER_KNOWLEDGE_BASES_DIR=/host/knowledge-bases
       # JWT Authentication Configuration
@@ -171,10 +171,13 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./workspace-manager:/workspace-manager  # Mount 整個專案目錄
+      - ./helm:/helm:ro  # Helm chart files for container-based manifest tests
+      - ./scripts:/repo-root/scripts:ro  # Host ops scripts for container-based tests
+      - ./docker-compose.yml:/repo-root/docker-compose.yml:ro  # Compose file for container-based tests
       - ./data/init-scripts:/data/init-scripts  # Init scripts storage volume
       - ${HOST_WORKSPACES_DIR:-./data/workspace-data}:/host/workspace-data  # Workspace data
       - ${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}:/host/workspace-scripts  # Workspace scripts
-      - ${HOST_CLAUDE_DATA_DIR:-./data/claude-data}:/host/claude-data  # Claude data
+      - ${HOST_AGENT_STATE_DIR:-./data/agent-state}:/host/agent-state  # Agent runtime state
       - ${HOST_MARKETPLACE_INSTALL_DIR:-./data/marketplace-install}:/host/marketplace-install  # Marketplace install staging
       - ${HOST_KNOWLEDGE_BASES_DIR:-./data/knowledge-bases}:/host/knowledge-bases  # Knowledge bases
     networks:
@@ -225,7 +228,7 @@ services:
       - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT:-.}
       - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
       - HOST_WORKSPACE_SCRIPTS_DIR=${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}
-      - HOST_CLAUDE_DATA_DIR=${HOST_CLAUDE_DATA_DIR:-./data/claude-data}
+      - HOST_AGENT_STATE_DIR=${HOST_AGENT_STATE_DIR:-./data/agent-state}
       - HOST_MARKETPLACE_INSTALL_DIR=${HOST_MARKETPLACE_INSTALL_DIR:-./data/marketplace-install}
       # Git Configuration
       - GIT_USER_NAME=Developer
@@ -259,10 +262,11 @@ services:
       - ./workspace-terminal:/workspace-terminal  # Mount Terminal Service 程式碼
       - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace  # Workspace projects
       - ${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}/default-workspace:/scripts  # Scripts directory
-      - ${HOST_CLAUDE_DATA_DIR:-./data/claude-data}/default_workspace:/home/developer/.claude  # Claude session 持久化
+      - ${HOST_AGENT_STATE_DIR:-./data/agent-state}/default_workspace/claude/home:/home/developer/.claude  # Claude state persistence
       - ${HOST_MARKETPLACE_INSTALL_DIR:-./data/marketplace-install}/default_workspace:/marketplace-install  # Marketplace install staging
-      - ./data/codex-auth/default-workspace:/home/developer/.codex  # Codex CLI login persistence
-      - ./data/codex-sessions:/home/developer/.codex-sessions  # Codex session persistence
+      - ${HOST_AGENT_STATE_DIR:-./data/agent-state}/default_workspace/codex/home:/home/developer/.codex  # Codex state persistence
+      - ${HOST_AGENT_STATE_DIR:-./data/agent-state}/default_workspace/codex/sessions:/home/developer/.codex-sessions  # Codex session persistence
+      - ${HOST_AGENT_STATE_DIR:-./data/agent-state}/default_workspace/gemini/home:/home/developer/.gemini  # Gemini state persistence
     networks:
       - aileron-network-dev
     depends_on:

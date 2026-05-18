@@ -83,9 +83,9 @@ class Settings(BaseSettings):
         default="/var/lib/aileron/workspace-scripts",
         description="Workspace scripts host directory",
     )
-    HOST_CLAUDE_DATA_DIR: str = Field(
-        default="/var/lib/aileron/claude-data",
-        description="Claude data host directory",
+    HOST_AGENT_STATE_DIR: str = Field(
+        default="/var/lib/aileron/agent-state",
+        description="Host directory to mount per-workspace agent state",
     )
     HOST_MARKETPLACE_INSTALL_DIR: str = Field(
         default="/var/lib/aileron/marketplace-install",
@@ -103,9 +103,9 @@ class Settings(BaseSettings):
         default="/host/workspace-scripts",
         description="Workspace scripts directory mounted inside workspace-manager",
     )
-    MANAGER_CLAUDE_DATA_DIR: str = Field(
-        default="/host/claude-data",
-        description="Claude data directory mounted inside workspace-manager",
+    MANAGER_AGENT_STATE_DIR: str = Field(
+        default="/host/agent-state",
+        description="Agent state directory mounted inside workspace-manager",
     )
     MANAGER_MARKETPLACE_INSTALL_DIR: str = Field(
         default="/host/marketplace-install",
@@ -153,6 +153,14 @@ class Settings(BaseSettings):
     )
     RUNTIME_K8S_PVC_NAME: str = Field(
         default="workspace-runtime-pvc", description="Workspace PVC name"
+    )
+    RUNTIME_K8S_AGENT_STATE_PVC_NAME: str = Field(
+        default="workspace-runtime-pvc",
+        description="PVC name used for workspace runtime agent state",
+    )
+    RUNTIME_K8S_AGENT_STATE_SUB_PATH_ROOT: str = Field(
+        default="agent-state",
+        description="PVC subPath root used for workspace runtime agent state",
     )
     RUNTIME_K8S_IMAGE: str = Field(
         default="ailerondocker/workspace-runtime:latest-lite-amd64",

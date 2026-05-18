@@ -39,7 +39,7 @@ function writeStaticCanvas({ contentDir = "./canvases/demo", title = "Demo" } = 
     kind: "static",
     contentDir,
     title,
-    owner: { type: "user" },
+    owner: {},
     routes: [{ path: "/", label: "Home" }],
     defaultPath: "/",
   });
@@ -56,7 +56,7 @@ function writeNextjsCanvas({ contentDir = "./canvases/next-app", title = "Next A
     kind: "nextjs",
     contentDir,
     title,
-    owner: { type: "user" },
+    owner: {},
     routes: [{ path: "/", label: "Home" }],
     defaultPath: "/",
   });
@@ -87,7 +87,7 @@ test("detectCanvas returns active static manifest metadata", () => {
   assert.equal(detection.type, "active");
   assert.equal(detection.kind, "static");
   assert.equal(detection.title, "Static App");
-  assert.equal(detection.owner.type, "user");
+  assert.deepEqual(detection.owner, {});
   assert.equal(detection.manifestStatus, "valid");
   assert.equal(detection.defaultPath, "/");
 });
@@ -101,7 +101,7 @@ test("detectCanvas rejects invalid static content", () => {
     kind: "static",
     contentDir: "./canvases/empty",
     title: "Empty",
-    owner: { type: "user" },
+    owner: {},
     routes: [{ path: "/" }],
     defaultPath: "/",
   });
@@ -136,7 +136,7 @@ test("detectCanvas rejects invalid Next.js content", () => {
     kind: "nextjs",
     contentDir: "./canvases/not-next",
     title: "Invalid Next",
-    owner: { type: "user" },
+    owner: {},
     routes: [{ path: "/" }],
     defaultPath: "/",
   });
@@ -171,7 +171,7 @@ test("selectSyncRendererAction restarts when manifest changes", () => {
     contentDir: "./A",
     resolvedContentDir: path.join(workspaceDir, ".aileron", "A"),
     title: "A",
-    owner: { type: "user" },
+    owner: {},
     routes: [{ path: "/" }],
     defaultPath: "/",
   };
