@@ -149,6 +149,7 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 	assertPVCExists(t, cl, "team-a", "workspace-pvc-ws-123")
 	assertDeploymentUsesPVC(t, cl, "team-a", "workspace-runtime-ws-123", "workspace-pvc-ws-123")
 	assertRuntimeDeploymentSecurityContext(t, cl, "team-a", "workspace-runtime-ws-123")
+	assertRuntimeDeploymentCodexArg0Tmpfs(t, cl, "team-a", "workspace-runtime-ws-123")
 	assertRuntimeDeploymentKnowledgeBaseMounts(t, cl, "team-a", "workspace-runtime-ws-123", "shared-knowledge-bases")
 	assertRuntimeDeploymentEnv(t, cl, "team-a", "workspace-runtime-ws-123", map[string]string{
 		"WORKSPACE_ID":        "ws-123",
@@ -1422,6 +1423,50 @@ func assertRuntimeDeploymentSecurityContext(
 	if securityContext == nil || securityContext.FSGroup == nil || *securityContext.FSGroup != 1000 {
 		t.Fatalf("deployment %s/%s fsGroup = %v, want 1000", namespace, name, securityContext)
 	}
+	if securityContext.SeccompProfile == nil || securityContext.SeccompProfile.Type != corev1.SeccompProfileTypeUnconfined {
+		t.Fatalf("deployment %s/%s seccompProfile = %v, want Unconfined", namespace, name, securityContext.SeccompProfile)
+	}
+}
+
+func assertRuntimeDeploymentCodexArg0Tmpfs(
+	t *testing.T,
+	cl client.Reader,
+	namespace string,
+	name string,
+) {
+	t.Helper()
+	var deployment appsv1.Deployment
+	if err := cl.Get(context.Background(), types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}, &deployment); err != nil {
+		t.Fatalf("get deployment %s/%s: %v", namespace, name, err)
+	}
+
+	var codexArg0Volume *corev1.Volume
+	for i := range deployment.Spec.Template.Spec.Volumes {
+		volume := &deployment.Spec.Template.Spec.Volumes[i]
+		if volume.Name == runtimeCodexArg0VolumeName {
+			codexArg0Volume = volume
+			break
+		}
+	}
+	if codexArg0Volume == nil || codexArg0Volume.EmptyDir == nil {
+		t.Fatalf("deployment %s/%s missing %s emptyDir volume", namespace, name, runtimeCodexArg0VolumeName)
+	}
+	if codexArg0Volume.EmptyDir.Medium != corev1.StorageMediumMemory {
+		t.Fatalf("deployment %s/%s codex arg0 medium = %s, want Memory", namespace, name, codexArg0Volume.EmptyDir.Medium)
+	}
+	if codexArg0Volume.EmptyDir.SizeLimit == nil || codexArg0Volume.EmptyDir.SizeLimit.String() != "16Mi" {
+		t.Fatalf("deployment %s/%s codex arg0 sizeLimit = %v, want 16Mi", namespace, name, codexArg0Volume.EmptyDir.SizeLimit)
+	}
+
+	for _, mount := range deployment.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if mount.Name == runtimeCodexArg0VolumeName && mount.MountPath == runtimeCodexArg0MountPath {
+			return
+		}
+	}
+	t.Fatalf("deployment %s/%s missing %s mount at %s", namespace, name, runtimeCodexArg0VolumeName, runtimeCodexArg0MountPath)
 }
 
 func assertRuntimeDeploymentEnv(

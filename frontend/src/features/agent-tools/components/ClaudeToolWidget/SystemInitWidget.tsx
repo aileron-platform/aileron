@@ -143,7 +143,7 @@ export const SystemInitWidget: React.FC<SystemInitWidgetProps> = ({
                 <div className="flex items-center gap-2 text-xs">
                   <Fingerprint className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
                   <span className="text-gray-600 dark:text-zinc-400">Session:</span>
-                  <code className="font-mono text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 px-1.5 py-0.5 rounded border border-gray-200 dark:border-zinc-700">
+                  <code className="font-mono text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 px-1.5 py-0.5 border border-gray-200 dark:border-zinc-700">
                     {sessionId}
                   </code>
                 </div>
@@ -153,7 +153,7 @@ export const SystemInitWidget: React.FC<SystemInitWidgetProps> = ({
                 <div className="flex items-center gap-2 text-xs">
                   <Cpu className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
                   <span className="text-gray-600 dark:text-zinc-400">Model:</span>
-                  <code className="font-mono text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 px-1.5 py-0.5 rounded border border-gray-200 dark:border-zinc-700">
+                  <code className="font-mono text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 px-1.5 py-0.5 border border-gray-200 dark:border-zinc-700">
                     {model}
                   </code>
                 </div>
@@ -163,7 +163,7 @@ export const SystemInitWidget: React.FC<SystemInitWidgetProps> = ({
                 <div className="flex items-center gap-2 text-xs">
                   <FolderOpen className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
                   <span className="text-gray-600 dark:text-zinc-400">CWD:</span>
-                  <code className="font-mono text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 px-1.5 py-0.5 rounded border border-gray-200 dark:border-zinc-700 break-all">
+                  <code className="font-mono text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 px-1.5 py-0.5 border border-gray-200 dark:border-zinc-700 break-all">
                     {cwd}
                   </code>
                 </div>
@@ -174,7 +174,7 @@ export const SystemInitWidget: React.FC<SystemInitWidgetProps> = ({
                 <div className="flex items-center gap-2 text-xs">
                   <Sparkles className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-400" />
                   <span className="text-gray-600 dark:text-zinc-400">Output Style:</span>
-                  <code className="font-mono text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 px-1.5 py-0.5 rounded border border-gray-200 dark:border-zinc-700">
+                  <code className="font-mono text-xs bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 px-1.5 py-0.5 border border-gray-200 dark:border-zinc-700">
                     {output_style}
                   </code>
                 </div>
@@ -201,7 +201,7 @@ export const SystemInitWidget: React.FC<SystemInitWidgetProps> = ({
                     {slash_commands.map((command, idx) => (
                       <span
                         key={idx}
-                        className="text-xs py-0.5 px-2 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 rounded border border-gray-200 dark:border-zinc-700"
+                        className="text-xs py-0.5 px-2 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 border border-gray-200 dark:border-zinc-700"
                       >
                         /{command}
                       </span>
@@ -231,7 +231,7 @@ export const SystemInitWidget: React.FC<SystemInitWidgetProps> = ({
                     {agents.map((agent, idx) => (
                       <span
                         key={idx}
-                        className="text-xs py-0.5 px-2 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 rounded border border-gray-200 dark:border-zinc-700"
+                        className="text-xs py-0.5 px-2 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 border border-gray-200 dark:border-zinc-700"
                       >
                         {agent}
                       </span>
@@ -267,7 +267,7 @@ export const SystemInitWidget: React.FC<SystemInitWidgetProps> = ({
                     {skills.map((skill, idx) => (
                       <span
                         key={idx}
-                        className="text-xs py-0.5 px-2 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 rounded border border-gray-200 dark:border-zinc-700"
+                        className="text-xs py-0.5 px-2 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 border border-gray-200 dark:border-zinc-700"
                       >
                         {skill}
                       </span>
@@ -309,7 +309,7 @@ export const SystemInitWidget: React.FC<SystemInitWidgetProps> = ({
                     {plugins.map((plugin, idx) => (
                       <span
                         key={idx}
-                        className="text-xs py-0.5 px-2 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 rounded border border-gray-200 dark:border-zinc-700"
+                        className="text-xs py-0.5 px-2 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 border border-gray-200 dark:border-zinc-700"
                       >
                         {plugin}
                       </span>
@@ -340,7 +340,7 @@ export const SystemInitWidget: React.FC<SystemInitWidgetProps> = ({
                     return (
                       <span
                         key={idx}
-                        className="inline-flex items-center gap-1 text-xs py-0.5 px-2 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 rounded border border-gray-200 dark:border-zinc-700"
+                        className="inline-flex items-center gap-1 text-xs py-0.5 px-2 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 border border-gray-200 dark:border-zinc-700"
                       >
                         <Icon className="h-3 w-3" />
                         {tool}
@@ -381,7 +381,7 @@ export const SystemInitWidget: React.FC<SystemInitWidgetProps> = ({
                             return (
                               <span
                                 key={idx}
-                                className="text-xs py-0 px-1.5 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 rounded border border-gray-200 dark:border-zinc-700"
+                                className="text-xs py-0 px-1.5 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 border border-gray-200 dark:border-zinc-700"
                               >
                                 {method}
                               </span>

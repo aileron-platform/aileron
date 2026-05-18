@@ -484,7 +484,7 @@ export const PermissionRequestWidget: React.FC<PermissionRequestWidgetProps> = (
   };
 
   return (
-    <div className={cn('border rounded-lg overflow-hidden', styles.container)}>
+    <div className={cn('border overflow-hidden', styles.container)}>
       <div className="p-3 flex items-start gap-3">
         <div className={cn('p-2 rounded-lg flex-shrink-0', styles.iconBg)}>
           <div className={styles.iconColor}>
@@ -538,7 +538,7 @@ export const PermissionRequestWidget: React.FC<PermissionRequestWidgetProps> = (
           </button>
 
           {showDetails && (
-            <div className="bg-muted rounded border border-border overflow-hidden">
+            <div className="bg-muted border border-border overflow-hidden">
               <table className="w-full text-xs">
                 <tbody>
                   {Object.entries(tool_input).map(([key, value], index) => (

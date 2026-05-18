@@ -70,7 +70,7 @@ export const EditWidget: React.FC<WidgetProps> = ({ input, output, error, status
             <span>−</span>
             <span>{t('workspace.chat.widgets.agentTools.deletedLines', { count: oldLines.length })}</span>
           </div>
-          <div className="bg-red-50 dark:bg-red-950/30 rounded border border-red-200 dark:border-red-800 overflow-hidden">
+          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 overflow-hidden">
             <div className={showExpandButton ? 'max-h-32 overflow-hidden' : ''}>
               {renderDiffTable(oldLines, true, showExpandButton ? PREVIEW_LINES : undefined)}
             </div>
@@ -82,7 +82,7 @@ export const EditWidget: React.FC<WidgetProps> = ({ input, output, error, status
             <span>+</span>
             <span>{t('workspace.chat.widgets.agentTools.addedLines', { count: newLines.length })}</span>
           </div>
-          <div className="bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800 overflow-hidden">
+          <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 overflow-hidden">
             <div className={showExpandButton ? 'max-h-32 overflow-hidden' : ''}>
               {renderDiffTable(newLines, false, showExpandButton ? PREVIEW_LINES : undefined)}
             </div>
@@ -124,7 +124,7 @@ export const EditWidget: React.FC<WidgetProps> = ({ input, output, error, status
                 <span>−</span>
                 <span>{t('workspace.chat.widgets.agentTools.deletedLines', { count: oldLines.length })}</span>
               </div>
-              <div className="bg-red-50 dark:bg-red-950/30 rounded border border-red-200 dark:border-red-800 overflow-hidden">
+              <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 overflow-hidden">
                 {renderDiffTable(oldLines, true)}
               </div>
             </div>
@@ -134,7 +134,7 @@ export const EditWidget: React.FC<WidgetProps> = ({ input, output, error, status
                 <span>+</span>
                 <span>{t('workspace.chat.widgets.agentTools.addedLines', { count: newLines.length })}</span>
               </div>
-              <div className="bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800 overflow-hidden">
+              <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 overflow-hidden">
                 {renderDiffTable(newLines, false)}
               </div>
             </div>

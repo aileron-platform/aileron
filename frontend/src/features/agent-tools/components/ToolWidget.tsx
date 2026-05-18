@@ -87,7 +87,7 @@ export const ToolWidget = React.forwardRef<HTMLDivElement, ToolWidgetProps>(
         <div
           ref={ref}
           className={cn(
-            'rounded-lg border overflow-hidden font-mono text-sm',
+            'border overflow-hidden font-mono text-sm',
             bgColor,
             borderColor,
             textColor,

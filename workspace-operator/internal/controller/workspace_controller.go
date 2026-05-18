@@ -35,6 +35,11 @@ const (
 	pvcComponent     = "workspace-pvc"
 )
 
+const (
+	runtimeCodexArg0VolumeName = "codex-arg0-tmp"
+	runtimeCodexArg0MountPath  = "/home/developer/.codex/tmp/arg0"
+)
+
 var ciliumNetworkPolicyGVK = schema.GroupVersionKind{
 	Group:   "cilium.io",
 	Version: "v2",
@@ -231,7 +236,8 @@ func (r *WorkspaceReconciler) reconcileRuntimeDeployment(
 		deployment.Spec.Replicas = int32Ptr(1)
 		deployment.Spec.Template.ObjectMeta.Labels = labels
 		deployment.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{
-			FSGroup: int64Ptr(1000),
+			FSGroup:        int64Ptr(1000),
+			SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeUnconfined},
 		}
 		deployment.Spec.Template.Spec.Volumes = runtimeVolumes(workspace, r.knowledgeBasesPVCName())
 		container := corev1.Container{
@@ -1273,6 +1279,15 @@ func runtimeVolumes(
 				},
 			},
 		},
+		{
+			Name: runtimeCodexArg0VolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{
+					Medium:    corev1.StorageMediumMemory,
+					SizeLimit: resourceQuantityPtr("16Mi"),
+				},
+			},
+		},
 	}
 	if len(workspace.Spec.KnowledgeBases) > 0 {
 		volumes = append(volumes, corev1.Volume{
@@ -1309,6 +1324,10 @@ func runtimeVolumeMounts(workspace *workspacev1alpha1.Workspace) []corev1.Volume
 			Name:      "workspace-data",
 			MountPath: "/home/developer/.codex-sessions",
 			SubPath:   ".system/codex-sessions",
+		},
+		{
+			Name:      runtimeCodexArg0VolumeName,
+			MountPath: runtimeCodexArg0MountPath,
 		},
 	}
 	for _, attachment := range workspace.Spec.KnowledgeBases {
@@ -1462,6 +1481,11 @@ func int32Ptr(v int32) *int32 {
 
 func int64Ptr(v int64) *int64 {
 	return &v
+}
+
+func resourceQuantityPtr(v string) *resource.Quantity {
+	quantity := resource.MustParse(v)
+	return &quantity
 }
 
 func intstrFromInt32(v int32) intstr.IntOrString {

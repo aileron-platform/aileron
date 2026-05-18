@@ -377,7 +377,7 @@ export const ClaudeToolWidget = React.forwardRef<HTMLDivElement, ClaudeToolWidge
       <div
         ref={ref}
         className={cn(
-          'rounded border overflow-hidden font-mono text-sm',
+          'border overflow-hidden font-mono text-sm',
           'bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-700 text-gray-900 dark:text-zinc-100',
           className
         )}

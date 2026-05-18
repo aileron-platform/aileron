@@ -60,7 +60,7 @@ export const MCPWidget: React.FC<WidgetProps & { toolType: string }> = ({
           <div className="text-xs font-medium text-gray-500 dark:text-zinc-400 mb-2">
             {t('workspace.chat.widgets.agentTools.parameters')}
           </div>
-          <pre className="text-xs font-mono bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 p-2 rounded border border-gray-200 dark:border-zinc-700 overflow-x-auto">
+          <pre className="text-xs font-mono bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 p-2 border border-gray-200 dark:border-zinc-700 overflow-x-auto">
             {JSON.stringify(mcpInfo.params, null, 2)}
           </pre>
         </div>
@@ -72,7 +72,7 @@ export const MCPWidget: React.FC<WidgetProps & { toolType: string }> = ({
               <div className="text-xs font-medium text-gray-500 dark:text-zinc-400 mb-2">
                 {t('workspace.chat.widgets.agentTools.result')}
               </div>
-              <pre className="text-xs font-mono bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 p-2 rounded border border-gray-200 dark:border-zinc-700 whitespace-pre-wrap">
+              <pre className="text-xs font-mono bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 p-2 border border-gray-200 dark:border-zinc-700 whitespace-pre-wrap">
                 {content}
               </pre>
             </div>

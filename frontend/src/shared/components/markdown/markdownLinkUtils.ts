@@ -66,3 +66,56 @@ export const resolveWorkspaceMarkdownPath = (
 
   return `/${resolvedSegments.join('/')}`;
 };
+
+const WORKSPACE_ROOT_PREFIX = '/workspace';
+const LINE_COLUMN_SUFFIX_RE = /:\d+(?::\d+)?$/;
+
+export interface WorkspaceFileHref {
+  filePath: string;
+}
+
+const stripLocationSuffix = (path: string): string => path.replace(LINE_COLUMN_SUFFIX_RE, '');
+
+const stripWorkspaceRoot = (pathname: string): string | null => {
+  if (pathname === WORKSPACE_ROOT_PREFIX || pathname === `${WORKSPACE_ROOT_PREFIX}/`) {
+    return null;
+  }
+  if (!pathname.startsWith(`${WORKSPACE_ROOT_PREFIX}/`)) {
+    return null;
+  }
+  return pathname.slice(WORKSPACE_ROOT_PREFIX.length);
+};
+
+export const parseWorkspaceFileHref = (
+  href: string | null | undefined,
+  currentOrigin: string,
+): WorkspaceFileHref | null => {
+  if (!href) {
+    return null;
+  }
+
+  let pathname: string;
+  if (EXTERNAL_PROTOCOL_RE.test(href)) {
+    let parsed: URL;
+    try {
+      parsed = new URL(href);
+    } catch {
+      return null;
+    }
+    if (parsed.origin !== currentOrigin) {
+      return null;
+    }
+    pathname = parsed.pathname;
+  } else if (href.startsWith('/')) {
+    pathname = stripHashAndQuery(href);
+  } else {
+    return null;
+  }
+
+  const sanitized = stripLocationSuffix(pathname);
+  const filePath = stripWorkspaceRoot(sanitized);
+  if (!filePath) {
+    return null;
+  }
+  return { filePath };
+};

@@ -90,7 +90,7 @@ export const AcpWriteWidget: React.FC<WidgetProps> = ({ input, output, error, st
               <div className="mb-1 text-[11px] font-medium text-gray-500 dark:text-zinc-400">
                 {t('workspace.chat.widgets.agentTools.oldContent')}
               </div>
-              <pre className="max-h-44 overflow-auto rounded border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 text-xs font-mono whitespace-pre-wrap break-all text-gray-800 dark:text-zinc-200">
+              <pre className="max-h-44 overflow-auto border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 text-xs font-mono whitespace-pre-wrap break-all text-gray-800 dark:text-zinc-200">
                 {oldContent}
               </pre>
             </div>
@@ -98,7 +98,7 @@ export const AcpWriteWidget: React.FC<WidgetProps> = ({ input, output, error, st
               <div className="mb-1 text-[11px] font-medium text-gray-500 dark:text-zinc-400">
                 {t('workspace.chat.widgets.agentTools.newContent')}
               </div>
-              <pre className="max-h-44 overflow-auto rounded border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 text-xs font-mono whitespace-pre-wrap break-all text-green-700 dark:text-green-400">
+              <pre className="max-h-44 overflow-auto border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 text-xs font-mono whitespace-pre-wrap break-all text-green-700 dark:text-green-400">
                 {content}
               </pre>
             </div>
@@ -127,7 +127,7 @@ export const AcpWriteWidget: React.FC<WidgetProps> = ({ input, output, error, st
             <div className="mb-1 text-[11px] font-medium text-gray-500 dark:text-zinc-400">
               {t('workspace.chat.widgets.agentTools.executionResult')}
             </div>
-            <pre className="max-h-28 overflow-auto rounded border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 text-xs font-mono whitespace-pre-wrap break-all text-gray-800 dark:text-zinc-200">
+            <pre className="max-h-28 overflow-auto border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 text-xs font-mono whitespace-pre-wrap break-all text-gray-800 dark:text-zinc-200">
               {outputText}
             </pre>
           </div>

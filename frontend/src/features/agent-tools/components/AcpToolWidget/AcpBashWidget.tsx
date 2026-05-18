@@ -86,7 +86,7 @@ export const AcpBashWidget: React.FC<WidgetProps> = ({ input, output, error, sta
               {command || t('workspace.chat.widgets.agentTools.noCommand')}
             </DialogHeading>
           </DialogHeader>
-          <div className="flex-1 overflow-auto rounded border border-zinc-700 bg-zinc-900 p-4">
+          <div className="flex-1 overflow-auto border border-zinc-700 bg-zinc-900 p-4">
             <pre className="text-xs font-mono whitespace-pre-wrap break-all text-zinc-300">
               {content}
             </pre>

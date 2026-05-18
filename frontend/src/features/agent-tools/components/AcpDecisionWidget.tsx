@@ -138,7 +138,7 @@ export const AcpDecisionWidget: React.FC<AcpDecisionWidgetProps> = ({
   const hasDisplayToolInput = Object.keys(displayToolInput).length > 0;
 
   return (
-    <div className={cn('rounded-lg border p-4 space-y-3', headerStyle())}>
+    <div className={cn('border p-4 space-y-3', headerStyle())}>
       <div className="flex items-center gap-3">
         <div className="rounded-full bg-background/70 p-2 text-foreground">
           {headerIcon()}
