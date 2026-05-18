@@ -109,6 +109,7 @@ class DockerOrchestrator(ContainerOrchestrator):
                 log_config=log_config,
                 cap_add=["NET_ADMIN"], # Keep original cap_add
                 security_opt=["seccomp=unconfined"],
+                tmpfs={"/home/developer/.codex/tmp/arg0": "rw,exec,nosuid,size=16m"},
                 command=context.labels.get("command"), # Optional command override
                 working_dir=context.labels.get("working_dir"),
             )

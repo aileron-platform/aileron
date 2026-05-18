@@ -64,6 +64,9 @@ class TestDockerOrchestrator:
         assert call_args["environment"] == {"KEY": "VALUE"}
         assert call_args["network"] == "test-net"
         assert call_args["security_opt"] == ["seccomp=unconfined"]
+        assert call_args["tmpfs"] == {
+            "/home/developer/.codex/tmp/arg0": "rw,exec,nosuid,size=16m"
+        }
 
     def test_create_workspace_runtime_removes_existing(self, docker_orchestrator, sample_workspace, sample_context):
         # Arrange

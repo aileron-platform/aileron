@@ -269,6 +269,8 @@ services:
       - ${HOST_AGENT_STATE_DIR:-./data/agent-state}/default_workspace/codex/home:/home/developer/.codex  # Codex state persistence
       - ${HOST_AGENT_STATE_DIR:-./data/agent-state}/default_workspace/codex/sessions:/home/developer/.codex-sessions  # Codex session persistence
       - ${HOST_AGENT_STATE_DIR:-./data/agent-state}/default_workspace/gemini/home:/home/developer/.gemini  # Gemini state persistence
+    tmpfs:
+      - /home/developer/.codex/tmp/arg0:rw,exec,nosuid,size=16m
     networks:
       - aileron-network-dev
     depends_on:
