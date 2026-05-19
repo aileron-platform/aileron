@@ -34,7 +34,7 @@ const renderToolbar = (overrides: Partial<React.ComponentProps<typeof FileViewer
 };
 
 describe('FileViewerWorkbenchToolbar', () => {
-  it('renders host and format actions in the left group and save on the right', () => {
+  it('renders host and format actions in the left group without duplicating save', () => {
     renderToolbar();
 
     const leftGroup = screen.getByTestId('file-viewer-toolbar-left');
@@ -42,7 +42,7 @@ describe('FileViewerWorkbenchToolbar', () => {
 
     expect(within(leftGroup).getByText('header-action')).toBeInTheDocument();
     expect(within(leftGroup).getByText('format-action')).toBeInTheDocument();
-    expect(within(rightGroup).getByLabelText('shared.fileViewer.toolbar.save')).toBeInTheDocument();
+    expect(within(rightGroup).queryByLabelText('shared.fileViewer.toolbar.save')).not.toBeInTheDocument();
   });
 
   it('keeps the left group valid when format actions are absent', () => {
@@ -73,7 +73,7 @@ describe('FileViewerWorkbenchToolbar', () => {
   });
 
   it('dispatches save actions', () => {
-    const props = renderToolbar();
+    const props = renderToolbar({ formatActions: null });
 
     fireEvent.click(screen.getByLabelText('shared.fileViewer.toolbar.save'));
 

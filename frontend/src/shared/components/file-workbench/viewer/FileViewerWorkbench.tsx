@@ -174,7 +174,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   );
   const activeViewerOwnerKey = useMemo(() => getViewerOwnerKey(activeTab), [activeTab]);
   const toolbarFormatActions = formatActions.ownerKey === activeViewerOwnerKey ? formatActions.node : null;
-  const showToolbarSave = canSave && Boolean(activeTab) && (activeTab?.isModified === true || !toolbarFormatActions);
+  const showToolbarSave = canSave && Boolean(activeTab) && !toolbarFormatActions;
   const showEditorToolbar = Boolean(headerActions || toolbarFormatActions || showToolbarSave);
 
   const contextMenuTab = useMemo(

@@ -62,6 +62,37 @@ describe('ChatInputBar', () => {
     expect(onSend).toHaveBeenCalledTimes(1);
   });
 
+  it('does not submit while IME composition is active', () => {
+    const onSend = vi.fn();
+    render(
+      <ChatInputBar
+        value="ㄓ"
+        isConnected
+        hasActiveRequests={false}
+        attachments={[]}
+        codeReferences={[]}
+        onChange={vi.fn()}
+        onSend={onSend}
+        onAbort={vi.fn()}
+        onOpenFilePicker={vi.fn()}
+        onOpenUploadDialog={vi.fn()}
+        onOpenSlashDialog={vi.fn()}
+        onOpenOpenSpecDialog={vi.fn()}
+        onRemoveAttachment={vi.fn()}
+        onRemoveCodeReference={vi.fn()}
+        t={t}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByPlaceholderText('workspace.chat.input.placeholder'), {
+      key: 'Enter',
+      shiftKey: false,
+      isComposing: true,
+    });
+
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
   it('shows Codex permission controls for Codex sessions', () => {
     render(
       <ChatInputBar

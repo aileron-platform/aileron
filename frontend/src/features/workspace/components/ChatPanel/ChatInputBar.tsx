@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { AtSign, BookOpen, FileText, Paperclip, Send, Slash, X, XCircle } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Textarea } from '@/shared/components/ui/textarea';
@@ -64,6 +64,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onGeminiPermissionModeChange,
   t,
 }) => {
+  const isComposingRef = useRef(false);
   const hasMessage = value.trim().length > 0;
   const hasAttachments = attachments.length > 0;
   const hasReferences = codeReferences.length > 0;
@@ -75,6 +76,11 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      const nativeEvent = event.nativeEvent as KeyboardEvent;
+      if (isComposingRef.current || nativeEvent.isComposing || nativeEvent.keyCode === 229) {
+        return;
+      }
+
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         onSend();
@@ -157,6 +163,12 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             value={value}
             onChange={onChange}
             onKeyDown={handleKeyDown}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false;
+            }}
             placeholder={t('workspace.chat.input.placeholder')}
             disabled={!isConnected || isAborting}
             className="min-h-[96px] border-none bg-transparent px-4 py-3 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"

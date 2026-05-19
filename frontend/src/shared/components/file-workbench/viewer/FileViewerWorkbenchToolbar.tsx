@@ -20,7 +20,7 @@ export const FileViewerWorkbenchToolbar: React.FC<FileViewerWorkbenchToolbarProp
   onSave,
 }) => {
   const { t } = useI18n();
-  const showSave = canSave && Boolean(activeTab) && (activeTab?.isModified === true || !formatActions);
+  const showSave = canSave && Boolean(activeTab) && !formatActions;
 
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-card px-2">

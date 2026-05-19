@@ -104,6 +104,21 @@ class FakeManager:
         return self.state
 
 
+class RecoveringManager:
+    def __init__(self, states) -> None:
+        self.states = list(states)
+        self.get_or_create_calls = 0
+        self.closed_sessions = []
+
+    async def get_or_create(self, *_args, **_kwargs):
+        state = self.states[min(self.get_or_create_calls, len(self.states) - 1)]
+        self.get_or_create_calls += 1
+        return state
+
+    async def close_session(self, session_id) -> None:
+        self.closed_sessions.append(session_id)
+
+
 class FailingAuthManager:
     async def get_or_create(self, *_args, **_kwargs):
         raise CodexAuthenticationRequiredError("not logged in")
@@ -166,6 +181,79 @@ async def test_execute_task_maps_authentication_required_to_i18n_error(monkeypat
 
     assert exc_info.value.error_code == "CODEX_AUTHENTICATION_FAILED"
     assert exc_info.value.message_key == "workspace.chat.errors.codexAuthenticationFailed"
+
+
+@pytest.mark.asyncio
+async def test_execute_task_recovers_from_stale_codex_process_broken_pipe(monkeypatch) -> None:
+    class BrokenThread:
+        async def turn(self, *_args, **_kwargs):
+            raise BrokenPipeError(32, "Broken pipe")
+
+    notifications = [
+        _notification(
+            "item/completed",
+            ItemCompletedNotification(
+                item=AgentMessageThreadItem(
+                    id="msg-1",
+                    text="final response",
+                    type="agentMessage",
+                ),
+                threadId="thread-1",
+                turnId="turn-1",
+            ),
+        ),
+    ]
+    recovered_handle = FakeHandle(notifications)
+    recovered_state = SessionState(
+        codex=SimpleNamespace(thread_start=AsyncMock(return_value=FakeThread(recovered_handle))),
+        dispatcher=CodexSessionApprovalDispatcher(),
+    )
+    stale_state = SessionState(
+        codex=SimpleNamespace(),
+        dispatcher=CodexSessionApprovalDispatcher(),
+        thread=BrokenThread(),
+    )
+    manager = RecoveringManager([stale_state, recovered_state])
+    tool = CodexTool(manager)
+
+    monkeypatch.setattr(module, "global_tool_decision_manager", FakeDecisionManager())
+    monkeypatch.setattr(
+        tool,
+        "_load_session_context",
+        AsyncMock(
+            return_value=(
+                SimpleNamespace(sdk_session_id="thread-1"),
+                None,
+                "/workspace",
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        tool,
+        "_persist_user_message",
+        AsyncMock(return_value={"message_id": "user-1"}),
+    )
+    monkeypatch.setattr(tool, "_save_sdk_session_id", AsyncMock())
+    async def finalize_text(
+        _session_id,
+        _task_id,
+        _event,
+        _text_message_ids,
+        assistant_message_ids,
+        _streaming_callbacks,
+    ):
+        assistant_message_ids.append("assistant-1")
+
+    monkeypatch.setattr(tool, "_finalize_text_message", finalize_text)
+
+    result = await tool.execute_task("session-1", "prompt")
+
+    assert manager.closed_sessions == ["session-1"]
+    assert manager.get_or_create_calls == 2
+    assert result.user_message_id == "user-1"
+    assert result.assistant_message_ids == ["assistant-1"]
+    assert stale_state.dispatcher._current is None
+    assert recovered_state.active_turn is None
 
 
 @pytest.mark.asyncio

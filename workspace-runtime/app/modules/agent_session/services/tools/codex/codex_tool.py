@@ -148,13 +148,14 @@ class CodexTool(ITool):
         global_tool_decision_manager.register_hooks(session_id, handler)
 
         try:
-            if state.thread is None:
-                state.thread = await state.codex.thread_start(
-                    **to_thread_start_kwargs(cfg, cwd)
-                )
-                await self._save_sdk_session_id(session_id, state.thread.id)
-
-            handle = await state.thread.turn([TextInput(prompt)], **to_turn_kwargs(cfg, cwd))
+            state, handle = await self._start_turn_with_broken_pipe_recovery(
+                session_id=session_id,
+                session=session,
+                cfg=cfg,
+                cwd=cwd,
+                prompt=prompt,
+                state=state,
+            )
             state.active_turn = handle
 
             async for notification in handle.stream():
@@ -353,6 +354,77 @@ class CodexTool(ITool):
             except Exception as exc:
                 logger.warning("Codex turn interrupt failed session=%s: %s", session_id[:8], exc)
         return {"status": "stopped"}
+
+    async def _start_turn_with_broken_pipe_recovery(
+        self,
+        *,
+        session_id: str,
+        session: Any,
+        cfg: CodexPermissionConfig | None,
+        cwd: str,
+        prompt: str,
+        state: Any,
+    ) -> tuple[Any, Any]:
+        pipe_exc: BrokenPipeError | None = None
+        try:
+            handle = await self._start_turn(
+                session_id=session_id,
+                cfg=cfg,
+                cwd=cwd,
+                prompt=prompt,
+                state=state,
+            )
+            return state, handle
+        except BrokenPipeError as exc:
+            pipe_exc = exc
+            logger.warning(
+                "Codex app-server pipe broke; rebuilding session=%s",
+                session_id[:8],
+            )
+            state.dispatcher.set_current(None)
+            state.active_turn = None
+            await self._manager.close_session(session_id)
+
+        try:
+            recovered_state = await self._manager.get_or_create(
+                session_id=session_id,
+                cwd=cwd,
+                sdk_session_id=session.sdk_session_id,
+                permission_config=cfg,
+            )
+        except CodexAuthenticationRequiredError as auth_exc:
+            raise CodexAuthenticationError() from auth_exc
+        if recovered_state.active_turn is not None:
+            raise CodexExecutionError() from pipe_exc
+
+        try:
+            handle = await self._start_turn(
+                session_id=session_id,
+                cfg=cfg,
+                cwd=cwd,
+                prompt=prompt,
+                state=recovered_state,
+            )
+        except BrokenPipeError as retry_exc:
+            raise CodexExecutionError() from retry_exc
+        return recovered_state, handle
+
+    async def _start_turn(
+        self,
+        *,
+        session_id: str,
+        cfg: CodexPermissionConfig | None,
+        cwd: str,
+        prompt: str,
+        state: Any,
+    ) -> Any:
+        if state.thread is None:
+            state.thread = await state.codex.thread_start(
+                **to_thread_start_kwargs(cfg, cwd)
+            )
+            await self._save_sdk_session_id(session_id, state.thread.id)
+
+        return await state.thread.turn([TextInput(prompt)], **to_turn_kwargs(cfg, cwd))
 
     @staticmethod
     def _stream_retry_notice(message: str) -> dict[str, Any]:
