@@ -9,7 +9,6 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { AlertTriangle, File, Folder, Trash2, Edit3 } from 'lucide-react';
-import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { useI18n } from '@/shared/hooks/useI18n';
 
 
@@ -354,8 +353,8 @@ export const BatchDeleteDialog: React.FC<BatchDeleteDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[min(90vh,640px)] w-[calc(100vw-2rem)] max-w-[500px] flex-col overflow-hidden sm:max-w-[500px]">
+        <DialogHeader className="shrink-0">
           <DialogHeading icon={AlertTriangle} className="text-destructive" tone="destructive">
             {t('common.fileOperations.batchDelete.title')}
           </DialogHeading>
@@ -363,39 +362,42 @@ export const BatchDeleteDialog: React.FC<BatchDeleteDialogProps> = ({
             {t('common.fileOperations.batchDelete.description')}
           </DialogDescription>
         </DialogHeader>
-        <div className="py-4 space-y-4">
-          <div className="text-sm">
+        <div className="min-h-0 flex-1 space-y-4 overflow-hidden py-4">
+          <div className="shrink-0 text-sm">
             <p className="font-semibold mb-2">
               {t('common.fileOperations.batchDelete.summary', { count: files.length })}
             </p>
-            <div className="flex gap-4 text-muted-foreground">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
               {fileCount > 0 && <span>{t('common.fileOperations.batchDelete.fileCount', { count: fileCount })}</span>}
               {folderCount > 0 && <span>{t('common.fileOperations.batchDelete.folderCount', { count: folderCount })}</span>}
             </div>
           </div>
 
-          <ScrollArea className="h-[200px] rounded-md border p-4">
-            <div className="space-y-2">
+          <div className="h-48 max-h-[40vh] overflow-auto rounded-md border">
+            <div className="min-w-max space-y-2 p-4">
               {files.map((file, index) => (
                 <div key={index} className="flex items-center gap-2 text-sm">
                   {file.type === 'directory' ? (
-                    <Folder className="h-4 w-4 text-blue-500" />
+                    <Folder className="h-4 w-4 shrink-0 text-blue-500" />
                   ) : (
-                    <File className="h-4 w-4 text-gray-500" />
+                    <File className="h-4 w-4 shrink-0 text-gray-500" />
                   )}
-                  <span className="truncate">{file.path}</span>
+                  <span className="whitespace-nowrap" title={file.path}>
+                    {file.path}
+                  </span>
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
 
           {folderCount > 0 && (
-            <p className="text-sm text-muted-foreground">
-              {t('common.fileOperations.batchDelete.folderWarning')}
-            </p>
+            <div className="flex shrink-0 items-start gap-2 text-sm text-muted-foreground">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>{t('common.fileOperations.batchDelete.folderWarning')}</p>
+            </div>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="shrink-0 gap-2 sm:space-x-0">
           <Button variant="outline" onClick={onClose}>
             {t('common.fileOperations.buttons.cancel')}
           </Button>

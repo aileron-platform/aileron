@@ -268,7 +268,7 @@ const common = {
       description: '此操作無法復原',
       file: '確定要刪除檔案 {{name}} 嗎？',
       folder: '確定要刪除資料夾 {{name}} 嗎？',
-      folderWarning: '⚠️ 資料夾內的所有檔案也會被刪除',
+      folderWarning: '資料夾內的所有檔案也會被刪除',
     },
     // 批次刪除
     batchDelete: {
@@ -277,7 +277,7 @@ const common = {
       summary: '即將刪除 {{count}} 個項目：',
       fileCount: '{{count}} 個檔案',
       folderCount: '{{count}} 個資料夾',
-      folderWarning: '⚠️ 資料夾內的所有檔案也會被刪除',
+      folderWarning: '資料夾內的所有檔案也會被刪除',
       deleteAll: '刪除全部',
     },
     // 按鈕

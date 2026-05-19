@@ -269,7 +269,7 @@ const common = {
       description: 'This action cannot be undone',
       file: 'Are you sure you want to delete file {{name}}?',
       folder: 'Are you sure you want to delete folder {{name}}?',
-      folderWarning: '⚠️ All files inside the folder will also be deleted',
+      folderWarning: 'All files inside the folder will also be deleted',
     },
     // Batch delete
     batchDelete: {
@@ -278,7 +278,7 @@ const common = {
       summary: 'About to delete {{count}} items:',
       fileCount: '{{count}} files',
       folderCount: '{{count}} folders',
-      folderWarning: '⚠️ All files inside the folders will also be deleted',
+      folderWarning: 'All files inside the folders will also be deleted',
       deleteAll: 'Delete All',
     },
     // Buttons
