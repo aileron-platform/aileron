@@ -207,6 +207,11 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
     const current = formatActionsRef.current;
 
     if (node === null) {
+      if (current.key === registrationKey && current.ownerKey === ownerKey) {
+        const next = { key: EMPTY_FORMAT_ACTIONS_KEY, ownerKey: '', node: null };
+        formatActionsRef.current = next;
+        setFormatActions(next);
+      }
       return;
     }
 
@@ -520,6 +525,16 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
           readOnly={!canMutate}
           onReload={() => adapter.readFile(activeTab.path)}
           onContentChange={setActiveContent}
+          onSave={adapter.saveFile
+            ? async (content) => {
+              await adapter.saveFile?.(activeTab.path, content);
+              updateTab(activeTab.id, {
+                content,
+                originalContent: content,
+                isModified: false,
+              });
+            }
+            : undefined}
           onOpenPath={onOpenPath}
           toolbarOwnerKey={activeViewerOwnerKey ?? undefined}
         />

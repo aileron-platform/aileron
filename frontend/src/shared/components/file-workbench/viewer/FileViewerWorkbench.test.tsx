@@ -43,20 +43,49 @@ vi.mock('@monaco-editor/react', () => ({
   ),
 }));
 
-vi.mock('./SharedMarkdownViewer', () => ({
-  SharedMarkdownViewer: ({
-    content,
-    onOpenPath,
-  }: {
-    content: string;
-    onOpenPath?: (path: string) => void;
-  }) => (
-    <div>
-      markdown:{content}
-      <button type="button" onClick={() => onOpenPath?.('/docs/linked.md')}>open-linked-markdown</button>
-    </div>
-  ),
-}));
+vi.mock('./SharedMarkdownViewer', async () => {
+  const ReactModule = await vi.importActual<typeof import('react')>('react');
+  const { useFileViewerWorkbench } = await vi.importActual<typeof import('./FileViewerWorkbenchContext')>('./FileViewerWorkbenchContext');
+
+  return {
+    SharedMarkdownViewer: ({
+      content,
+      filePath,
+      fileName,
+      onOpenPath,
+      onSave,
+      toolbarOwnerKey,
+    }: {
+      content: string;
+      filePath?: string;
+      fileName: string;
+      onOpenPath?: (path: string) => void;
+      onSave?: (content: string) => Promise<void> | void;
+      toolbarOwnerKey?: string;
+    }) => {
+      const { registerFormatActions } = useFileViewerWorkbench();
+      const ownerKey = toolbarOwnerKey ?? `markdown:${filePath ?? fileName}`;
+      const registrationKey = `markdown:${filePath ?? fileName}:${content}`;
+
+      ReactModule.useEffect(() => {
+        registerFormatActions(
+          <button type="button" aria-label="mock-markdown-edit">edit</button>,
+          registrationKey,
+          ownerKey,
+        );
+        return () => registerFormatActions(null, registrationKey, ownerKey);
+      }, [ownerKey, registerFormatActions, registrationKey]);
+
+      return (
+        <div>
+          markdown:{content}
+          <button type="button" onClick={() => onOpenPath?.('/docs/linked.md')}>open-linked-markdown</button>
+          <button type="button" onClick={() => void onSave?.('# Persisted')}>mock-markdown-save</button>
+        </div>
+      );
+    },
+  };
+});
 
 vi.mock('./SharedMermaidViewer', () => ({
   SharedMermaidViewer: ({ content }: { content: string }) => <div>mermaid:{content}</div>,
@@ -175,6 +204,40 @@ describe('FileViewerWorkbench', () => {
     expect(onOpenPath).toHaveBeenCalledWith('/docs/linked.md');
   });
 
+  it('clears Markdown format actions while the active Markdown tab is loading', async () => {
+    const adapter: FileViewerWorkbenchAdapter = {
+      readFile: vi.fn(),
+      saveFile: vi.fn().mockResolvedValue(undefined),
+    };
+    const onTabsChange = vi.fn();
+    const onActiveTabChange = vi.fn();
+    const { rerender } = render(
+      <FileViewerWorkbench
+        tabs={[tabs[0]]}
+        activeTabId="/docs/a.md"
+        adapter={adapter}
+        onTabsChange={onTabsChange}
+        onActiveTabChange={onActiveTabChange}
+      />,
+    );
+
+    expect(await screen.findByLabelText('mock-markdown-edit')).toBeInTheDocument();
+
+    rerender(
+      <FileViewerWorkbench
+        tabs={[{ ...tabs[0], isLoading: true }]}
+        activeTabId="/docs/a.md"
+        adapter={adapter}
+        onTabsChange={onTabsChange}
+        onActiveTabChange={onActiveTabChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('mock-markdown-edit')).not.toBeInTheDocument();
+    });
+  });
+
   it('saves all modified tabs through the adapter', async () => {
     const { adapter, onTabsChange } = renderWorkbench({ activeTabId: '/docs/b.ts' });
 
@@ -187,6 +250,21 @@ describe('FileViewerWorkbench', () => {
     expect(onTabsChange).toHaveBeenCalledWith([
       tabs[0],
       { ...tabs[1], originalContent: 'const b = 2;', isModified: false },
+      tabs[2],
+    ]);
+  });
+
+  it('persists Markdown viewer saves through the adapter', async () => {
+    const { adapter, onTabsChange } = renderWorkbench();
+
+    fireEvent.click(screen.getByRole('button', { name: 'mock-markdown-save' }));
+
+    await waitFor(() => {
+      expect(adapter.saveFile).toHaveBeenCalledWith('/docs/a.md', '# Persisted');
+    });
+    expect(onTabsChange).toHaveBeenCalledWith([
+      { ...tabs[0], content: '# Persisted', originalContent: '# Persisted', isModified: false },
+      tabs[1],
       tabs[2],
     ]);
   });

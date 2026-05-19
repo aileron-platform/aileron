@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Copy, Download, Edit3, Eye, FileText, RefreshCw, Save, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
@@ -14,6 +14,7 @@ interface SharedMarkdownViewerProps {
   readOnly?: boolean;
   onReload?: () => Promise<string>;
   onContentChange?: (content: string) => void;
+  onSave?: (content: string) => Promise<void> | void;
   onOpenPath?: (path: string) => void;
   toolbarOwnerKey?: string;
 }
@@ -25,6 +26,7 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
   readOnly = false,
   onReload,
   onContentChange,
+  onSave,
   onOpenPath,
   toolbarOwnerKey,
 }) => {
@@ -35,6 +37,7 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState(content);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const canEdit = !readOnly && Boolean(onContentChange);
 
   useEffect(() => {
@@ -74,10 +77,18 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
     URL.revokeObjectURL(url);
   }, [content, fileName]);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     onContentChange?.(editContent);
+    if (onSave) {
+      setIsSaving(true);
+      try {
+        await onSave(editContent);
+      } finally {
+        setIsSaving(false);
+      }
+    }
     setIsEditMode(false);
-  }, [editContent, onContentChange]);
+  }, [editContent, onContentChange, onSave]);
 
   const handleCancel = useCallback(() => {
     setEditContent(content);
@@ -105,7 +116,8 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleSave}
+            onClick={() => void handleSave()}
+            disabled={isSaving}
             title={t('shared.fileViewer.markdown.save')}
             aria-label={t('shared.fileViewer.markdown.save')}
           >
@@ -115,6 +127,7 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
             variant="ghost"
             size="sm"
             onClick={handleCancel}
+            disabled={isSaving}
             title={t('shared.fileViewer.markdown.cancel')}
             aria-label={t('shared.fileViewer.markdown.cancel')}
           >
@@ -224,10 +237,13 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
     handleZoomOut,
     isEditMode,
     isRefreshing,
+    isSaving,
     onReload,
     t,
     zoom,
   ]);
+  const toolbarActionsRef = useRef(toolbarActions);
+  toolbarActionsRef.current = toolbarActions;
 
   const toolbarRegistrationKey = useMemo(
     () => [
@@ -240,18 +256,19 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
       zoom,
       copied,
       isRefreshing,
+      isSaving,
       canEdit,
       Boolean(onReload),
       readOnly,
     ].join('|'),
-    [canEdit, content, copied, editContent, fileName, filePath, i18nState.currentLanguage, isEditMode, isRefreshing, onReload, readOnly, zoom],
+    [canEdit, content, copied, editContent, fileName, filePath, i18nState.currentLanguage, isEditMode, isRefreshing, isSaving, onReload, readOnly, zoom],
   );
   const resolvedToolbarOwnerKey = toolbarOwnerKey ?? `markdown:${filePath ?? fileName}`;
 
   useEffect(() => {
-    registerFormatActions(toolbarActions, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+    registerFormatActions(toolbarActionsRef.current, toolbarRegistrationKey, resolvedToolbarOwnerKey);
     return () => registerFormatActions(null, toolbarRegistrationKey, resolvedToolbarOwnerKey);
-  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarActions, toolbarRegistrationKey]);
+  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarRegistrationKey]);
 
   return (
     <div id="markdown-preview-container" className="flex h-full flex-col bg-background">

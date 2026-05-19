@@ -99,31 +99,36 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   const useStreamingTypewriter = (content: string, active: boolean, charsPerFrame: number = 3) => {
     const [displayText, setDisplayText] = useState('');
     const displayedLengthRef = useRef(0);
-    const rafRef = useRef<number | null>(null);
+    const timerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
     const contentRef = useRef(content);
+    const displayTextRef = useRef('');
 
     useEffect(() => {
       contentRef.current = content;
 
-      // 停止時直接同步內容，避免殘留動畫
+      const clearTimer = () => {
+        if (timerRef.current) {
+          window.clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+      };
+
       if (!active) {
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        clearTimer();
         displayedLengthRef.current = content.length;
-        setDisplayText(content);
+        if (displayTextRef.current !== content) {
+          displayTextRef.current = content;
+          setDisplayText(content);
+        }
         return;
       }
 
-      // 若內容被重置（變短了，可能是新的 session），重新開始
       if (content.length < displayedLengthRef.current) {
         displayedLengthRef.current = 0;
       }
 
-      // 取消之前的動畫
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-      }
+      clearTimer();
 
-      // 如果已經顯示完畢，不需要動畫
       if (displayedLengthRef.current >= content.length) {
         return;
       }
@@ -138,15 +143,19 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
             displayedLengthRef.current + charsPerFrame,
             targetLength
           );
-          setDisplayText(currentContent.slice(0, displayedLengthRef.current));
-          rafRef.current = requestAnimationFrame(animate);
+          const nextDisplayText = currentContent.slice(0, displayedLengthRef.current);
+          if (displayTextRef.current !== nextDisplayText) {
+            displayTextRef.current = nextDisplayText;
+            setDisplayText(nextDisplayText);
+          }
+          timerRef.current = window.setTimeout(animate, 16);
         }
       };
 
-      rafRef.current = requestAnimationFrame(animate);
+      timerRef.current = window.setTimeout(animate, 16);
 
       return () => {
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        clearTimer();
       };
     }, [content, active, charsPerFrame]);
 

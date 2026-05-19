@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ChatMessageArea } from './ChatMessageArea';
 import type { PermissionRequest } from './agentSessionTypes';
@@ -35,7 +35,13 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 vi.mock('./ChatMessageItem', () => ({
-  ChatMessageItem: () => <div data-testid="chat-message-item" />,
+  ChatMessageItem: ({ message }: { message: { content_blocks?: Array<{ type: string; text?: string; thinking?: string }> } }) => (
+    <div data-testid="chat-message-item">
+      {message.content_blocks?.map((block, index) => (
+        <span key={index}>{block.text ?? block.thinking ?? ''}</span>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock('@/features/agent-tools/components/AcpDecisionWidget', () => ({
@@ -67,6 +73,10 @@ const pendingPermission: PermissionRequest = {
 describe('ChatMessageArea', () => {
   beforeAll(() => {
     Element.prototype.scrollTo = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('forwards the Codex widget-selected session scope to permission decisions', async () => {
@@ -121,5 +131,32 @@ describe('ChatMessageArea', () => {
     expect(
       screen.getByText('Codex connection lost. Reconnecting (2/5).'),
     ).toBeInTheDocument();
+  });
+
+  it('advances streaming text with timers without relying on animation-frame recursion', async () => {
+    vi.useFakeTimers();
+
+    render(
+      <div style={{ height: 600 }}>
+        <ChatMessageArea
+          messages={[]}
+          hasActiveRequests
+          hasActiveConversation
+          onNewSession={vi.fn()}
+          typingIndicator={null}
+          t={t}
+          streamingContent="abcdef"
+          isStreaming
+        />
+      </div>,
+    );
+
+    expect(screen.queryByText('abcdef')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(32);
+    });
+
+    expect(screen.getByText('abcdef')).toBeInTheDocument();
   });
 });

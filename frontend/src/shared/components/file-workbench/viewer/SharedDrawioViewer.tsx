@@ -285,6 +285,8 @@ export const SharedDrawioViewer: React.FC<SharedDrawioViewerProps> = ({
       </Button>
     </>
   ), [canEditInDrawio, content, handleDownload, i18nBase, isLoading, isSaving, switchViewerMode, t, viewerMode]);
+  const toolbarActionsRef = useRef(toolbarActions);
+  toolbarActionsRef.current = toolbarActions;
 
   const toolbarRegistrationKey = useMemo(
     () => [
@@ -305,9 +307,9 @@ export const SharedDrawioViewer: React.FC<SharedDrawioViewerProps> = ({
   const resolvedToolbarOwnerKey = toolbarOwnerKey ?? `drawio:${filePath}`;
 
   useEffect(() => {
-    registerFormatActions(toolbarActions, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+    registerFormatActions(toolbarActionsRef.current, toolbarRegistrationKey, resolvedToolbarOwnerKey);
     return () => registerFormatActions(null, toolbarRegistrationKey, resolvedToolbarOwnerKey);
-  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarActions, toolbarRegistrationKey]);
+  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarRegistrationKey]);
 
   const fallbackDescriptionKey = fallbackReason === 'DISABLED'
     ? `${i18nBase}.serviceUnavailable.disabled`

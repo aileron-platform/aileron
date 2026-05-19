@@ -240,6 +240,8 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
     t,
     zoom,
   ]);
+  const toolbarActionsRef = useRef(toolbarActions);
+  toolbarActionsRef.current = toolbarActions;
 
   const toolbarRegistrationKey = useMemo(
     () => [
@@ -256,9 +258,9 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
   const resolvedToolbarOwnerKey = toolbarOwnerKey ?? `mermaid:${fileName}`;
 
   useEffect(() => {
-    registerFormatActions(toolbarActions, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+    registerFormatActions(toolbarActionsRef.current, toolbarRegistrationKey, resolvedToolbarOwnerKey);
     return () => registerFormatActions(null, toolbarRegistrationKey, resolvedToolbarOwnerKey);
-  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarActions, toolbarRegistrationKey]);
+  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarRegistrationKey]);
 
   return (
     <div ref={containerRef} className={cn('flex h-full flex-col bg-background', className)}>

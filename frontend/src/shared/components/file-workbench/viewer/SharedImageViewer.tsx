@@ -174,6 +174,8 @@ export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
       </Button>
     </>
   ), [handleDownload, handleResetZoom, handleRotate, handleZoomIn, handleZoomOut, i18nBase, imageUrl, t, zoom]);
+  const toolbarActionsRef = useRef(toolbarActions);
+  toolbarActionsRef.current = toolbarActions;
 
   const toolbarRegistrationKey = useMemo(
     () => [
@@ -191,9 +193,9 @@ export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
   const resolvedToolbarOwnerKey = toolbarOwnerKey ?? `image:${filePath}`;
 
   useEffect(() => {
-    registerFormatActions(toolbarActions, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+    registerFormatActions(toolbarActionsRef.current, toolbarRegistrationKey, resolvedToolbarOwnerKey);
     return () => registerFormatActions(null, toolbarRegistrationKey, resolvedToolbarOwnerKey);
-  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarActions, toolbarRegistrationKey]);
+  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarRegistrationKey]);
 
   return (
     <div ref={containerRef} className={cn('flex h-full flex-col bg-muted/10', className)}>

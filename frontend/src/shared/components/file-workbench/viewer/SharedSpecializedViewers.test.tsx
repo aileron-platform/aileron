@@ -136,6 +136,31 @@ describe('shared specialized file viewers', () => {
     expect(onContentChange).toHaveBeenCalledWith('# Updated');
   });
 
+  it('persists Markdown edits when the shared save action is clicked', async () => {
+    const onContentChange = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+
+    renderWithFormatActions(
+      <SharedMarkdownViewer
+        content="# Shared"
+        fileName="readme.md"
+        onContentChange={onContentChange}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.markdown.edit'));
+    fireEvent.change(screen.getByPlaceholderText('shared.fileViewer.markdown.editPlaceholder'), {
+      target: { value: '# Saved' },
+    });
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.markdown.save'));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith('# Saved');
+    });
+    expect(onContentChange).toHaveBeenCalledWith('# Saved');
+  });
+
   it('keeps Markdown toolbar actions available through the shared focus toolbar', () => {
     const registerFormatActions = vi.fn();
 
@@ -154,6 +179,51 @@ describe('shared specialized file viewers', () => {
 
     view.unmount();
     expect(registerFormatActions).toHaveBeenCalledWith(null, expect.any(String), expect.any(String));
+  });
+
+  it('allows empty Markdown files to enter edit mode from the shared toolbar', () => {
+    renderWithFormatActions(
+      <SharedMarkdownViewer
+        content=""
+        fileName="empty.md"
+        onContentChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.markdown.edit'));
+
+    expect(screen.getByPlaceholderText('shared.fileViewer.markdown.editPlaceholder')).toBeInTheDocument();
+  });
+
+  it('does not re-register Markdown toolbar actions on parent rerenders with unstable callbacks', async () => {
+    const registerSpy = vi.fn();
+
+    const Harness: React.FC = () => {
+      const [actions, setActions] = React.useState<React.ReactNode | null>(null);
+      const registerFormatActions = React.useCallback((node: React.ReactNode | null, registrationKey?: string, ownerKey?: string) => {
+        registerSpy(node, registrationKey, ownerKey);
+        setActions(node);
+      }, []);
+
+      return (
+        <FileViewerWorkbenchProvider registerFormatActions={registerFormatActions}>
+          <div data-testid="registered-format-actions">{actions}</div>
+          <SharedMarkdownViewer
+            content="# Shared"
+            fileName="readme.md"
+            onReload={() => Promise.resolve('# Shared')}
+            onContentChange={vi.fn()}
+          />
+        </FileViewerWorkbenchProvider>
+      );
+    };
+
+    render(<Harness />);
+
+    expect(await screen.findByLabelText('shared.fileViewer.markdown.edit')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(registerSpy.mock.calls.filter(([node]) => node !== null)).toHaveLength(1);
+    });
   });
 
   it('opens internal Markdown links through the workspace tab callback', () => {
