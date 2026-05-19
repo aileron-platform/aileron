@@ -6,6 +6,7 @@ from codex_app_server.generated.v2_all import (
     CommandExecutionOutputDeltaNotification,
     CommandExecutionStatus,
     CommandExecutionThreadItem,
+    ErrorNotification,
     FileChangePatchUpdatedNotification,
     FileChangeThreadItem,
     FileUpdateChange,
@@ -18,6 +19,7 @@ from codex_app_server.generated.v2_all import (
     ThreadTokenUsage,
     ThreadTokenUsageUpdatedNotification,
     TokenUsageBreakdown,
+    TurnError,
 )
 
 from app.modules.agent_session.services.tools.codex.notification_mapper import (
@@ -29,6 +31,7 @@ from app.modules.agent_session.services.tools.codex.notification_mapper import (
     FileChangeStart,
     ImageGenerationEnd,
     PlanDelta,
+    StreamError,
     TextDelta,
     TextFinal,
     ThinkingDelta,
@@ -233,3 +236,19 @@ def test_notification_mapper_handles_image_generation_completion() -> None:
         saved_path="/home/developer/.codex/generated_images/image.png",
         revised_prompt="a tiny robot",
     )
+
+
+def test_notification_mapper_preserves_retryable_stream_errors() -> None:
+    mapper = NotificationMapper()
+
+    event = mapper.dispatch(
+        "turn/error",
+        ErrorNotification(
+            error=TurnError(message="Reconnecting... 3/5"),
+            threadId="thread-1",
+            turnId="turn-1",
+            willRetry=True,
+        ),
+    )
+
+    assert event == StreamError(message="Reconnecting... 3/5", will_retry=True)

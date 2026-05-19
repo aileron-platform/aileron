@@ -833,6 +833,7 @@ export const ChatPanel: React.FC = () => {
             isStreaming={agentState.isStreaming}
             thinkingContent={agentState.thinkingContent}
             isThinking={agentState.isThinking}
+            taskStatusNotice={agentState.activeTaskStatusNotice}
             runningTools={agentState.runningTools}
             onPreviewMessage={handleOpenMessagePreview}
             previewLabel={t('workspace.chat.messages.viewResult')}

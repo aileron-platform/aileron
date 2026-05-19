@@ -9,6 +9,7 @@ from codex_app_server.generated.v2_all import (
     CommandExecutionOutputDeltaNotification,
     CommandExecutionStatus,
     CommandExecutionThreadItem,
+    ErrorNotification,
     FileChangePatchUpdatedNotification,
     FileChangeThreadItem,
     FileUpdateChange,
@@ -18,6 +19,7 @@ from codex_app_server.generated.v2_all import (
     PatchApplyStatus,
     PlanDeltaNotification,
     ReasoningSummaryTextDeltaNotification,
+    TurnError,
 )
 
 import app.modules.agent_session.services.tools.codex.codex_tool as module
@@ -52,6 +54,7 @@ class FakeCallbacks:
     def __init__(self) -> None:
         self.messages = []
         self.thinking = []
+        self.status_notices = []
 
     async def on_message_created(self, message):
         self.messages.append(message)
@@ -64,6 +67,9 @@ class FakeCallbacks:
 
     async def on_thinking_end(self, message_id):
         self.thinking.append(("end", message_id))
+
+    async def on_status_notice(self, notice):
+        self.status_notices.append(notice)
 
 
 class FakeHandle:
@@ -137,7 +143,9 @@ async def test_execute_task_rejects_same_session_active_turn(monkeypatch) -> Non
     monkeypatch.setattr(
         tool,
         "_load_session_context",
-        AsyncMock(return_value=(SimpleNamespace(sdk_session_id=None), None, "/workspace")),
+        AsyncMock(
+            return_value=(SimpleNamespace(sdk_session_id=None), None, "/workspace")
+        ),
     )
 
     with pytest.raises(CodexExecutionError):
@@ -415,6 +423,132 @@ async def test_execute_task_streams_thinking_and_retains_plan(monkeypatch) -> No
         ("start", "codex-thinking:think-1"),
         ("chunk", "codex-thinking:think-1", "reasoning"),
         ("end", "codex-thinking:think-1"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_execute_task_keeps_streaming_when_codex_reports_retrying_error(
+    monkeypatch,
+) -> None:
+    notifications = [
+        _notification(
+            "turn/error",
+            ErrorNotification(
+                error=TurnError(message="Reconnecting... 3/5"),
+                threadId="thread-1",
+                turnId="turn-1",
+                willRetry=True,
+            ),
+        ),
+        _notification(
+            "item/completed",
+            ItemCompletedNotification(
+                item=AgentMessageThreadItem(
+                    id="msg-1",
+                    text="final response",
+                    type="agentMessage",
+                ),
+                threadId="thread-1",
+                turnId="turn-1",
+            ),
+        ),
+    ]
+    handle = FakeHandle(notifications)
+    state = SessionState(
+        codex=SimpleNamespace(thread_start=AsyncMock(return_value=FakeThread(handle))),
+        dispatcher=CodexSessionApprovalDispatcher(),
+    )
+    tool = CodexTool(FakeManager(state))
+    finalized_text = AsyncMock(return_value="assistant-text-1")
+
+    monkeypatch.setattr(module, "global_tool_decision_manager", FakeDecisionManager())
+    monkeypatch.setattr(
+        tool,
+        "_load_session_context",
+        AsyncMock(return_value=(SimpleNamespace(sdk_session_id=None), None, "/workspace")),
+    )
+    monkeypatch.setattr(
+        tool,
+        "_persist_user_message",
+        AsyncMock(return_value={"message_id": "user-1"}),
+    )
+    monkeypatch.setattr(tool, "_save_sdk_session_id", AsyncMock())
+    monkeypatch.setattr(tool, "_finalize_text_message", finalized_text)
+
+    result = await tool.execute_task("session-1", "prompt")
+
+    assert result.user_message_id == "user-1"
+    finalized_text.assert_awaited_once()
+    assert state.active_turn is None
+
+
+@pytest.mark.asyncio
+async def test_execute_task_emits_status_notice_for_codex_reconnect(
+    monkeypatch,
+) -> None:
+    notifications = [
+        _notification(
+            "turn/error",
+            ErrorNotification(
+                error=TurnError(message="Reconnecting... 2/5"),
+                threadId="thread-1",
+                turnId="turn-1",
+                willRetry=True,
+            ),
+        ),
+        _notification(
+            "item/completed",
+            ItemCompletedNotification(
+                item=AgentMessageThreadItem(
+                    id="msg-1",
+                    text="final response",
+                    type="agentMessage",
+                ),
+                threadId="thread-1",
+                turnId="turn-1",
+            ),
+        ),
+    ]
+    handle = FakeHandle(notifications)
+    state = SessionState(
+        codex=SimpleNamespace(thread_start=AsyncMock(return_value=FakeThread(handle))),
+        dispatcher=CodexSessionApprovalDispatcher(),
+    )
+    tool = CodexTool(FakeManager(state))
+    callbacks = FakeCallbacks()
+
+    monkeypatch.setattr(module, "global_tool_decision_manager", FakeDecisionManager())
+    monkeypatch.setattr(
+        tool,
+        "_load_session_context",
+        AsyncMock(
+            return_value=(SimpleNamespace(sdk_session_id=None), None, "/workspace")
+        ),
+    )
+    monkeypatch.setattr(
+        tool,
+        "_persist_user_message",
+        AsyncMock(return_value={"message_id": "user-1"}),
+    )
+    monkeypatch.setattr(tool, "_save_sdk_session_id", AsyncMock())
+    monkeypatch.setattr(tool, "_finalize_text_message", AsyncMock())
+
+    await tool.execute_task(
+        "session-1",
+        "prompt",
+        task_id="task-1",
+        streaming_callbacks=callbacks,
+    )
+
+    assert callbacks.status_notices == [
+        {
+            "message_key": "workspace.chat.status.codexReconnecting",
+            "severity": "warning",
+            "params": {
+                "attempt": 2,
+                "max_attempts": 5,
+            },
+        }
     ]
 
 

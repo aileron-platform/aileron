@@ -46,6 +46,7 @@ class EventType(str, Enum):
     TASK_STOP_ACK = "task:stop_ack"         # Acknowledge stop signal received (backend -> frontend)
     TASK_STOPPING = "task:stopping"         # Task stopping
     TASK_STOPPED = "task:stopped"           # Task stopped completed
+    TASK_STATUS_NOTICE = "task:status_notice"  # Non-terminal task status notice
 
     # CRUD events - Messages
     MESSAGES_CREATED = "messages created"
@@ -272,6 +273,21 @@ class WebSocketEvent:
                 "task_id": task_id,
                 "status": "stopped",  # Add status so frontend can update task state
             },
+            session_id=session_id,
+            task_id=task_id,
+        )
+
+    @classmethod
+    def task_status_notice(
+        cls,
+        session_id: str,
+        task_id: str,
+        data: Dict[str, Any],
+    ) -> "WebSocketEvent":
+        """Create task:status_notice event."""
+        return cls(
+            type=EventType.TASK_STATUS_NOTICE,
+            data={"session_id": session_id, "task_id": task_id, **data},
             session_id=session_id,
             task_id=task_id,
         )
@@ -799,6 +815,17 @@ class EventEmitter:
     ) -> int:
         """Emit task:stop_ack event - Acknowledge stop signal received."""
         return await self.emit(WebSocketEvent.task_stop_ack(session_id, task_id))
+
+    async def emit_task_status_notice(
+        self,
+        session_id: str,
+        task_id: str,
+        data: Dict[str, Any],
+    ) -> int:
+        """Emit task:status_notice event."""
+        return await self.emit(
+            WebSocketEvent.task_status_notice(session_id, task_id, data)
+        )
 
     async def emit_tool_start(
         self,

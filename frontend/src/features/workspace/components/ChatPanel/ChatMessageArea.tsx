@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, RefreshCw } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { cn } from '@/shared/utils/cn';
 import { PermissionScope, PermissionRequestWidget } from '@/features/agent-tools/components/ClaudeToolWidget';
 import AcpDecisionWidget from '@/features/agent-tools/components/AcpDecisionWidget';
-import type { AgentMessage, ToolUseBlock, ToolResultBlock, AgenticTool, PermissionRequest, UserInputRequest, ToolDecisionType, ToolDecisionOutcome } from './agentSessionTypes';
+import type { AgentMessage, ToolUseBlock, ToolResultBlock, AgenticTool, PermissionRequest, UserInputRequest, ToolDecisionType, ToolDecisionOutcome, TaskStatusNotice } from './agentSessionTypes';
 import type { RunningToolExecution } from './agentSessionStore';
 import { ChatMessageItem } from './ChatMessageItem';
 import type { AskUserQuestionSubmitHandler } from './AgentContentBlockRenderer';
@@ -46,6 +46,7 @@ export interface ChatMessageAreaProps {
   isStreaming?: boolean;
   thinkingContent?: string;
   isThinking?: boolean;
+  taskStatusNotice?: TaskStatusNotice | null;
   runningTools?: Map<string, RunningToolExecution>;
   // 預覽
   onPreviewMessage?: (message: AgentMessage) => void;
@@ -77,6 +78,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   isStreaming,
   thinkingContent,
   isThinking,
+  taskStatusNotice,
   runningTools = new Map(),
   onPreviewMessage,
   previewLabel,
@@ -492,6 +494,23 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
                   onDeny={handlePendingDeny}
                 />
               )}
+            </div>
+          )}
+
+          {taskStatusNotice && (
+            <div
+              className={cn(
+                'mx-4 my-2 flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                taskStatusNotice.severity === 'warning'
+                  ? 'border-amber-200 bg-amber-50 text-amber-900'
+                  : 'border-border bg-muted/50 text-muted-foreground',
+              )}
+              role="status"
+            >
+              <RefreshCw className="h-4 w-4 shrink-0 animate-spin" />
+              <span>
+                {t(taskStatusNotice.message_key, taskStatusNotice.params)}
+              </span>
             </div>
           )}
 

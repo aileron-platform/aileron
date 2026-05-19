@@ -51,6 +51,10 @@ const chat = {
     title: 'Assistant is responding',
     subtitle: 'Generating a reply...'
   },
+  status: {
+    codexReconnecting: 'Codex connection lost. Reconnecting ({{attempt}}/{{max_attempts}}).',
+    codexRetrying: 'Codex connection lost. Retrying...',
+  },
   generatedImage: {
     alt: 'Generated image',
     previewAction: 'Open generated image preview',

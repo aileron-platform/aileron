@@ -644,6 +644,7 @@ export type WebSocketEventType =
   | 'task:stop_ack'
   | 'task:stopping'
   | 'task:stopped'
+  | 'task:status_notice'
   // Tool Decision events
   | 'tool-decision:request'
   | 'tool-decision:approved'
@@ -661,6 +662,13 @@ export interface WebSocketEvent {
   task_id?: string;
   seq?: number;
   timestamp: string;
+}
+
+export interface TaskStatusNotice {
+  task_id: string;
+  message_key: string;
+  severity: 'info' | 'warning' | 'error';
+  params?: Record<string, string | number>;
 }
 
 export interface StreamingChunkEvent {

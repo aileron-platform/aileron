@@ -16,6 +16,7 @@ import type {
   PermissionRequest,
   UserInputRequest,
   ContextWindowStatus,
+  TaskStatusNotice,
 } from './agentSessionTypes';
 
 export interface RunningToolExecution {
@@ -48,6 +49,7 @@ export interface AgentSessionState {
   currentTaskId: string | null;
   tasks: AgentTask[];
   activeTask: AgentTask | null;
+  activeTaskStatusNotice: TaskStatusNotice | null;
   taskErrors: Map<string, string>; // taskId -> error message
 
   // Message 狀態
@@ -105,6 +107,7 @@ const INITIAL_STATE: AgentSessionState = {
   currentTaskId: null,
   tasks: [],
   activeTask: null,
+  activeTaskStatusNotice: null,
   taskErrors: new Map(),
 
   messages: [],
@@ -161,6 +164,7 @@ export interface AgentSessionStore {
   updateTask: (taskId: string, updates: Partial<AgentTask>) => void;
   removeTask: (taskId: string) => void;
   setActiveTask: (task: AgentTask | null) => void;
+  setActiveTaskStatusNotice: (notice: TaskStatusNotice | null) => void;
   setTaskError: (taskId: string, error: string) => void;
   clearTaskError: (taskId: string) => void;
   getTaskError: (taskId: string) => string | undefined;
@@ -295,10 +299,14 @@ export function createAgentSessionStore(): AgentSessionStore {
       );
       // 同時更新 activeTask 如果它是正在更新的 task
       let activeTask = state.activeTask;
+      let activeTaskStatusNotice = state.activeTaskStatusNotice;
       if (activeTask && activeTask.task_id === taskId) {
         activeTask = { ...activeTask, ...updates };
+        if (updates.status && ['completed', 'failed', 'stopped'].includes(updates.status)) {
+          activeTaskStatusNotice = null;
+        }
       }
-      setState({ tasks, activeTask });
+      setState({ tasks, activeTask, activeTaskStatusNotice });
     },
     removeTask: (taskId: string) => {
       const tasks = state.tasks.filter((t) => t.task_id !== taskId);
@@ -306,10 +314,20 @@ export function createAgentSessionStore(): AgentSessionStore {
       if (activeTask && activeTask.task_id === taskId) {
         activeTask = null;
       }
-      setState({ tasks, activeTask });
+      setState({ tasks, activeTask, activeTaskStatusNotice: null });
     },
     setActiveTask: (task: AgentTask | null) => {
-      setState({ activeTask: task, currentTaskId: task?.task_id ?? null });
+      setState({
+        activeTask: task,
+        activeTaskStatusNotice:
+          task && state.activeTaskStatusNotice?.task_id === task.task_id
+            ? state.activeTaskStatusNotice
+            : null,
+        currentTaskId: task?.task_id ?? null,
+      });
+    },
+    setActiveTaskStatusNotice: (notice: TaskStatusNotice | null) => {
+      setState({ activeTaskStatusNotice: notice });
     },
 
     // Task Errors 操作
@@ -531,6 +549,7 @@ export function createAgentSessionStore(): AgentSessionStore {
         setState({
           tasks: updatedTasks,
           activeTask,
+          activeTaskStatusNotice: activeTask ? state.activeTaskStatusNotice : null,
           isStreaming: false,
           streamingContent: '',
           streamingTaskId: null,

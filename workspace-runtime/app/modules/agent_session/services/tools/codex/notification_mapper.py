@@ -136,6 +136,7 @@ class IgnoredEvent:
 @dataclass(frozen=True, slots=True)
 class StreamError:
     message: str
+    will_retry: bool
 
 
 CodexEvent = Union[
@@ -196,7 +197,10 @@ class NotificationMapper:
             )
 
         if isinstance(payload, ErrorNotification):
-            return StreamError(message=payload.error.message)
+            return StreamError(
+                message=payload.error.message,
+                will_retry=payload.will_retry,
+            )
 
         if isinstance(payload, ItemStartedNotification):
             item = self._unwrap_item(payload.item)

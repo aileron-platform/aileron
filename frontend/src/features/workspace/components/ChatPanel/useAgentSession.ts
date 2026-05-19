@@ -848,6 +848,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         store.setStreamingContent('');
         store.setThinkingContent('');
         store.clearRunningTools();
+        store.setActiveTaskStatusNotice(null);
 
         // 清除 streaming snapshot
         if (sessionId) {
@@ -865,6 +866,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         store.endStreaming();
         store.endThinking();
         store.clearRunningTools();
+        store.setActiveTaskStatusNotice(null);
 
         // 任務已完全停止，可以從追蹤集合中移除（延遲清理，避免競態條件）
         setTimeout(() => {
@@ -873,6 +875,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       },
       onTaskFailed: (sessionId, taskId, errorMsg, code) => {
         if (sessionId !== currentSessionIdRef.current) return;
+        store.setActiveTaskStatusNotice(null);
 
         // 記錄任務失敗事件（這是重要的錯誤事件）
         const currentState = store.getSnapshot();
@@ -909,6 +912,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       // Task completed event - 當任務正常完成時，延遲清除 streaming 狀態以確保完整顯示
       onTaskCompleted: (sessionId, taskId) => {
         if (sessionId !== currentSessionIdRef.current) return;
+        store.setActiveTaskStatusNotice(null);
 
         logger.debug('Task completed, checking streaming state before clearing', {
           sessionId,
@@ -943,6 +947,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       },
       onStreamingError: (sessionId, taskId, error, code) => {
         if (sessionId !== currentSessionIdRef.current) return;
+        store.setActiveTaskStatusNotice(null);
 
         logger.error('Streaming error', { sessionId, taskId, error, code });
 
@@ -954,6 +959,14 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         store.endStreaming();
         store.endThinking();
         store.clearRunningTools();
+      },
+      onTaskStatusNotice: (sessionId, taskId, notice) => {
+        if (sessionId !== currentSessionIdRef.current) return;
+
+        store.setActiveTaskStatusNotice({
+          ...notice,
+          task_id: taskId,
+        });
       },
     });
 
@@ -971,6 +984,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     store.clearRunningTools();
     store.setPendingPermission(null);
     store.setPendingUserInput(null);
+    store.setActiveTaskStatusNotice(null);
     store.clearQueue();
     stoppedTaskIdsRef.current.clear();
     restoredStreamingRef.current = null;
@@ -1095,6 +1109,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     const activeStream = currentSessionStreams.find(m => m.isStreaming);
     if (activeStream) {
       pendingStreamingResumeRef.current = false;
+      if (state.activeTaskStatusNotice) store.setActiveTaskStatusNotice(null);
       if (!state.isStreaming) store.startStreaming(activeStream.task_id || '');
       const base = restoredStreamingPrefixRef.current || '';
       const merged = mergeStreamingText(base, activeStream.content);
@@ -1161,6 +1176,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     state.isStreaming,
     state.isThinking,
     state.activeTask,
+    state.activeTaskStatusNotice,
     state.tasks,
     state.pendingPermission,
     state.isLoadingMessages,

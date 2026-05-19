@@ -51,6 +51,10 @@ const chat = {
     title: '助理正在回覆',
     subtitle: '產生回覆中...'
   },
+  status: {
+    codexReconnecting: 'Codex 連線中斷，正在重新連線 ({{attempt}}/{{max_attempts}})。',
+    codexRetrying: 'Codex 連線中斷，正在重試...',
+  },
   generatedImage: {
     alt: '生成圖片',
     previewAction: '開啟生成圖片預覽',

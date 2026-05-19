@@ -84,6 +84,15 @@ class StreamingCallbacks(Protocol):
         """
         ...
 
+    async def on_status_notice(self, notice: Dict[str, Any]) -> None:
+        """
+        Non-terminal task status notification.
+
+        Args:
+            notice: Status notice payload.
+        """
+        ...
+
     def emit_event(self, event_name: str, data: Dict[str, Any]) -> None:
         """
         Emit WebSocket event.
@@ -93,4 +102,3 @@ class StreamingCallbacks(Protocol):
             data: Event data
         """
         ...
-

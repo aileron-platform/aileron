@@ -222,7 +222,8 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
         onDrop={handleNodeDrop}
         enableDragDrop={enableDragDrop}
         className={cn(
-          'text-foreground hover:bg-muted/40',
+          'text-foreground',
+          !nodeState.isMultiSelected && 'hover:bg-muted/40',
           isDropTarget && !isWritableDropTarget && 'cursor-not-allowed opacity-60',
         )}
       />

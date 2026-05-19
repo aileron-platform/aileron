@@ -59,4 +59,41 @@ describe('AgentSessionEventDispatcher', () => {
       'AUTHENTICATION_FAILED',
     );
   });
+
+  it('dispatches task status notice events', () => {
+    const dispatcher = new AgentSessionEventDispatcher();
+    const onTaskStatusNotice = vi.fn();
+
+    dispatcher.subscribe({ onTaskStatusNotice });
+
+    dispatcher.dispatch({
+      type: 'task:status_notice',
+      session_id: 'session-1',
+      task_id: 'task-1',
+      timestamp: '2026-05-18T00:00:00.000Z',
+      data: {
+        session_id: 'session-1',
+        task_id: 'task-1',
+        message_key: 'workspace.chat.status.codexReconnecting',
+        severity: 'warning',
+        params: {
+          attempt: 2,
+          max_attempts: 5,
+        },
+      },
+    });
+
+    expect(onTaskStatusNotice).toHaveBeenCalledWith(
+      'session-1',
+      'task-1',
+      expect.objectContaining({
+        message_key: 'workspace.chat.status.codexReconnecting',
+        severity: 'warning',
+        params: {
+          attempt: 2,
+          max_attempts: 5,
+        },
+      }),
+    );
+  });
 });

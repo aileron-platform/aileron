@@ -7,6 +7,7 @@ import base64
 import json
 import logging
 import mimetypes
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -65,6 +66,8 @@ from .notification_mapper import (
 from .permission_mapper import to_thread_start_kwargs, to_turn_kwargs
 
 logger = logging.getLogger(__name__)
+
+_RECONNECT_MESSAGE_RE = re.compile(r"Reconnecting\.\.\.\s*(\d+)/(\d+)")
 
 
 class CodexExecutionError(ToolExecutionError):
@@ -292,6 +295,17 @@ class CodexTool(ITool):
                     token_usage = event.token_usage
 
                 elif isinstance(event, StreamError):
+                    if event.will_retry:
+                        logger.warning(
+                            "Codex stream retrying after error: %s", event.message
+                        )
+                        if streaming_callbacks and hasattr(
+                            streaming_callbacks, "on_status_notice"
+                        ):
+                            await streaming_callbacks.on_status_notice(
+                                self._stream_retry_notice(event.message)
+                            )
+                        continue
                     logger.error("Codex stream error: %s", event.message)
                     raise CodexExecutionError()
 
@@ -339,6 +353,24 @@ class CodexTool(ITool):
             except Exception as exc:
                 logger.warning("Codex turn interrupt failed session=%s: %s", session_id[:8], exc)
         return {"status": "stopped"}
+
+    @staticmethod
+    def _stream_retry_notice(message: str) -> dict[str, Any]:
+        reconnect_match = _RECONNECT_MESSAGE_RE.search(message)
+        if reconnect_match:
+            attempt, max_attempts = reconnect_match.groups()
+            return {
+                "message_key": "workspace.chat.status.codexReconnecting",
+                "severity": "warning",
+                "params": {
+                    "attempt": int(attempt),
+                    "max_attempts": int(max_attempts),
+                },
+            }
+        return {
+            "message_key": "workspace.chat.status.codexRetrying",
+            "severity": "warning",
+        }
 
     async def _load_session_context(
         self,

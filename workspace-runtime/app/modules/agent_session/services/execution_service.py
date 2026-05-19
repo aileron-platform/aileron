@@ -132,6 +132,13 @@ class WebSocketStreamingCallbacks:
             )
         )
 
+    async def on_status_notice(self, notice: Dict[str, Any]) -> None:
+        await self.emitter.emit_task_status_notice(
+            session_id=self.session_id,
+            task_id=self.task_id,
+            data=notice,
+        )
+
     def emit_event(self, event_name: str, data: Dict[str, Any]) -> None:
         """Emit WebSocket event.
 

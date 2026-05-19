@@ -19,6 +19,7 @@ const translations: Record<string, string> = {
   'workspace.chat.empty.title': 'Start chatting',
   'workspace.chat.empty.description': 'Ask a question.',
   'workspace.chat.empty.action': 'Create new message',
+  'workspace.chat.status.codexReconnecting': 'Codex connection lost. Reconnecting ({{attempt}}/{{max_attempts}}).',
 };
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -92,5 +93,33 @@ describe('ChatMessageArea', () => {
     await user.click(screen.getByRole('button', { name: 'Approve' }));
 
     expect(onPermissionDecision).toHaveBeenCalledWith('request-1', true, 'session');
+  });
+
+  it('renders task status notices with translated parameters', () => {
+    render(
+      <div style={{ height: 600 }}>
+        <ChatMessageArea
+          messages={[]}
+          hasActiveRequests
+          hasActiveConversation
+          onNewSession={vi.fn()}
+          typingIndicator={null}
+          t={t}
+          taskStatusNotice={{
+            task_id: 'task-1',
+            message_key: 'workspace.chat.status.codexReconnecting',
+            severity: 'warning',
+            params: {
+              attempt: 2,
+              max_attempts: 5,
+            },
+          }}
+        />
+      </div>,
+    );
+
+    expect(
+      screen.getByText('Codex connection lost. Reconnecting (2/5).'),
+    ).toBeInTheDocument();
   });
 });

@@ -16,6 +16,7 @@ import type {
   AgentMessage,
   QueuedMessage,
   StreamingChunkEvent,
+  TaskStatusNotice,
   ThinkingChunkEvent,
   ToolDecisionRequestEvent,
 } from './agentSessionTypes';
@@ -39,6 +40,11 @@ export interface EventHandlers {
   onTaskFailed?: (sessionId: string, taskId: string, error?: string, code?: string) => void;
   onTaskStopAck?: (sessionId: string, taskId: string) => void;
   onTaskStopped?: (sessionId: string, taskId: string) => void;
+  onTaskStatusNotice?: (
+    sessionId: string,
+    taskId: string,
+    notice: TaskStatusNotice,
+  ) => void;
 
   // Message events
   onMessageCreated?: (message: AgentMessage) => void;
@@ -268,6 +274,22 @@ export class AgentSessionEventDispatcher {
         this.emit('onTaskPatched', data as unknown as Partial<AgentTask> & { task_id: string });
         if (session_id && task_id) {
           this.emit('onTaskStopped', session_id, task_id);
+        }
+        break;
+      case 'task:status_notice':
+        logger.debug('Task status notice', { session_id, task_id, data });
+        if (session_id && task_id) {
+          const noticeData = data as {
+            message_key: string;
+            severity?: 'info' | 'warning' | 'error';
+            params?: Record<string, string | number>;
+          };
+          this.emit('onTaskStatusNotice', session_id, task_id, {
+            task_id,
+            message_key: noticeData.message_key,
+            severity: noticeData.severity ?? 'info',
+            params: noticeData.params,
+          });
         }
         break;
 
