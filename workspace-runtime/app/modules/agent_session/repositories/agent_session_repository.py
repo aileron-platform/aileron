@@ -213,7 +213,11 @@ class AgentSessionRepository(BaseRepository[AgentSessionModel]):
         # Serialize and update (dict -> JSON string)
         return await self.update(session_id, {"data": json.dumps(data, ensure_ascii=False)})
 
-    async def set_sdk_session_id(self, session_id: str, sdk_session_id: str) -> None:
+    async def set_sdk_session_id(
+        self,
+        session_id: str,
+        sdk_session_id: str,
+    ) -> None:
         """Persist the SDK session id inside the session data JSON."""
         session = await self.find_by_id(session_id)
         if not session:

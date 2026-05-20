@@ -75,6 +75,37 @@ describe('buildSessionResultPreviewPayload', () => {
     expect(screen.getByText('15')).toBeInTheDocument();
   });
 
+  it('passes compacted context status into usage stats', () => {
+    const task: AgentTask = {
+      task_id: 'task-1',
+      session_id: 'session-1',
+      created_at: '2026-04-14T00:00:00Z',
+      created_by: 'user',
+      status: 'completed',
+      raw_sdk_response: {
+        type: 'codex',
+        context_compactions: [{ item_id: 'compact-1' }],
+      },
+      context_compacted: true,
+      token_usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        total_tokens: 15,
+      },
+    };
+
+    const payload = buildSessionResultPreviewPayload(baseMessage, [task]);
+
+    expect(payload?.rawContent).toMatchObject({
+      context_compacted: true,
+      context_compactions: [{ item_id: 'compact-1' }],
+    });
+
+    render(<UsageStats rawContent={payload?.rawContent} />);
+
+    expect(screen.getByText('workspace.canvas.usage.contextCompacted')).toBeInTheDocument();
+  });
+
   it('keeps markdown preview available when usage metadata is genuinely absent', () => {
     const payload = buildSessionResultPreviewPayload(baseMessage, []);
 

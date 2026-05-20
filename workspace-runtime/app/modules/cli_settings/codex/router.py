@@ -15,7 +15,6 @@ from .models import (
     CodexConfigSectionUpdateRequest,
     CodexConfigSectionUpdateResponse,
     CodexConfigUpdateRequest,
-    CodexConfigUpdateResponse,
     CodexEditableLayer,
     CodexFeatureEnableResponse,
     CodexFileListResponse,
@@ -172,7 +171,7 @@ async def get_codex_config(
 
 @router.put(
     "/config",
-    response_model=CodexConfigUpdateResponse,
+    response_model=CodexConfigDocument,
     responses=build_responses(400, 401, 422, 500),
 )
 async def update_codex_config(
@@ -180,7 +179,7 @@ async def update_codex_config(
     workspace_id: str = Path(..., description="Workspace ID"),
     layer: CodexEditableLayer = Query(..., description="Settings layer"),
     service: CodexSettingsService = Depends(get_codex_settings_service),
-) -> CodexConfigUpdateResponse:
+) -> CodexConfigDocument:
     """Update raw Codex config.toml after TOML validation."""
 
     return service.update_config_document(workspace_id, layer, payload.content)

@@ -39,6 +39,9 @@ PORT_RANGE_MIN = 30000
 PORT_RANGE_MAX = 60000
 
 TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "jinja_templates" / "runtime"
+CODEX_DEFAULT_CONFIG_PATH = (
+    Path(__file__).resolve().parent.parent / "defaults" / "codex" / "config.toml"
+)
 
 AGENT_STATE_MOUNTS = {
     "claude/home": "/home/developer/.claude",
@@ -446,7 +449,9 @@ class RuntimeProvisionService:
             Path(self.settings.MANAGER_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id
         )
         manager_agent_state = self._agent_state_manager_root(safe_workspace_id)
-        manager_marketplace_install = Path(self.settings.MANAGER_MARKETPLACE_INSTALL_DIR) / safe_workspace_id
+        manager_marketplace_install = (
+            Path(self.settings.MANAGER_MARKETPLACE_INSTALL_DIR) / safe_workspace_id
+        )
         manager_knowledge_bases = Path(self.settings.MANAGER_KNOWLEDGE_BASES_DIR)
 
         manager_workspace.mkdir(parents=True, exist_ok=True)
@@ -455,6 +460,7 @@ class RuntimeProvisionService:
             (manager_agent_state / provider_path).mkdir(parents=True, exist_ok=True)
         manager_marketplace_install.mkdir(parents=True, exist_ok=True)
         manager_knowledge_bases.mkdir(parents=True, exist_ok=True)
+        self._write_codex_default_config(manager_agent_state)
 
         if workspace.setup_script:
             custom_setup_file = manager_scripts / "custom-setup.sh"
@@ -488,6 +494,12 @@ class RuntimeProvisionService:
                     VolumeMount(
                         source=str(host_workspace_runtime / "scripts"),
                         target="/workspace-runtime/scripts",
+                    )
+                )
+                volumes.append(
+                    VolumeMount(
+                        source=str(host_workspace_runtime / "agent-defaults"),
+                        target="/workspace-runtime/agent-defaults",
                     )
                 )
                 volumes.append(
@@ -576,6 +588,17 @@ class RuntimeProvisionService:
             VolumeMount(source=str(host_agent_state / provider_path), target=target)
             for provider_path, target in AGENT_STATE_MOUNTS.items()
         ]
+
+    def _write_codex_default_config(self, manager_agent_state: Path) -> None:
+        config_path = manager_agent_state / "codex" / "home" / "config.toml"
+        if config_path.exists():
+            return
+
+        config_path.write_text(
+            CODEX_DEFAULT_CONFIG_PATH.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        config_path.chmod(0o600)
 
     def _resolve_host_mount_path(self, value: str) -> Path:
         path = Path(value).expanduser()

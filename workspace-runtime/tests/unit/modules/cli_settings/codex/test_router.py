@@ -171,6 +171,10 @@ def test_codex_config_raw_update_validates_toml(tmp_path) -> None:
     )
 
     assert response.status_code == 200
+    payload = response.json()
+    assert payload["content"] == 'model = "gpt-5.2"\n'
+    assert payload["layer"] == "user"
+    assert payload["exists"] is True
     assert resolver.resolve("user", "config").read_text(encoding="utf-8") == 'model = "gpt-5.2"\n'
 
     response = client.put(

@@ -40,6 +40,7 @@ export interface ChatMessageItemProps {
   activeTaskId?: string | null;
   /** 當前 session 是否仍有 streaming/thinking 中的回應 */
   hasActiveResponseLifecycle?: boolean;
+  runtimeBaseUrl?: string;
 }
 
 /**
@@ -94,6 +95,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   onAskUserQuestionSubmit,
   activeTaskId,
   hasActiveResponseLifecycle = false,
+  runtimeBaseUrl,
 }) => {
   // 檢查是否有可渲染的內容，避免產生空的 div 元素造成間距不一致
   const shouldRender = useMemo(() => hasRenderableContent(message), [message]);
@@ -147,6 +149,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         onAskUserQuestionSubmit={onAskUserQuestionSubmit}
         activeTaskId={activeTaskId}
         isLastMessage={isLastAssistant}
+        runtimeBaseUrl={runtimeBaseUrl}
       />
       {canPreview && (
         <div className="flex justify-center py-1">

@@ -58,7 +58,6 @@ def to_thread_start_kwargs(cfg: CodexPermissionConfig | None, cwd: str) -> dict:
         "cwd": cwd,
         "sandbox": SANDBOX_MAP[cfg.sandbox_mode],
         "approval_policy": _approval_policy(cfg),
-        "config": {"sandbox_workspace_write": {"network_access": True}},
     }
 
 

@@ -12,6 +12,7 @@ from codex_app_server.generated.v2_all import (
     CommandExecutionOutputDeltaNotification,
     CommandExecutionStatus,
     CommandExecutionThreadItem,
+    ContextCompactionThreadItem,
     ErrorNotification,
     FileChangeOutputDeltaNotification as SdkFileChangeOutputDeltaNotification,
     FileChangePatchUpdatedNotification,
@@ -129,6 +130,11 @@ class TokenUsageEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class ContextCompactionEnd:
+    item_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class IgnoredEvent:
     method: str
 
@@ -155,6 +161,7 @@ CodexEvent = Union[
     ThinkingEnd,
     PlanDelta,
     TokenUsageEvent,
+    ContextCompactionEnd,
     IgnoredEvent,
     StreamError,
 ]
@@ -245,6 +252,8 @@ class NotificationMapper:
                 )
             if isinstance(item, ReasoningThreadItem):
                 return ThinkingEnd(item_id=item.id)
+            if isinstance(item, ContextCompactionThreadItem):
+                return ContextCompactionEnd(item_id=item.id)
 
         if isinstance(payload, UnknownNotification):
             return self._ignored(method)

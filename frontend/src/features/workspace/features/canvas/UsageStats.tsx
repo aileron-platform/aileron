@@ -69,6 +69,8 @@ interface RawContent {
   cost_usd?: number;
   service_tier?: string;
   model?: string;
+  context_compacted?: boolean;
+  context_compactions?: unknown[];
   response?: Record<string, any>;
 }
 
@@ -162,8 +164,10 @@ export const UsageStats: React.FC<UsageStatsProps> = ({ rawContent }) => {
   const hasTokenData = [inputTokens, outputTokens, totalTokens, cacheReads, cacheWrites]
     .some((value) => typeof value === 'number');
   const hasCostData = typeof totalCostUsd === 'number';
+  const contextCompacted = rawContent.context_compacted === true
+    || (Array.isArray(rawContent.context_compactions) && rawContent.context_compactions.length > 0);
 
-  if (!hasTokenData && !hasCostData) {
+  if (!hasTokenData && !hasCostData && !contextCompacted) {
     return null;
   }
 
@@ -191,6 +195,7 @@ export const UsageStats: React.FC<UsageStatsProps> = ({ rawContent }) => {
   const durationLabel = t('workspace.canvas.usage.duration');
   const providerLabel = t('workspace.canvas.usage.provider');
   const modelLabel = t('workspace.canvas.usage.model');
+  const contextCompactedLabel = t('workspace.canvas.usage.contextCompacted');
 
   const formatCount = (value?: number) => {
     if (typeof value !== 'number') return notAvailable;
@@ -266,6 +271,12 @@ export const UsageStats: React.FC<UsageStatsProps> = ({ rawContent }) => {
               <span>
                 {inputLabel} {formatCount(inputTokens)} · {outputLabel} {formatCount(outputTokens)}
               </span>
+              {contextCompacted && (
+                <Badge variant="outline" className="gap-1 text-[11px]">
+                  <Layers className="h-3 w-3" />
+                  {contextCompactedLabel}
+                </Badge>
+              )}
               {metaItems.map((item) => {
                 const Icon = item.icon;
                 return (

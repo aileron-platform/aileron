@@ -308,6 +308,7 @@ export interface AgentTask {
   error_message?: string | null;
   stopped_reason?: string | null;
   raw_sdk_response?: Record<string, unknown> | null;
+  context_compacted?: boolean;
   duration_ms?: number | null;
   token_usage?: {
     input_tokens: number;

@@ -55,6 +55,7 @@ export interface ChatMessageAreaProps {
   onAskUserQuestionSubmit?: AskUserQuestionSubmitHandler;
   // 活躍任務 ID（用於區分即時和歷史訊息的工具顯示）
   activeTaskId?: string | null;
+  runtimeBaseUrl?: string;
 }
 
 export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
@@ -84,6 +85,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   previewLabel,
   onAskUserQuestionSubmit,
   activeTaskId,
+  runtimeBaseUrl,
 }) => {
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
   const isInitialRender = useRef(true);
@@ -456,6 +458,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
                       onAskUserQuestionSubmit={onAskUserQuestionSubmit}
                       activeTaskId={activeTaskId}
                       hasActiveResponseLifecycle={hasActiveResponseLifecycle}
+                      runtimeBaseUrl={runtimeBaseUrl}
                     />
                   ))}
               </div>

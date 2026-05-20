@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..codex_usage import codex_usage_totals
 from ..domain.entities import Task
 from ..domain.enums import AgentSessionStatus, TaskStatus
 from ..domain.value_objects import MessageRange, TokenUsage
@@ -221,6 +222,7 @@ class TaskService:
         task_id: str,
         raw_sdk_response: Optional[Dict[str, Any]] = None,
         computed_context_window: Optional[int] = None,
+        context_window_limit: Optional[int] = None,
     ) -> Task:
         """Complete task.
 
@@ -268,6 +270,7 @@ class TaskService:
             await self.session_repo.update_context_usage(
                 task.session_id,
                 computed_context_window,
+                context_window_limit,
             )
 
         return self.task_repo.to_entity(model)
@@ -605,12 +608,12 @@ class TaskService:
                 ),
             )
         elif sdk_type == "codex":
-            turn = response.get("turn", {})
-            usage = turn.get("usage", {})
+            usage = codex_usage_totals(raw_sdk_response)
             return TokenUsage(
                 input_tokens=usage.get("input_tokens", 0),
                 output_tokens=usage.get("output_tokens", 0),
                 total_tokens=usage.get("total_tokens", 0),
+                cache_read_input_tokens=usage.get("cached_input_tokens"),
             )
         elif sdk_type == "gemini":
             usage = response.get("usageMetadata", {})

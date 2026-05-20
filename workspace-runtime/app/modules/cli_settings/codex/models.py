@@ -158,14 +158,6 @@ class CodexConfigUpdateRequest(BaseModel):
     content: str
 
 
-class CodexConfigUpdateResponse(BaseModel):
-    """Raw Codex config update response."""
-
-    workspaceId: str
-    layer: CodexEditableLayer
-    path: str
-
-
 class CodexConfigSectionResponse(BaseModel):
     """Structured config section response."""
 

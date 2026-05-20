@@ -6,6 +6,7 @@ from codex_app_server.generated.v2_all import (
     CommandExecutionOutputDeltaNotification,
     CommandExecutionStatus,
     CommandExecutionThreadItem,
+    ContextCompactionThreadItem,
     ErrorNotification,
     FileChangePatchUpdatedNotification,
     FileChangeThreadItem,
@@ -26,6 +27,7 @@ from app.modules.agent_session.services.tools.codex.notification_mapper import (
     CommandOutputDelta,
     CommandToolEnd,
     CommandToolStart,
+    ContextCompactionEnd,
     FileChangeEnd,
     FileChangePatchUpdated,
     FileChangeStart,
@@ -95,6 +97,24 @@ def test_notification_mapper_handles_text_and_token_usage() -> None:
     )
     assert isinstance(usage, TokenUsageEvent)
     assert usage.token_usage["total"]["total_tokens"] == 3
+
+
+def test_notification_mapper_handles_context_compaction_completion() -> None:
+    mapper = NotificationMapper()
+
+    event = mapper.dispatch(
+        "item/completed",
+        ItemCompletedNotification(
+            item=ContextCompactionThreadItem(
+                id="compact-1",
+                type="contextCompaction",
+            ),
+            threadId="thread-1",
+            turnId="turn-1",
+        ),
+    )
+
+    assert event == ContextCompactionEnd(item_id="compact-1")
 
 
 def test_notification_mapper_handles_command_events() -> None:

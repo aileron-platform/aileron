@@ -63,6 +63,38 @@ async def test_get_or_create_constructs_config_and_resumes(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_or_create_reuses_idle_session_when_codex_config_changes(
+    monkeypatch,
+) -> None:
+    import app.modules.agent_session.services.tools.codex.client_manager as module
+
+    created = []
+
+    class FakeCodex:
+        def __init__(self, config):
+            self.config = config
+            self._client = SimpleNamespace(_sync=SimpleNamespace(_approval_handler=None))
+            self.thread_resume = AsyncMock(return_value=SimpleNamespace(id="thread-1"))
+            self.close = AsyncMock()
+            created.append(self)
+
+    manager = CodexClientManager()
+    monkeypatch.setattr(module, "AsyncCodex", FakeCodex)
+    monkeypatch.setattr(module, "assert_sdk_structure", lambda: None)
+    monkeypatch.setattr(manager, "_log_server_version", AsyncMock())
+    monkeypatch.setattr(manager, "_ensure_codex_auth", AsyncMock())
+
+    first_state = await manager.get_or_create("session-1", "/workspace", sdk_session_id="sdk-1")
+
+    second_state = await manager.get_or_create("session-1", "/workspace", sdk_session_id="sdk-1")
+
+    assert second_state is first_state
+    assert len(created) == 1
+    created[0].close.assert_not_awaited()
+    created[0].thread_resume.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_get_or_create_clears_stale_sdk_session_id(monkeypatch) -> None:
     import app.modules.agent_session.services.tools.codex.client_manager as module
 

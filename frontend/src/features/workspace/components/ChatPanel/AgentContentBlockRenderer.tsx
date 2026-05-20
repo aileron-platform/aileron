@@ -5,7 +5,7 @@
  * 呈現風格：使用者訊息靠右，助手訊息靠左（無卡片包裝）
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ClaudeToolWidget, { ClaudeToolType, PermissionScope } from '@/features/agent-tools/components/ClaudeToolWidget';
 import AcpToolWidget from '@/features/agent-tools/components/AcpToolWidget';
 import AcpDecisionWidget from '@/features/agent-tools/components/AcpDecisionWidget';
@@ -13,6 +13,7 @@ import { MarkdownRenderer } from '@/features/workspace/components/MarkdownRender
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/shared/components/ui/dialog';
 import { createLogger } from '@/shared/services/logger';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { ApiClient } from '@/shared/api/apiClient';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { AgentMessage, ContentBlock, ImageBlock, ToolUseBlock, ToolResultBlock, ThinkingBlock, SystemBlock, SystemCompleteBlock, SystemStatusBlock, AgenticTool, PermissionRequest, UserInputRequest, ToolDecisionType, ToolDecisionOutcome } from './agentSessionTypes';
 import { resolveAcpToolWidgetTypeWithKind } from './agentSessionTypes';
@@ -56,6 +57,7 @@ interface AgentContentBlockRendererProps {
   activeTaskId?: string | null;
   /** 是否為最新一則 assistant 訊息（控制 question-form 可互動性） */
   isLastMessage?: boolean;
+  runtimeBaseUrl?: string;
 }
 
 /**
@@ -132,10 +134,80 @@ function imageBlockSrc(block: ImageBlock): string | null {
   return null;
 }
 
-const ImageBlockRenderer: React.FC<{ block: ImageBlock }> = ({ block }) => {
+function runtimeImageRequestPath(sourceUrl: string, runtimeBaseUrl?: string): string | null {
+  const normalizeWorkspacePath = (path: string): string => {
+    if (path === '/workspace') return '/';
+    if (path.startsWith('/workspace/')) return path.slice('/workspace'.length);
+    return path;
+  };
+  const normalizeFileContentPath = (requestPath: string): string => {
+    const parsed = new URL(requestPath, 'http://runtime.local');
+    const filePath = parsed.searchParams.get('path');
+    if (filePath) {
+      parsed.searchParams.set('path', normalizeWorkspacePath(filePath));
+    }
+    return `${parsed.pathname}${parsed.search}`;
+  };
+
+  if (!sourceUrl.startsWith('http')) {
+    return normalizeFileContentPath(sourceUrl);
+  }
+  if (!runtimeBaseUrl || !sourceUrl.startsWith(runtimeBaseUrl)) {
+    return null;
+  }
+  const parsed = new URL(sourceUrl);
+  return normalizeFileContentPath(`${parsed.pathname}${parsed.search}`);
+}
+
+const ImageBlockRenderer: React.FC<{ block: ImageBlock; runtimeBaseUrl?: string }> = ({ block, runtimeBaseUrl }) => {
   const { t } = useI18n();
   const [previewOpen, setPreviewOpen] = React.useState(false);
-  const src = imageBlockSrc(block);
+  const directSrc = imageBlockSrc(block);
+  const [blobSrc, setBlobSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    const source = block.source;
+    if (!source || source.type !== 'url' || !source.url || !runtimeBaseUrl) {
+      setBlobSrc(null);
+      return;
+    }
+
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const requestPath = runtimeImageRequestPath(source.url, runtimeBaseUrl);
+    if (!requestPath) {
+      setBlobSrc(null);
+      return;
+    }
+
+    const client = new ApiClient({ baseUrl: runtimeBaseUrl });
+
+    client.getBlob(requestPath)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setBlobSrc(objectUrl);
+      })
+      .catch((error) => {
+        logger.error('Failed to load generated image blob', { error });
+        if (!cancelled) setBlobSrc(null);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [block.source, runtimeBaseUrl]);
+
+  const usesAuthenticatedBlob = Boolean(
+    block.source?.type === 'url' &&
+    block.source.url &&
+    runtimeBaseUrl &&
+    runtimeImageRequestPath(block.source.url, runtimeBaseUrl),
+  );
+  const src = usesAuthenticatedBlob ? blobSrc : directSrc;
   if (!src) return null;
   const imageAlt = t('workspace.chat.generatedImage.alt');
   return (
@@ -523,7 +595,8 @@ const AssistantMessageRenderer: React.FC<{
   onAskUserQuestionSubmit?: AskUserQuestionSubmitHandler;
   activeTaskId?: string | null;
   isLastMessage?: boolean;
-}> = ({ message, allMessages, agentTool, onApprove, onDeny, pendingUserInput, onAskUserQuestionSubmit, activeTaskId, isLastMessage }) => {
+  runtimeBaseUrl?: string;
+}> = ({ message, allMessages, agentTool, onApprove, onDeny, pendingUserInput, onAskUserQuestionSubmit, activeTaskId, isLastMessage, runtimeBaseUrl }) => {
   const { t } = useI18n();
   const [locallySubmittedForms, setLocallySubmittedForms] = useState<Set<string>>(() => new Set());
   const blocks = message.content_blocks || [];
@@ -614,7 +687,7 @@ const AssistantMessageRenderer: React.FC<{
           return <ThinkingBlockRenderer key={idx} block={block} isMessageActive={isMessageActive} />;
         }
         if (block.type === 'image') {
-          return <ImageBlockRenderer key={idx} block={block as ImageBlock} />;
+          return <ImageBlockRenderer key={idx} block={block as ImageBlock} runtimeBaseUrl={runtimeBaseUrl} />;
         }
         if (block.type === 'tool_use') {
           return (
@@ -744,6 +817,7 @@ export const AgentContentBlockRenderer: React.FC<AgentContentBlockRendererProps>
   onAskUserQuestionSubmit,
   activeTaskId,
   isLastMessage,
+  runtimeBaseUrl,
 }) => {
   const isUser = message.role === 'user';
   const isPermissionRequest = message.type === 'permission_request';
@@ -778,6 +852,7 @@ export const AgentContentBlockRenderer: React.FC<AgentContentBlockRendererProps>
       onAskUserQuestionSubmit={onAskUserQuestionSubmit}
       activeTaskId={activeTaskId}
       isLastMessage={isLastMessage}
+      runtimeBaseUrl={runtimeBaseUrl}
     />
   );
 };

@@ -193,6 +193,7 @@ class WebSocketEvent:
         message_count: Optional[int] = None,
         duration_ms: Optional[int] = None,
         token_usage: Optional[Dict[str, Any]] = None,
+        context_compacted: bool = False,
     ) -> "WebSocketEvent":
         """Create task:completed event - Task completed successfully."""
         return cls(
@@ -204,6 +205,7 @@ class WebSocketEvent:
                 "message_count": message_count,
                 "duration_ms": duration_ms,
                 "token_usage": token_usage,
+                "context_compacted": context_compacted,
             },
             session_id=session_id,
             task_id=task_id,
@@ -780,11 +782,17 @@ class EventEmitter:
         message_count: Optional[int] = None,
         duration_ms: Optional[int] = None,
         token_usage: Optional[Dict[str, Any]] = None,
+        context_compacted: bool = False,
     ) -> int:
         """Emit task:completed event."""
         return await self.emit(
             WebSocketEvent.task_completed(
-                session_id, task_id, message_count, duration_ms, token_usage
+                session_id,
+                task_id,
+                message_count,
+                duration_ms,
+                token_usage,
+                context_compacted,
             )
         )
 

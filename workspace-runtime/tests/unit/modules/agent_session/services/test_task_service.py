@@ -156,6 +156,34 @@ class TestTaskService:
         service.task_repo.complete_task.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_complete_task_persists_context_window_limit(self, service):
+        """Test completing a Task updates context usage and model limit."""
+        running_model = self._create_mock_task_model(status="running")
+        running_entity = self._create_mock_task_entity(status=TaskStatus.RUNNING)
+
+        completed_model = self._create_mock_task_model(status="completed", completed_at=datetime.utcnow())
+        completed_entity = self._create_mock_task_entity(status=TaskStatus.COMPLETED, completed_at=datetime.utcnow())
+
+        service.task_repo.find_by_id.return_value = running_model
+        service.task_repo.complete_task.return_value = completed_model
+        service.task_repo.to_entity = MagicMock(side_effect=[running_entity, completed_entity])
+        service.session_repo.update_status.return_value = None
+
+        result = await service.complete_task(
+            "task-123",
+            raw_sdk_response={"type": "codex"},
+            computed_context_window=225807,
+            context_window_limit=258400,
+        )
+
+        assert result is not None
+        service.session_repo.update_context_usage.assert_called_once_with(
+            "session-456",
+            225807,
+            258400,
+        )
+
+    @pytest.mark.asyncio
     async def test_fail_task(self, service):
         """Test failing a Task."""
         running_model = self._create_mock_task_model(status="running")
@@ -349,22 +377,49 @@ class TestTokenUsageExtraction:
         """Test extracting Codex format token usage."""
         raw_response = {
             "type": "codex",
-            "response": {
-                "turn": {
-                    "usage": {
-                        "input_tokens": 800,
-                        "output_tokens": 400,
-                        "total_tokens": 1200,
-                    }
-                }
-            }
+            "token_usage": {
+                "last": {
+                    "input_tokens": 800,
+                    "output_tokens": 400,
+                    "total_tokens": 1200,
+                    "cached_input_tokens": 125,
+                },
+                "total": {
+                    "input_tokens": 1800,
+                    "output_tokens": 900,
+                    "total_tokens": 2700,
+                    "cached_input_tokens": 300,
+                },
+            },
         }
 
         usage = TaskService.extract_token_usage(raw_response)
 
         assert usage is not None
-        assert usage.input_tokens == 800
-        assert usage.output_tokens == 400
+        assert usage.input_tokens == 1800
+        assert usage.output_tokens == 900
+        assert usage.total_tokens == 2700
+        assert usage.cache_read_input_tokens == 300
+
+    def test_extract_codex_usage_supports_flat_payload(self):
+        """Test extracting Codex usage when the raw payload is flat."""
+        raw_response = {
+            "type": "codex",
+            "token_usage": {
+                "input_tokens": 8,
+                "output_tokens": 4,
+                "total_tokens": 12,
+                "cached_input_tokens": 3,
+            },
+        }
+
+        usage = TaskService.extract_token_usage(raw_response)
+
+        assert usage is not None
+        assert usage.input_tokens == 8
+        assert usage.output_tokens == 4
+        assert usage.total_tokens == 12
+        assert usage.cache_read_input_tokens == 3
 
     def test_extract_gemini_usage(self):
         """Test extracting Gemini format token usage."""

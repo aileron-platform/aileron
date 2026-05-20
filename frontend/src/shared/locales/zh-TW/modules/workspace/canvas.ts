@@ -169,6 +169,7 @@ const canvas = {
     duration: '耗時',
     provider: '來源',
     model: '模型',
+    contextCompacted: '已壓縮上下文',
     models: '模型貢獻',
     modelCount: '{{count}} 個模型',
     modelCost: '成本',

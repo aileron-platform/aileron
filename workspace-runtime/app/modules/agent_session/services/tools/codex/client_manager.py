@@ -104,7 +104,10 @@ class CodexClientManager:
             if codex._client._sync._approval_handler is not dispatcher:
                 raise RuntimeError("Codex approval handler patch did not stick")
 
-            state = SessionState(codex=codex, dispatcher=dispatcher)
+            state = SessionState(
+                codex=codex,
+                dispatcher=dispatcher,
+            )
             if sdk_session_id:
                 try:
                     state.thread = await codex.thread_resume(

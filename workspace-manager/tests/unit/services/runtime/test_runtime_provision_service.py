@@ -265,6 +265,39 @@ class TestRuntimeProvisionService:
         assert (
             tmp_path / "mounted-agent-state" / "workspace_123" / "codex" / "sessions"
         ).is_dir()
+        codex_config_path = (
+            tmp_path
+            / "mounted-agent-state"
+            / "workspace_123"
+            / "codex"
+            / "home"
+            / "config.toml"
+        )
+        assert codex_config_path.read_text(encoding="utf-8") == (
+            "# Aileron-managed Codex defaults.\n"
+            "# Runtime-specific sandbox and approval policy are passed by workspace-runtime.\n"
+            "\n"
+            'model_reasoning_effort = "medium"\n'
+            "model_auto_compact_token_limit = 128000\n"
+            "tool_output_token_limit = 12000\n"
+            "\n"
+            "[features]\n"
+            "shell_snapshot = true\n"
+            "multi_agent = true\n"
+        )
+        assert codex_config_path.stat().st_mode & 0o777 == 0o600
+
+    def test_write_codex_default_config_preserves_existing_user_config(
+        self, provision_service, tmp_path: Path
+    ):
+        agent_state = tmp_path / "agent-state"
+        config_path = agent_state / "codex" / "home" / "config.toml"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text('model = "user-selected"\n', encoding="utf-8")
+
+        provision_service._write_codex_default_config(agent_state)
+
+        assert config_path.read_text(encoding="utf-8") == 'model = "user-selected"\n'
 
     def test_build_volumes_resolves_relative_host_mount_paths(
         self,
@@ -351,6 +384,9 @@ class TestRuntimeProvisionService:
         )
         assert sources["/workspace-runtime/scripts"] == str(
             tmp_path / "workspace-runtime" / "scripts"
+        )
+        assert sources["/workspace-runtime/agent-defaults"] == str(
+            tmp_path / "workspace-runtime" / "agent-defaults"
         )
         assert sources["/workspace-runtime/tests"] == str(
             tmp_path / "workspace-runtime" / "tests"

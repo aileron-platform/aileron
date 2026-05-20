@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentContentBlockRenderer } from './AgentContentBlockRenderer';
 import type { AgentMessage, PermissionRequest } from './agentSessionTypes';
@@ -73,6 +73,20 @@ const pendingPermission: PermissionRequest = {
 };
 
 describe('AgentContentBlockRenderer', () => {
+  beforeEach(() => {
+    window.sessionStorage.setItem('oidc_tokens', JSON.stringify({ access_token: 'token-1' }));
+    URL.createObjectURL = vi.fn();
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:generated-image');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    window.sessionStorage.clear();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it('renders assistant image blocks from base64 sources', () => {
     const message = {
       message_id: 'msg-image',
@@ -105,6 +119,55 @@ describe('AgentContentBlockRenderer', () => {
 
     const image = screen.getByRole('img', { name: 'Generated image' });
     expect(image).toHaveAttribute('src', 'data:image/png;base64,aW1hZ2U=');
+  });
+
+  it('loads assistant image URL blocks through authenticated runtime blob requests', async () => {
+    const blob = new Blob(['image'], { type: 'image/png' });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(blob, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const message = {
+      message_id: 'msg-image-url',
+      session_id: 'session-1',
+      task_id: 'task-1',
+      created_at: '2026-05-17T00:00:00Z',
+      index: 0,
+      role: 'assistant',
+      type: 'assistant',
+      content_blocks: [
+        {
+          type: 'image',
+          source: {
+            type: 'url',
+            media_type: 'image/png',
+            url: '/api/v1/files/content?path=%2Fworkspace%2F.aileron%2Fgenerated-images%2Fcodex%2Fimage.png&raw=true',
+            path: '/workspace/.aileron/generated-images/codex/image.png',
+          },
+        },
+      ],
+      queued: false,
+    } as AgentMessage;
+
+    render(
+      <AgentContentBlockRenderer
+        message={message}
+        allMessages={[message]}
+        agentTool="codex"
+        runtimeBaseUrl="http://runtime.test"
+      />,
+    );
+
+    const image = await screen.findByRole('img', { name: 'Generated image' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://runtime.test/api/v1/files/content?path=%2F.aileron%2Fgenerated-images%2Fcodex%2Fimage.png&raw=true',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer token-1',
+        }),
+      }),
+    );
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    expect(image).toHaveAttribute('src', 'blob:generated-image');
   });
 
   it('opens generated image blocks in a dialog preview', async () => {

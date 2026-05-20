@@ -12,6 +12,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_scope
+from app.modules.agent_session.codex_usage import codex_context_usage
 from app.modules.agent_session.domain.enums import MessageRole, MessageType, PermissionMode, TaskStatus
 from app.modules.agent_session.repositories.message_repository import MessageRepository
 from app.modules.agent_session.repositories.agent_session_repository import AgentSessionRepository
@@ -700,16 +701,15 @@ class ExecutionService:
                 permission_mode=effective_pm,
             )
 
-            # DEBUG: Track execute_prompt result
-            logger.info(
-                "[DEBUG] execute_prompt result: task_id=%s, was_stopped=%s, assistant_count=%d, raw_sdk_response=%s",
+            logger.debug(
+                "Task execution returned task_id=%s was_stopped=%s assistant_count=%d raw_sdk_response=%s",
                 task_id[:8], result.was_stopped, len(result.assistant_message_ids),
                 "has_data" if result.raw_sdk_response else "None"
             )
 
             # Update task status (short-lived session)
             if result.was_stopped:
-                logger.info("[DEBUG] Task was stopped, calling stop_task: task_id=%s", task_id[:8])
+                logger.debug("Stopping task after tool result task_id=%s", task_id[:8])
                 async with async_session_scope() as db:
                     task_service = TaskService(db)
                     await task_service.stop_task(task_id)
@@ -727,7 +727,6 @@ class ExecutionService:
                         has_error=False,
                     )
             else:
-                logger.info("[DEBUG] Task completed normally, calling complete_task: task_id=%s", task_id[:8])
                 # Compute context window from SDK response
                 computed_context_window = self._compute_context_window(result.raw_sdk_response)
                 async with async_session_scope() as db:
@@ -736,18 +735,25 @@ class ExecutionService:
                         task_id,
                         raw_sdk_response=result.raw_sdk_response,
                         computed_context_window=computed_context_window,
+                        context_window_limit=result.context_window_limit,
                     )
-                logger.info("[DEBUG] complete_task finished successfully: task_id=%s", task_id[:8])
+                logger.debug("Task completion persisted task_id=%s", task_id[:8])
                 completed_token_usage = None
                 if completed_task and completed_task.raw_sdk_response:
                     token_usage = TaskService.extract_token_usage(completed_task.raw_sdk_response)
                     completed_token_usage = token_usage.to_dict() if token_usage else None
+                context_compacted = bool(
+                    completed_task
+                    and completed_task.raw_sdk_response
+                    and completed_task.raw_sdk_response.get("context_compactions")
+                )
                 # Emit task:completed event
                 await self.emitter.emit_task_completed(
                     session_id=session_id,
                     task_id=task_id,
                     duration_ms=completed_task.duration_ms if completed_task else None,
                     token_usage=completed_token_usage,
+                    context_compacted=context_compacted,
                 )
                 # Publish Redis completion event (if automation_execution_id exists)
                 if automation_execution_id:
@@ -1061,15 +1067,7 @@ class ExecutionService:
                 return input_tokens + output_tokens
 
             elif sdk_type == "codex":
-                token_usage = raw_sdk_response.get("token_usage") or {}
-                total = token_usage.get("total") or {}
-                if "total_tokens" in total:
-                    return total.get("total_tokens", 0)
-                turn = response.get("turn", {})
-                usage = turn.get("usage", {})
-                if "total_tokens" in usage:
-                    return usage["total_tokens"]
-                return usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
+                return codex_context_usage(raw_sdk_response)
 
             elif sdk_type == "gemini":
                 usage = response.get("usageMetadata", {})

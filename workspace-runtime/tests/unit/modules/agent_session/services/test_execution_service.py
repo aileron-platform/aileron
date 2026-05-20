@@ -136,6 +136,15 @@ def test_execution_service_lock_management_and_context_window() -> None:
         {"type": "codex", "response": {"turn": {"usage": {"total_tokens": 11}}}}
     ) == 11
     assert ExecutionService._compute_context_window(
+        {
+            "type": "codex",
+            "token_usage": {
+                "last": {"total_tokens": 71_519},
+                "total": {"total_tokens": 1_052_466},
+            },
+        }
+    ) == 71_519
+    assert ExecutionService._compute_context_window(
         {"type": "gemini", "response": {"usageMetadata": {"totalTokenCount": 9}}}
     ) == 9
     assert ExecutionService._compute_context_window(
@@ -415,12 +424,33 @@ async def test_execute_in_background_success_stopped_and_failure(monkeypatch: py
         return_value=SimpleNamespace(
             was_stopped=False,
             assistant_message_ids=["a1"],
-            raw_sdk_response={"type": "claude", "response": {"usage": {"input_tokens": 2, "output_tokens": 3}}},
+            raw_sdk_response={
+                "type": "codex",
+                "token_usage": {
+                    "total": {
+                        "input_tokens": 2,
+                        "output_tokens": 3,
+                        "total_tokens": 5,
+                    },
+                },
+                "context_compactions": [{"item_id": "compact-1"}],
+            },
+            context_window_limit=258400,
         )
     )
     task_service.complete_task.return_value = SimpleNamespace(
         duration_ms=1234,
-        raw_sdk_response={"type": "claude", "response": {"usage": {"input_tokens": 2, "output_tokens": 3}}},
+        raw_sdk_response={
+            "type": "codex",
+            "token_usage": {
+                "total": {
+                    "input_tokens": 2,
+                    "output_tokens": 3,
+                    "total_tokens": 5,
+                },
+            },
+            "context_compactions": [{"item_id": "compact-1"}],
+        },
     )
     await ExecutionService._execute_in_background(
         service,
@@ -433,8 +463,19 @@ async def test_execute_in_background_success_stopped_and_failure(monkeypatch: py
     )
     task_service.complete_task.assert_awaited_once_with(
         "task-1",
-        raw_sdk_response={"type": "claude", "response": {"usage": {"input_tokens": 2, "output_tokens": 3}}},
+        raw_sdk_response={
+            "type": "codex",
+            "token_usage": {
+                "total": {
+                    "input_tokens": 2,
+                    "output_tokens": 3,
+                    "total_tokens": 5,
+                },
+            },
+            "context_compactions": [{"item_id": "compact-1"}],
+        },
         computed_context_window=5,
+        context_window_limit=258400,
     )
     service.emitter.emit_task_completed.assert_awaited_once_with(
         session_id="session-1",
@@ -445,6 +486,7 @@ async def test_execute_in_background_success_stopped_and_failure(monkeypatch: py
             "output_tokens": 3,
             "total_tokens": 5,
         },
+        context_compacted=True,
     )
     assert "task-1" not in service._active_executions
 

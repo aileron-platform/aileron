@@ -152,6 +152,7 @@ describe('Codex SettingsPage TOML editor', () => {
     await waitFor(() => {
       expect(saveButton).toBeDisabled();
     });
+    expect(editor).toHaveValue('model = "updated"\n');
   });
 
   it('confirms before discarding dirty changes on layer switch', async () => {

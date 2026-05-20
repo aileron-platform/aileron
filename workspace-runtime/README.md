@@ -40,6 +40,14 @@ Workspace Runtime runs inside each workspace and provides agent execution, files
 - dev server startup
 - debugging support
 
+### Codex Runtime Defaults
+
+Workspace Runtime reads Codex CLI state from the mounted
+`/home/developer/.codex` directory. Workspace provisioning creates the
+platform-managed default `config.toml` in that mounted agent state before the
+runtime container starts, while sandbox and approval policy continue to come
+from Workspace Runtime execution settings.
+
 ### Draw.io Integration
 
 Draw.io is optional. `DRAWIO_ENABLED` defaults to `true` to preserve existing

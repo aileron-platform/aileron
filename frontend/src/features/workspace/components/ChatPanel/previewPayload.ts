@@ -67,6 +67,7 @@ function mergePreviewRawContent(
   const tokenUsage = task?.token_usage ?? undefined;
   const model = task?.model ?? metadata?.model ?? undefined;
   const durationMs = task?.duration_ms ?? undefined;
+  const contextCompacted = task?.context_compacted ?? undefined;
 
   const merged: Record<string, unknown> = {
     ...(rawSdkResponse ?? {}),
@@ -78,6 +79,9 @@ function mergePreviewRawContent(
   }
   if (typeof durationMs === 'number') {
     merged.duration_ms = durationMs;
+  }
+  if (typeof contextCompacted === 'boolean') {
+    merged.context_compacted = contextCompacted;
   }
   if (model) {
     merged.model = model;

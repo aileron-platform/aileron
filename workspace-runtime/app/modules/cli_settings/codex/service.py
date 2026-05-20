@@ -21,7 +21,6 @@ from .models import (
     CodexConfigDocument,
     CodexConfigSectionResponse,
     CodexConfigSectionUpdateResponse,
-    CodexConfigUpdateResponse,
     CodexFeatureEnableResponse,
     CodexHookCommandAction,
     CodexHookEntry,
@@ -353,7 +352,7 @@ class CodexSettingsService:
         workspace_id: str,
         layer: CodexLayer | str,
         content: str,
-    ) -> CodexConfigUpdateResponse:
+    ) -> CodexConfigDocument:
         try:
             parse_toml(content)
         except Exception as exc:
@@ -365,7 +364,13 @@ class CodexSettingsService:
         path = self._resolver.resolve(codex_layer, CodexResource.CONFIG)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-        return CodexConfigUpdateResponse(workspaceId=workspace_id, layer=codex_layer.value, path=str(path))
+        return CodexConfigDocument(
+            workspaceId=workspace_id,
+            layer=codex_layer.value,
+            path=str(path),
+            content=content,
+            exists=True,
+        )
 
     def get_config_section(
         self,

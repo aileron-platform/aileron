@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from ..codex_usage import codex_usage_totals
 from ..domain.enums import TaskStatus
 
 
@@ -99,6 +100,7 @@ class TaskResponse(BaseModel):
     computed_context_window: Optional[int] = None
     permission_request: Optional[PermissionRequestResponse] = None
     token_usage: Optional[TokenUsageSummary] = None
+    context_compacted: bool = False
 
     model_config = {"from_attributes": True, "populate_by_name": True, "by_alias": True}
 
@@ -131,8 +133,10 @@ class TaskResponse(BaseModel):
 
         # Extract token usage from raw_sdk_response
         token_usage = None
+        context_compacted = False
         if entity.raw_sdk_response:
             token_usage = cls._extract_token_usage(entity.raw_sdk_response)
+            context_compacted = cls._extract_context_compacted(entity.raw_sdk_response)
 
         return cls(
             id=entity.id,
@@ -152,7 +156,14 @@ class TaskResponse(BaseModel):
             computed_context_window=entity.computed_context_window,
             permission_request=permission_request,
             token_usage=token_usage,
+            context_compacted=context_compacted,
         )
+
+    @staticmethod
+    def _extract_context_compacted(raw_response: Dict[str, Any]) -> bool:
+        """Extract whether Codex context compaction occurred."""
+        compactions = raw_response.get("context_compactions")
+        return isinstance(compactions, list) and len(compactions) > 0
 
     @staticmethod
     def _extract_token_usage(raw_response: Dict[str, Any]) -> Optional[TokenUsageSummary]:
@@ -182,14 +193,14 @@ class TaskResponse(BaseModel):
                 service_tier=usage_data.get("serviceTier"),
             )
         elif sdk_type == "codex":
-            turn = response.get("turn", {})
-            usage = turn.get("usage", {})
-            costs = turn.get("costs", {})
+            usage = codex_usage_totals(raw_response)
             return TokenUsageSummary(
                 input_tokens=usage.get("input_tokens", 0),
                 output_tokens=usage.get("output_tokens", 0),
                 total_tokens=usage.get("total_tokens", 0),
-                cost_usd=costs.get("total_cost", costs.get("total_cost_usd")),
+                cache_read_tokens=usage.get("cached_input_tokens"),
+                cost_usd=usage.get("cost_usd"),
+                service_tier=usage.get("service_tier"),
             )
         elif sdk_type == "gemini":
             usage = response.get("usageMetadata", {})

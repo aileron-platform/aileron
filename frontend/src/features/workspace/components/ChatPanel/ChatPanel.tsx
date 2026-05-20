@@ -839,6 +839,7 @@ export const ChatPanel: React.FC = () => {
             previewLabel={t('workspace.chat.messages.viewResult')}
             onAskUserQuestionSubmit={handleAskUserQuestionSubmit}
             activeTaskId={agentState.activeTask?.task_id}
+            runtimeBaseUrl={workspaceRuntime.runtimeBaseUrl}
           />
           <QueuedMessagesPanel
             messages={agentState.queuedMessages}

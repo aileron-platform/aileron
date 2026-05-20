@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -9,6 +9,7 @@ from codex_app_server.generated.v2_all import (
     CommandExecutionOutputDeltaNotification,
     CommandExecutionStatus,
     CommandExecutionThreadItem,
+    ContextCompactionThreadItem,
     ErrorNotification,
     FileChangePatchUpdatedNotification,
     FileChangeThreadItem,
@@ -19,6 +20,9 @@ from codex_app_server.generated.v2_all import (
     PatchApplyStatus,
     PlanDeltaNotification,
     ReasoningSummaryTextDeltaNotification,
+    ThreadTokenUsage,
+    ThreadTokenUsageUpdatedNotification,
+    TokenUsageBreakdown,
     TurnError,
 )
 
@@ -87,6 +91,7 @@ class FakeThread:
         self.id = "thread-1"
         self._handle = handle
         self.turn_calls = []
+        self.compact = AsyncMock()
 
     async def turn(self, *_args, **_kwargs):
         self.turn_calls.append((_args, _kwargs))
@@ -96,12 +101,18 @@ class FakeThread:
 class FakeManager:
     def __init__(self, state) -> None:
         self.state = state
+        self.get_or_create_calls = []
+        self.closed_sessions = []
 
-    async def get_or_create(self, *_args, **_kwargs):
+    async def get_or_create(self, *args, **kwargs):
+        self.get_or_create_calls.append((args, kwargs))
         return self.state
 
     async def get_state(self, *_args, **_kwargs):
         return self.state
+
+    async def close_session(self, session_id) -> None:
+        self.closed_sessions.append(session_id)
 
 
 class RecoveringManager:
@@ -222,7 +233,9 @@ async def test_execute_task_recovers_from_stale_codex_process_broken_pipe(monkey
         "_load_session_context",
         AsyncMock(
             return_value=(
-                SimpleNamespace(sdk_session_id="thread-1"),
+                SimpleNamespace(
+                    sdk_session_id="thread-1",
+                ),
                 None,
                 "/workspace",
             )
@@ -410,7 +423,14 @@ async def test_execute_task_persists_image_generation_and_skips_empty_final_text
 
 
 @pytest.mark.asyncio
-async def test_persist_image_generation_message_uses_base64_source(monkeypatch, tmp_path) -> None:
+async def test_persist_image_generation_message_uses_workspace_url_source(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    generated_root = workspace_root / ".aileron" / "generated-images" / "codex"
+    monkeypatch.setattr(module, "_WORKSPACE_ROOT", workspace_root)
+    monkeypatch.setattr(module, "_CODEX_GENERATED_IMAGE_DIR", generated_root)
     image_path = tmp_path / "image.png"
     image_path.write_bytes(b"image-bytes")
     tool = CodexTool(FakeManager(SimpleNamespace()))
@@ -437,6 +457,22 @@ async def test_persist_image_generation_message_uses_base64_source(monkeypatch, 
     )
 
     assert message["message_id"] == "assistant-image-1"
+    source = persisted_blocks[0]["blocks"][0]["source"]
+    assert source["type"] == "url"
+    assert source["media_type"] == "image/png"
+    assert source["path"].startswith(str(generated_root))
+    assert source["url"].startswith("/api/v1/files/content?")
+    assert "%2Fworkspace%2F" not in source["url"]
+    generated_files = list(generated_root.glob("image-1-*.png"))
+    assert len(generated_files) == 1
+    generated_file = generated_files[0]
+    assert (
+        f"%2F.aileron%2Fgenerated-images%2Fcodex%2F{generated_file.name}"
+        in source["url"]
+    )
+    assert "raw=true" in source["url"]
+    assert "data" not in source
+    assert generated_file.read_bytes() == b"image-bytes"
     assert persisted_blocks == [
         {
             "session_id": "session-1",
@@ -444,16 +480,57 @@ async def test_persist_image_generation_message_uses_base64_source(monkeypatch, 
             "blocks": [
                 {
                     "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/png",
-                        "data": "aW1hZ2UtYnl0ZXM=",
-                        "path": str(image_path),
-                    },
+                    "source": source,
                 }
             ],
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_persist_image_generation_message_does_not_overwrite_reused_item_id(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    generated_root = workspace_root / ".aileron" / "generated-images" / "codex"
+    monkeypatch.setattr(module, "_WORKSPACE_ROOT", workspace_root)
+    monkeypatch.setattr(module, "_CODEX_GENERATED_IMAGE_DIR", generated_root)
+    tool = CodexTool(FakeManager(SimpleNamespace()))
+
+    async def persist_blocks(session_id, task_id, blocks):
+        return {"message_id": "assistant-image", "content_blocks": blocks}
+
+    monkeypatch.setattr(tool, "_persist_assistant_blocks", persist_blocks)
+
+    first = await tool._persist_image_generation_message(
+        session_id="session-1",
+        task_id="task-1",
+        event=ImageGenerationEnd(
+            item_id="image-1",
+            status="completed",
+            result="Zmlyc3Q=",
+            saved_path=None,
+            revised_prompt=None,
+        ),
+    )
+    second = await tool._persist_image_generation_message(
+        session_id="session-2",
+        task_id="task-2",
+        event=ImageGenerationEnd(
+            item_id="image-1",
+            status="completed",
+            result="c2Vjb25k",
+            saved_path=None,
+            revised_prompt=None,
+        ),
+    )
+
+    first_path = first["content_blocks"][0]["source"]["path"]
+    second_path = second["content_blocks"][0]["source"]["path"]
+    assert first_path != second_path
+    assert Path(first_path).read_bytes() == b"first"
+    assert Path(second_path).read_bytes() == b"second"
 
 
 @pytest.mark.asyncio
@@ -751,3 +828,205 @@ async def test_execute_task_wraps_string_prompt_in_text_input(monkeypatch) -> No
     assert len(args[0]) == 1
     assert type(args[0][0]).__name__ == "TextInput"
     assert args[0][0].text == "prompt"
+
+
+def _token_usage_notification(
+    *,
+    total_tokens: int,
+    cumulative_total_tokens: int | None = None,
+    model_context_window: int | None = None,
+):
+    token_usage = ThreadTokenUsage(
+        last=TokenUsageBreakdown(
+            totalTokens=total_tokens,
+            inputTokens=total_tokens,
+            outputTokens=0,
+            cachedInputTokens=0,
+            reasoningOutputTokens=0,
+        ),
+        total=TokenUsageBreakdown(
+            totalTokens=cumulative_total_tokens or total_tokens,
+            inputTokens=cumulative_total_tokens or total_tokens,
+            outputTokens=0,
+            cachedInputTokens=0,
+            reasoningOutputTokens=0,
+        ),
+    )
+    payload = ThreadTokenUsageUpdatedNotification(
+        threadId="thread-1",
+        turnId="turn-1",
+        tokenUsage=token_usage,
+    )
+    if model_context_window is not None:
+        payload_dict = payload.model_dump(by_alias=True)
+        payload_dict["tokenUsage"]["modelContextWindow"] = model_context_window
+        payload = ThreadTokenUsageUpdatedNotification.model_validate(payload_dict)
+    return _notification("thread/tokenUsage/updated", payload)
+
+
+@pytest.mark.asyncio
+async def test_execute_task_does_not_run_manual_compact(monkeypatch) -> None:
+    notifications = [
+        _token_usage_notification(
+            total_tokens=80,
+            cumulative_total_tokens=1_000,
+            model_context_window=100,
+        )
+    ]
+    handle = FakeHandle(notifications)
+    thread = FakeThread(handle)
+    state = SessionState(
+        codex=SimpleNamespace(thread_start=AsyncMock(return_value=thread)),
+        dispatcher=CodexSessionApprovalDispatcher(),
+    )
+    tool = CodexTool(FakeManager(state))
+
+    monkeypatch.setattr(module, "global_tool_decision_manager", FakeDecisionManager())
+    monkeypatch.setattr(
+        tool,
+        "_load_session_context",
+        AsyncMock(return_value=(SimpleNamespace(sdk_session_id=None), None, "/workspace")),
+    )
+    monkeypatch.setattr(
+        tool,
+        "_persist_user_message",
+        AsyncMock(return_value={"message_id": "user-1"}),
+    )
+    monkeypatch.setattr(tool, "_save_sdk_session_id", AsyncMock())
+
+    result = await tool.execute_task("session-1", "prompt")
+
+    thread.compact.assert_not_awaited()
+    assert "compact" not in result.raw_sdk_response
+    assert result.context_window == 80
+
+
+@pytest.mark.asyncio
+async def test_execute_task_records_context_compaction_event(monkeypatch) -> None:
+    notifications = [
+        _notification(
+            "item/completed",
+            ItemCompletedNotification(
+                item=ContextCompactionThreadItem(
+                    id="compact-1",
+                    type="contextCompaction",
+                ),
+                threadId="thread-1",
+                turnId="turn-1",
+            ),
+        ),
+        _token_usage_notification(total_tokens=10, model_context_window=100),
+    ]
+    handle = FakeHandle(notifications)
+    thread = FakeThread(handle)
+    state = SessionState(
+        codex=SimpleNamespace(thread_start=AsyncMock(return_value=thread)),
+        dispatcher=CodexSessionApprovalDispatcher(),
+    )
+    tool = CodexTool(FakeManager(state))
+
+    monkeypatch.setattr(module, "global_tool_decision_manager", FakeDecisionManager())
+    monkeypatch.setattr(
+        tool,
+        "_load_session_context",
+        AsyncMock(return_value=(SimpleNamespace(sdk_session_id=None), None, "/workspace")),
+    )
+    monkeypatch.setattr(
+        tool,
+        "_persist_user_message",
+        AsyncMock(return_value={"message_id": "user-1"}),
+    )
+    monkeypatch.setattr(tool, "_save_sdk_session_id", AsyncMock())
+
+    result = await tool.execute_task("session-1", "prompt")
+
+    assert result.raw_sdk_response["context_compactions"] == [
+        {"item_id": "compact-1"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_execute_task_preserves_overfilled_codex_thread_for_sdk_compaction(monkeypatch) -> None:
+    notifications = [_token_usage_notification(total_tokens=10, model_context_window=100)]
+    handle = FakeHandle(notifications)
+    thread = FakeThread(handle)
+    state = SessionState(
+        codex=SimpleNamespace(thread_start=AsyncMock(return_value=thread)),
+        dispatcher=CodexSessionApprovalDispatcher(),
+        thread=thread,
+    )
+    manager = FakeManager(state)
+    tool = CodexTool(manager)
+
+    monkeypatch.setattr(module, "global_tool_decision_manager", FakeDecisionManager())
+    monkeypatch.setattr(
+        tool,
+        "_load_session_context",
+        AsyncMock(
+            return_value=(
+                SimpleNamespace(
+                    sdk_session_id="thread-overfilled",
+                    current_context_usage=220,
+                    context_window_limit=250,
+                ),
+                None,
+                "/workspace",
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        tool,
+        "_persist_user_message",
+        AsyncMock(return_value={"message_id": "user-1"}),
+    )
+    monkeypatch.setattr(tool, "_save_sdk_session_id", AsyncMock())
+
+    await tool.execute_task("session-1", "prompt")
+
+    assert manager.closed_sessions == []
+    assert manager.get_or_create_calls[0][1]["sdk_session_id"] == "thread-overfilled"
+    state.codex.thread_start.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_execute_task_preserves_existing_codex_thread(
+    monkeypatch,
+) -> None:
+    notifications = [_token_usage_notification(total_tokens=10, model_context_window=100)]
+    handle = FakeHandle(notifications)
+    thread = FakeThread(handle)
+    state = SessionState(
+        codex=SimpleNamespace(thread_start=AsyncMock(return_value=thread)),
+        dispatcher=CodexSessionApprovalDispatcher(),
+        thread=thread,
+    )
+    manager = FakeManager(state)
+    tool = CodexTool(manager)
+
+    monkeypatch.setattr(module, "global_tool_decision_manager", FakeDecisionManager())
+    monkeypatch.setattr(
+        tool,
+        "_load_session_context",
+        AsyncMock(
+            return_value=(
+                SimpleNamespace(
+                    sdk_session_id="old-thread",
+                    custom_context={},
+                ),
+                None,
+                "/workspace",
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        tool,
+        "_persist_user_message",
+        AsyncMock(return_value={"message_id": "user-1"}),
+    )
+    monkeypatch.setattr(tool, "_save_sdk_session_id", AsyncMock())
+
+    await tool.execute_task("session-1", "prompt")
+
+    assert manager.closed_sessions == []
+    assert manager.get_or_create_calls[0][1]["sdk_session_id"] == "old-thread"
+    state.codex.thread_start.assert_not_awaited()

@@ -169,6 +169,7 @@ const canvas = {
     duration: 'Duration',
     provider: 'Provider',
     model: 'Model',
+    contextCompacted: 'Context compacted',
     models: 'Model Breakdown',
     modelCount: '{{count}} models',
     modelCost: 'Cost',

@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import json
 import logging
 import mimetypes
 import re
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlencode
+from uuid import uuid4
 
 from codex_app_server.generated.v2_all import CommandExecutionStatus, PatchApplyStatus
 from codex_app_server import TextInput
 
 from app.database import async_session_scope
+from app.modules.agent_session.codex_usage import codex_context_usage
 from app.modules.agent_session.domain.enums import PermissionMode
 from app.modules.agent_session.domain.value_objects import CodexPermissionConfig
 from app.modules.agent_session.repositories.agent_session_repository import (
@@ -47,6 +51,7 @@ from .notification_mapper import (
     CommandOutputDelta,
     CommandToolEnd,
     CommandToolStart,
+    ContextCompactionEnd,
     FileChangeEnd,
     FileChangeOutputDelta,
     FileChangePatchUpdated,
@@ -68,6 +73,8 @@ from .permission_mapper import to_thread_start_kwargs, to_turn_kwargs
 logger = logging.getLogger(__name__)
 
 _RECONNECT_MESSAGE_RE = re.compile(r"Reconnecting\.\.\.\s*(\d+)/(\d+)")
+_WORKSPACE_ROOT = Path("/workspace")
+_CODEX_GENERATED_IMAGE_DIR = _WORKSPACE_ROOT / ".aileron" / "generated-images" / "codex"
 
 
 class CodexExecutionError(ToolExecutionError):
@@ -295,6 +302,11 @@ class CodexTool(ITool):
                 elif isinstance(event, TokenUsageEvent):
                     token_usage = event.token_usage
 
+                elif isinstance(event, ContextCompactionEnd):
+                    raw_events.setdefault("context_compactions", []).append(
+                        {"item_id": event.item_id}
+                    )
+
                 elif isinstance(event, StreamError):
                     if event.will_retry:
                         logger.warning(
@@ -330,9 +342,7 @@ class CodexTool(ITool):
             **raw_events,
         }
         context_window = self._context_window(token_usage)
-        context_window_limit = (
-            token_usage.get("model_context_window") if token_usage else None
-        )
+        context_window_limit = self._context_window_limit(token_usage)
 
         return TaskResult(
             user_message_id=user_message["message_id"],
@@ -643,20 +653,21 @@ class CodexTool(ITool):
             [{"type": "image", "source": source}],
         )
 
-    @staticmethod
-    def _image_source_from_generation(event: ImageGenerationEnd) -> dict[str, Any] | None:
+    @classmethod
+    def _image_source_from_generation(cls, event: ImageGenerationEnd) -> dict[str, Any] | None:
         media_type = "image/png"
         if event.saved_path:
             path = Path(event.saved_path)
             if path.exists() and path.is_file():
                 guessed_type = mimetypes.guess_type(path.name)[0]
                 media_type = guessed_type or media_type
-                return {
-                    "type": "base64",
-                    "media_type": media_type,
-                    "data": base64.b64encode(path.read_bytes()).decode("ascii"),
-                    "path": event.saved_path,
-                }
+                workspace_path = cls._ensure_workspace_image_file(
+                    event=event,
+                    image_bytes=path.read_bytes(),
+                    media_type=media_type,
+                    source_path=path,
+                )
+                return cls._image_url_source(workspace_path, media_type)
 
         if event.result:
             result = event.result
@@ -664,14 +675,78 @@ class CodexTool(ITool):
                 header, data = result.split(";base64,", 1)
                 media_type = header.removeprefix("data:") or media_type
                 result = data
-            return {
-                "type": "base64",
-                "media_type": media_type,
-                "data": result,
-                "path": event.saved_path,
-            }
+            try:
+                image_bytes = base64.b64decode(result, validate=True)
+            except (binascii.Error, ValueError):
+                logger.warning(
+                    "Codex image generation result was not valid base64 item_id=%s status=%s",
+                    event.item_id,
+                    event.status,
+                )
+                return None
+            workspace_path = cls._ensure_workspace_image_file(
+                event=event,
+                image_bytes=image_bytes,
+                media_type=media_type,
+                source_path=None,
+            )
+            return cls._image_url_source(workspace_path, media_type)
 
         return None
+
+    @staticmethod
+    def _image_url_source(path: Path, media_type: str) -> dict[str, Any]:
+        file_path = str(path)
+        request_path = CodexTool._workspace_file_request_path(path)
+        return {
+            "type": "url",
+            "media_type": media_type,
+            "url": f"/api/v1/files/content?{urlencode({'path': request_path, 'raw': 'true'})}",
+            "path": file_path,
+        }
+
+    @staticmethod
+    def _workspace_file_request_path(path: Path) -> str:
+        try:
+            relative_path = path.resolve(strict=False).relative_to(
+                _WORKSPACE_ROOT.resolve(strict=False)
+            )
+            return f"/{relative_path.as_posix()}"
+        except ValueError:
+            return str(path)
+
+    @classmethod
+    def _ensure_workspace_image_file(
+        cls,
+        *,
+        event: ImageGenerationEnd,
+        image_bytes: bytes,
+        media_type: str,
+        source_path: Path | None,
+    ) -> Path:
+        if source_path and cls._is_under_workspace(source_path):
+            return source_path
+
+        _CODEX_GENERATED_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+        suffix = (
+            source_path.suffix
+            if source_path and source_path.suffix
+            else mimetypes.guess_extension(media_type) or ".png"
+        )
+        safe_item_id = (
+            re.sub(r"[^A-Za-z0-9_.-]+", "-", event.item_id).strip(".-") or "image"
+        )
+        target = _CODEX_GENERATED_IMAGE_DIR / f"{safe_item_id}-{uuid4().hex}{suffix}"
+        target.write_bytes(image_bytes)
+        return target
+
+    @staticmethod
+    def _is_under_workspace(path: Path) -> bool:
+        try:
+            path.resolve(strict=False).relative_to(_WORKSPACE_ROOT.resolve(strict=False))
+            return True
+        except ValueError:
+            return False
 
     async def _persist_tool_result_message(
         self,
@@ -764,8 +839,13 @@ class CodexTool(ITool):
     def _context_window(token_usage: dict[str, Any] | None) -> int | None:
         if not token_usage:
             return None
-        total = token_usage.get("total") or {}
-        return total.get("total_tokens")
+        return codex_context_usage({"token_usage": token_usage})
+
+    @staticmethod
+    def _context_window_limit(token_usage: dict[str, Any] | None) -> int | None:
+        if not token_usage:
+            return None
+        return token_usage.get("model_context_window")
 
     @staticmethod
     def _noop_emit_event(event_name: str, data: dict[str, Any]) -> None:

@@ -93,6 +93,7 @@ services:
     volumes:
       # Mount code in development mode.
       - ./app:/app/app:ro
+      - ./agent-defaults:/app/agent-defaults:ro
       - ./scripts:/app/scripts:ro
       - ./tests:/app/tests:rw
       - ./pyproject.toml:/app/pyproject.toml:ro
