@@ -1,4 +1,6 @@
 # ✈️ Aileron
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/aileron-platform/aileron/badge)](https://securityscorecards.dev/viewer/?uri=github.com/aileron-platform/aileron)
+[![License](https://img.shields.io/github/license/aileron-platform/aileron)](https://github.com/aileron-platform/aileron/blob/develop/LICENSE)
 
 [繁體中文](./README.zh-TW.md)
 
