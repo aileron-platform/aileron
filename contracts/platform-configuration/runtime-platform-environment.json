@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "required": [
+    {
+      "name": "AILERON_WORKSPACE_ID",
+      "valueKind": "non-empty-string",
+      "valuePattern": "^.+$"
+    },
+    {
+      "name": "AILERON_WORKSPACE_PATH",
+      "valueKind": "absolute-path",
+      "valuePattern": "^/.*$"
+    },
+    {
+      "name": "AILERON_RUNTIME_INSTANCE_ID",
+      "valueKind": "canonical-uuid",
+      "valuePattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    {
+      "name": "AILERON_RUNTIME_ACCESS_REVISION",
+      "valueKind": "non-negative-integer",
+      "valuePattern": "^(0|[1-9][0-9]*)$"
+    },
+    {
+      "name": "AILERON_KB_MOUNT_REVISION",
+      "valueKind": "non-negative-integer",
+      "valuePattern": "^(0|[1-9][0-9]*)$"
+    },
+    {
+      "name": "AILERON_WORKTREE_SUBDIR",
+      "valueKind": "safe-relative-path",
+      "valuePattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
+    },
+    {
+      "name": "AILERON_RUNTIME_STATE_DATABASE_URL_FILE",
+      "valueKind": "secret-file-path",
+      "valuePattern": "^/.+$"
+    },
+    {
+      "name": "AILERON_RUNTIME_CONTROL_TOKEN_FILE",
+      "valueKind": "secret-file-path",
+      "valuePattern": "^/.+$"
+    },
+    {
+      "name": "AILERON_MANAGER_INTERNAL_URL",
+      "valueKind": "internal-http-url",
+      "valuePattern": "^http://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]+(/[^ ]*)?$",
+      "port": {
+        "required": true,
+        "minimum": 1,
+        "maximum": 65535
+      }
+    },
+    {
+      "name": "AILERON_PLATFORM_PUBLIC_ORIGIN",
+      "valueKind": "public-origin",
+      "valuePattern": "^https?://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]+)?$",
+      "port": {
+        "required": false,
+        "minimum": 1,
+        "maximum": 65535
+      }
+    },
+    {
+      "name": "AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE",
+      "valueKind": "file-path",
+      "valuePattern": "^/.+$"
+    },
+    {
+      "name": "AILERON_RUNTIME_ASSERTION_ISSUER",
+      "valueKind": "bounded-non-empty-string",
+      "valuePattern": "^.{1,128}$"
+    },
+    {
+      "name": "AILERON_BROWSER_SERVICE_NAME",
+      "valueKind": "dns-service-name",
+      "valuePattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    {
+      "name": "AILERON_BROWSER_WEBRTC_INTERNAL_URL",
+      "valueKind": "internal-http-url",
+      "valuePattern": "^http://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]+(/[^ ]*)?$",
+      "port": {
+        "required": true,
+        "minimum": 1,
+        "maximum": 65535
+      }
+    },
+    {
+      "name": "AILERON_BROWSER_CDP_URL",
+      "valueKind": "internal-http-url",
+      "valuePattern": "^http://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]+(/[^ ]*)?$",
+      "port": {
+        "required": true,
+        "minimum": 1,
+        "maximum": 65535
+      }
+    },
+    {
+      "name": "AILERON_CANVAS_SERVICE_NAME",
+      "valueKind": "dns-service-name",
+      "valuePattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    {
+      "name": "AILERON_CANVAS_INTERNAL_URL",
+      "valueKind": "internal-http-url",
+      "valuePattern": "^http://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]+(/[^ ]*)?$",
+      "port": {
+        "required": true,
+        "minimum": 1,
+        "maximum": 65535
+      }
+    },
+    {
+      "name": "AILERON_CANVAS_API_URL",
+      "valueKind": "internal-http-url",
+      "valuePattern": "^http://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:[0-9]+(/[^ ]*)?$",
+      "port": {
+        "required": true,
+        "minimum": 1,
+        "maximum": 65535
+      }
+    }
+  ]
+}

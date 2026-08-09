@@ -1,0 +1,83 @@
+{{- if and .Values.workspaceOperator.enabled .Values.workspaceOperator.rbac.create }}
+{{- $runtimeNamespace := include "aileron.workspaceRuntimeNamespace" . }}
+{{- $clusterDependenciesEnabled := eq (include "aileron.workspaceOperator.clusterDependenciesEnabled" .) "true" }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-operator
+  namespace: {{ $runtimeNamespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+rules:
+{{ include "aileron.workspaceOperator.namespacedDependencyRules" . | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-operator
+  namespace: {{ $runtimeNamespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "aileron.fullname" . }}-workspace-operator
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" .Values.workspaceOperator.serviceAccount "nameSuffix" "workspace-operator") }}
+    namespace: {{ $runtimeNamespace | quote }}
+{{- if $clusterDependenciesEnabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-operator-storageclasses
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+rules:
+{{ include "aileron.workspaceOperator.clusterDependencyRules" . | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-operator-storageclasses
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "aileron.fullname" . }}-workspace-operator-storageclasses
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" .Values.workspaceOperator.serviceAccount "nameSuffix" "workspace-operator") }}
+    namespace: {{ $runtimeNamespace | quote }}
+{{- end }}
+{{- if .Values.cilium.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-firewall-attestor
+  namespace: {{ $runtimeNamespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+rules:
+{{ include "aileron.workspaceFirewallAttestor.namespacedDependencyRules" . | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-firewall-attestor
+  namespace: {{ $runtimeNamespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "aileron.fullname" . }}-workspace-firewall-attestor
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" .Values.workspaceOperator.firewallAttestor.serviceAccount "nameSuffix" "workspace-firewall-attestor") }}
+    namespace: {{ $runtimeNamespace | quote }}
+{{- end }}
+{{- end }}

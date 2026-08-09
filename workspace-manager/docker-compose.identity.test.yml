@@ -1,0 +1,122 @@
+name: workspace-manager-identity-test
+
+services:
+  identity-test-secrets-init:
+    image: alpine:3.20
+    restart: "no"
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        umask 0077
+        head -c 32 /dev/urandom | base64 | tr -d '\n' > /run/test-secrets/ldap-admin-password
+        head -c 32 /dev/urandom | base64 | tr -d '\n' > /run/test-secrets/ldap-config-password
+        chmod 0400 /run/test-secrets/ldap-admin-password /run/test-secrets/ldap-config-password
+    volumes:
+      - identity-test-secrets:/run/test-secrets
+
+  postgres-identity-test:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: identity_test
+      POSTGRES_PASSWORD: identity_test
+      POSTGRES_DB: aileron
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identity_test -d aileron"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ../init-sql:/docker-entrypoint-initdb.d:ro
+
+  openldap-identity-test:
+    image: osixia/openldap:1.5.0
+    environment:
+      LDAP_ORGANISATION: Aileron
+      LDAP_DOMAIN: aileron.local
+      LDAP_ADMIN_PASSWORD_FILE: /run/test-secrets/ldap-admin-password
+      LDAP_CONFIG_PASSWORD_FILE: /run/test-secrets/ldap-config-password
+      LDAP_TLS: "false"
+      LDAP_READONLY_USER: "false"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          ldapwhoami -x -H ldap://127.0.0.1:389
+          -D "cn=admin,dc=aileron,dc=local"
+          -y /run/test-secrets/ldap-admin-password >/dev/null 2>&1
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    tmpfs:
+      - /var/lib/ldap
+      - /etc/ldap/slapd.d
+    volumes:
+      - identity-test-secrets:/run/test-secrets:ro
+    depends_on:
+      identity-test-secrets-init:
+        condition: service_completed_successfully
+    networks:
+      default:
+        aliases:
+          - openldap
+
+  openldap-identity-test-seed:
+    image: osixia/openldap:1.5.0
+    entrypoint: ["/bin/sh", "-ec"]
+    restart: "no"
+    volumes:
+      - ../directory/10-seed-users.ldif:/seed/10-seed-users.ldif:ro
+      - identity-test-secrets:/run/test-secrets:ro
+    depends_on:
+      openldap-identity-test:
+        condition: service_healthy
+    command:
+      - |
+        if ldapsearch -LLL -x -H ldap://openldap-identity-test:389 \
+          -D "cn=admin,dc=aileron,dc=local" \
+          -y /run/test-secrets/ldap-admin-password \
+          -b "ou=people,dc=aileron,dc=local" "(uid=alice)" dn | grep -q '^dn:'; then
+          exit 0
+        fi
+        ldapadd -x -H ldap://openldap-identity-test:389 \
+          -D "cn=admin,dc=aileron,dc=local" \
+          -y /run/test-secrets/ldap-admin-password -f /seed/10-seed-users.ldif
+
+  workspace-manager-identity-test:
+    image: ailerondocker/workspace-manager:dev
+    pull_policy: never
+    depends_on:
+      openldap-identity-test:
+        condition: service_healthy
+      postgres-identity-test:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://identity_test:identity_test@postgres-identity-test:5432/aileron
+      OIDC_ISSUER_URL: https://oidc.test.example
+      OIDC_CLIENT_ID: aileron-manager
+      OIDC_ALLOWED_ALGORITHMS: RS256
+      OIDC_MAX_TOKEN_LIFETIME_SECONDS: "1800"
+      OIDC_JWKS_CACHE_TTL: "3600"
+      OIDC_DISCOVERY_TIMEOUT_SECONDS: "5"
+      BOOTSTRAP_ADMIN_SUBJECT: 00000000-0000-4000-8000-000000000001
+      WORKSPACE_MANAGER_IDENTITY_HARNESS: "true"
+      ENV: testing
+      PYTHONPATH: /workspace-manager
+    volumes:
+      - .:/workspace-manager
+      - /workspace-manager/.venv
+      - ../packages:/packages:ro
+      - ..:/repo-root:ro
+    working_dir: /workspace-manager
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        uv run pytest tests/integration/modules/identity -v
+
+volumes:
+  identity-test-secrets:

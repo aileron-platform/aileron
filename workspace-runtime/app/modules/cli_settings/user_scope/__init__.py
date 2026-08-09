@@ -1,0 +1,1 @@
+"""User-scope materialization subdomain."""

@@ -1,0 +1,103 @@
+# ─── Logs ───
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ─── Node / build output ───
+node_modules
+dist
+dist-ssr
+*.local
+
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+test-results/
+
+# ─── Virtual environments ───
+.venv/
+venv/
+env/
+
+# ─── Environment variables (.env.example stays tracked; *.local covers .env.*.local) ───
+.env
+
+# ─── Editor / IDE (root dot-dirs like .vscode/.idea handled by the /.*/ rule below) ───
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.vite
+
+# ─── Databases ───
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── AI agent settings ───
+# .claude is also nested inside modules, so the root-only /.*/ rule is not enough.
+.claude/
+.mcp.json
+AGENTS.md
+GEMINI.md
+!workspace-manager/app/resources/kb_templates/**/AGENTS.md
+!workspace-runtime/agent-defaults/AGENTS.md
+!workspace-runtime/agent-defaults/CLAUDE.md
+
+# ─── Project runtime / temp ───
+workspace*.sh
+workspace-manager/celerybeat-schedule*
+workspace-runtime/tests/mock_workspace/
+workspace-runtime/app/tests/mock_workspace/
+.services.pid
+tmp/
+/docs/*
+!/docs/agents/
+!/docs/agents/*.md
+!/docs/adr/
+!/docs/adr/*.md
+docs-site/.docusaurus/
+
+# ─── Data directories (runtime workspaces) ───
+data/*
+!data/README.md
+!data/**/README.md
+
+# ─── Superpowers working docs (never commit) ───
+**/docs/superpowers/
+
+# ─── Root-level dot-directories (tooling/cache); .github kept for CI ───
+/.*/
+!/.github/
+
+# >>> ai-developer-hub: managed worktree directory >>>
+/.worktrees/
+/.aileron/local-history/
+# <<< ai-developer-hub: managed worktree directory <<<

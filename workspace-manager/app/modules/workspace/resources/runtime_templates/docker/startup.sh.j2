@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+WORKSPACE_ID="{{ workspace.id }}"
+WORKSPACE_NAME="{{ workspace.name }}"
+RUNTIME_PORT={{ ports.default_internal_port }}
+
+log() {
+  echo "[${WORKSPACE_ID}] $1"
+}
+
+log "Initializing Workspace Runtime (${WORKSPACE_NAME})"
+
+log "Creating base directory structure"
+mkdir -p /workspace/src /workspace/docs /workspace/tests /workspace/config
+
+log "Generating environment variable configuration"
+cat <<'ENVVARS' > /workspace/config/.env
+{% for key, value in environment.items() %}{{ key }}="{{ value }}"
+{% endfor %}
+ENVVARS
+
+log "Workspace Runtime initialization complete, ready to start services (port: ${RUNTIME_PORT})"
+log "Custom setup script will run from start_services.sh (/scripts/custom-setup.sh)"

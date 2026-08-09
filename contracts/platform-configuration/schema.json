@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aileron.dev/contracts/platform-configuration/schema.json",
+  "title": "Aileron Platform Configuration Contract Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "installationInputs", "helmSecretReferences", "helmAdapter", "derivedLogicalOutputs", "composeOutputs", "testFixtureOutputs", "auditedDispositions"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "contractVersion": {"const": "1"},
+    "installationInputs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/installationInput"}
+    },
+    "helmSecretReferences": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/helmSecretReference"}
+    },
+    "helmAdapter": {"$ref": "#/$defs/helmAdapter"},
+    "derivedLogicalOutputs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/derivedLogicalOutput"}
+    },
+    "composeOutputs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/composeOutput"}
+    },
+    "testFixtureOutputs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/testFixtureOutput"}
+    },
+    "auditedDispositions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/auditedDisposition"}
+    }
+  },
+  "$defs": {
+    "owner": {
+      "enum": [
+        "platform-contract",
+        "compose-adapter",
+        "workspace-manager",
+        "workspace-operator",
+        "frontend-build",
+        "third-party-adapter",
+        "external-secret-owner"
+      ]
+    },
+    "disposition": {
+      "enum": [
+        "keep-input",
+        "keep-derived-output",
+        "move-to-service-default",
+        "replace-with-secret-reference",
+        "test-fixture-only",
+        "remove"
+      ]
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["composeInput"],
+      "properties": {
+        "composeInput": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "helmValuesPath": {"type": "string", "minLength": 1}
+      }
+    },
+    "installationInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logicalName",
+        "type",
+        "required",
+        "owner",
+        "consumer",
+        "secret",
+        "derived",
+        "disposition",
+        "mapping"
+      ],
+      "properties": {
+        "logicalName": {"type": "string", "pattern": "^[a-z][A-Za-z0-9]*$"},
+        "type": {"enum": ["origin", "url", "string", "path", "integer", "port", "port-range", "image", "uuid", "email"]},
+        "required": {"type": "boolean"},
+        "owner": {"$ref": "#/$defs/owner"},
+        "consumer": {"type": "string", "minLength": 1},
+        "secret": {"const": false},
+        "derived": {"const": false},
+        "disposition": {"const": "keep-input"},
+        "mapping": {"$ref": "#/$defs/mapping"}
+      }
+    },
+    "helmSecretReferenceMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["secretNameValuesPath", "secretKeyValuesPath"],
+      "properties": {
+        "secretNameValuesPath": {"type": "string", "minLength": 1},
+        "secretKeyValuesPath": {"type": "string", "minLength": 1}
+      }
+    },
+    "helmSecretReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logicalName",
+        "required",
+        "owner",
+        "consumer",
+        "secret",
+        "derived",
+        "disposition",
+        "mapping"
+      ],
+      "properties": {
+        "logicalName": {"type": "string", "pattern": "^[a-z][A-Za-z0-9]*$"},
+        "required": {"type": "boolean"},
+        "owner": {"const": "external-secret-owner"},
+        "consumer": {"type": "string", "minLength": 1},
+        "secret": {"const": true},
+        "derived": {"const": false},
+        "disposition": {"const": "replace-with-secret-reference"},
+        "mapping": {"$ref": "#/$defs/helmSecretReferenceMapping"}
+      }
+    },
+    "helmEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configMap", "fieldRef", "literal", "secretFile"],
+      "properties": {
+        "configMap": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"}
+        },
+        "fieldRef": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/helmFieldReference"}
+        },
+        "literal": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"}
+        },
+        "secretFile": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*_FILE$"}
+        }
+      }
+    },
+    "helmFieldReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "fieldPath"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "fieldPath": {"type": "string", "minLength": 1}
+      }
+    },
+    "helmDeployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nameSuffix", "container", "environment"],
+      "properties": {
+        "nameSuffix": {"type": "string", "pattern": "^-.+"},
+        "container": {"type": "string", "minLength": 1},
+        "environment": {"$ref": "#/$defs/helmEnvironment"}
+      }
+    },
+    "helmSecretFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deploymentSuffix", "container", "environmentName", "path", "logicalName"],
+      "properties": {
+        "deploymentSuffix": {"type": "string", "pattern": "^-.+"},
+        "container": {"type": "string", "minLength": 1},
+        "environmentName": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*_FILE$"},
+        "path": {"type": "string", "pattern": "^/"},
+        "logicalName": {"type": "string", "pattern": "^[a-z][A-Za-z0-9]*$"}
+      }
+    },
+    "helmAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chartPath", "releaseName", "namespace", "valuesFiles", "platformConfigMap", "deployments", "secretFiles"],
+      "properties": {
+        "chartPath": {"type": "string", "pattern": "^(?!/).+"},
+        "releaseName": {"type": "string", "minLength": 1},
+        "namespace": {"type": "string", "minLength": 1},
+        "valuesFiles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^(?!/).+"}
+        },
+        "platformConfigMap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["nameSuffix", "keys"],
+          "properties": {
+            "nameSuffix": {"type": "string", "pattern": "^-.+"},
+            "keys": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"}
+            }
+          }
+        },
+        "deployments": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/helmDeployment"}
+        },
+        "secretFiles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/helmSecretFile"}
+        }
+      }
+    },
+    "derivedLogicalOutputMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["composeTemplate", "helmTemplate"],
+      "properties": {
+        "composeTemplate": {"type": "string", "minLength": 1},
+        "helmTemplate": {"type": "string", "minLength": 1}
+      }
+    },
+    "derivedLogicalOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logicalName", "type", "inputs", "owner", "consumer", "secret", "derived", "disposition", "mapping"],
+      "properties": {
+        "logicalName": {"type": "string", "pattern": "^[a-z][A-Za-z0-9]*$"},
+        "type": {"enum": ["origin", "url", "path"]},
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["platformPublicOrigin", "workspaceId"]}
+        },
+        "owner": {"const": "platform-contract"},
+        "consumer": {"type": "string", "minLength": 1},
+        "secret": {"const": false},
+        "derived": {"const": true},
+        "disposition": {"const": "keep-derived-output"},
+        "mapping": {"$ref": "#/$defs/derivedLogicalOutputMapping"}
+      }
+    },
+    "composeOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "name", "consumer", "behavior", "owner", "sourceKind", "secret", "disposition"],
+      "properties": {
+        "service": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "consumer": {"type": "string", "minLength": 1},
+        "behavior": {"type": "string", "minLength": 1},
+        "owner": {"$ref": "#/$defs/owner"},
+        "sourceKind": {"enum": ["input", "derived", "fixed", "secret-reference", "third-party-adapter"]},
+        "sourceInput": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "secret": {"type": "boolean"},
+        "disposition": {"$ref": "#/$defs/disposition"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"sourceKind": {"const": "input"}}},
+          "then": {"required": ["sourceInput"]}
+        },
+        {
+          "if": {"properties": {"secret": {"const": true}}},
+          "then": {
+            "properties": {
+              "sourceKind": {"const": "secret-reference"},
+              "disposition": {"const": "replace-with-secret-reference"}
+            }
+          }
+        }
+      ]
+    },
+    "testFixtureOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "service", "name", "consumer", "behavior", "owner", "sourceKind", "secret", "disposition"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^(?!/).+"},
+        "service": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "consumer": {"type": "string", "minLength": 1},
+        "behavior": {"type": "string", "minLength": 1},
+        "owner": {"const": "third-party-adapter"},
+        "sourceKind": {"const": "test-fixture"},
+        "secret": {"const": true},
+        "disposition": {"const": "test-fixture-only"}
+      }
+    },
+    "auditedDisposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service", "name", "consumer", "behavior", "owner", "sourceKind", "secret", "disposition"],
+      "properties": {
+        "service": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "consumer": {"type": "string", "minLength": 1},
+        "behavior": {"type": "string", "minLength": 1},
+        "owner": {"$ref": "#/$defs/owner"},
+        "sourceKind": {"enum": ["input", "derived", "fixed", "secret-reference", "third-party-adapter"]},
+        "secret": {"type": "boolean"},
+        "disposition": {"enum": ["move-to-service-default", "replace-with-secret-reference", "remove"]}
+      }
+    }
+  }
+}

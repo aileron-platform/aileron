@@ -1,0 +1,307 @@
+{
+  "schemaVersion": 1,
+  "endpoint": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/{workspaceId}/availability"
+  },
+  "actionEndpoint": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/{workspaceId}/availability/actions/{action}"
+  },
+  "deletionProjection": {
+    "field": "deletion",
+    "authorization": {
+      "operationId": "workspace.delete",
+      "minimumResourceRole": "owner",
+      "requestTimeOnly": true
+    },
+    "intentEndpoint": {
+      "method": "DELETE",
+      "path": "/api/v1/workspaces/{workspaceId}",
+      "confirmationField": "confirmationName",
+      "confirmationMustMatchCurrentWorkspaceName": true,
+      "confirmationRequiredForRetry": true
+    },
+    "entry": {
+      "availability": [
+        "ready",
+        "transitioning",
+        "stopped",
+        "blocked"
+      ],
+      "allowedActions": [
+        "delete"
+      ]
+    },
+    "actions": [
+      "delete",
+      "retry"
+    ],
+    "phases": [
+      "queued",
+      "cancelling_automations",
+      "stopping_runtime",
+      "deleting_resources",
+      "finalizing"
+    ],
+    "phaseProjection": {
+      "queued": {
+        "availability": "deleting",
+        "allowedActions": []
+      },
+      "cancelling_automations": {
+        "availability": "deleting",
+        "allowedActions": []
+      },
+      "stopping_runtime": {
+        "availability": "deleting",
+        "allowedActions": []
+      },
+      "deleting_resources": {
+        "availability": "deleting",
+        "allowedActions": []
+      },
+      "finalizing": {
+        "availability": "deleting",
+        "allowedActions": []
+      }
+    },
+    "progress": {
+      "kind": "phase",
+      "percentage": false,
+      "requiredPhases": [
+        "queued",
+        "cancelling_automations",
+        "stopping_runtime",
+        "deleting_resources",
+        "finalizing"
+      ]
+    },
+    "automationConvergence": {
+      "queued": "cancel",
+      "running": "request_cancel_and_wait_for_terminal",
+      "uncertain": "fail_and_preserve_workspace"
+    },
+    "idempotency": {
+      "inFlight": "reuse_existing_attempt",
+      "failed": "explicit_retry_creates_new_attempt",
+      "acceptedAttemptLocksWrites": true
+    },
+    "completion": {
+      "availability": "not_found",
+      "httpStatus": 404,
+      "workspaceMustBeAbsent": true,
+      "clientMayNavigateOnlyAfterConfirmation": true
+    },
+    "failure": {
+      "availability": "blocked",
+      "retryable": true,
+      "allowedActions": [
+        "retry"
+      ],
+      "preserveWorkspace": true,
+      "preservePersistentData": true,
+      "partialCleanupMayHaveOccurred": true,
+      "clientTimeoutIsNotSuccess": true
+    },
+    "knowledgeBase": {
+      "preserveEntity": true,
+      "removeAttachmentRelationOnCompletion": true
+    }
+  },
+  "availabilityStates": [
+    "ready",
+    "transitioning",
+    "stopped",
+    "blocked",
+    "deleting",
+    "not_found"
+  ],
+  "allowedActions": [
+    "start",
+    "retry",
+    "rebuild",
+    "return"
+  ],
+  "knowledgeMountStates": [
+    "ready",
+    "syncing",
+    "degraded"
+  ],
+  "reasonCodes": {
+    "WORKSPACE_AUTHENTICATION_REQUIRED": {
+      "availability": "blocked",
+      "scope": "workspace",
+      "httpStatus": 401,
+      "retryable": false,
+      "defaultAllowedActions": []
+    },
+    "WORKSPACE_ACCESS_DENIED": {
+      "availability": "blocked",
+      "scope": "workspace",
+      "httpStatus": 403,
+      "retryable": false,
+      "defaultAllowedActions": [
+        "return"
+      ]
+    },
+    "WORKSPACE_READY": {
+      "availability": "ready",
+      "scope": "workspace",
+      "httpStatus": 200,
+      "retryable": false,
+      "defaultAllowedActions": []
+    },
+    "WORKSPACE_RUNTIME_ACCESS_RECYCLE_IN_PROGRESS": {
+      "availability": "transitioning",
+      "scope": "workspace",
+      "httpStatus": 423,
+      "retryable": false,
+      "defaultAllowedActions": [
+        "return"
+      ]
+    },
+    "WORKSPACE_RUNTIME_ACCESS_RECYCLE_FAILED": {
+      "availability": "blocked",
+      "scope": "workspace",
+      "httpStatus": 423,
+      "retryable": true,
+      "defaultAllowedActions": [
+        "retry",
+        "rebuild",
+        "return"
+      ]
+    },
+    "WORKSPACE_RUNTIME_STARTING": {
+      "availability": "transitioning",
+      "scope": "workspace",
+      "httpStatus": 423,
+      "retryable": false,
+      "defaultAllowedActions": [
+        "return"
+      ]
+    },
+    "WORKSPACE_RUNTIME_RESTARTING": {
+      "availability": "transitioning",
+      "scope": "workspace",
+      "httpStatus": 423,
+      "retryable": false,
+      "defaultAllowedActions": [
+        "return"
+      ]
+    },
+    "WORKSPACE_RUNTIME_STOPPING": {
+      "availability": "transitioning",
+      "scope": "workspace",
+      "httpStatus": 423,
+      "retryable": false,
+      "defaultAllowedActions": [
+        "return"
+      ]
+    },
+    "WORKSPACE_RUNTIME_STOPPED": {
+      "availability": "stopped",
+      "scope": "workspace",
+      "httpStatus": 423,
+      "retryable": false,
+      "defaultAllowedActions": [
+        "start",
+        "return"
+      ]
+    },
+    "WORKSPACE_RUNTIME_ERROR": {
+      "availability": "blocked",
+      "scope": "workspace",
+      "httpStatus": 423,
+      "retryable": true,
+      "defaultAllowedActions": [
+        "retry",
+        "rebuild",
+        "return"
+      ]
+    },
+    "WORKSPACE_RUNTIME_INSTANCE_UNAVAILABLE": {
+      "availability": "blocked",
+      "scope": "workspace",
+      "httpStatus": 423,
+      "retryable": true,
+      "defaultAllowedActions": [
+        "rebuild",
+        "return"
+      ]
+    },
+    "WORKSPACE_DELETING": {
+      "availability": "deleting",
+      "scope": "workspace",
+      "httpStatus": 423,
+      "retryable": false,
+      "defaultAllowedActions": [
+        "return"
+      ]
+    },
+    "WORKSPACE_NOT_FOUND": {
+      "availability": "not_found",
+      "scope": "workspace",
+      "httpStatus": 404,
+      "retryable": false,
+      "defaultAllowedActions": [
+        "return"
+      ]
+    },
+    "WORKSPACE_AVAILABILITY_ACTION_NOT_ALLOWED": {
+      "availability": "blocked",
+      "scope": "workspace",
+      "httpStatus": 409,
+      "retryable": false,
+      "defaultAllowedActions": [
+        "return"
+      ]
+    },
+    "WORKSPACE_AVAILABILITY_ACTION_ACCEPTED": {
+      "availability": "transitioning",
+      "scope": "workspace",
+      "httpStatus": 202,
+      "retryable": false,
+      "defaultAllowedActions": [
+        "return"
+      ]
+    },
+    "WORKSPACE_RUNTIME_INSTANCE_MISMATCH": {
+      "availability": "transitioning",
+      "scope": "workspace",
+      "httpStatus": 423,
+      "retryable": false,
+      "defaultAllowedActions": [
+        "return"
+      ]
+    },
+    "WORKSPACE_BROWSER_WORKLOAD_NOT_READY": {
+      "availability": "ready",
+      "scope": "browser",
+      "httpStatus": 423,
+      "retryable": false,
+      "defaultAllowedActions": []
+    },
+    "WORKSPACE_EXECUTION_PLANE_DRIFT": {
+      "availability": "blocked",
+      "scope": "workspace",
+      "httpStatus": 409,
+      "retryable": false,
+      "defaultAllowedActions": []
+    },
+    "WORKSPACE_EXECUTION_PLANE_OBSERVATION_UNAVAILABLE": {
+      "availability": "transitioning",
+      "scope": "workspace",
+      "httpStatus": 503,
+      "retryable": false,
+      "defaultAllowedActions": []
+    },
+    "WORKSPACE_KB_MOUNT_SYNC_IN_PROGRESS": {
+      "availability": "ready",
+      "scope": "knowledge_mount",
+      "httpStatus": 409,
+      "retryable": false,
+      "defaultAllowedActions": []
+    }
+  }
+}

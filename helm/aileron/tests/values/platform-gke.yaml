@@ -1,0 +1,37 @@
+kubernetes:
+  workspaceRuntimeNamespace: workspace-system
+  platformStorageGid: 2000
+  workspaceData:
+    storageClassName: enterprise-multishare-rwx
+  runtimeHome:
+    accessMode: ReadWriteOnce
+    storageClassName: standard-rwo
+  knowledgeBases:
+    accessModes:
+      - ReadWriteMany
+    storageClassName: enterprise-multishare-rwx
+  managerState:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: standard-rwo
+  storageVerification:
+    enabled: true
+    workspaceStorageClassName: enterprise-multishare-rwx-verification-delete
+    managerStateStorageClassName: standard-rwo-verification-delete
+    workspaceSize: 1Gi
+    managerStateSize: 1Gi
+
+frontend:
+  enabled: false
+postgres:
+  enabled: false
+redis:
+  enabled: false
+ingress:
+  enabled: false
+oidc:
+  issuerUrl: https://login.example.com/realms/aileron
+  clientSecretName: external-oidc-client
+bootstrap:
+  admin:
+    enabled: false

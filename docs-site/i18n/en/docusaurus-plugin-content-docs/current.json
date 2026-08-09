@@ -1,0 +1,34 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.docsSidebar.category.安裝說明": {
+    "message": "Installation",
+    "description": "The label for category 安裝說明 in sidebar docsSidebar"
+  },
+  "sidebar.docsSidebar.category.功能說明": {
+    "message": "Features",
+    "description": "The label for category 功能說明 in sidebar docsSidebar"
+  },
+  "sidebar.docsSidebar.category.Knowledge Base": {
+    "message": "Knowledge Base",
+    "description": "The label for category Knowledge Base in sidebar docsSidebar"
+  },
+  "sidebar.docsSidebar.category.系統架構說明": {
+    "message": "Architecture",
+    "description": "The label for category 系統架構說明 in sidebar docsSidebar"
+  },
+  "sidebar.docsSidebar.category.參考資料": {
+    "message": "Reference",
+    "description": "The label for category 參考資料 in sidebar docsSidebar"
+  },
+  "sidebar.docsSidebar.category.API 參考": {
+    "message": "API Reference",
+    "description": "The label for category API 參考 in sidebar docsSidebar"
+  },
+  "sidebar.docsSidebar.category.設定參考": {
+    "message": "Configuration Reference",
+    "description": "The label for category 設定參考 in sidebar docsSidebar"
+  }
+}

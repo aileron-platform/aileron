@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aileron.dev/contracts/browser-connectivity/turn-path-evidence.schema.json",
+  "title": "TURN Path Evidence Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "latestAttempt"],
+  "properties": {
+    "contractVersion": {"const": "browser-connectivity/v1"},
+    "latestAttempt": {"$ref": "#/$defs/evidence"},
+    "lastSuccess": {"$ref": "#/$defs/evidence"}
+  },
+  "$defs": {
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["installationId", "vantageId"],
+      "properties": {
+        "installationId": {"type": "string", "minLength": 1},
+        "vantageId": {"type": "string", "minLength": 1}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractVersion", "producer", "profileRevision", "credentialRevision", "outcome", "acceptedAt", "expiresAt"],
+      "properties": {
+        "contractVersion": {"const": "browser-connectivity/v1"},
+        "producer": {"$ref": "#/$defs/producer"},
+        "profileRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "credentialRevision": {"type": "string", "minLength": 1},
+        "outcome": {"enum": ["success", "failure"]},
+        "measuredAt": {"type": "string", "format": "date-time"},
+        "acceptedAt": {"type": "string", "format": "date-time"},
+        "expiresAt": {"type": "string", "format": "date-time"},
+        "relayAddress": {"type": "string", "minLength": 1},
+        "errorCode": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"outcome": {"const": "success"}}, "required": ["outcome"]},
+          "then": {"required": ["relayAddress"], "not": {"required": ["errorCode"]}},
+          "else": {"required": ["errorCode"], "not": {"required": ["relayAddress"]}}
+        }
+      ]
+    }
+  }
+}

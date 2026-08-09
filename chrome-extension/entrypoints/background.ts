@@ -1,0 +1,314 @@
+/**
+ * dev-browser Chrome Extension Background Script
+ *
+ * This extension connects to the dev-browser relay server and allows
+ * Playwright automation of the user's existing browser tabs.
+ */
+
+import { createLogger } from "../utils/logger";
+import { TabManager } from "../services/TabManager";
+import { ConnectionManager } from "../services/ConnectionManager";
+import { CDPRouter } from "../services/CDPRouter";
+import { StateManager } from "../services/StateManager";
+import { ConfigManager } from "../services/ConfigManager";
+import { GlowEffectManager } from "../services/GlowEffectManager";
+import {
+  isConfigureBrowserExtensionPairingMessage,
+  isTrustedFrontendSender,
+  parseTrustedFrontendOrigins,
+} from "../utils/trustedFrontendOrigins";
+import type {
+  ConfigResponse,
+  PopupMessage,
+  PairingConfigResponse,
+  StateResponse,
+} from "../utils/types";
+
+export default defineBackground(() => {
+  // Log extension initialization
+  console.log("[background] Extension initializing at", new Date().toISOString());
+
+  // Create connection manager first (needed for sendMessage)
+  let connectionManager: ConnectionManager;
+
+  // Create logger with sendMessage function
+  const logger = createLogger((msg) => connectionManager?.send(msg));
+
+  // Create state manager for persistence
+  const stateManager = new StateManager();
+
+  // Create config manager for relay configuration
+  const configManager = new ConfigManager(logger);
+  const trustedFrontendOrigins = parseTrustedFrontendOrigins(
+    import.meta.env.WXT_TRUSTED_FRONTEND_ORIGINS
+  );
+
+  // Create glow effect manager
+  const glowEffectManager = new GlowEffectManager({
+    logger,
+    stateManager,
+  });
+
+  // Create tab manager
+  const tabManager = new TabManager({
+    logger,
+    sendMessage: (msg) => connectionManager.send(msg),
+  });
+
+  // Create CDP router
+  const cdpRouter = new CDPRouter({
+    logger,
+    tabManager,
+    glowEffect: glowEffectManager,
+  });
+
+  // Create connection manager
+  connectionManager = new ConnectionManager({
+    logger,
+    onMessage: (msg) => cdpRouter.handleCommand(msg),
+    onDisconnect: () => tabManager.detachAll(),
+    getConfig: () => configManager.getConfig(),
+    buildWebSocketUrl: (config) => configManager.buildWebSocketUrl(config),
+    buildHealthCheckUrl: (config) => configManager.buildHealthCheckUrl(config),
+    consumePairingAssertion: () => configManager.consumePairingAssertion(),
+    clearPairingAssertion: (runtimeInstanceId) =>
+      configManager.clearPairingAssertion(runtimeInstanceId),
+  });
+
+  // Keep-alive alarm name for Chrome Alarms API
+  const KEEPALIVE_ALARM = "keepAlive";
+
+  // Update badge to show active/inactive state
+  function updateBadge(isActive: boolean): void {
+    chrome.action.setBadgeText({ text: isActive ? "ON" : "" });
+    chrome.action.setBadgeBackgroundColor({ color: "#4CAF50" });
+  }
+
+  // Handle state changes
+  async function handleStateChange(isActive: boolean): Promise<void> {
+    const currentState = await stateManager.getState();
+    await stateManager.setState({ ...currentState, isActive });
+    if (isActive) {
+      chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.5 });
+      connectionManager.startMaintaining();
+    } else {
+      chrome.alarms.clear(KEEPALIVE_ALARM);
+      connectionManager.disconnect();
+      await glowEffectManager.removeAll();
+    }
+    updateBadge(isActive);
+  }
+
+  // Handle debugger events
+  function onDebuggerEvent(
+    source: chrome.debugger.DebuggerSession,
+    method: string,
+    params: unknown
+  ): void {
+    cdpRouter.handleDebuggerEvent(source, method, params, (msg) => connectionManager.send(msg));
+  }
+
+  function onDebuggerDetach(
+    source: chrome.debugger.Debuggee,
+    reason: `${chrome.debugger.DetachReason}`
+  ): void {
+    const tabId = source.tabId;
+    if (!tabId) return;
+
+    logger.debug(`Debugger detached for tab ${tabId}: ${reason}`);
+    tabManager.handleDebuggerDetach(tabId);
+  }
+
+  // Handle messages from popup
+  chrome.runtime.onMessage.addListener(
+    (
+      message: PopupMessage,
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response: StateResponse | ConfigResponse) => void
+    ) => {
+      if (message.type === "getState") {
+        (async () => {
+          const state = await stateManager.getState();
+          const isConnected = await connectionManager.checkConnection();
+          sendResponse({
+            isActive: state.isActive,
+            isConnected,
+            glowEnabled: state.glowEnabled,
+          });
+        })();
+        return true; // Async response
+      }
+
+      if (message.type === "setState") {
+        (async () => {
+          await handleStateChange(message.isActive);
+          const state = await stateManager.getState();
+          const isConnected = await connectionManager.checkConnection();
+          sendResponse({
+            isActive: state.isActive,
+            isConnected,
+            glowEnabled: state.glowEnabled,
+          });
+        })();
+        return true; // Async response
+      }
+
+      if (message.type === "setGlowEnabled") {
+        (async () => {
+          const currentState = await stateManager.getState();
+          await stateManager.setState({
+            ...currentState,
+            glowEnabled: message.enabled,
+          });
+
+          // If glow is disabled, immediately remove all glow effects
+          if (!message.enabled) {
+            await glowEffectManager.removeAll();
+          }
+
+          const newState = await stateManager.getState();
+          const isConnected = await connectionManager.checkConnection();
+          sendResponse({
+            isActive: newState.isActive,
+            isConnected,
+            glowEnabled: newState.glowEnabled,
+          });
+        })();
+        return true; // Async response
+      }
+
+      if (message.type === "getConfig") {
+        (async () => {
+          const config = await configManager.getConfig();
+          const defaultConfig = configManager.getDefaultConfig();
+          sendResponse({ config, defaultConfig });
+        })();
+        return true; // Async response
+      }
+
+      if (message.type === "setConfig") {
+        (async () => {
+          const config = await configManager.setConfig(message.config);
+          const defaultConfig = configManager.getDefaultConfig();
+          // Reconnect with new configuration
+          connectionManager.disconnect();
+          const state = await stateManager.getState();
+          if (state.isActive) {
+            connectionManager.startMaintaining();
+          }
+          sendResponse({ config, defaultConfig });
+        })();
+        return true; // Async response
+      }
+
+      if (message.type === "resetConfig") {
+        (async () => {
+          const config = await configManager.resetConfig();
+          const defaultConfig = configManager.getDefaultConfig();
+          // Reconnect with default configuration
+          connectionManager.disconnect();
+          const state = await stateManager.getState();
+          if (state.isActive) {
+            connectionManager.startMaintaining();
+          }
+          sendResponse({ config, defaultConfig });
+        })();
+        return true; // Async response
+      }
+
+      return false;
+    }
+  );
+
+  chrome.runtime.onMessageExternal.addListener(
+    (
+      message: unknown,
+      sender: chrome.runtime.MessageSender,
+      sendResponse: (response: PairingConfigResponse) => void
+    ) => {
+      if (
+        !isTrustedFrontendSender(sender.url, trustedFrontendOrigins) ||
+        !isConfigureBrowserExtensionPairingMessage(message)
+      ) {
+        sendResponse({ accepted: false });
+        return false;
+      }
+      (async () => {
+        try {
+          const pairing = configManager.setPairingAssertion(message.pairing);
+          connectionManager.disconnect({ preservePendingPairingAssertion: true });
+          await handleStateChange(true);
+          sendResponse({
+            accepted: true,
+            runtimeInstanceId: pairing.runtimeInstanceId,
+          });
+        } catch {
+          logger.error("Browser extension pairing assertion was rejected");
+          sendResponse({ accepted: false });
+        }
+      })();
+      return true;
+    }
+  );
+
+  // Set up event listeners
+
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    if (tabManager.has(tabId)) {
+      logger.debug("Tab closed:", tabId);
+      tabManager.detach(tabId, false);
+    }
+    glowEffectManager.handleTabClosed(tabId);
+  });
+
+  // Register debugger event listeners
+  chrome.debugger.onEvent.addListener(onDebuggerEvent);
+  chrome.debugger.onDetach.addListener(onDebuggerDetach);
+
+  // Reset any stale debugger connections on startup
+  chrome.debugger.getTargets().then((targets) => {
+    const attached = targets.filter((t) => t.tabId && t.attached);
+    if (attached.length > 0) {
+      logger.log(`Detaching ${attached.length} stale debugger connections`);
+      for (const target of attached) {
+        chrome.debugger.detach({ tabId: target.tabId }).catch(() => {});
+      }
+    }
+  });
+
+  logger.log("Extension initialized");
+
+  // Initialize from stored state
+  stateManager.getState().then((state) => {
+    updateBadge(state.isActive);
+    if (state.isActive) {
+      // Create keep-alive alarm only when extension is active
+      chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.5 });
+      connectionManager.startMaintaining();
+    }
+  });
+
+  // Set up Chrome Alarms keep-alive listener
+  // This ensures the connection is maintained even after service worker unloads
+  chrome.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === KEEPALIVE_ALARM) {
+      const state = await stateManager.getState();
+
+      if (state.isActive) {
+        const isConnected = connectionManager.isConnected();
+        const isAttempting = connectionManager.isAttemptingConnection();
+
+        logger.log(`Keep-alive alarm: connected=${isConnected}, attempting=${isAttempting}`);
+
+        if (!isConnected && !isAttempting) {
+          logger.log("Keep-alive: Connection lost, triggering startMaintaining");
+          connectionManager.startMaintaining();
+        } else if (isAttempting) {
+          logger.debug("Keep-alive: Already attempting, skipping");
+        } else {
+          logger.debug("Keep-alive: Connected, skipping");
+        }
+      }
+    }
+  });
+});

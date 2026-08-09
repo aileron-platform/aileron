@@ -1,0 +1,41 @@
+{{- if .Values.workspaceManager.enabled }}
+{{- $crNamespace := include "aileron.workspaceRuntimeNamespace" . }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-manager
+  namespace: {{ $crNamespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["platform.aileron.io"]
+    resources: ["workspaces"]
+    verbs: ["get", "create", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    resourceNames:
+      - {{ .Values.kubernetes.knowledgeBases.pvcName | quote }}
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-manager
+  namespace: {{ $crNamespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" .Values.workspaceManager.serviceAccount "nameSuffix" "workspace-manager") }}
+    namespace: {{ $crNamespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "aileron.fullname" . }}-workspace-manager
+{{- end }}

@@ -1,0 +1,94 @@
+{
+  "realm": "aileron",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "clients": [
+    {
+      "clientId": "__OIDC_CLIENT_ID__",
+      "name": "Aileron Workspace Manager",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "__OIDC_CLIENT_SECRET__",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "__OIDC_CALLBACK_URL__"
+      ],
+      "webOrigins": [
+        "__PLATFORM_PUBLIC_ORIGIN__"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "__OIDC_LOGOUT_PATTERN__"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "email"
+      ]
+    }
+  ],
+  "components": {
+    "org.keycloak.storage.UserStorageProvider": [
+      {
+        "name": "openldap",
+        "providerId": "ldap",
+        "config": {
+          "enabled": ["true"],
+          "priority": ["0"],
+          "fullSyncPeriod": ["-1"],
+          "changedSyncPeriod": ["-1"],
+          "cachePolicy": ["DEFAULT"],
+          "editMode": ["READ_ONLY"],
+          "syncRegistrations": ["false"],
+          "vendor": ["other"],
+          "usernameLDAPAttribute": ["uid"],
+          "rdnLDAPAttribute": ["uid"],
+          "uuidLDAPAttribute": ["entryUUID"],
+          "userObjectClasses": ["inetOrgPerson", "organizationalPerson"],
+          "connectionUrl": ["ldap://openldap:389"],
+          "usersDn": ["ou=people,dc=aileron,dc=local"],
+          "authType": ["simple"],
+          "bindDn": ["cn=admin,dc=aileron,dc=local"],
+          "bindCredential": ["__LDAP_BIND_CREDENTIAL__"],
+          "searchScope": ["1"],
+          "useTruststoreSpi": ["ldapsOnly"],
+          "connectionPooling": ["true"],
+          "pagination": ["true"],
+          "importEnabled": ["true"],
+          "customUserSearchFilter": ["(!(pwdAccountLockedTime=*))"],
+          "allowKerberosAuthentication": ["false"],
+          "debug": ["false"],
+          "useKerberosForPasswordAuthentication": ["false"],
+          "trustEmail": ["false"]
+        }
+      }
+    ]
+  },
+  "users": [
+    {
+      "id": "__LOCAL_ADMIN_SUBJECT__",
+      "username": "__LOCAL_ADMIN_USERNAME__",
+      "enabled": true,
+      "email": "__LOCAL_ADMIN_EMAIL__",
+      "emailVerified": true,
+      "firstName": "Aileron",
+      "lastName": "Administrator",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__LOCAL_ADMIN_PASSWORD__",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

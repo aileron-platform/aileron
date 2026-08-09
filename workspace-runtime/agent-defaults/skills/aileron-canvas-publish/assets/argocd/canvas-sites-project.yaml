@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: __ARGOCD_PROJECT__
+  namespace: argocd
+  labels:
+    app.kubernetes.io/managed-by: aileron-canvas-publish
+spec:
+  description: Aileron Canvas OCI Helm chart deployments
+  sourceRepos:
+    - oci://__OCI_REGISTRY__/__OCI_CHART_REPOSITORY__/*/aileron-site
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: __DESTINATION_NAMESPACE__
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: apps
+      kind: Deployment
+    - group: ""
+      kind: Service
+    - group: networking.k8s.io
+      kind: Ingress

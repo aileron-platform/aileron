@@ -1,0 +1,66 @@
+services:
+  postgres-test:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: test_workspace_manager
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  redis-test:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  workspace-manager-test:
+    image: ailerondocker/workspace-manager:dev
+    pull_policy: never
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        umask 077
+        printf '%s\n' 'manager-test-runtime-database-credential-key-v1' > /tmp/runtime-database-credential.key
+        mkdir -p /tmp/runtime-assertion-keys
+        .venv/bin/python scripts/generate_runtime_assertion_keys.py /tmp/runtime-assertion-keys --key-id workspace-manager-ed25519-v1
+        exec "$$@"
+      - --
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://test_user:test_password@postgres-test:5432/test_workspace_manager
+      - AUTOMATION_TEST_DATABASE_URL=postgresql://test_user:test_password@postgres-test:5432/test_workspace_manager
+      - CELERY_INTEGRATION_BROKER_URL=redis://redis-test:6379/15
+      - REDIS_URL=redis://redis-test:6379/0
+      - RUNTIME_DATABASE_CREDENTIAL_KEY_FILE=/tmp/runtime-database-credential.key
+      - RUNTIME_ASSERTION_PRIVATE_KEY_FILE=/tmp/runtime-assertion-keys/private-key.pem
+      - RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE=/tmp/runtime-assertion-keys/jwks.json
+      - TESTING=true
+      - ENV=testing
+      - CILIUM_ENABLED=true
+      - PYTHONPATH=/workspace-manager
+    volumes:
+      - .:/workspace-manager
+      - /workspace-manager/.venv
+      - ../packages:/packages:ro
+      - ..:/repo-root:ro
+      - ../scripts:/scripts:ro
+      - ../helm:/helm:ro
+    working_dir: /workspace-manager
+    command: >
+      sh -c "
+        uv sync --dev &&
+        uv run pytest tests/ --cov=app --cov-report=term-missing --cov-report=html -v
+      "

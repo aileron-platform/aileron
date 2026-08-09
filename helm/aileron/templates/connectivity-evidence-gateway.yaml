@@ -1,0 +1,219 @@
+{{- if and .Values.turn.enabled .Values.connectivityEvidenceGateway.enabled }}
+{{- $fullname := include "aileron.fullname" . -}}
+{{- $secretName := .Values.connectivityEvidenceGateway.auth.existingSecretName -}}
+{{- $installationID := .Values.connectivityEvidenceGateway.installationId | replace "{releaseNamespace}" .Release.Namespace | replace "{releaseName}" .Release.Name -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-connectivity-evidence-gateway
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: connectivity-evidence-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "aileron.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: connectivity-evidence-gateway
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: connectivity-evidence-gateway
+      annotations:
+        checksum/turn-profile: {{ include "aileron.turnReachabilityProfileJSON" . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gateway
+          image: {{ include "aileron.imageReference" (dict "name" "workspaceOperator.image" "image" .Values.workspaceOperator.image "production" .Values.security.requireStrongSecrets) | quote }}
+          imagePullPolicy: {{ .Values.workspaceOperator.image.pullPolicy }}
+          args:
+            - --mode=connectivity-evidence-gateway
+            - --connectivity-probe-bind-address=:8083
+          env:
+            - name: TURN_REACHABILITY_PROFILE_JSON
+              value: {{ include "aileron.turnReachabilityProfileJSON" . | quote }}
+            - name: TURN_CREDENTIAL_REVISION
+              value: {{ .Values.turn.credentialRevision | quote }}
+            - name: AILERON_INSTALLATION_ID
+              value: {{ $installationID | quote }}
+            - name: TURN_FRONTEND_PROBE_ICE_SERVERS_JSON_FILE
+              value: /run/secrets/aileron-connectivity/probe-ice-servers.json
+            - name: CONNECTIVITY_AGENT_TOKENS_FILE
+              value: /run/secrets/aileron-connectivity/agent-tokens.json
+            - name: CONNECTIVITY_GATEWAY_INTERNAL_TOKEN_FILE
+              value: /run/secrets/aileron-connectivity/internal-token
+            {{- if eq .Values.turn.profile.credentialIssuer.kind "turnRest" }}
+            - name: TURN_REST_SHARED_SECRET_FILE
+              value: /run/secrets/aileron-connectivity/turn-rest-shared-secret
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8083
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 2
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.connectivityEvidenceGateway.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: connectivity-auth
+              mountPath: /run/secrets/aileron-connectivity
+              readOnly: true
+      volumes:
+        - name: connectivity-auth
+          projected:
+            defaultMode: 0440
+            sources:
+              - secret:
+                  name: {{ $secretName }}
+                  items:
+                    - key: {{ .Values.connectivityEvidenceGateway.auth.probeIceServersJsonKey }}
+                      path: probe-ice-servers.json
+                    - key: {{ .Values.connectivityEvidenceGateway.auth.agentTokensJsonKey }}
+                      path: agent-tokens.json
+                    - key: {{ .Values.connectivityEvidenceGateway.auth.internalTokenKey }}
+                      path: internal-token
+              {{- if eq .Values.turn.profile.credentialIssuer.kind "turnRest" }}
+              - secret:
+                  name: {{ include "aileron.turnSecretName" . }}
+                  items:
+                    - key: {{ .Values.turn.restSharedSecretKey }}
+                      path: turn-rest-shared-secret
+              {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-connectivity-evidence-gateway
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: connectivity-evidence-gateway
+spec:
+  selector:
+    {{- include "aileron.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: connectivity-evidence-gateway
+  ports:
+    - name: http
+      port: 8083
+      targetPort: http
+{{- if .Values.connectivityEvidenceGateway.hostAgent.enabled }}
+{{- $agentCASecretName := .Values.connectivityEvidenceGateway.hostAgent.tls.caSecretName | default "" | trim }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ $fullname }}-connectivity-host-agent
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: connectivity-external-agent
+spec:
+  selector:
+    matchLabels:
+      {{- include "aileron.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: connectivity-external-agent
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: connectivity-external-agent
+    spec:
+      automountServiceAccountToken: false
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: agent
+          image: {{ include "aileron.imageReference" (dict "name" "workspaceOperator.image" "image" .Values.workspaceOperator.image "production" .Values.security.requireStrongSecrets) | quote }}
+          imagePullPolicy: {{ .Values.workspaceOperator.image.pullPolicy }}
+          args:
+            - --mode=connectivity-external-agent
+          env:
+            - name: CONNECTIVITY_EVIDENCE_GATEWAY_URL
+              value: {{ printf "%s/api/v1/connectivity-evidence" (include "aileron.platformPublicOrigin" .) | quote }}
+            - name: AILERON_INSTALLATION_ID
+              value: {{ $installationID | quote }}
+            - name: CONNECTIVITY_AGENT_VANTAGE_ID
+              value: {{ .Values.connectivityEvidenceGateway.hostAgent.vantageId | quote }}
+            - name: CONNECTIVITY_AGENT_INTERVAL_SECONDS
+              value: {{ .Values.turn.profile.evidence.intervalSeconds | quote }}
+            - name: CONNECTIVITY_AGENT_TOKEN_FILE
+              value: /var/run/aileron-connectivity-agent/token
+            {{- if ne $agentCASecretName "" }}
+            - name: CONNECTIVITY_AGENT_CA_FILE
+              value: /var/run/aileron-connectivity-agent-ca/ca.crt
+            {{- end }}
+          volumeMounts:
+            - name: agent-token
+              mountPath: /var/run/aileron-connectivity-agent
+              readOnly: true
+            {{- if ne $agentCASecretName "" }}
+            - name: agent-ca
+              mountPath: /var/run/aileron-connectivity-agent-ca
+              readOnly: true
+            {{- end }}
+          resources:
+            {{- toYaml .Values.connectivityEvidenceGateway.hostAgent.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: agent-token
+          secret:
+            secretName: {{ $secretName }}
+            defaultMode: 288
+            items:
+              - key: {{ .Values.connectivityEvidenceGateway.auth.agentTokenKeyPrefix }}{{ .Values.connectivityEvidenceGateway.hostAgent.vantageId }}-token
+                path: token
+        {{- if ne $agentCASecretName "" }}
+        - name: agent-ca
+          secret:
+            secretName: {{ $agentCASecretName | quote }}
+            defaultMode: 288
+            items:
+              - key: {{ .Values.connectivityEvidenceGateway.hostAgent.tls.caSecretKey | quote }}
+                path: ca.crt
+        {{- end }}
+      {{- with .Values.connectivityEvidenceGateway.hostAgent.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.connectivityEvidenceGateway.hostAgent.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,608 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: aileron-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aileron
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+    secrets:
+      - postgres-password
+    ports:
+      - "5433:5432"
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/postgres:/var/lib/postgresql/data"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/init-sql:/docker-entrypoint-initdb.d:ro"
+    networks:
+      - aileron-network-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: aileron-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6382:6379"
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/redis:/data"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --save
+      - "900"
+      - "1"
+      - --save
+      - "300"
+      - "10"
+      - --save
+      - "60"
+      - "10000"
+    networks:
+      - aileron-network-dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  coturn:
+    image: ${COTURN_IMAGE:?COTURN_IMAGE must be set}
+    pull_policy: never
+    user: "0:0"
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        config_file=/run/aileron-coturn/turnserver.conf
+        umask 077
+        {
+          printf '%s\n' \
+            'listening-ip=0.0.0.0' \
+            'listening-port=3478' \
+            'min-port=${TURN_RELAY_MIN_PORT:?TURN_RELAY_MIN_PORT must be set}' \
+            'max-port=${TURN_RELAY_MAX_PORT:?TURN_RELAY_MAX_PORT must be set}' \
+            'realm=aileron' \
+            'use-auth-secret'
+          printf 'static-auth-secret='
+          cat /run/secrets/coturn-auth-secret
+          printf '%s\n' \
+            '' \
+            'fingerprint' \
+            'no-cli' \
+            'no-tls' \
+            'no-dtls' \
+            'no-multicast-peers' \
+            'log-file=stdout' \
+            'simple-log'
+        } > "$${config_file}"
+        chmod 0600 "$${config_file}"
+        exec turnserver -c "$${config_file}"
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_READ_SEARCH
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - coturn-auth-secret
+    tmpfs:
+      - /run/aileron-coturn:mode=0700,noexec,nosuid,nodev
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "${TURN_RELAY_MIN_PORT:?TURN_RELAY_MIN_PORT must be set}-${TURN_RELAY_MAX_PORT:?TURN_RELAY_MAX_PORT must be set}:${TURN_RELAY_MIN_PORT:?TURN_RELAY_MIN_PORT must be set}-${TURN_RELAY_MAX_PORT:?TURN_RELAY_MAX_PORT must be set}/udp"
+    networks:
+      - aileron-network-dev
+    depends_on:
+      turn-readiness-preflight:
+        condition: service_completed_successfully
+
+  connectivity-evidence-gateway:
+    image: ${WORKSPACE_OPERATOR_IMAGE:?WORKSPACE_OPERATOR_IMAGE must be set}
+    pull_policy: never
+    user: "0:0"
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_READ_SEARCH
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - --mode=connectivity-evidence-gateway
+      - --connectivity-probe-bind-address=:8083
+    environment:
+      TURN_REACHABILITY_PROFILE_FILE: /run/config/turn-reachability-profile.json
+      TURN_FRONTEND_PROBE_ICE_SERVERS_JSON_FILE: /run/secrets/turn-frontend-ice-servers.json
+      TURN_CREDENTIAL_REVISION: ${TURN_CREDENTIAL_REVISION:?TURN_CREDENTIAL_REVISION must be set}
+      AILERON_INSTALLATION_ID: ${AILERON_INSTALLATION_ID:?AILERON_INSTALLATION_ID must be set}
+      CONNECTIVITY_AGENT_TOKENS_FILE: /run/secrets/connectivity-agent-tokens.json
+      CONNECTIVITY_GATEWAY_INTERNAL_TOKEN_FILE: /run/secrets/gateway-internal-token
+      TURN_REST_SHARED_SECRET_FILE: /run/secrets/turn-rest-shared-secret
+    volumes:
+      - "${HOST_TURN_CONFIG_DIR:?HOST_TURN_CONFIG_DIR must be set}/turn-reachability-profile.json:/run/config/turn-reachability-profile.json:ro"
+    secrets:
+      - connectivity-agent-tokens.json
+      - gateway-internal-token
+      - turn-rest-shared-secret
+      - turn-frontend-ice-servers.json
+    ports:
+      - "${TURN_CONNECTIVITY_GATEWAY_EXTERNAL_PORT:?TURN_CONNECTIVITY_GATEWAY_EXTERNAL_PORT must be set}:8083"
+    networks:
+      - aileron-network-dev
+    depends_on:
+      turn-readiness-preflight:
+        condition: service_completed_successfully
+      coturn:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --output-document=/dev/null http://127.0.0.1:8083/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  connectivity-external-agent:
+    image: ${WORKSPACE_OPERATOR_IMAGE:?WORKSPACE_OPERATOR_IMAGE must be set}
+    pull_policy: never
+    user: "0:0"
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_READ_SEARCH
+    security_opt:
+      - no-new-privileges:true
+    network_mode: host
+    command:
+      - --mode=connectivity-external-agent
+    environment:
+      CONNECTIVITY_EVIDENCE_GATEWAY_URL: http://127.0.0.1:${TURN_CONNECTIVITY_GATEWAY_EXTERNAL_PORT:?TURN_CONNECTIVITY_GATEWAY_EXTERNAL_PORT must be set}/api/v1/connectivity-evidence
+      AILERON_INSTALLATION_ID: ${AILERON_INSTALLATION_ID:?AILERON_INSTALLATION_ID must be set}
+      CONNECTIVITY_AGENT_VANTAGE_ID: host
+      CONNECTIVITY_AGENT_INTERVAL_SECONDS: "30"
+      CONNECTIVITY_AGENT_TOKEN_FILE: /run/secrets/host-agent-token
+    secrets:
+      - host-agent-token
+    depends_on:
+      turn-readiness-preflight:
+        condition: service_completed_successfully
+      connectivity-evidence-gateway:
+        condition: service_healthy
+
+  turn-readiness-preflight:
+    image: ${WORKSPACE_MANAGER_IMAGE:?WORKSPACE_MANAGER_IMAGE must be set}
+    pull_policy: never
+    command:
+      - /workspace-manager/.venv/bin/python
+      - /workspace-manager/scripts/validate_turn_readiness.py
+      - --profile
+      - /run/config/turn-reachability-profile.json
+      - --secret-dir
+      - /run/secrets
+      - --credential-revision
+      - ${TURN_CREDENTIAL_REVISION:?TURN_CREDENTIAL_REVISION must be set}
+      - --operator-image
+      - ${WORKSPACE_OPERATOR_IMAGE:?WORKSPACE_OPERATOR_IMAGE must be set}
+      - --coturn-image
+      - ${COTURN_IMAGE:?COTURN_IMAGE must be set}
+      - --relay-port-min
+      - ${TURN_RELAY_MIN_PORT:?TURN_RELAY_MIN_PORT must be set}
+      - --relay-port-max
+      - ${TURN_RELAY_MAX_PORT:?TURN_RELAY_MAX_PORT must be set}
+      - --required-vantage
+      - host
+    environment:
+      PYTHONPATH: /workspace-manager
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/workspace-manager:/workspace-manager:ro"
+      - /workspace-manager/.venv
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/packages:/packages:ro"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/contracts:/repo-root/contracts:ro"
+      - "${HOST_TURN_CONFIG_DIR:?HOST_TURN_CONFIG_DIR must be set}/turn-reachability-profile.json:/run/config/turn-reachability-profile.json:ro"
+    secrets:
+      - connectivity-agent-tokens.json
+      - gateway-internal-token
+      - turn-rest-shared-secret
+      - coturn-auth-secret
+      - host-agent-token
+    networks:
+      - aileron-network-dev
+    restart: "no"
+
+  runtime-assertion-key-init:
+    image: ${WORKSPACE_MANAGER_IMAGE:?WORKSPACE_MANAGER_IMAGE must be set}
+    pull_policy: never
+    command:
+      - /workspace-manager/.venv/bin/python
+      - /workspace-manager/scripts/generate_runtime_assertion_keys.py
+      - /output
+      - --key-id
+      - workspace-manager-ed25519-v1
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/workspace-manager:/workspace-manager:ro"
+      - /workspace-manager/.venv
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/runtime-assertions:/output"
+    restart: "no"
+
+  identity-bootstrap:
+    image: ${WORKSPACE_MANAGER_IMAGE:?WORKSPACE_MANAGER_IMAGE must be set}
+    pull_policy: never
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        umask 077
+        /workspace-manager/.venv/bin/python \
+          /workspace-manager/scripts/provision_platform_roles.py
+        exec /workspace-manager/.venv/bin/python \
+          /workspace-manager/scripts/bootstrap_admin_user.py \
+          --issuer "$${OIDC_ISSUER_URL}" \
+          --subject "$${BOOTSTRAP_ADMIN_SUBJECT}" \
+          --username "$${BOOTSTRAP_ADMIN_USERNAME}" \
+          --email "$${BOOTSTRAP_ADMIN_EMAIL}"
+    environment:
+      ENV: development
+      DATABASE_URL: postgresql://postgres@postgres:5432/aileron
+      PGPASSFILE: /run/secrets/postgres-passfile
+      PLATFORM_PUBLIC_ORIGIN: ${PLATFORM_PUBLIC_ORIGIN:?PLATFORM_PUBLIC_ORIGIN must be set}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:?OIDC_ISSUER_URL must be set}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?OIDC_CLIENT_ID must be set}
+      OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc-client-secret
+      BOOTSTRAP_ADMIN_SUBJECT: ${BOOTSTRAP_ADMIN_SUBJECT:?BOOTSTRAP_ADMIN_SUBJECT must be set}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:?BOOTSTRAP_ADMIN_USERNAME must be set}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?BOOTSTRAP_ADMIN_EMAIL must be set}
+      PYTHONPATH: /workspace-manager
+    secrets:
+      - postgres-passfile
+      - oidc-client-secret
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/workspace-manager:/workspace-manager:ro"
+      - /workspace-manager/.venv
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/packages:/packages:ro"
+    tmpfs:
+      - /tmp
+    networks:
+      - aileron-network-dev
+    depends_on:
+      turn-readiness-preflight:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  workspace-manager:
+    image: ${WORKSPACE_MANAGER_IMAGE:?WORKSPACE_MANAGER_IMAGE must be set}
+    pull_policy: never
+    container_name: aileron-workspace-manager-dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ENV: development
+      TZ: ${TZ:?TZ must be set}
+      REDIS_URL: redis://redis:6379/0
+      DOCKER_NETWORK: aileron-network-dev
+      AILERON_INSTALLATION_ID: ${AILERON_INSTALLATION_ID:?AILERON_INSTALLATION_ID must be set}
+      BROWSER_CONNECTIVITY_PROBE_IMAGE: ${WORKSPACE_OPERATOR_IMAGE:?WORKSPACE_OPERATOR_IMAGE must be set}
+      TURN_REACHABILITY_PROFILE_FILE: /run/config/turn-reachability-profile.json
+      HOST_TURN_REACHABILITY_PROFILE_FILE: ${HOST_TURN_CONFIG_DIR:?HOST_TURN_CONFIG_DIR must be set}/turn-reachability-profile.json
+      TURN_REST_SHARED_SECRET_FILE: /run/secrets/turn-rest-shared-secret
+      TURN_FRONTEND_ICE_SERVERS_JSON_FILE: /run/secrets/turn-frontend-ice-servers.json
+      HOST_TURN_REST_SHARED_SECRET_FILE: ${HOST_TURN_SECRETS_DIR:?HOST_TURN_SECRETS_DIR must be set}/turn-rest-shared-secret
+      TURN_BACKEND_ICE_SERVERS_JSON_FILE: /run/secrets/turn-backend-ice-servers.json
+      HOST_TURN_BACKEND_ICE_SERVERS_JSON_FILE: ${HOST_TURN_SECRETS_DIR:?HOST_TURN_SECRETS_DIR must be set}/turn-backend-ice-servers.json
+      TURN_CREDENTIAL_REVISION: ${TURN_CREDENTIAL_REVISION:?TURN_CREDENTIAL_REVISION must be set}
+      TURN_CONNECTIVITY_GATEWAY_URL: http://connectivity-evidence-gateway:8083
+      TURN_CONNECTIVITY_GATEWAY_INTERNAL_TOKEN_FILE: /run/secrets/gateway-internal-token
+      DATABASE_URL: postgresql://postgres@postgres:5432/aileron
+      PGPASSFILE: /run/secrets/postgres-passfile
+      HOST_PROJECT_ROOT: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}
+      WORKSPACE_RUNTIME_IMAGE: ${WORKSPACE_RUNTIME_IMAGE:?WORKSPACE_RUNTIME_IMAGE must be set}
+      HOST_WORKSPACE_RUNTIME_DIR: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/workspace-runtime
+      HOST_WORKSPACES_DIR: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/workspace-data
+      HOST_WORKSPACE_SCRIPTS_DIR: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/workspace-scripts
+      HOST_RUNTIME_HOME_DIR: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/runtime-home
+      HOST_BROWSER_CREDENTIALS_DIR: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/browser-credentials
+      HOST_KNOWLEDGE_BASES_DIR: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/knowledge-bases
+      HOST_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/runtime-assertions/jwks.json
+      MANAGER_WORKSPACES_DIR: /host/workspace-data
+      MANAGER_WORKSPACE_SCRIPTS_DIR: /host/workspace-scripts
+      MANAGER_RUNTIME_HOME_DIR: /host/runtime-home
+      MANAGER_BROWSER_CREDENTIALS_DIR: /host/browser-credentials
+      MANAGER_KNOWLEDGE_BASES_DIR: /host/knowledge-bases
+      RUNTIME_ASSERTION_PRIVATE_KEY_FILE: /run/secrets/aileron/private-key.pem
+      RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE: /run/secrets/aileron/jwks.json
+      RUNTIME_DATABASE_CREDENTIAL_KEY_FILE: /run/secrets/aileron/runtime-database-credential.key
+      RUNTIME_ASSERTION_KID: workspace-manager-ed25519-v1
+      RUNTIME_ASSERTION_ISSUER: workspace-manager
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      PLATFORM_PUBLIC_ORIGIN: ${PLATFORM_PUBLIC_ORIGIN:?PLATFORM_PUBLIC_ORIGIN must be set}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:?OIDC_ISSUER_URL must be set}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?OIDC_CLIENT_ID must be set}
+      OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc-client-secret
+    secrets:
+      - postgres-passfile
+      - oidc-client-secret
+      - turn-rest-shared-secret
+      - turn-frontend-ice-servers.json
+      - turn-backend-ice-servers.json
+      - gateway-internal-token
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/workspace-manager:/workspace-manager"
+      - /workspace-manager/.venv
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/packages:/packages:ro"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/contracts:/repo-root/contracts:ro"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/helm:/helm:ro"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/scripts:/repo-root/scripts:ro"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/docker-compose.yml:/repo-root/docker-compose.yml:ro"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/docker-bake.hcl:/repo-root/docker-bake.hcl:ro"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/init-scripts:/data/init-scripts"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/workspace-data:/host/workspace-data"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/workspace-scripts:/host/workspace-scripts"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/runtime-home:/host/runtime-home"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/browser-credentials:/host/browser-credentials"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/knowledge-bases:/host/knowledge-bases"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/runtime-assertions:/run/secrets/aileron:ro"
+      - "${HOST_TURN_CONFIG_DIR:?HOST_TURN_CONFIG_DIR must be set}/turn-reachability-profile.json:/run/config/turn-reachability-profile.json:ro"
+    networks:
+      - aileron-network-dev
+    depends_on:
+      identity-bootstrap:
+        condition: service_completed_successfully
+      runtime-assertion-key-init:
+        condition: service_completed_successfully
+      turn-readiness-preflight:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:3001/health\", timeout=5)' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    image: ${WORKSPACE_UI_IMAGE:?WORKSPACE_UI_IMAGE must be set}
+    pull_policy: never
+    container_name: aileron-frontend-dev
+    restart: unless-stopped
+    working_dir: /app
+    command:
+      - npm
+      - run
+      - dev
+      - --
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8082"
+    environment:
+      TZ: ${TZ:?TZ must be set}
+      DOCKER_ENV: "true"
+      VITE_BROWSER_EXTENSION_ID: ${VITE_BROWSER_EXTENSION_ID-}
+    ports:
+      - "8082:8082"
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/frontend:/app"
+      - /app/node_modules
+    networks:
+      - aileron-network-dev
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    depends_on:
+      - workspace-manager
+      - drawio
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8082/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  drawio:
+    image: jgraph/drawio
+    container_name: aileron-drawio-dev
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:?TZ must be set}
+    networks:
+      - aileron-network-dev
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  local-oidc-config:
+    profiles: ["local-oidc"]
+    image: python:3.12-alpine
+    restart: "no"
+    environment:
+      PLATFORM_PUBLIC_ORIGIN: ${PLATFORM_PUBLIC_ORIGIN:?PLATFORM_PUBLIC_ORIGIN must be set}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?OIDC_CLIENT_ID must be set}
+      OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc-client-secret
+      BOOTSTRAP_ADMIN_SUBJECT: ${BOOTSTRAP_ADMIN_SUBJECT:?BOOTSTRAP_ADMIN_SUBJECT must be set}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:?BOOTSTRAP_ADMIN_USERNAME must be set}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?BOOTSTRAP_ADMIN_EMAIL must be set}
+      LDAP_ADMIN_PASSWORD_FILE: /run/secrets/ldap-admin-password
+      LDAP_CONFIG_PASSWORD_FILE: /run/secrets/ldap-config-password
+      LOCAL_ADMIN_PASSWORD_FILE: /run/secrets/local-admin-password
+      LDAP_ALICE_PASSWORD_FILE: /run/secrets/ldap-alice-password
+      LDAP_BOB_PASSWORD_FILE: /run/secrets/ldap-bob-password
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        python /local-oidc/prepare.py \
+          --template /local-oidc/aileron-realm.template.json \
+          --output-dir /generated
+        chown 1000:0 /generated/aileron-realm.json /generated/10-seed-users.ldif
+        chmod 0600 /generated/aileron-realm.json /generated/10-seed-users.ldif
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/local-oidc:/local-oidc:ro"
+      - local-oidc-generated:/generated
+    secrets:
+      - oidc-client-secret
+      - ldap-admin-password
+      - ldap-config-password
+      - local-admin-password
+      - ldap-alice-password
+      - ldap-bob-password
+
+  openldap:
+    profiles: ["local-oidc"]
+    image: osixia/openldap:1.5.0
+    container_name: aileron-openldap-dev
+    restart: unless-stopped
+    environment:
+      LDAP_ORGANISATION: Aileron
+      LDAP_DOMAIN: aileron.local
+      LDAP_TLS: "false"
+      LDAP_READONLY_USER: "false"
+      LDAP_ADMIN_PASSWORD_FILE: /run/secrets/ldap-admin-password
+      LDAP_CONFIG_PASSWORD_FILE: /run/secrets/ldap-config-password
+    ports:
+      - "389:389"
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/openldap:/var/lib/ldap"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/openldap-config:/etc/ldap/slapd.d"
+    secrets:
+      - ldap-admin-password
+      - ldap-config-password
+    networks:
+      - aileron-network-dev
+    depends_on:
+      local-oidc-config:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          ldapwhoami -x -H ldap://127.0.0.1:389
+          -D "cn=admin,dc=aileron,dc=local"
+          -y /run/secrets/ldap-admin-password >/dev/null 2>&1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 6m
+
+  openldap-seed:
+    profiles: ["local-oidc"]
+    image: osixia/openldap:1.5.0
+    entrypoint: ["/bin/sh", "-ec"]
+    restart: "no"
+    command:
+      - |
+        if ldapsearch -LLL -x -H ldap://openldap:389 \
+          -D "cn=admin,dc=aileron,dc=local" \
+          -y /run/secrets/ldap-admin-password \
+          -b "ou=people,dc=aileron,dc=local" "(uid=alice)" dn | grep -q '^dn:'; then
+          exit 0
+        fi
+        exec ldapadd -x -H ldap://openldap:389 \
+          -D "cn=admin,dc=aileron,dc=local" \
+          -y /run/secrets/ldap-admin-password \
+          -f /generated/10-seed-users.ldif
+    volumes:
+      - local-oidc-generated:/generated:ro
+    secrets:
+      - ldap-admin-password
+    networks:
+      - aileron-network-dev
+    depends_on:
+      local-oidc-config:
+        condition: service_completed_successfully
+      openldap:
+        condition: service_healthy
+
+  keycloak:
+    profiles: ["local-oidc"]
+    image: quay.io/keycloak/keycloak:25.0.0
+    pull_policy: never
+    container_name: aileron-keycloak-local-dev
+    restart: unless-stopped
+    command:
+      - start-dev
+      - --import-realm
+    environment:
+      TZ: ${TZ:?TZ must be set}
+      KC_DB: dev-file
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "false"
+    volumes:
+      - keycloak-local-data:/opt/keycloak/data
+      - local-oidc-generated:/opt/keycloak/data/import:ro
+    network_mode: service:workspace-manager
+    depends_on:
+      workspace-manager:
+        condition: service_started
+      local-oidc-config:
+        condition: service_completed_successfully
+      openldap-seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - timeout 5 bash -c ':> /dev/tcp/127.0.0.1/8080' || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 6m
+
+networks:
+  aileron-network-dev:
+    name: aileron-network-dev
+    driver: bridge
+
+volumes:
+  keycloak-local-data:
+  local-oidc-generated:
+
+secrets:
+  postgres-password:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/postgres-password"
+  postgres-passfile:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/postgres-passfile"
+  oidc-client-secret:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/oidc-client-secret"
+  local-admin-password:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/local-admin-password"
+  ldap-admin-password:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/ldap-admin-password"
+  ldap-config-password:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/ldap-config-password"
+  ldap-alice-password:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/ldap-alice-password"
+  ldap-bob-password:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/ldap-bob-password"
+  coturn-auth-secret:
+    file: "${HOST_TURN_SECRETS_DIR:?HOST_TURN_SECRETS_DIR must be set}/coturn-auth-secret"
+  connectivity-agent-tokens.json:
+    file: "${HOST_TURN_SECRETS_DIR:?HOST_TURN_SECRETS_DIR must be set}/connectivity-agent-tokens.json"
+  gateway-internal-token:
+    file: "${HOST_TURN_SECRETS_DIR:?HOST_TURN_SECRETS_DIR must be set}/gateway-internal-token"
+  turn-rest-shared-secret:
+    file: "${HOST_TURN_SECRETS_DIR:?HOST_TURN_SECRETS_DIR must be set}/turn-rest-shared-secret"
+  turn-frontend-ice-servers.json:
+    file: "${HOST_TURN_SECRETS_DIR:?HOST_TURN_SECRETS_DIR must be set}/turn-frontend-ice-servers.json"
+  turn-backend-ice-servers.json:
+    file: "${HOST_TURN_SECRETS_DIR:?HOST_TURN_SECRETS_DIR must be set}/turn-backend-ice-servers.json"
+  host-agent-token:
+    file: "${HOST_TURN_SECRETS_DIR:?HOST_TURN_SECRETS_DIR must be set}/host-agent-token"

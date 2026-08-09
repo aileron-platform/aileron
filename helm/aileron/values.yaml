@@ -1,0 +1,360 @@
+global:
+  imagePullSecrets: []
+  storageClass: ""
+
+security:
+  # Enable for production baselines so placeholder or weak credentials fail at render time.
+  requireStrongSecrets: false
+
+platformSecrets:
+  existingSecretName: aileron-platform-secrets
+  databaseUrlKey: database-url
+  runtimeDatabaseCredentialKey: runtime-database-credential-key
+  postgresUsernameKey: postgres-username
+  postgresPasswordKey: postgres-password
+
+nameOverride: ""
+fullnameOverride: ""
+
+ingress:
+  # Deployment profiles must explicitly opt in to public routing.
+  enabled: false
+  className: ""
+  # Set true only when the cluster has an intentional default IngressClass.
+  useDefaultClass: false
+  # disabled, kubernetesSecret, or controllerManaged.
+  tlsMode: disabled
+  # Existing namespace-local certificate Secret for the one platform host.
+  tlsSecretName: ""
+  # Provider-specific annotations for the fixed platform Ingress.
+  annotations: {}
+
+# Exact browser-visible origin. All callbacks and public paths are derived from it.
+platformPublicOrigin: https://aileron.localhost
+
+kubernetes:
+  enabled: true
+  provisioner: kubernetes
+  # The chart, Manager, Workspace CRs, Operator and shared PVCs must use this namespace.
+  workspaceRuntimeNamespace: workspace-system
+  workspaceData:
+    size: 20Gi
+    storageClassName: ""
+  runtimeHome:
+    size: 2Gi
+    accessMode: ReadWriteOnce
+    storageClassName: ""
+  platformStorageGid: 2000
+  knowledgeBases:
+    pvcName: knowledge-bases-pvc
+    size: 20Gi
+    accessModes:
+      - ReadWriteMany
+    storageClassName: ""
+  managerState:
+    pvcName: workspace-manager-state
+    size: 20Gi
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: ""
+  storageVerification:
+    enabled: false
+    # Required when enabled. Use disposable StorageClasses with Delete reclaim policy.
+    workspaceStorageClassName: ""
+    managerStateStorageClassName: ""
+    workspaceSize: 1Gi
+    managerStateSize: 1Gi
+  browserImage:
+    repository: ailerondocker/workspace-chrome
+    digest: ""
+    tag: latest-kubernetes-amd64
+  canvasImage:
+    repository: ailerondocker/workspace-canvas
+    digest: ""
+    tag: latest-kubernetes-amd64
+  workspaceDefaults:
+    runtime:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2000m
+          memory: 3Gi
+    browser:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2000m
+          memory: 2Gi
+    canvas:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 1Gi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+
+runtimeAssertions:
+  # Both Secrets must already exist in workspaceRuntimeNamespace. The JWKS must
+  # contain activeKid and its public key must match private-key.pem.
+  issuer: workspace-manager
+  activeKid: workspace-manager-ed25519-v1
+  privateKeySecretName: runtime-assertion-signer
+  privateKeySecretKey: private-key.pem
+  publicKeySetSecretName: runtime-assertion-public-jwks
+  publicKeySetSecretKey: jwks.json
+
+browserCredentials:
+  existingSecretName: browser-credential-keyring
+  key: keyring.json
+  revision: 1
+
+cilium:
+  enabled: false
+
+bootstrap:
+  admin:
+    enabled: true
+    # OIDC subject of the platform bootstrap administrator. The external
+    # identity provider owns the credential; this value only seeds the local
+    # administrator snapshot.
+    subject: 00000000-0000-4000-8000-000000000001
+    username: admin
+    email: admin@aileron.com
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+
+oidc:
+  # External provider canonical issuer. Aileron never installs an IdP.
+  issuerUrl: https://login.example.com/realms/aileron
+  # Existing Secret consumed only by Workspace Manager.
+  clientSecretName: aileron-oidc-client
+  clientSecretKey: client-secret
+  caSecretName: ""
+  caSecretKey: ca.crt
+  clientId: aileron-manager
+
+firewall:
+  seed:
+    workspace:
+      egressMode: unrestricted
+      allowedDomains: []
+    browser:
+      egressMode: unrestricted
+      allowedDomains: []
+
+frontend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ailerondocker/workspace-ui
+    digest: ""
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8082
+  resources: {}
+
+workspaceManager:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ailerondocker/workspace-manager
+    digest: ""
+    tag: latest-kubernetes-amd64
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    create: true
+    name: ""
+  service:
+    type: ClusterIP
+    port: 3001
+    flowerPort: 5555
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+workspaceOperator:
+  enabled: true
+  replicaCount: 1
+  runtimeImage:
+    repository: ailerondocker/workspace-runtime
+    digest: ""
+    tag: latest-kubernetes-amd64
+  image:
+    repository: ailerondocker/workspace-operator
+    digest: ""
+    tag: latest
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    create: true
+    name: ""
+  resources: {}
+  firewallAttestor:
+    socketPath: /var/run/cilium/cilium.sock
+    pollInterval: 5s
+    maxAge: 30s
+    serviceAccount:
+      create: true
+      name: ""
+    nodeSelector: {}
+    tolerations:
+      - operator: Exists
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  rbac:
+    create: true
+
+workspaceRuntimePrepuller:
+  enabled: true
+  nodeSelector: {}
+  tolerations: []
+  resources:
+    requests:
+      cpu: 1m
+      memory: 1Mi
+
+postgres:
+  enabled: true
+  runAsUser: null
+  image:
+    repository: ailerondocker/platform-postgres
+    digest: ""
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    port: 5432
+  persistence:
+    enabled: true
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: ""
+  auth:
+    appDatabase: aileron
+  resources: {}
+
+redis:
+  enabled: true
+  image:
+    repository: ailerondocker/platform-redis
+    digest: ""
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    port: 6379
+  persistence:
+    enabled: true
+    size: 5Gi
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: ""
+  resources: {}
+  args:
+    - --appendonly
+    - "yes"
+    - --maxmemory
+    - 256mb
+    - --maxmemory-policy
+    - allkeys-lru
+
+service:
+  annotations: {}
+
+turn:
+  enabled: false
+  existingSecretName: aileron-turn-ice
+  backendIceServersKey: backend-ice-servers-json
+  frontendIceServersKey: frontend-ice-servers-json
+  restSharedSecretKey: turn-rest-shared-secret
+  credentialRevision: turn-credentials-v1
+  profile:
+    contractVersion: browser-connectivity/v1
+    policyBackend: cilium
+    backend:
+      urls:
+        - "turn:turn.aileron.localhost:3478"
+      controlDestination:
+        kind: ciliumEntities
+        values:
+          - host
+          - remote-node
+      relayDestination:
+        kind: ciliumEntities
+        values:
+          - host
+          - remote-node
+      relayPortRange:
+        min: 49160
+        max: 49259
+    frontend:
+      urls:
+        - "turn:turn.aileron.localhost:3478"
+    credentialIssuer:
+      kind: staticSecret
+      ttlSeconds: 300
+    evidence:
+      intervalSeconds: 30
+      ttlSeconds: 90
+      requiredFrontendVantages:
+        - host
+
+coturn:
+  enabled: false
+  namespace: aileron-turn-system
+  frontendHost: turn.aileron.localhost
+  image:
+    repository: ailerondocker/platform-coturn
+    digest: ""
+    tag: latest
+    pullPolicy: IfNotPresent
+  listenerPort: 3478
+  realm: aileron
+  auth:
+    existingSecretName: aileron-coturn-auth
+    usernameKey: username
+    credentialSecretKey: credential
+    probeUsernameKey: probe-username
+    probeCredentialKey: probe-credential
+  nodeSelector: {}
+  tolerations: []
+  resources: {}
+
+connectivityEvidenceGateway:
+  enabled: true
+  installationId: "{releaseNamespace}.{releaseName}"
+  auth:
+    existingSecretName: aileron-connectivity-evidence
+    internalTokenKey: internal-token
+    agentTokensJsonKey: agent-tokens-json
+    probeIceServersJsonKey: probe-ice-servers-json
+    agentTokenKeyPrefix: agent-
+  hostAgent:
+    enabled: false
+    vantageId: host
+    tls:
+      caSecretName: ""
+      caSecretKey: ca.crt
+    nodeSelector: {}
+    tolerations: []
+    resources: {}
+  resources: {}

@@ -1,0 +1,2085 @@
+{
+  "schemaVersion": 1,
+  "routes": [
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/mcp-servers/{scope}/{server_name}/export",
+      "methods": [
+        "GET"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4043,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/mcp-servers/{scope}/{server_name}/toggle",
+      "methods": [
+        "PATCH"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4043,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/agent-settings/cache/refresh",
+      "methods": [
+        "POST"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4041,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/mcp-servers/{scope}/{server_name}/export",
+      "methods": [
+        "GET"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4040,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/mcp-servers/{scope}/{server_name}/toggle",
+      "methods": [
+        "PATCH"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4040,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/mcp-servers",
+      "methods": [
+        "GET"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4037,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/mcp-servers/{scope}",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4037,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/mcp-servers/{scope}/{server_name}",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PUT"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4037,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/settings/raw",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4037,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/mcp-servers/{scope}/{server_name}/export",
+      "methods": [
+        "GET"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4037,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/mcp-servers/{scope}/{server_name}/toggle",
+      "methods": [
+        "PATCH"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4037,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/mcp-import",
+      "methods": [
+        "POST"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4036,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/settings",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4034,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/mcp-servers",
+      "methods": [
+        "GET"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4034,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/mcp-servers/{scope}",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4034,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/mcp-servers/{scope}/{server_name}",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PUT"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4034,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/mcp-import",
+      "methods": [
+        "POST"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4033,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/mcp-servers",
+      "methods": [
+        "GET"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4031,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/mcp-servers/{scope}",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4031,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/mcp-servers/{scope}/{server_name}",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PUT"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4031,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/mcp-import",
+      "methods": [
+        "POST"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4030,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/config",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4026,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/config/{section}",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 4026,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/plugins/{plugin_id:path}/mcp-servers/{server_id:path}/policy",
+      "methods": [
+        "PATCH"
+      ],
+      "action": "workspace_settings",
+      "matchPriority": 3544,
+      "sensitive": true
+    },
+    {
+      "routeTemplate": "/api/v1/threads/by-automation-execution/{execution_id}",
+      "methods": [
+        "GET"
+      ],
+      "action": "agent",
+      "matchPriority": 3035,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/timeline/items/batch-get",
+      "methods": [
+        "POST"
+      ],
+      "action": "agent",
+      "matchPriority": 3034,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/messages/{message_id}/tool-result",
+      "methods": [
+        "GET"
+      ],
+      "action": "agent",
+      "matchPriority": 3031,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/client-browser-relay/pages",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "action": "browser_automation",
+      "matchPriority": 3030,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/client-browser-relay/pages/{name}",
+      "methods": [
+        "DELETE"
+      ],
+      "action": "browser_automation",
+      "matchPriority": 3030,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/questions/{message_id}/answer",
+      "methods": [
+        "POST"
+      ],
+      "action": "agent",
+      "matchPriority": 3027,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/queued-messages/{queued_message_id}",
+      "methods": [
+        "DELETE"
+      ],
+      "action": "agent",
+      "matchPriority": 3027,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/client-browser-relay",
+      "methods": [
+        "GET"
+      ],
+      "action": "browser_automation",
+      "matchPriority": 3025,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/audio/transcriptions",
+      "methods": [
+        "POST"
+      ],
+      "action": "agent",
+      "matchPriority": 3024,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/attachments",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "action": "agent",
+      "matchPriority": 3023,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/attachments/{attachment_id}",
+      "methods": [
+        "DELETE"
+      ],
+      "action": "agent",
+      "matchPriority": 3023,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/messages",
+      "methods": [
+        "POST"
+      ],
+      "action": "agent",
+      "matchPriority": 3020,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/timeline",
+      "methods": [
+        "GET"
+      ],
+      "action": "agent",
+      "matchPriority": 3020,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/archive",
+      "methods": [
+        "POST"
+      ],
+      "action": "agent",
+      "matchPriority": 3019,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/cancel",
+      "methods": [
+        "POST"
+      ],
+      "action": "agent",
+      "matchPriority": 3018,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/submit",
+      "methods": [
+        "POST"
+      ],
+      "action": "agent",
+      "matchPriority": 3018,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/draft",
+      "methods": [
+        "POST"
+      ],
+      "action": "agent",
+      "matchPriority": 3017,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/draft",
+      "methods": [
+        "PATCH"
+      ],
+      "action": "agent",
+      "matchPriority": 3017,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/retry",
+      "methods": [
+        "POST"
+      ],
+      "action": "agent",
+      "matchPriority": 3017,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads",
+      "methods": [
+        "GET"
+      ],
+      "action": "agent",
+      "matchPriority": 3012,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}",
+      "methods": [
+        "DELETE",
+        "GET"
+      ],
+      "action": "agent",
+      "matchPriority": 3012,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/conflicts/mark-resolved",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2052,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/skills/conflicts/preflight",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2050,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}/content",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2047,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/skills/conflicts/preflight",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2047,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/branches/publish",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2045,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/operation/cancel",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2045,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/remote-branches",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2045,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/skills/batch-delete",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2044,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/skills/conflicts/preflight",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2044,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/slash-commands/{scope}/content",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2044,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/branches/create",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2044,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/branches/delete",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2044,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/branches/rename",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2044,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/branches/switch",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2044,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/changes/numstat",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2044,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/conflicts/abort",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2044,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/commits/revert",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2043,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/subagents/{scope}/content",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2042,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/force-unlock",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2042,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/slash-commands/{scope}/content",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2041,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/skills/batch-delete",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2041,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/review-notes/{note_id}/replies",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2040,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2040,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/lfs/convert",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2040,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/lfs/preview",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2040,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/review-notes/{note_id}/status",
+      "methods": [
+        "PATCH"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/memory/{scope}/content",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/output-styles/{scope}",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/output-styles/{scope}/{file_name}",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/skills/content",
+      "methods": [
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/skills/extract",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/subagents/{scope}/content",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/skills/upload",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2038,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/skills/batch-delete",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2038,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/hooks/import",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2037,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/plugins/{plugin_id:path}/hook-trust",
+      "methods": [
+        "PATCH"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2037,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/slash-commands/{scope}",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2037,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/discard",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2037,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/unstage",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2037,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/skills/move",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2036,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/skills/content",
+      "methods": [
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2036,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/skills/extract",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2036,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/commit",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2036,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/remote",
+      "methods": [
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2036,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/claude-md",
+      "methods": [
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2035,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/subagents/{scope}",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2035,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/skills/upload",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2035,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/clone",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2035,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/fetch",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2035,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/stage",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2035,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/slash-commands/{scope}",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2034,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/init",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2034,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/pull",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2034,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/push",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2034,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/review-notes",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/review-notes/{note_id}",
+      "methods": [
+        "DELETE"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/plugins/{plugin_id:path}",
+      "methods": [
+        "PATCH"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/overview/trust",
+      "methods": [
+        "PATCH"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/rules/validate",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/skills/content",
+      "methods": [
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/skills/extract",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/skills/move",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/lfs",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/memory/{scope}",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2032,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/skills",
+      "methods": [
+        "DELETE",
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2032,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/hooks/{scope}/disable",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2032,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/skills/upload",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2032,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/agents-md",
+      "methods": [
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2032,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/subagents/{scope}",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2032,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/hooks/{scope}",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2031,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/hooks/{scope}/enable",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2031,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/hooks/{scope}/entry",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2030,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/skills/move",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2030,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/manifest",
+      "methods": [
+        "DELETE"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2029,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/agents-md",
+      "methods": [
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2029,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/rules/file",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2029,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/subagents",
+      "methods": [
+        "DELETE",
+        "POST",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2029,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/skills",
+      "methods": [
+        "DELETE",
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2029,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/conflicts/preflight",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2028,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/plugins/{plugin_id:path}",
+      "methods": [
+        "PATCH"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2027,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/reset",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2026,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/skills",
+      "methods": [
+        "DELETE",
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2026,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/sync",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2025,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/hooks/{scope}",
+      "methods": [
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2025,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/history/{entry_id}/restore",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2024,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/{resource}/file",
+      "methods": [
+        "DELETE",
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2024,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/batch-delete",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2022,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/content/batch",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2022,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/archive",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2017,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/content",
+      "methods": [
+        "PUT"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2017,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/extract",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2017,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/upload",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2016,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/drawio/save",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2015,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/paste",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2015,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/move",
+      "methods": [
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2014,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files",
+      "methods": [
+        "DELETE",
+        "POST"
+      ],
+      "action": "runtime_write",
+      "matchPriority": 2010,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}/content",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1047,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/operation-status",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1046,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/skills/tree/children",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1044,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/slash-commands/{scope}/content",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1044,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/subagents/{scope}/content",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1042,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/commits/{commit_id}/files",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1042,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/slash-commands/{scope}/content",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1041,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/skills/tree/children",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1041,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/slash-commands",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1040,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1040,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/managed-requirements",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1040,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/repository",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1040,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/memory/{scope}/content",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/output-styles",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/output-styles/{scope}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/output-styles/{scope}/{file_name:path}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/skills/content",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/skills/plugins",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/subagents/{scope}/content",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1039,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/skills/tree/children",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1038,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/branches",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1038,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/contexts",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1038,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/hooks/export",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1037,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/slash-commands",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1037,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/slash-commands/{scope}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1037,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/changes",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1037,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/commits",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1037,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/commits/{commit_id}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1037,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/skills/tree",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1036,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/skills/content",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1036,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/remote",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1036,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/status",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1036,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/claude-md",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1035,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/subagents",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1035,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/subagents/{scope}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1035,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/subagents/detail",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1035,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/slash-commands",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1034,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/slash-commands/{scope}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1034,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/blob",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1034,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/diff",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1034,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/review-notes",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/plugins",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/plugins/{plugin_id:path}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/skills/content",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/skills/tree",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/version-control/lfs",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1033,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/memory",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1032,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/hooks-scopes",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1032,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/agents-md",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1032,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/subagents",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1032,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/opencode/subagents/{scope}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1032,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/hooks",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1031,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/claude-code/hooks/{scope}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1031,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/skills/tree",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1030,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/agents-md",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1029,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/rules/file",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1029,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/subagents",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1029,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/overview",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1028,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/detect",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1027,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/health",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1027,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/routes",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1027,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/plugins",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1027,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/plugins/{plugin_id:path}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1027,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/archive/{operation_id}/download",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1025,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/canvas/logs",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1025,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/hooks/{scope}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1025,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/rules",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1025,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/{resource}/files",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1025,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/apps",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1024,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/apps/{app_name:path}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1024,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex/{resource}/file",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1024,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/drawio/availability",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1023,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/tree/children",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1022,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/codex",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1020,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/docs/oauth2-redirect",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1019,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/download",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1018,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/drawio/viewer",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1017,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/archive/{operation_id}",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1017,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/content",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1017,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/history",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1017,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/search",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1016,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/files/tree",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1014,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/openapi.json",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1012,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/redoc",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1005,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/docs",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1004,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1000,
+      "sensitive": false
+    }
+  ]
+}

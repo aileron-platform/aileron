@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "aileron-site.fullname" . }}
+  labels:
+{{ include "aileron-site.labels" . | indent 4 }}
+spec:
+  ingressClassName: {{ required "ingressClassName is required" .Values.ingressClassName | quote }}
+  tls:
+    - hosts:
+        - {{ required "site.hostname is required" .Values.site.hostname | quote }}
+      secretName: {{ required "tlsSecretName is required" .Values.tlsSecretName | quote }}
+  rules:
+    - host: {{ required "site.hostname is required" .Values.site.hostname | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "aileron-site.fullname" . }}
+                port:
+                  name: http

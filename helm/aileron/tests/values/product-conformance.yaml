@@ -1,0 +1,59 @@
+ingress:
+  enabled: false
+
+kubernetes:
+  workspaceRuntimeNamespace: workspace-system
+  workspaceData:
+    size: 1Gi
+  runtimeHome:
+    size: 1Gi
+    accessMode: ReadWriteOnce
+  knowledgeBases:
+    pvcName: product-knowledge-bases-pvc
+    size: 1Gi
+    accessModes:
+      - ReadWriteMany
+  managerState:
+    pvcName: product-manager-state-pvc
+    size: 1Gi
+    accessModes:
+      - ReadWriteOnce
+  storageVerification:
+    enabled: false
+
+frontend:
+  enabled: false
+
+workspaceManager:
+  enabled: true
+  replicaCount: 1
+
+# The existing E2E Operator remains the only controller for the test namespace.
+workspaceOperator:
+  enabled: false
+
+workspaceRuntimePrepuller:
+  enabled: false
+
+postgres:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 1Gi
+    accessModes:
+      - ReadWriteOnce
+
+redis:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 1Gi
+    accessModes:
+      - ReadWriteOnce
+
+oidc:
+  issuerUrl: https://login.example.com/realms/aileron
+  clientSecretName: external-oidc-client
+
+cilium:
+  enabled: false

@@ -1,0 +1,23 @@
+{
+  "drawio.save_success": "Draw.io 圖表已成功保存",
+  "drawio.errors.empty_file": "檔案內容為空",
+  "drawio.errors.file_not_found": "找不到檔案：{file_path}",
+  "drawio.errors.url_generation_failed": "生成 Draw.io URL 失敗：{error}",
+  "drawio.errors.service_unavailable": "Draw.io 預覽服務目前未啟用或無法連線。",
+  "drawio.errors.empty_content": "圖表內容不能為空",
+  "drawio.errors.invalid_xml": "無效的 Draw.io XML 格式",
+  "drawio.errors.save_failed": "保存 Draw.io 檔案失敗：{error}",
+  "drawio.errors.invalid_format": "不支援的匯出格式：{format}",
+  "drawio.errors.export_failed": "匯出 Draw.io 圖表失敗：{error}",
+  "agentSession.errors.workspacePath.notAbsolute": "Workspace path 必須是絕對路徑",
+  "agentSession.errors.workspacePath.outsideAllowedRoots": "Workspace path 必須位於允許的 runtime 根目錄下",
+  "errors.internal_server": "伺服器發生內部錯誤，請稍後再試。",
+  "authorization.runtime.action_forbidden": "不允許執行此 Workspace Runtime 操作。",
+  "authorization.runtime.missing_auth_header": "需要 Bearer 授權標頭。",
+  "authorization.runtime.empty_token": "驗證權杖不可為空。",
+  "authorization.runtime.token_expired": "驗證權杖無效或已過期。",
+  "authorization.runtime.authentication_failed": "目前無法完成身分驗證。",
+  "authorization.runtime.denied": "您沒有執行此 Workspace Runtime 操作的權限。",
+  "authorization.runtime.locked": "Workspace Runtime 存取目前暫時鎖定。",
+  "authorization.runtime.verification_failed": "目前無法驗證 Workspace 權限。"
+}

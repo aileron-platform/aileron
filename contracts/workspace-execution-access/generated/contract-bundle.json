@@ -1,0 +1,624 @@
+{
+  "contracts": {
+    "claims.schema.json": {
+      "$id": "https://aileron.dev/contracts/workspace-execution-access/claims.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "aud": {
+                "const": "workspace-runtime"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "actions": {
+                "not": {
+                  "contains": {
+                    "const": "terminal"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "aud": {
+                "const": "workspace-terminal"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "actions": {
+                "const": [
+                  "terminal"
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "actions": {
+          "items": {
+            "enum": [
+              "runtime_read",
+              "runtime_write",
+              "workspace_settings",
+              "terminal",
+              "agent",
+              "automation",
+              "browser_automation"
+            ]
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "aud": {
+          "enum": [
+            "workspace-runtime",
+            "workspace-terminal"
+          ]
+        },
+        "exp": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "iat": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "iss": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "jti": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "workspace-execution-access-grant"
+        },
+        "runtimeAccessRevision": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runtimeInstanceId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sub": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "workspaceId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "iss",
+        "sub",
+        "aud",
+        "kind",
+        "workspaceId",
+        "runtimeInstanceId",
+        "runtimeAccessRevision",
+        "actions",
+        "iat",
+        "exp",
+        "jti"
+      ],
+      "title": "Workspace Execution Access Grant Claims",
+      "type": "object",
+      "x-aileron-actions-are-canonical-sorted": true,
+      "x-aileron-token-ttl-seconds": 60
+    },
+    "conformance-vectors.json": {
+      "contractVersion": "workspace-execution-access/v1",
+      "expectedContext": {
+        "issuer": "workspace-manager",
+        "runtimeAccessRevision": 7,
+        "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+        "workspaceId": "workspace-1"
+      },
+      "issuanceCases": [
+        {
+          "accepted": true,
+          "expectedClaims": {
+            "actions": [
+              "agent",
+              "runtime_read"
+            ],
+            "aud": "workspace-runtime",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "canonical-grant-jti",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "name": "valid-runtime",
+          "request": {
+            "actions": [
+              "runtime_read",
+              "agent"
+            ],
+            "audience": "workspace-runtime",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "userId": "local-user-1",
+            "workspaceId": "workspace-1"
+          }
+        },
+        {
+          "accepted": true,
+          "expectedClaims": {
+            "actions": [
+              "terminal"
+            ],
+            "aud": "workspace-terminal",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "canonical-grant-jti",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "name": "valid-terminal",
+          "request": {
+            "actions": [
+              "terminal"
+            ],
+            "audience": "workspace-terminal",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "userId": "local-user-1",
+            "workspaceId": "workspace-1"
+          }
+        },
+        {
+          "accepted": false,
+          "name": "wrong-audience",
+          "request": {
+            "actions": [
+              "runtime_read"
+            ],
+            "audience": "all",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "userId": "local-user-1",
+            "workspaceId": "workspace-1"
+          }
+        },
+        {
+          "accepted": false,
+          "name": "wrong-action-for-runtime",
+          "request": {
+            "actions": [
+              "terminal"
+            ],
+            "audience": "workspace-runtime",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "userId": "local-user-1",
+            "workspaceId": "workspace-1"
+          }
+        },
+        {
+          "accepted": false,
+          "name": "wrong-action-for-terminal",
+          "request": {
+            "actions": [
+              "runtime_read"
+            ],
+            "audience": "workspace-terminal",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "userId": "local-user-1",
+            "workspaceId": "workspace-1"
+          }
+        },
+        {
+          "accepted": false,
+          "name": "empty-actions",
+          "request": {
+            "actions": [],
+            "audience": "workspace-runtime",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "userId": "local-user-1",
+            "workspaceId": "workspace-1"
+          }
+        },
+        {
+          "accepted": false,
+          "name": "all-action",
+          "request": {
+            "actions": [
+              "all"
+            ],
+            "audience": "workspace-runtime",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "userId": "local-user-1",
+            "workspaceId": "workspace-1"
+          }
+        }
+      ],
+      "tokenKind": "workspace-execution-access-grant",
+      "ttlSeconds": 60,
+      "validationEpoch": 2000000000,
+      "verificationCases": [
+        {
+          "accepted": true,
+          "claims": {
+            "actions": [
+              "agent",
+              "runtime_read"
+            ],
+            "aud": "workspace-runtime",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "valid-runtime",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "runtime",
+          "name": "valid-runtime",
+          "requiredAction": "agent"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "terminal"
+            ],
+            "aud": "workspace-terminal",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "wrong-audience",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "runtime",
+          "name": "wrong-audience-runtime",
+          "requiredAction": "agent"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "runtime_read"
+            ],
+            "aud": "workspace-runtime",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "wrong-action",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "runtime",
+          "name": "wrong-action-runtime",
+          "requiredAction": "agent"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [],
+            "aud": "workspace-runtime",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "empty-actions",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "runtime",
+          "name": "empty-actions-runtime",
+          "requiredAction": "agent"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "all"
+            ],
+            "aud": "workspace-runtime",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "all-action",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "runtime",
+          "name": "all-action-runtime",
+          "requiredAction": "agent"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "agent"
+            ],
+            "aud": "workspace-runtime",
+            "exp": 2000000000,
+            "iat": 1999999940,
+            "iss": "workspace-manager",
+            "jti": "expired",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "runtime",
+          "name": "expired-runtime",
+          "requiredAction": "agent"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "agent"
+            ],
+            "aud": "workspace-runtime",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "instance-mismatch",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "22222222-2222-4222-8222-222222222222",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "runtime",
+          "name": "instance-mismatch-runtime",
+          "requiredAction": "agent"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "agent"
+            ],
+            "aud": "workspace-runtime",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "revision-mismatch",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 8,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "runtime",
+          "name": "revision-mismatch-runtime",
+          "requiredAction": "agent"
+        },
+        {
+          "accepted": true,
+          "claims": {
+            "actions": [
+              "terminal"
+            ],
+            "aud": "workspace-terminal",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "valid-terminal",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "terminal",
+          "name": "valid-terminal",
+          "requiredAction": "terminal"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "terminal"
+            ],
+            "aud": "workspace-runtime",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "wrong-terminal-audience",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "terminal",
+          "name": "wrong-audience-terminal",
+          "requiredAction": "terminal"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "runtime_read"
+            ],
+            "aud": "workspace-terminal",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "wrong-terminal-action",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "terminal",
+          "name": "wrong-action-terminal",
+          "requiredAction": "terminal"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [],
+            "aud": "workspace-terminal",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "empty-terminal-actions",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "terminal",
+          "name": "empty-actions-terminal",
+          "requiredAction": "terminal"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "all"
+            ],
+            "aud": "workspace-terminal",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "all-terminal-action",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "terminal",
+          "name": "all-action-terminal",
+          "requiredAction": "terminal"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "terminal"
+            ],
+            "aud": "workspace-terminal",
+            "exp": 2000000000,
+            "iat": 1999999940,
+            "iss": "workspace-manager",
+            "jti": "expired-terminal",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "terminal",
+          "name": "expired-terminal",
+          "requiredAction": "terminal"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "terminal"
+            ],
+            "aud": "workspace-terminal",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "terminal-instance-mismatch",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 7,
+            "runtimeInstanceId": "22222222-2222-4222-8222-222222222222",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "terminal",
+          "name": "instance-mismatch-terminal",
+          "requiredAction": "terminal"
+        },
+        {
+          "accepted": false,
+          "claims": {
+            "actions": [
+              "terminal"
+            ],
+            "aud": "workspace-terminal",
+            "exp": 2000000060,
+            "iat": 2000000000,
+            "iss": "workspace-manager",
+            "jti": "terminal-revision-mismatch",
+            "kind": "workspace-execution-access-grant",
+            "runtimeAccessRevision": 8,
+            "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
+            "sub": "local-user-1",
+            "workspaceId": "workspace-1"
+          },
+          "consumer": "terminal",
+          "name": "revision-mismatch-terminal",
+          "requiredAction": "terminal"
+        }
+      ]
+    },
+    "route-inventory.json": {
+      "audiences": {
+        "workspace-runtime": {
+          "allowedActions": [
+            "agent",
+            "automation",
+            "browser_automation",
+            "runtime_read",
+            "runtime_write",
+            "workspace_settings"
+          ]
+        },
+        "workspace-terminal": {
+          "allowedActions": [
+            "terminal"
+          ]
+        }
+      },
+      "contractVersion": "workspace-execution-access/v1"
+    }
+  },
+  "generated": true,
+  "message": "DO NOT EDIT; run generate_contract_bundle.py"
+}

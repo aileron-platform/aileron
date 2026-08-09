@@ -1,0 +1,7 @@
+interface:
+  display_name: "Aileron Web Canvas Review"
+  short_description: "Apply Canvas review notes and re-sync the preview."
+  default_prompt: "Use $aileron-web-canvas-review to apply this Canvas review note."
+
+policy:
+  allow_implicit_invocation: true

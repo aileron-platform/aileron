@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: __APPLICATION_NAME__
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/managed-by: aileron-canvas-publish
+    aileron.io/site-id-hash: __SITE_ID_HASH__
+spec:
+  project: __ARGOCD_PROJECT__
+  source:
+    repoURL: oci://__OCI_REGISTRY__/__OCI_CHART_REPOSITORY__/__SITE_ID_HASH__/aileron-site
+    path: .
+    targetRevision: __CHART_VERSION__
+    helm:
+      releaseName: __APPLICATION_NAME__
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: __DESTINATION_NAMESPACE__
+  syncPolicy:
+    automated:
+      allowEmpty: false
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

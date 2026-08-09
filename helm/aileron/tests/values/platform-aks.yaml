@@ -1,0 +1,37 @@
+kubernetes:
+  workspaceRuntimeNamespace: workspace-system
+  platformStorageGid: 2000
+  workspaceData:
+    storageClassName: azurefile-nfs-premiumv2-custom
+  runtimeHome:
+    accessMode: ReadWriteOnce
+    storageClassName: managed-csi-premium
+  knowledgeBases:
+    accessModes:
+      - ReadWriteMany
+    storageClassName: azurefile-nfs-premiumv2-custom
+  managerState:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: managed-csi-premium
+  storageVerification:
+    enabled: true
+    workspaceStorageClassName: azurefile-nfs-premiumv2-custom-verification-delete
+    managerStateStorageClassName: managed-csi-premium-verification-delete
+    workspaceSize: 100Gi
+    managerStateSize: 1Gi
+
+frontend:
+  enabled: false
+postgres:
+  enabled: false
+redis:
+  enabled: false
+ingress:
+  enabled: false
+oidc:
+  issuerUrl: https://login.example.com/realms/aileron
+  clientSecretName: external-oidc-client
+bootstrap:
+  admin:
+    enabled: false

@@ -1,0 +1,5 @@
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf
+frontend/docker-entrypoint.sh text eol=lf
+workspace-nextjs/scripts/*.sh text eol=lf

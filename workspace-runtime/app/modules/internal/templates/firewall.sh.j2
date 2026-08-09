@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+log() {
+  echo "[firewall] $1"
+}
+
+log "Starting firewall configuration..."
+
+# Clear existing rules
+iptables -F INPUT
+iptables -F OUTPUT
+
+# === INPUT rules (incoming traffic) ===
+log "Setting INPUT rules..."
+
+# Default accept all incoming traffic
+iptables -P INPUT ACCEPT
+
+# Allow local loopback
+iptables -A INPUT -i lo -j ACCEPT
+
+# Allow established connections
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Explicitly allow HTTP/HTTPS incoming (80, 443)
+iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+
+# Allow SSH incoming (22)
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+
+# Allow FastAPI incoming (3002)
+iptables -A INPUT -p tcp --dport 3002 -j ACCEPT
+
+log "INPUT rules configuration complete"
+
+# === OUTPUT rules (outgoing traffic) ===
+log "Setting OUTPUT rules..."
+
+# Blocked egress mode
+{% if firewall.egress_mode == "blocked" %}
+log "Egress mode: blocked (preserving internal network)"
+
+# Default deny external connections
+iptables -P OUTPUT DROP
+
+# Allow local loopback
+iptables -A OUTPUT -o lo -j ACCEPT
+
+# Allow established connections
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Allow Docker internal network communication (172.16.0.0/12 includes common Docker subnets)
+iptables -A OUTPUT -d 172.16.0.0/12 -j ACCEPT
+iptables -A OUTPUT -d 10.0.0.0/8 -j ACCEPT
+
+# Allow connection to workspace-manager (via Docker DNS)
+iptables -A OUTPUT -p tcp --dport 3001 -j ACCEPT
+
+# Allow DNS queries
+iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+
+log "Firewall configuration complete: external egress blocked"
+exit 0
+{% endif %}
+
+# Unrestricted egress mode
+{% if firewall.egress_mode == "unrestricted" %}
+log "Egress mode: unrestricted"
+
+# Allow all external connections
+iptables -P OUTPUT ACCEPT
+
+# Allow local loopback
+iptables -A OUTPUT -o lo -j ACCEPT
+
+# Allow established connections
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+{% elif firewall.egress_mode == "allowlist" %}
+log "Egress mode: allowlist"
+
+# Default deny external connections
+iptables -P OUTPUT DROP
+
+# Allow local loopback
+iptables -A OUTPUT -o lo -j ACCEPT
+
+# Allow established connections
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Allow Docker internal network communication
+iptables -A OUTPUT -d 172.16.0.0/12 -j ACCEPT
+iptables -A OUTPUT -d 10.0.0.0/8 -j ACCEPT
+
+# Allow connection to workspace-manager
+iptables -A OUTPUT -p tcp --dport 3001 -j ACCEPT
+
+# Allow DNS queries (required)
+iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+
+# Create rules for each allowed domain
+{% for domain in firewall.allowed_domains %}
+log "Allowing domain: {{ domain }}"
+
+# Resolve IP addresses for the domain
+DOMAIN_IPS=$(dig +short {{ domain }} A {{ domain }} AAAA 2>/dev/null | grep -E '^[0-9a-f.:]+$' || true)
+
+if [ -n "$DOMAIN_IPS" ]; then
+  for IP in $DOMAIN_IPS; do
+    log "  Allowing IP: $IP ({{ domain }})"
+    iptables -A OUTPUT -d "$IP" -j ACCEPT
+  done
+else
+  log "  Warning: Unable to resolve domain {{ domain }}"
+fi
+{% endfor %}
+
+{% endif %}
+
+log "Firewall configuration complete"

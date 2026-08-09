@@ -1,0 +1,8 @@
+ARG RUNTIME_BASE
+FROM ${RUNTIME_BASE}
+
+USER root
+RUN install -d -m 0755 /opt/canvas/site
+COPY site/ /opt/canvas/site/
+RUN chown -R 10001:10001 /opt/canvas/site
+USER 10001:10001

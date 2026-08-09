@@ -1,0 +1,7 @@
+interface:
+  display_name: "Aileron Canvas Publish"
+  short_description: "以 Workspace 設定的 provider 將 Web Canvas 發佈到 GitLab、Argo CD 與 K8s。"
+  default_prompt: "使用 $aileron-canvas-publish 檢查環境、發佈、查詢、回滾或撤下目前的 Aileron Web Canvas。"
+
+policy:
+  allow_implicit_invocation: true

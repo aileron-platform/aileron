@@ -1,0 +1,37 @@
+kubernetes:
+  workspaceRuntimeNamespace: workspace-system
+  platformStorageGid: 2000
+  workspaceData:
+    storageClassName: efs-sc
+  runtimeHome:
+    accessMode: ReadWriteOnce
+    storageClassName: ebs-gp3
+  knowledgeBases:
+    accessModes:
+      - ReadWriteMany
+    storageClassName: efs-sc
+  managerState:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: ebs-gp3
+  storageVerification:
+    enabled: true
+    workspaceStorageClassName: efs-sc-verification-delete
+    managerStateStorageClassName: ebs-gp3-verification-delete
+    workspaceSize: 1Gi
+    managerStateSize: 1Gi
+
+frontend:
+  enabled: false
+postgres:
+  enabled: false
+redis:
+  enabled: false
+ingress:
+  enabled: false
+oidc:
+  issuerUrl: https://login.example.com/realms/aileron
+  clientSecretName: external-oidc-client
+bootstrap:
+  admin:
+    enabled: false

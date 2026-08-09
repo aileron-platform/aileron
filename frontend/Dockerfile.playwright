@@ -1,0 +1,14 @@
+ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.61.1-noble
+FROM ${PLAYWRIGHT_IMAGE}
+
+WORKDIR /app
+
+ENV CI=1
+ENV PLAYWRIGHT_HTML_OPEN=never
+
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY . .
+
+CMD ["npm", "run", "test:e2e"]

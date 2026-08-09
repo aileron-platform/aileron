@@ -1,0 +1,15 @@
+services:
+  workspace-operator-test:
+    image: ailerondocker/workspace-operator-test:dev
+    pull_policy: never
+    working_dir: /workspace-operator
+    volumes:
+      # Test the working tree rather than the sources baked into the image.
+      - ./api:/workspace-operator/api:ro
+      - ./cmd:/workspace-operator/cmd:ro
+      - ./internal:/workspace-operator/internal:ro
+      - ./go.mod:/workspace-operator/go.mod:ro
+      - ./go.sum:/workspace-operator/go.sum:ro
+      - ../contracts:/contracts:ro
+      - ../helm:/helm:ro
+    command: go test -v ./...

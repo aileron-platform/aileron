@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "resourceTypes": ["workspace", "knowledge_base"],
+  "ranges": ["7d", "30d", "90d"],
+  "storageKinds": ["workspace_data", "runtime_home", "knowledge_base"],
+  "workspaceHealthGroups": ["running", "transitioning", "stopped", "error"],
+  "knowledgeBaseVisibility": ["public", "private"],
+  "knowledgeBaseIndexingGroups": ["success", "processing", "failure", "never_indexed"],
+  "capacityRisks": ["normal", "warning", "critical", "unknown", "stale"],
+  "expansionPhases": ["pending", "applying", "completed", "failed"],
+  "thresholds": {
+    "warningPercent": 80,
+    "criticalPercent": 95,
+    "staleAfterSeconds": 7200
+  },
+  "retention": {
+    "rawActivityDays": 90,
+    "dailyAggregates": "permanent",
+    "capacitySnapshots": "permanent"
+  },
+  "cacheTtlSeconds": {
+    "statusSummary": 30,
+    "activityTrend": 300,
+    "capacityTrend": 300
+  },
+  "endpoints": [
+    "/platform-resources/workspaces/statistics/summary",
+    "/platform-resources/workspaces/statistics/resource-trend",
+    "/platform-resources/workspaces/statistics/capacity-trend",
+    "/platform-resources/knowledge-bases/statistics/summary",
+    "/platform-resources/knowledge-bases/statistics/resource-trend",
+    "/platform-resources/knowledge-bases/statistics/capacity-trend",
+    "/platform-resources/knowledge-bases/{knowledgeBaseId}/quota",
+    "/platform-resources/workspaces/{workspaceId}/capacity-expansions",
+    "/workspaces/{workspaceId}/capacity",
+    "/internal/workspaces/{workspaceId}/resource-telemetry/batches"
+  ]
+}

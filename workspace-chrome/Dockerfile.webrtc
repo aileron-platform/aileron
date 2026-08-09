@@ -1,0 +1,133 @@
+ARG BROWSER_BASE_IMAGE
+FROM ${BROWSER_BASE_IMAGE} AS browser-base
+
+# ========== Install Chinese locale + CJK fonts + Node.js (for CDP proxy) ==========
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    locales \
+    fonts-noto-cjk \
+    chromium-l10n \
+    nodejs \
+    && sed -i '/zh_TW.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen zh_TW.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=zh_TW.UTF-8
+ENV LC_ALL=zh_TW.UTF-8
+ENV LANGUAGE=zh_TW:zh
+
+# ========== Override Chrome policy (enable DevTools for CDP support) ==========
+COPY chromium-policy-override.json /etc/chromium/policies/managed/policies.json
+RUN install -d -m 0755 /opt/aileron/chromium-profile-seed/Default
+COPY preferences.json /opt/aileron/chromium-profile-seed/Default/Preferences
+COPY ["aileron-logo.png", "/opt/aileron/chromium-profile-seed/Default/Google Profile Picture.png"]
+RUN chmod 0444 \
+    /opt/aileron/chromium-profile-seed/Default/Preferences \
+    "/opt/aileron/chromium-profile-seed/Default/Google Profile Picture.png"
+
+# ========== Add CDP proxy (rewrites Host header to enable container-name connections) ==========
+RUN mkdir -p /opt/cdp-proxy
+COPY cdp-proxy.js /opt/cdp-proxy/cdp-proxy.js
+RUN chmod 0444 /opt/cdp-proxy/cdp-proxy.js
+
+# ========== neko configuration ==========
+ENV NEKO_SERVER_BIND=:6080
+ENV NEKO_DESKTOP_SCREEN=1440x900@30
+ENV NEKO_LEGACY=true
+ENV NEKO_PLUGINS_ENABLED=false
+ENV NEKO_CHAT_ENABLED=false
+ENV NEKO_FILETRANSFER_ENABLED=false
+ENV NEKO_CAPTURE_BROADCAST_AUTOSTART=false
+ENV NEKO_CAPTURE_SCREENCAST_ENABLED=false
+ENV NEKO_CAPTURE_WEBCAM_ENABLED=false
+ENV NEKO_CAPTURE_MICROPHONE_ENABLED=false
+ENV NEKO_SESSION_INACTIVE_CURSORS=false
+# Use one TURN-compatible WebRTC profile in Docker and Kubernetes. Dynamic
+# Browser workloads do not publish per-container media ports.
+COPY neko-capture.yaml /tmp/neko-capture.yaml
+RUN test "$(grep -Ec '^capture:' /etc/neko/neko.yaml)" -eq 0 && \
+    grep -Fq 'implicit_hosting: false' /etc/neko/neko.yaml && \
+    sed -i 's/implicit_hosting: false/implicit_hosting: true/' /etc/neko/neko.yaml && \
+    cat /tmp/neko-capture.yaml >> /etc/neko/neko.yaml && \
+    rm /tmp/neko-capture.yaml && \
+    printf '\nwebrtc:\n  icelite: false\n  udpmux: 0\n  nat1to1: []\n  ip_retrieval_url: ""\n\n' >> /etc/neko/neko.yaml && \
+    cp /etc/neko/neko.yaml /etc/neko/neko.kubernetes.yaml && \
+    chmod 0444 /etc/neko/neko.kubernetes.yaml && \
+    test "$(grep -Ec '^capture:' /etc/neko/neko.yaml)" -eq 1 && \
+    test "$(grep -Ec '^capture:' /etc/neko/neko.kubernetes.yaml)" -eq 1 && \
+    grep -Eq '^[[:space:]]+udpmux: 0$' /etc/neko/neko.yaml && \
+    grep -Eq '^[[:space:]]+nat1to1: \[\]$' /etc/neko/neko.yaml && \
+    grep -Eq '^[[:space:]]+udpmux: 0$' /etc/neko/neko.kubernetes.yaml && \
+    grep -Eq '^[[:space:]]+nat1to1: \[\]$' /etc/neko/neko.kubernetes.yaml
+
+# The bundled static UI is not part of the product surface.
+RUN grep -Fq 'command=/usr/bin/neko serve --server.static "/var/www"' /etc/neko/supervisord.conf && \
+    sed -i 's|command=/usr/bin/neko serve --server.static "/var/www"|command=/usr/bin/neko serve|' /etc/neko/supervisord.conf && \
+    grep -Fxq 'command=/usr/bin/neko serve' /etc/neko/supervisord.conf && \
+    ! grep -Fq -- '--server.static' /etc/neko/supervisord.conf
+
+# Exposed ports: 6080 (neko HTTP+WS), 9223 (CDP relay → Chrome 9222)
+EXPOSE 6080 9223
+
+LABEL org.opencontainers.image.source=https://github.com/chengyang-code/aileron
+LABEL org.opencontainers.image.description="Aileron Workspace Chrome - neko WebRTC + CDP"
+LABEL org.opencontainers.image.licenses=MIT
+
+# Kubernetes stage: one arbitrary non-root identity owns all runtime processes.
+# The writable root is provided by the Pod's /tmp emptyDir; /dev/shm is mounted
+# separately by the Operator.
+FROM browser-base AS kubernetes
+
+COPY supervisord-kubernetes.conf /etc/neko/supervisord.kubernetes.conf
+COPY supervisord-chromium-kubernetes.conf /etc/neko/supervisord.kubernetes/chromium.conf
+COPY supervisord-cdp-proxy-kubernetes.conf /etc/neko/supervisord.kubernetes/cdp-relay.conf
+COPY entrypoint.kubernetes.sh /usr/local/bin/aileron-browser-kubernetes-entrypoint
+
+RUN chmod 0444 \
+        /etc/neko/neko.kubernetes.yaml \
+        /etc/neko/supervisord.kubernetes.conf \
+        /etc/neko/supervisord.kubernetes/chromium.conf \
+        /etc/neko/supervisord.kubernetes/cdp-relay.conf \
+    && sed 's|/tmp/xf86-input-neko.sock|/tmp/aileron-browser/xf86-input-neko.sock|' \
+        /etc/neko/xorg.conf > /etc/neko/xorg.kubernetes.conf \
+    && chmod 0444 /etc/neko/xorg.kubernetes.conf \
+    && sed 's|socket=/tmp/pulseaudio.socket|socket=/tmp/aileron-browser/pulseaudio.socket|' \
+        /etc/pulse/default.pa > /etc/pulse/default.kubernetes.pa \
+    && chmod 0444 /etc/pulse/default.kubernetes.pa \
+    && chmod 0555 /usr/local/bin/aileron-browser-kubernetes-entrypoint \
+    && chmod -R a+rX /opt/aileron/chromium-profile-seed /opt/cdp-proxy \
+    && chmod 1777 /tmp
+
+ENV HOME=/tmp/aileron-browser/home
+ENV TMPDIR=/tmp/aileron-browser/tmp
+ENV XDG_RUNTIME_DIR=/tmp/aileron-browser/runtime
+ENV PULSE_SERVER=unix:/tmp/aileron-browser/pulseaudio.socket
+ENV AILERON_BROWSER_PROFILE_DIR=/tmp/aileron-browser/chromium
+ENV NEKO_DESKTOP_INPUT_SOCKET=/tmp/aileron-browser/xf86-input-neko.sock
+
+USER 10001:10001
+
+ENTRYPOINT ["/usr/local/bin/aileron-browser-kubernetes-entrypoint"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/neko/supervisord.kubernetes.conf"]
+
+# Default image target for Docker Compose development. Neko's upstream root
+# supervisor remains isolated from the Kubernetes execution profile.
+FROM browser-base AS development
+
+RUN install -d -m 0755 -o neko -g neko /home/neko/.config/chromium/Default \
+    && install -m 0600 -o neko -g neko \
+        /opt/aileron/chromium-profile-seed/Default/Preferences \
+        /home/neko/.config/chromium/Default/Preferences \
+    && install -m 0600 -o neko -g neko \
+        "/opt/aileron/chromium-profile-seed/Default/Google Profile Picture.png" \
+        "/home/neko/.config/chromium/Default/Google Profile Picture.png"
+
+COPY supervisord-chromium-cdp.conf /etc/neko/supervisord/chromium.conf
+COPY supervisord-cdp-proxy-neko.conf /etc/neko/supervisord/cdp-relay.conf
+COPY entrypoint.docker.sh /usr/local/bin/aileron-browser-docker-entrypoint
+
+RUN chmod 0555 /usr/local/bin/aileron-browser-docker-entrypoint
+
+USER root
+
+ENTRYPOINT ["/usr/local/bin/aileron-browser-docker-entrypoint"]
+CMD ["/usr/bin/supervisord", "-c", "/tmp/aileron-browser/supervisord.generated.conf"]

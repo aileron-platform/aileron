@@ -1,0 +1,18 @@
+{
+  "title": {
+    "message": "Aileron",
+    "description": "The title in the navbar"
+  },
+  "item.label.文件": {
+    "message": "Docs",
+    "description": "Navbar item with label 文件"
+  },
+  "item.label.Manager API": {
+    "message": "Manager API",
+    "description": "Navbar item with label Manager API"
+  },
+  "item.label.Runtime API": {
+    "message": "Runtime API",
+    "description": "Navbar item with label Runtime API"
+  }
+}

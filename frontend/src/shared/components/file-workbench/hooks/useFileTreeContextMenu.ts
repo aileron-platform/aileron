@@ -1,0 +1,326 @@
+/**
+ * useFileTreeContextMenu Hook
+ * 
+ */
+
+import { useMemo } from 'react';
+import {
+  Archive,
+  Eye,
+  FilePlus,
+  FolderPlus,
+  Copy,
+  ClipboardPaste,
+  Download,
+  Trash2,
+  RefreshCw,
+  Upload,
+  FileEdit,
+} from 'lucide-react';
+import type { FileTreeContextMenuAction } from '../primitives/FileTreeContextMenuItems';
+import type { FileTreeNode } from '../types';
+
+export interface FileTreeContextMenuConfig {
+  node: FileTreeNode | null;
+  
+  readOnly?: boolean;
+  
+  enableMultiSelect?: boolean;
+  
+  selectedCount?: number;
+
+  selectedIds?: Set<string>;
+  
+  hasClipboard?: boolean;
+  
+  isImageFile?: boolean;
+
+  isPathWritable?: (path: string) => boolean;
+  
+  features?: {
+    open?: boolean;
+    view?: boolean;
+    upload?: boolean;
+    createFile?: boolean;
+    createFolder?: boolean;
+    copy?: boolean;
+    copyPath?: boolean;
+    download?: boolean;
+    paste?: boolean;
+    rename?: boolean;
+    delete?: boolean;
+    refresh?: boolean;
+    viewImage?: boolean;
+    extractArchive?: boolean;
+  };
+  
+  callbacks: {
+    onOpen?: (node: FileTreeNode) => void;
+    onView?: (node: FileTreeNode) => void;
+    onUpload?: () => void;
+    onCreateFile?: () => void;
+    onCreateFolder?: () => void;
+    onCopy?: (node: FileTreeNode) => void;
+    onCopyPath?: (path: string) => void;
+    onDownload?: (node: FileTreeNode, paths: string[]) => void;
+    onPaste?: () => void;
+    onRename?: (node: FileTreeNode) => void;
+    onDelete?: (node: FileTreeNode) => void;
+    onBatchDelete?: (paths: string[]) => void;
+    onRefresh?: () => void;
+    onViewImage?: (node: FileTreeNode) => void;
+    onExtractArchive?: (node: FileTreeNode) => void;
+    onClose: () => void;
+  };
+  
+  t: (key: string, options?: Record<string, unknown>) => string;
+}
+
+/**
+ */
+export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileTreeContextMenuAction[] {
+  const {
+    node,
+    readOnly = false,
+    enableMultiSelect = false,
+    selectedCount = 0,
+    selectedIds,
+    hasClipboard = false,
+    isImageFile = false,
+    isPathWritable,
+    features = {},
+    callbacks,
+    t,
+  } = config;
+
+  return useMemo<FileTreeContextMenuAction[]>(() => {
+    if (!node) {
+      return [];
+    }
+
+    const items: FileTreeContextMenuAction[] = [];
+    const isDirectory = node.type === 'directory';
+    const multipleSelected = enableMultiSelect && selectedCount > 1;
+    const isZipFile = !isDirectory && node.name.toLowerCase().endsWith('.zip');
+    const nodeWritable = node.writable ?? isPathWritable?.(node.path) ?? true;
+    const writeActionDisabled = readOnly || !nodeWritable;
+
+
+    const defaultFeatures = {
+      open: true,
+      view: false,
+      upload: true,
+      createFile: true,
+      createFolder: true,
+      copy: true,
+      copyPath: false,
+      download: false,
+      paste: true,
+      rename: true,
+      delete: true,
+      refresh: false,
+      viewImage: false,
+      extractArchive: false,
+      ...features,
+    };
+
+
+    if (isDirectory) {
+
+      if (defaultFeatures.upload && callbacks.onUpload) {
+        items.push({
+          key: 'upload',
+          label: t('common.fileTree.contextMenu.upload'),
+          icon: Upload,
+          disabled: writeActionDisabled,
+          onSelect: () => {
+            callbacks.onClose();
+            callbacks.onUpload();
+          },
+        });
+      }
+
+
+      if (defaultFeatures.createFile && callbacks.onCreateFile) {
+        items.push({
+          key: 'create-file',
+          label: t('common.fileTree.contextMenu.createFile'),
+          icon: FilePlus,
+          disabled: writeActionDisabled,
+          onSelect: () => {
+            callbacks.onClose();
+            callbacks.onCreateFile();
+          },
+        });
+      }
+
+
+      if (defaultFeatures.createFolder && callbacks.onCreateFolder) {
+        items.push({
+          key: 'create-folder',
+          label: t('common.fileTree.contextMenu.createFolder'),
+          icon: FolderPlus,
+          disabled: writeActionDisabled,
+          onSelect: () => {
+            callbacks.onClose();
+            callbacks.onCreateFolder();
+          },
+        });
+      }
+    }
+
+
+    if (!isDirectory && defaultFeatures.open && (callbacks.onOpen || callbacks.onView)) {
+      items.push({
+        key: 'open',
+        label: t('common.fileTree.contextMenu.open'),
+        icon: Eye,
+        onSelect: () => {
+          callbacks.onClose();
+          (callbacks.onOpen ?? callbacks.onView)?.(node);
+        },
+      });
+    }
+
+
+    if (!isDirectory && isImageFile && defaultFeatures.viewImage && callbacks.onViewImage) {
+      items.push({
+        key: 'view-image',
+        label: t('common.fileTree.contextMenu.viewImage'),
+        icon: Eye,
+        onSelect: () => {
+          callbacks.onClose();
+          callbacks.onViewImage(node);
+        },
+      });
+    }
+
+    if (defaultFeatures.download && callbacks.onDownload) {
+      items.push({
+        key: 'download',
+        label: multipleSelected
+          ? t('common.fileTree.contextMenu.downloadSelected', { count: selectedCount })
+          : isDirectory
+            ? t('common.fileTree.contextMenu.downloadAsZip')
+            : t('common.fileTree.contextMenu.download'),
+        icon: Download,
+        onSelect: () => {
+          callbacks.onClose();
+          callbacks.onDownload(
+            node,
+            multipleSelected && selectedIds ? Array.from(selectedIds) : [node.path],
+          );
+        },
+        showDividerBefore: isDirectory && items.length > 0,
+      });
+    }
+
+    if (isZipFile && defaultFeatures.extractArchive && callbacks.onExtractArchive) {
+      items.push({
+        key: 'extract-archive',
+        label: t('common.fileTree.contextMenu.extractArchive'),
+        icon: Archive,
+        disabled: writeActionDisabled,
+        onSelect: () => {
+          callbacks.onClose();
+          callbacks.onExtractArchive(node);
+        },
+      });
+    }
+
+
+    if (defaultFeatures.copy && callbacks.onCopy) {
+      items.push({
+        key: 'copy',
+        label: t('common.fileTree.contextMenu.copy'),
+        icon: Copy,
+        onSelect: () => {
+          callbacks.onClose();
+          callbacks.onCopy(node);
+        },
+        showDividerBefore: !isDirectory && items.length > 0,
+      });
+    }
+
+
+    if (defaultFeatures.copyPath && callbacks.onCopyPath) {
+      items.push({
+        key: 'copy-path',
+        label: t('common.fileTree.contextMenu.copyPath'),
+        icon: Copy,
+        onSelect: () => {
+          callbacks.onClose();
+          callbacks.onCopyPath(node.path);
+        },
+      });
+    }
+
+
+    if (defaultFeatures.paste && callbacks.onPaste) {
+      items.push({
+        key: 'paste',
+        label: t('common.fileTree.contextMenu.paste'),
+        icon: ClipboardPaste,
+        disabled: !hasClipboard || writeActionDisabled,
+        onSelect: () => {
+          callbacks.onClose();
+          callbacks.onPaste();
+        },
+      });
+    }
+
+
+
+    if (defaultFeatures.rename && callbacks.onRename) {
+      items.push({
+        key: 'rename',
+        label: t('common.fileTree.contextMenu.rename'),
+        icon: FileEdit,
+        disabled: writeActionDisabled,
+        onSelect: () => {
+          callbacks.onClose();
+          callbacks.onRename(node);
+        },
+        showDividerBefore: true,
+      });
+    }
+
+
+    if (defaultFeatures.delete && (callbacks.onDelete || callbacks.onBatchDelete)) {
+      items.push({
+        key: 'delete',
+        label: multipleSelected
+          ? t('common.fileTree.contextMenu.deleteSelected', { count: selectedCount })
+          : t('common.fileTree.contextMenu.delete'),
+        icon: Trash2,
+        variant: 'destructive' as const,
+        disabled: writeActionDisabled || multipleSelected,
+        onSelect: () => {
+          callbacks.onClose();
+          if (multipleSelected && callbacks.onBatchDelete && selectedIds) {
+            callbacks.onBatchDelete(Array.from(selectedIds));
+          } else if (callbacks.onDelete) {
+            callbacks.onDelete(node);
+          }
+        },
+      });
+    }
+
+
+
+    if (defaultFeatures.refresh && callbacks.onRefresh) {
+      items.push({
+        key: 'refresh',
+        label: t('common.fileTree.contextMenu.refresh'),
+        icon: RefreshCw,
+        onSelect: () => {
+          callbacks.onClose();
+          callbacks.onRefresh();
+        },
+        showDividerBefore: true,
+      });
+    }
+
+    return items;
+  }, [node, readOnly, enableMultiSelect, selectedCount, selectedIds, hasClipboard, isImageFile, isPathWritable, features, callbacks, t]);
+}

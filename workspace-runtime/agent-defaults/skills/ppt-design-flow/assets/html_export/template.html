@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{deck_title}}</title>
+  <style>
+{{inline_styles}}
+  </style>
+</head>
+<body class="reading-mode">
+  <button id="mode-toggle" class="mode-toggle" type="button" data-i18n-key="deck.togglePresentation">簡報模式</button>
+  <div class="reading-shell">
+    <nav class="slide-nav" aria-label="Slide thumbnails">
+      <h1>{{deck_title}}</h1>
+{{thumbnail_list}}
+    </nav>
+    <main class="slide-main">
+{{slide_sections}}
+    </main>
+  </div>
+  <div class="presentation-shell" aria-hidden="true">
+    <img id="presentation-image" alt="Current slide" />
+    <div id="page-indicator" class="page-indicator"></div>
+  </div>
+  <script>
+{{inline_script}}
+  </script>
+</body>
+</html>

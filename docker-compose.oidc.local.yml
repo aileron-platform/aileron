@@ -1,0 +1,71 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.0
+    pull_policy: never
+    container_name: aileron-keycloak-local-dev
+    restart: unless-stopped
+    command:
+      - start-dev
+      - --import-realm
+    environment:
+      TZ: ${TZ:-Asia/Taipei}
+      KC_DB: dev-file
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "false"
+    volumes:
+      - keycloak-local-data:/opt/keycloak/data
+      - ./local-oidc:/opt/keycloak/data/import:ro
+    network_mode: service:workspace-manager
+    depends_on:
+      openldap:
+        condition: service_healthy
+      openldap-seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - timeout 5 bash -c ':> /dev/tcp/127.0.0.1/8080' || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  identity-bootstrap:
+    environment:
+      OIDC_ISSUER_URL: http://localhost:8080/realms/aileron
+
+  workspace-manager:
+    environment:
+      ENV: development
+      OIDC_ISSUER_URL: http://localhost:8080/realms/aileron
+      OIDC_DISCOVERY_URL: http://localhost:8080/realms/aileron/.well-known/openid-configuration
+      OIDC_CLIENT_ID: aileron-manager
+      OIDC_CLIENT_SECRET: local-manager-secret
+      OIDC_REDIRECT_URI: http://localhost:3001/api/v1/oauth2/callback
+      FRONTEND_ORIGIN: http://localhost:8082
+      OIDC_POST_LOGOUT_REDIRECT_URI: http://localhost:8082
+    ports:
+      - "8080:8080"
+
+  frontend:
+    working_dir: /app
+    command:
+      - npm
+      - run
+      - dev
+      - --
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8082"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+
+volumes:
+  keycloak-local-data:

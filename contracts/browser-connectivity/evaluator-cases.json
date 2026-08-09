@@ -1,0 +1,194 @@
+{
+  "contractVersion": "browser-connectivity/v1",
+  "credentialRevision": "docker-compose-v1",
+  "now": "2026-08-05T00:00:00Z",
+  "cases": [
+    {
+      "name": "all-current-success-evidence-is-ready-and-allowed",
+      "backend": {
+        "contractVersion": "browser-connectivity/v1",
+        "latestAttempt": {
+          "contractVersion": "browser-connectivity/v1",
+          "producer": {"installationId": "compose", "vantageId": "backend:workspace-1"},
+          "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+          "credentialRevision": "docker-compose-v1",
+          "outcome": "success",
+          "measuredAt": "2026-08-04T23:59:40Z",
+          "acceptedAt": "2026-08-04T23:59:45Z",
+          "expiresAt": "2026-08-05T00:01:15Z",
+          "relayAddress": "127.0.0.1:49160"
+        },
+        "lastSuccess": {
+          "contractVersion": "browser-connectivity/v1",
+          "producer": {"installationId": "compose", "vantageId": "backend:workspace-1"},
+          "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+          "credentialRevision": "docker-compose-v1",
+          "outcome": "success",
+          "measuredAt": "2026-08-04T23:59:40Z",
+          "acceptedAt": "2026-08-04T23:59:45Z",
+          "expiresAt": "2026-08-05T00:01:15Z",
+          "relayAddress": "127.0.0.1:49160"
+        }
+      },
+      "frontend": {
+        "host": {
+          "contractVersion": "browser-connectivity/v1",
+          "latestAttempt": {
+            "contractVersion": "browser-connectivity/v1",
+            "producer": {"installationId": "compose", "vantageId": "host"},
+            "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+            "credentialRevision": "docker-compose-v1",
+            "outcome": "success",
+            "acceptedAt": "2026-08-04T23:59:50Z",
+            "expiresAt": "2026-08-05T00:01:20Z",
+            "relayAddress": "127.0.0.1:49161"
+          },
+          "lastSuccess": {
+            "contractVersion": "browser-connectivity/v1",
+            "producer": {"installationId": "compose", "vantageId": "host"},
+            "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+            "credentialRevision": "docker-compose-v1",
+            "outcome": "success",
+            "acceptedAt": "2026-08-04T23:59:50Z",
+            "expiresAt": "2026-08-05T00:01:20Z",
+            "relayAddress": "127.0.0.1:49161"
+          }
+        }
+      },
+      "expected": {"state": "ready", "admission": "allowed", "backendState": "ready", "frontendState": "ready", "reason": "BrowserConnectivityReady", "errorCode": null}
+    },
+    {
+      "name": "frontend-failure-with-current-last-success-is-degraded-and-allowed",
+      "backendRef": "all-current-success-evidence-is-ready-and-allowed",
+      "frontend": {
+        "host": {
+          "contractVersion": "browser-connectivity/v1",
+          "latestAttempt": {
+            "contractVersion": "browser-connectivity/v1",
+            "producer": {"installationId": "compose", "vantageId": "host"},
+            "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+            "credentialRevision": "docker-compose-v1",
+            "outcome": "failure",
+            "acceptedAt": "2026-08-04T23:59:59Z",
+            "expiresAt": "2026-08-05T00:01:29Z",
+            "errorCode": "TURN_RELAY_UNAVAILABLE"
+          },
+          "lastSuccess": {
+            "contractVersion": "browser-connectivity/v1",
+            "producer": {"installationId": "compose", "vantageId": "host"},
+            "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+            "credentialRevision": "docker-compose-v1",
+            "outcome": "success",
+            "acceptedAt": "2026-08-04T23:59:20Z",
+            "expiresAt": "2026-08-05T00:00:50Z",
+            "relayAddress": "127.0.0.1:49161"
+          }
+        }
+      },
+      "expected": {"state": "degraded", "admission": "allowed", "backendState": "ready", "frontendState": "degraded", "reason": "FrontendTURNPathNotReady", "errorCode": "FRONTEND_TURN_PATH_NOT_READY"}
+    },
+    {
+      "name": "frontend-last-success-expiring-at-authority-now-is-not-ready-and-denied",
+      "backendRef": "all-current-success-evidence-is-ready-and-allowed",
+      "frontend": {
+        "host": {
+          "contractVersion": "browser-connectivity/v1",
+          "latestAttempt": {
+            "contractVersion": "browser-connectivity/v1",
+            "producer": {"installationId": "compose", "vantageId": "host"},
+            "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+            "credentialRevision": "docker-compose-v1",
+            "outcome": "failure",
+            "acceptedAt": "2026-08-04T23:59:59Z",
+            "expiresAt": "2026-08-05T00:01:29Z",
+            "errorCode": "TURN_RELAY_UNAVAILABLE"
+          },
+          "lastSuccess": {
+            "contractVersion": "browser-connectivity/v1",
+            "producer": {"installationId": "compose", "vantageId": "host"},
+            "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+            "credentialRevision": "docker-compose-v1",
+            "outcome": "success",
+            "acceptedAt": "2026-08-04T23:57:00Z",
+            "expiresAt": "2026-08-05T00:00:00Z",
+            "relayAddress": "127.0.0.1:49161"
+          }
+        }
+      },
+      "expected": {"state": "not_ready", "admission": "denied", "backendState": "ready", "frontendState": "not_ready", "reason": "FrontendTURNPathNotReady", "errorCode": "FRONTEND_TURN_PATH_NOT_READY"}
+    },
+    {
+      "name": "frontend-profile-revision-mismatch-is-not-ready-and-denied",
+      "backendRef": "all-current-success-evidence-is-ready-and-allowed",
+      "frontend": {
+        "host": {
+          "contractVersion": "browser-connectivity/v1",
+          "latestAttempt": {
+            "contractVersion": "browser-connectivity/v1",
+            "producer": {"installationId": "compose", "vantageId": "host"},
+            "profileRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "credentialRevision": "docker-compose-v1",
+            "outcome": "success",
+            "acceptedAt": "2026-08-04T23:59:50Z",
+            "expiresAt": "2026-08-05T00:01:20Z",
+            "relayAddress": "127.0.0.1:49161"
+          },
+          "lastSuccess": {
+            "contractVersion": "browser-connectivity/v1",
+            "producer": {"installationId": "compose", "vantageId": "host"},
+            "profileRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "credentialRevision": "docker-compose-v1",
+            "outcome": "success",
+            "acceptedAt": "2026-08-04T23:59:50Z",
+            "expiresAt": "2026-08-05T00:01:20Z",
+            "relayAddress": "127.0.0.1:49161"
+          }
+        }
+      },
+      "expected": {"state": "not_ready", "admission": "denied", "backendState": "ready", "frontendState": "not_ready", "reason": "FrontendTURNPathNotReady", "errorCode": "FRONTEND_TURN_PATH_NOT_READY"}
+    },
+    {
+      "name": "frontend-credential-revision-mismatch-is-not-ready-and-denied",
+      "backendRef": "all-current-success-evidence-is-ready-and-allowed",
+      "frontend": {
+        "host": {
+          "contractVersion": "browser-connectivity/v1",
+          "latestAttempt": {
+            "contractVersion": "browser-connectivity/v1",
+            "producer": {"installationId": "compose", "vantageId": "host"},
+            "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+            "credentialRevision": "retired-credential",
+            "outcome": "success",
+            "acceptedAt": "2026-08-04T23:59:50Z",
+            "expiresAt": "2026-08-05T00:01:20Z",
+            "relayAddress": "127.0.0.1:49161"
+          },
+          "lastSuccess": {
+            "contractVersion": "browser-connectivity/v1",
+            "producer": {"installationId": "compose", "vantageId": "host"},
+            "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+            "credentialRevision": "retired-credential",
+            "outcome": "success",
+            "acceptedAt": "2026-08-04T23:59:50Z",
+            "expiresAt": "2026-08-05T00:01:20Z",
+            "relayAddress": "127.0.0.1:49161"
+          }
+        }
+      },
+      "expected": {"state": "not_ready", "admission": "denied", "backendState": "ready", "frontendState": "not_ready", "reason": "FrontendTURNPathNotReady", "errorCode": "FRONTEND_TURN_PATH_NOT_READY"}
+    },
+    {
+      "name": "backend-authority-unavailable-is-unavailable-and-denied",
+      "backend": null,
+      "backendError": "evidence_unavailable",
+      "frontend": {},
+      "expected": {"state": "unavailable", "admission": "denied", "backendState": "unavailable", "frontendState": "pending", "reason": "BackendEvidenceUnavailable", "errorCode": "BACKEND_EVIDENCE_UNAVAILABLE"}
+    },
+    {
+      "name": "missing-current-evidence-is-pending-and-denied",
+      "backend": null,
+      "frontend": {},
+      "expected": {"state": "pending", "admission": "denied", "backendState": "pending", "frontendState": "pending", "reason": "BrowserConnectivityPending", "errorCode": null}
+    }
+  ]
+}

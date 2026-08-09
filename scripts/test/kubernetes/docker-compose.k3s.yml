@@ -1,0 +1,317 @@
+name: aileron-kubernetes-k3s-e2e
+
+services:
+  workspace-operator-image:
+    image: aileron/workspace-operator:k3s-e2e
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  workspace-manager-image:
+    image: aileron/workspace-manager:k3s-e2e
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  workspace-runtime-image:
+    image: aileron/workspace-runtime:k3s-e2e
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  workspace-browser-image:
+    image: aileron/workspace-chrome:k3s-e2e
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  workspace-canvas-image:
+    image: aileron/workspace-canvas:k3s-e2e
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  product-conformance-image:
+    image: aileron/product-conformance:k3s-e2e
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  platform-redis-image:
+    image: aileron/platform-redis:k3s-e2e
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  platform-postgres-image:
+    image: aileron/platform-postgres:k3s-e2e
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  workspace-probe-image:
+    image: aileron/kubernetes-conformance-probe:k3s-e2e
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  image-exporter:
+    image: docker:27-cli
+    depends_on:
+      workspace-operator-image:
+        condition: service_started
+      workspace-manager-image:
+        condition: service_started
+      workspace-runtime-image:
+        condition: service_started
+      workspace-browser-image:
+        condition: service_started
+      workspace-canvas-image:
+        condition: service_started
+      product-conformance-image:
+        condition: service_started
+      platform-redis-image:
+        condition: service_started
+      platform-postgres-image:
+        condition: service_started
+      workspace-probe-image:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        rm -f \
+          /images/e2e-images.tar \
+          /images/e2e-images.tar.next \
+          /images/product-workload-images.txt \
+          /images/product-workload-images.txt.next \
+          /images/workload-probe-image.txt \
+          /images/workload-probe-image.txt.next
+        docker image save \
+          --output /images/e2e-images.tar.next \
+          aileron/workspace-operator:k3s-e2e \
+          aileron/workspace-manager:k3s-e2e \
+          aileron/workspace-runtime:k3s-e2e \
+          aileron/workspace-chrome:k3s-e2e \
+          aileron/workspace-canvas:k3s-e2e \
+          aileron/product-conformance:k3s-e2e \
+          aileron/platform-redis:k3s-e2e \
+          aileron/platform-postgres:k3s-e2e \
+          aileron/kubernetes-conformance-probe:k3s-e2e
+        docker image inspect \
+          --format '{{index .RepoDigests 0}}' \
+          aileron/kubernetes-conformance-probe:k3s-e2e \
+          > /images/workload-probe-image.txt.next
+        : > /images/product-workload-images.txt.next
+        for source_image in \
+          aileron/workspace-runtime:k3s-e2e \
+          aileron/workspace-chrome:k3s-e2e \
+          aileron/workspace-canvas:k3s-e2e
+        do
+          immutable_image="$$(docker image inspect \
+            --format '{{index .RepoDigests 0}}' \
+            "$${source_image}")"
+          printf '%s\n' "$${immutable_image}" | grep -Eq \
+            '^[a-z0-9]([a-z0-9._:/-]*[a-z0-9])?@sha256:[0-9a-f]{64}$'
+          printf '%s %s\n' "$${source_image}" "$${immutable_image}" \
+            >> /images/product-workload-images.txt.next
+        done
+        grep -Eq \
+          '^[a-z0-9]([a-z0-9._:/-]*[a-z0-9])?@sha256:[0-9a-f]{64}$' \
+          /images/workload-probe-image.txt.next
+        mv /images/e2e-images.tar.next /images/e2e-images.tar
+        mv \
+          /images/product-workload-images.txt.next \
+          /images/product-workload-images.txt
+        mv /images/workload-probe-image.txt.next /images/workload-probe-image.txt
+        exec sleep 3600
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test -s /images/e2e-images.tar
+          && test -s /images/product-workload-images.txt
+          && test -s /images/workload-probe-image.txt
+      interval: 2s
+      timeout: 2s
+      retries: 600
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - image-cache:/images
+
+  nfs-server:
+    platform: linux/amd64
+    image: erichough/nfs-server:2.2.1
+    privileged: true
+    environment:
+      NFS_DISABLE_VERSION_3: "true"
+      NFS_EXPORT_0: >-
+        /exports *(rw,sync,no_subtree_check,root_squash,anonuid=65534,anongid=2000,insecure,fsid=0,crossmnt)
+    entrypoint: ["/usr/bin/env", "bash", "-euc"]
+    command:
+      - |
+        install -d -m 2770 -g 2000 \
+          /exports/knowledge-bases \
+          /exports/manager-state \
+          /exports/runtime-homes \
+          /exports/workspaces \
+          /exports/workspaces/11111111-1111-4111-8111-111111111111 \
+          /exports/runtime-homes/11111111-1111-4111-8111-111111111111
+        exec /usr/local/bin/entrypoint.sh
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          exportfs -v | grep -q /exports
+          && grep -qx Y /proc/fs/nfsd/v4_end_grace
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - nfs-data:/exports
+
+  k3s-server:
+    image: aileron/k3s-nfs-node:v1.31.6-k3s1
+    pull_policy: never
+    privileged: true
+    depends_on:
+      image-exporter:
+        condition: service_healthy
+      nfs-server:
+        condition: service_healthy
+    environment:
+      K3S_TOKEN: aileron-kubernetes-e2e
+      K3S_KUBECONFIG_MODE: "666"
+      K3S_KUBECONFIG_OUTPUT: /output/kubeconfig.yaml
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        while [ ! -s /image-source/e2e-images.tar ]; do sleep 1; done
+        mkdir -p /var/lib/rancher/k3s/agent/images
+        cp /image-source/e2e-images.tar /var/lib/rancher/k3s/agent/images/
+        exec k3s server \
+          --disable=traefik \
+          --disable=servicelb \
+          --node-name=k3s-server \
+          --tls-san=k3s-server \
+          --write-kubeconfig-mode=666
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          kubectl get --raw=/readyz >/dev/null 2>&1
+          && source_ref=docker.io/aileron/kubernetes-conformance-probe:k3s-e2e
+          && target_ref="docker.io/$$(cat /image-source/workload-probe-image.txt)"
+          && (ctr --namespace k8s.io images inspect "$${target_ref}" >/dev/null 2>&1
+          || ctr --namespace k8s.io images tag --force "$${source_ref}" "$${target_ref}" >/dev/null)
+          && ctr --namespace k8s.io images inspect "$${target_ref}" >/dev/null 2>&1
+          && while read -r source_image immutable_image; do
+            source_ref="docker.io/$${source_image}";
+            target_ref="docker.io/$${immutable_image}";
+            ctr --namespace k8s.io images inspect "$${target_ref}" >/dev/null 2>&1 ||
+            ctr --namespace k8s.io images tag --force "$${source_ref}" "$${target_ref}" >/dev/null ||
+            exit 1;
+            ctr --namespace k8s.io images inspect "$${target_ref}" >/dev/null 2>&1 ||
+            exit 1;
+          done < /image-source/product-workload-images.txt
+      interval: 5s
+      timeout: 10s
+      retries: 60
+    tmpfs:
+      - /run
+      - /var/run
+    volumes:
+      - image-cache:/image-source:ro
+      - k3s-server-data:/var/lib/rancher/k3s
+      - kubeconfig:/output
+
+  k3s-agent:
+    image: aileron/k3s-nfs-node:v1.31.6-k3s1
+    pull_policy: never
+    privileged: true
+    depends_on:
+      image-exporter:
+        condition: service_healthy
+      k3s-server:
+        condition: service_healthy
+    environment:
+      K3S_TOKEN: aileron-kubernetes-e2e
+      K3S_URL: https://k3s-server:6443
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        while [ ! -s /image-source/e2e-images.tar ]; do sleep 1; done
+        mkdir -p /var/lib/rancher/k3s/agent/images
+        cp /image-source/e2e-images.tar /var/lib/rancher/k3s/agent/images/
+        exec k3s agent --node-name=k3s-agent
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          source_ref=docker.io/aileron/kubernetes-conformance-probe:k3s-e2e
+          && target_ref="docker.io/$$(cat /image-source/workload-probe-image.txt)"
+          && (ctr --namespace k8s.io images inspect "$${target_ref}" >/dev/null 2>&1
+          || ctr --namespace k8s.io images tag --force "$${source_ref}" "$${target_ref}" >/dev/null)
+          && ctr --namespace k8s.io images inspect "$${target_ref}" >/dev/null 2>&1
+          && while read -r source_image immutable_image; do
+            source_ref="docker.io/$${source_image}";
+            target_ref="docker.io/$${immutable_image}";
+            ctr --namespace k8s.io images inspect "$${target_ref}" >/dev/null 2>&1 ||
+            ctr --namespace k8s.io images tag --force "$${source_ref}" "$${target_ref}" >/dev/null ||
+            exit 1;
+            ctr --namespace k8s.io images inspect "$${target_ref}" >/dev/null 2>&1 ||
+            exit 1;
+          done < /image-source/product-workload-images.txt
+      interval: 5s
+      timeout: 10s
+      retries: 60
+    tmpfs:
+      - /run
+      - /var/run
+    volumes:
+      - image-cache:/image-source:ro
+      - k3s-agent-data:/var/lib/rancher/k3s
+
+  kubernetes-conformance-e2e:
+    image: aileron/k3s-nfs-node:v1.31.6-k3s1
+    pull_policy: never
+    depends_on:
+      k3s-server:
+        condition: service_healthy
+      k3s-agent:
+        condition: service_healthy
+    environment:
+      ARTIFACT_DIR: /artifacts
+      E2E_MODE: local
+      E2E_STORAGE_MODE: static-nfs
+      K3S_KUBECONFIG_SOURCE: /kubeconfig/kubeconfig.yaml
+      K3S_SERVER_NAME: k3s-server
+      MANAGER_IMAGE: aileron/workspace-manager:k3s-e2e
+      RUNTIME_IMAGE: aileron/workspace-runtime:k3s-e2e
+      BROWSER_IMAGE: aileron/workspace-chrome:k3s-e2e
+      CANVAS_IMAGE: aileron/workspace-canvas:k3s-e2e
+      PRODUCT_DRIVER_IMAGE: aileron/product-conformance:k3s-e2e
+      REDIS_IMAGE: aileron/platform-redis:k3s-e2e
+      POSTGRES_IMAGE: aileron/platform-postgres:k3s-e2e
+      PRODUCT_CONFORMANCE_HOOK: /repo/scripts/test/kubernetes/product-conformance/product-conformance-hook.sh
+      OPERATOR_IMAGE: aileron/workspace-operator:k3s-e2e
+      NFS_SERVER: nfs-server
+      PLATFORM_STORAGE_GID: "2000"
+      REQUIRE_PRODUCT_LIFECYCLE: "true"
+      ROOT_SQUASH_MODE: pod
+      WORKLOAD_PROBE_IMAGE: aileron/kubernetes-conformance-probe:k3s-e2e
+      WORKLOAD_PROBE_IMAGE_FILE: /image-source/workload-probe-image.txt
+      PRODUCT_WORKLOAD_IMAGES_FILE: /image-source/product-workload-images.txt
+    entrypoint:
+      - /repo/scripts/test/kubernetes/run-kubernetes-conformance-e2e.sh
+    volumes:
+      - ../../..:/repo:ro
+      - image-cache:/image-source:ro
+      - kubeconfig:/kubeconfig:ro
+      - ${K3S_E2E_ARTIFACT_DIR:-/tmp/aileron-kubernetes-e2e-artifacts}:/artifacts
+
+volumes:
+  image-cache:
+  k3s-agent-data:
+  k3s-server-data:
+  kubeconfig:
+  nfs-data:

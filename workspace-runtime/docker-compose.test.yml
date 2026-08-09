@@ -1,0 +1,126 @@
+services:
+  # PostgreSQL test database
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: workspace-runtime-postgres-test
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: test_workspace_runtime
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+    ports:
+      - "5435:5432"
+    volumes:
+      # Optional initialization script
+      - ./tests/fixtures/test-db-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_workspace_runtime"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Use tmpfs to improve test speed.
+    tmpfs:
+      - /var/lib/postgresql/data
+    command: >
+      postgres
+        -c shared_buffers=128MB
+        -c max_connections=100
+        -c log_statement=all
+        -c log_duration=on
+        -c fsync=off
+        -c synchronous_commit=off
+        -c full_page_writes=off
+    networks:
+      - test-network
+
+  # Workspace Runtime test container
+  workspace-runtime-test:
+    image: ailerondocker/workspace-runtime:dev-lite
+    pull_policy: never
+    container_name: workspace-runtime-test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    environment:
+      # Test environment marker
+      TESTING: "true"
+      ENV: test
+      AILERON_WORKSPACE_ID: test-workspace
+      AILERON_WORKSPACE_PATH: /workspace
+      AILERON_RUNTIME_INSTANCE_ID: 11111111-1111-4111-8111-111111111111
+      AILERON_RUNTIME_ACCESS_REVISION: "0"
+      AILERON_KB_MOUNT_REVISION: "0"
+      AILERON_WORKTREE_SUBDIR: .worktrees
+      AILERON_RUNTIME_STATE_DATABASE_URL_FILE: /tmp/aileron-secrets/runtime-state-database-url
+      AILERON_RUNTIME_CONTROL_TOKEN_FILE: /tmp/aileron-secrets/runtime-control-token
+      AILERON_MANAGER_INTERNAL_URL: http://workspace-manager:8000
+      AILERON_PLATFORM_PUBLIC_ORIGIN: http://frontend.test
+      AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE: /tmp/runtime-jwks.json
+      AILERON_RUNTIME_ASSERTION_ISSUER: workspace-manager
+      AILERON_BROWSER_SERVICE_NAME: workspace-browser-test
+      AILERON_BROWSER_WEBRTC_INTERNAL_URL: http://workspace-browser-test:6080
+      AILERON_BROWSER_CDP_URL: http://workspace-browser-test:9223
+      AILERON_CANVAS_SERVICE_NAME: workspace-canvas-test
+      AILERON_CANVAS_INTERNAL_URL: http://workspace-canvas-test:3003
+      AILERON_CANVAS_API_URL: http://workspace-canvas-test:3013
+      MARKETPLACE_OPERATION_JOURNAL_DIR: /tmp/marketplace-operations
+      PYTHONPATH: /app
+    volumes:
+      # Mount code in development mode.
+      - ./app:/app/app:ro
+      - ./agent-defaults:/app/agent-defaults:ro
+      - ./scripts:/app/scripts:ro
+      - ./tests:/app/tests:rw
+      - ../contracts:/app/contracts:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./uv.lock:/app/uv.lock:ro
+      - ./Dockerfile:/app/Dockerfile:ro
+      - ./base-images:/app/base-images:ro
+      - ./install-claude-cli.sh:/app/install-claude-cli.sh:ro
+      - ./docker-compose.test.yml:/app/docker-compose.test.yml:ro
+      - ./vendor:/app/vendor:ro
+      - ../docker-compose.yml:/repo-root/docker-compose.yml:ro
+      - ../docker-bake.hcl:/repo-root/docker-bake.hcl:ro
+      # Shared package tests resolve wire contracts from the checkout root.
+      - ../contracts:/repo-root/contracts:ro
+      - ../packages:/packages:ro
+      - ./README.md:/app/README.md:ro
+      - ./supervisord.kubernetes.conf:/app/supervisord.kubernetes.conf:ro
+      - ./supervisord.conf:/app/supervisord.conf:ro
+      - ./supervisord.dev.conf:/app/supervisord.dev.conf:ro
+      - ./start_services.sh:/app/start_services.sh:ro
+      - ./start_services.kubernetes.sh:/app/start_services.kubernetes.sh:ro
+      # Test result output
+      - ./test-results:/app/test-results:rw
+      - ./htmlcov:/app/htmlcov:rw
+      # Test workspace
+      - test_workspace:/workspace
+      # Dedicated persistent HOME fixture for Runtime user-scope tests.
+      - test_runtime_home:/home/developer
+    working_dir: /app
+    networks:
+      - test-network
+    # Test command, overridable at runtime.
+    command: >
+      sh -c "
+        install -d -m 0700 /tmp/aileron-secrets &&
+        printf '%s' 'postgresql+asyncpg://test_user:test_password@postgres-test:5432/test_workspace_runtime' > /tmp/aileron-secrets/runtime-state-database-url &&
+        printf '%s' 'test-runtime-control-token' > /tmp/aileron-secrets/runtime-control-token &&
+        chmod 0400 /tmp/aileron-secrets/runtime-state-database-url /tmp/aileron-secrets/runtime-control-token &&
+        echo '🔧 Installing dependencies...' &&
+        uv sync --all-extras &&
+        echo '🧪 Running tests...' &&
+        uv run pytest tests/ --cov=app --cov-report=term-missing --cov-report=html:htmlcov --cov-report=json:test-results/coverage.json --junit-xml=test-results/junit.xml -v --maxfail=5
+      "
+
+volumes:
+  test_workspace:
+    driver: local
+  test_runtime_home:
+    driver: local
+
+networks:
+  test-network:
+    name: workspace-runtime-test-network
+    driver: bridge

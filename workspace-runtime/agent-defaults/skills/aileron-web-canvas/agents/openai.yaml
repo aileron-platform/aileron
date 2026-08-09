@@ -1,0 +1,7 @@
+interface:
+  display_name: "Aileron Web Canvas"
+  short_description: "Build previewable Web Canvas pages."
+  default_prompt: "Use $aileron-web-canvas to build or update this web artifact for Aileron Canvas preview."
+
+policy:
+  allow_implicit_invocation: true

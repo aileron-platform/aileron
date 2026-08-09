@@ -1,0 +1,15 @@
+1. Release namespace:
+   {{ .Release.Namespace }}
+
+{{ if .Values.ingress.enabled }}
+2. 公開平台入口:
+   Platform: {{ include "aileron.platformPublicOrigin" . }}
+   External OIDC Issuer: {{ .Values.oidc.issuerUrl }}
+{{ else }}
+2. 公開平台 Ingress 尚未啟用；請透過目標叢集的 deployment profile 明確啟用。
+{{ end }}
+
+3. 路由責任說明:
+   - 單一平台 Ingress 只導向 Frontend；Frontend Nginx 代理 Manager 與 Workspace 路徑。
+   - IngressClass、TLS 模式及 provider annotations 必須由 deployment profile 明確設定。
+   - Pod-to-Pod 與 Service-to-Service 流量持續使用叢集內部 Service DNS，不經 Ingress。

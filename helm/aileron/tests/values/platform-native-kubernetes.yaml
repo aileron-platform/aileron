@@ -1,0 +1,37 @@
+kubernetes:
+  workspaceRuntimeNamespace: workspace-system
+  platformStorageGid: 2000
+  workspaceData:
+    storageClassName: nfs-rwx
+  runtimeHome:
+    accessMode: ReadWriteOnce
+    storageClassName: csi-rwo
+  knowledgeBases:
+    accessModes:
+      - ReadWriteMany
+    storageClassName: nfs-rwx
+  managerState:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: csi-rwo
+  storageVerification:
+    enabled: true
+    workspaceStorageClassName: nfs-rwx-verification-delete
+    managerStateStorageClassName: csi-rwo-verification-delete
+    workspaceSize: 1Gi
+    managerStateSize: 1Gi
+
+frontend:
+  enabled: false
+postgres:
+  enabled: false
+redis:
+  enabled: false
+ingress:
+  enabled: false
+oidc:
+  issuerUrl: https://login.example.com/realms/aileron
+  clientSecretName: external-oidc-client
+bootstrap:
+  admin:
+    enabled: false

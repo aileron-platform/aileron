@@ -1,0 +1,181 @@
+const wizard = {
+  buttons: {
+    cancel: '取消',
+    next: '下一步',
+    previous: '上一步',
+    retry: '重新嘗試',
+    finish: '完成設定',
+    processing: '處理中...',
+  },
+  validation: {
+    basicInfo: '請先填寫所有必填欄位才能繼續。',
+  },
+  notifications: {
+    completedTitle: '工作區已建置完成',
+    completedDescription: '工作區已成功建立並進入可使用狀態。',
+    copied: '已複製到剪貼簿',
+    copyFailed: '複製失敗',
+    errorTitle: '發生錯誤',
+  },
+  steps: {
+    basicInfo: {
+      title: '建立新的工作區',
+      subtitle: '步驟 {{current}}/{{total}}：填寫基本資訊',
+      cardTitle: '專案基本資料',
+      cardDescription: '這些資訊將顯示在工作區清單中，並協助團隊成員辨識專案。',
+      fields: {
+        name: {
+          label: '專案名稱',
+          placeholder: '輸入專案名稱',
+          helper: '將做為工作區顯示名稱。',
+        },
+        description: {
+          label: '專案描述',
+          placeholder: '簡短說明此工作區的目的',
+          helper: '協助成員快速了解專案內容。',
+        },
+        agenticTool: {
+          label: '代理工具',
+          placeholder: '選擇代理工具',
+          helper: '建立後不可變更，且只可安裝相容此代理工具的模板。',
+          options: {
+            claudeCode: 'Claude Code',
+            codex: 'Codex',
+            opencode: 'OpenCode',
+          },
+          descriptions: {
+            claudeCode: '建立 Claude Code 工作區，可使用 Claude 相容的對話、Hooks、MCP 與套件。',
+            codex: '建立 Codex 工作區，可使用 Codex 對話與 OpenAI 工作流程相容的 marketplace 套件。',
+            opencode: '建立 OpenCode 工作區，可使用 ACP 對話與 marketplace 套件。',
+          },
+          selected: '已選取',
+        },
+      },
+    },
+    runtimeConfig: {
+      title: '設定執行環境',
+      subtitle: '步驟 {{current}}/{{total}}：配置工作區執行環境',
+      cardTitle: '執行環境配置',
+      cardDescription: '選擇容器映像並填入需要自動執行的指令。',
+      optional: '（選填）',
+      fields: {
+        runtime: {
+          label: '容器映像',
+          placeholder: '選擇執行環境',
+          loading: '載入中...',
+          recommended: '推薦',
+        },
+        setupScript: {
+          label: '初始化指令',
+          placeholder: 'npm install\nnpm run build',
+          helper: '建立完成後會自動執行這些指令。',
+        },
+        envVars: {
+          label: '環境變數設定',
+          empty: '尚未新增環境變數。',
+          namePlaceholder: '變數名稱',
+          valuePlaceholder: '變數值',
+          add: '新增環境變數',
+        },
+      },
+      runtimeOptions: {
+        universal: {
+          label: '通用環境',
+          description: '預載常用開發工具的 Ubuntu 基礎映像。',
+        },
+        node: {
+          label: 'Node.js 環境',
+          description: '針對 Node.js 專案最佳化，內建 npm 與 yarn。',
+        },
+        python: {
+          label: 'Python 環境',
+          description: '針對 Python 專案最佳化，內建 pip 與 poetry。',
+        },
+        java: {
+          label: 'Java 21 + Maven',
+          description: '預載 Eclipse Temurin JDK 21 與 Apache Maven 3.9，適合 Spring Boot、Maven 專案。',
+        },
+      },
+    },
+    workspaceCreation: {
+      title: '建立工作區環境',
+      subtitle: '步驟 {{current}}/{{total}}：建置容器與資源',
+      cardTitle: '建置狀態',
+      cardDescription: '系統正在部署執行環境與網路設定。',
+      pendingTitle: '正在建立工作區...',
+      pendingDescription: '請稍候，完成後會自動進入下一步。',
+      readyTitle: '工作區已準備就緒！',
+      readyDescription: '工作區 {{workspaceId}} 已上線，接著完成 CLI 設定即可開始使用。',
+      progress: {
+        label: '工作區建立進度',
+        percent: '{{value}}%',
+        provisioningTitle: '正在建立工作區基礎環境',
+        provisioningDescription: '正在準備容器與工作區資源。',
+        healthTitle: '正在確認 Runtime 健康狀態',
+        healthDescription: 'Runtime 服務正在啟動，這個階段通常會比佈建花更久。',
+        readyTitle: 'Workspace Runtime 已準備就緒',
+        readyDescription: '必要服務皆已通過健康檢查，請繼續完成設定。',
+        failedTitle: '工作區建立需要處理',
+        failedDescription: '請查看錯誤與日誌後重新嘗試佈建。',
+      },
+      infrastructure: {
+        title: '容器佈建',
+        pending: '正在建立容器...',
+        failed: '佈建失敗',
+        success: '容器建立完成',
+      },
+      health: {
+        title: '服務健康檢查',
+        pending: '正在檢查服務狀態...',
+        success: '服務運行正常',
+        waiting: '等待容器啟動',
+        retrying: '服務啟動中，請稍候...',
+      },
+      workspaceId: {
+        label: '工作區 ID',
+        copyTitle: '複製完整 ID',
+      },
+      logs: {
+        title: '建置日誌',
+        open: '日誌（{{count}}）',
+        dialogTitle: '建置日誌詳細資料',
+        dialogDescription: '工作區建立期間收集到的 Runtime 事件。',
+        empty: '暫無日誌',
+        loading: '載入日誌中...',
+      },
+    },
+    cliSetup: {
+      badge: 'Workspace CLI',
+      title: '透過 CLI 連線',
+      subtitle: '步驟 {{current}}/{{total}}：於終端機完成驗證',
+      cardTitle: '終端機指引',
+      cardDescription: '依照指引完成 CLI 安裝與同步。',
+      loading: '載入 CLI 指引中...',
+      instructionsTitle: '請依序完成以下步驟：',
+      commandsTitle: '指令',
+      instructions: {
+        login: '在終端機中執行 Workspace CLI 登入流程。',
+        enterCode: '瀏覽器取得驗證碼後貼回終端機完成登入。',
+        pull: '同步此工作區的專案內容至本機環境。',
+      },
+      terminal: {
+        loginCommand: '$ workspace login',
+        openBrowser: '開啟瀏覽器進行驗證...',
+        authSuccess: '驗證成功',
+        pullCommand: '$ workspace pull {{workspaceId}}',
+        fetchingMetadata: '取得工作區相關資訊中...',
+        syncComplete: '同步完成，可以開始開發！',
+      },
+      readyTitle: '設定完成',
+      readyDescription: '完成以上指令後即可開始協作。',
+    },
+  },
+  error: {
+    createWorkspace: '無法建立工作區，請稍後再試一次。',
+    pollWorkspace: '無法確認工作區狀態，請稍後再試。',
+    provisionWorkspace: '工作區佈建失敗，請查看紀錄後再試一次。',
+    retryWorkspace: '無法重新啟動工作區佈建，請稍後再試一次。',
+  },
+};
+
+export default wizard;

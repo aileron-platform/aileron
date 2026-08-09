@@ -1,0 +1,36 @@
+name: aileron-platform-services-contract
+
+services:
+  redis-image:
+    image: aileron/platform-redis:contract-test
+    build:
+      context: ../../../platform/redis
+      dockerfile: Dockerfile
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  postgres-image:
+    image: aileron/platform-postgres:contract-test
+    build:
+      context: ../../../platform/postgres
+      dockerfile: Dockerfile
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  platform-services-probe:
+    image: docker:27-cli
+    depends_on:
+      redis-image:
+        condition: service_started
+      postgres-image:
+        condition: service_started
+    environment:
+      REDIS_IMAGE: aileron/platform-redis:contract-test
+      POSTGRES_IMAGE: aileron/platform-postgres:contract-test
+      STORAGE_GID: "2000"
+    entrypoint:
+      - /bin/sh
+      - /repo/scripts/test/container/assert-platform-service-images.sh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../../..:/repo:ro

@@ -1,0 +1,145 @@
+import { DialogHeading } from '@/shared/components/ui/dialog-heading';
+import React from 'react';
+import { Loader2, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/shared/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader } from '@/shared/components/ui/dialog';
+import { Input } from '@/shared/components/ui/input';
+import { Textarea } from '@/shared/components/ui/textarea';
+import { useToast } from '@/shared/components/ui/use-toast';
+import { ROUTES } from '@/shared/constants/routes';
+import { useI18n } from '@/shared/hooks/useI18n';
+import { useKnowledgeBase } from '../providers/KnowledgeBaseProvider';
+
+interface KnowledgeBaseCreateDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+const slugify = (value: string): string => value
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '');
+
+export const KnowledgeBaseCreateDialog: React.FC<KnowledgeBaseCreateDialogProps> = ({
+  open,
+  onOpenChange,
+}) => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { t } = useI18n();
+  const { createKnowledgeBase, isMutating } = useKnowledgeBase();
+
+  const [name, setName] = React.useState('');
+  const [slug, setSlug] = React.useState('');
+  const [description, setDescription] = React.useState('');
+
+  React.useEffect(() => {
+    if (!open) {
+      setName('');
+      setSlug('');
+      setDescription('');
+    }
+  }, [open]);
+
+  const canSubmit = name.trim().length > 0 && slug.trim().length > 0 && !isMutating;
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    setSlug((current) => (current ? current : slugify(value)));
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+    try {
+      const created = await createKnowledgeBase({
+        name: name.trim(),
+        slug: slugify(slug),
+        description: description.trim() || undefined,
+      });
+      toast({
+        variant: 'success',
+        title: t('knowledgeBase.create.successTitle'),
+        description: t('knowledgeBase.create.successDescription', { name: created.name }),
+      });
+      onOpenChange(false);
+      navigate(ROUTES.knowledgeBase.files(created.id));
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: t('knowledgeBase.create.failedTitle'),
+        description: t('knowledgeBase.create.failedDescription'),
+      });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-xl">
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogHeading icon={Sparkles}>
+              {t('knowledgeBase.create.dialogTitle')}
+            </DialogHeading>
+            <DialogDescription>{t('knowledgeBase.create.dialogDescription')}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground" htmlFor="kb-create-name">
+              {t('knowledgeBase.create.nameLabel')}
+            </label>
+            <Input
+              id="kb-create-name"
+              value={name}
+              onChange={(event) => handleNameChange(event.target.value)}
+              placeholder={t('knowledgeBase.create.namePlaceholder')}
+              disabled={isMutating}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground" htmlFor="kb-create-slug">
+              {t('knowledgeBase.create.slugLabel')}
+            </label>
+            <Input
+              id="kb-create-slug"
+              value={slug}
+              onChange={(event) => setSlug(slugify(event.target.value))}
+              placeholder={t('knowledgeBase.create.slugPlaceholder')}
+              disabled={isMutating}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t('knowledgeBase.create.slugHint')}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground" htmlFor="kb-create-description">
+              {t('knowledgeBase.create.descriptionLabel')}
+            </label>
+            <Textarea
+              id="kb-create-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder={t('knowledgeBase.create.descriptionPlaceholder')}
+              disabled={isMutating}
+              rows={4}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={isMutating}>
+              {t('knowledgeBase.common.actions.cancel')}
+            </Button>
+            <Button type="submit" disabled={!canSubmit}>
+              {isMutating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t('knowledgeBase.common.actions.create')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};

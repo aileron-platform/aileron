@@ -1,0 +1,118 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "aileron.fullname" . }}-postgres
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "aileron.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "aileron.componentLabels" (dict "component" "postgres" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentPodLabels" (dict "component" "postgres" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+        {{- if ne .Values.postgres.runAsUser nil }}
+        runAsUser: {{ .Values.postgres.runAsUser }}
+        {{- end }}
+        {{- with .Values.kubernetes.platformStorageGid }}
+        fsGroup: {{ . }}
+        fsGroupChangePolicy: OnRootMismatch
+        {{- end }}
+      containers:
+        - name: postgres
+          image: {{ include "aileron.imageReference" (dict "name" "postgres.image" "image" .Values.postgres.image "production" .Values.security.requireStrongSecrets) | quote }}
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.auth.appDatabase | quote }}
+            - name: POSTGRES_USER_FILE
+              value: /run/secrets/aileron/postgres-username
+            - name: POSTGRES_PASSWORD_FILE
+              value: /run/secrets/aileron/postgres-password
+            - name: POSTGRES_INITDB_ARGS
+              value: --auth-host=scram-sha-256
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: postgres-run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+            - name: postgres-credentials
+              mountPath: /run/secrets/aileron
+              readOnly: true
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$(cat $POSTGRES_USER_FILE)\""]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$(cat $POSTGRES_USER_FILE)\""]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: init-sql
+          configMap:
+            name: {{ include "aileron.fullname" . }}-postgres-init
+        - name: postgres-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: postgres-credentials
+          secret:
+            secretName: {{ .Values.platformSecrets.existingSecretName }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.platformSecrets.postgresUsernameKey }}
+                path: postgres-username
+              - key: {{ .Values.platformSecrets.postgresPasswordKey }}
+                path: postgres-password
+        {{- if not .Values.postgres.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+  {{- if .Values.postgres.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.postgres.persistence.accessModes | nindent 10 }}
+        {{- if .Values.postgres.persistence.storageClassName }}
+        storageClassName: {{ .Values.postgres.persistence.storageClassName | quote }}
+        {{- else }}
+        {{- include "aileron.storageClassName" . | nindent 8 }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.persistence.size }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PPT Candidate Picker</title>
+  <style>
+    :root {
+      --bg: #f2efe9;
+      --bg-accent: #e6ded1;
+      --panel: rgba(255, 250, 242, 0.86);
+      --panel-strong: rgba(255, 252, 247, 0.96);
+      --line: rgba(73, 56, 34, 0.14);
+      --text: #201a13;
+      --muted: #6d5d4c;
+      --accent: #bc5b28;
+      --accent-soft: #f2d6c6;
+      --shadow: 0 16px 50px rgba(75, 46, 16, 0.12);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+      --max-width: 1560px;
+      --candidate-width: 356px;
+      --candidate-gap: 18px;
+      --focus-width: 406px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Segoe UI Variable Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(255, 197, 147, 0.56), transparent 26%),
+        radial-gradient(circle at top right, rgba(130, 184, 255, 0.22), transparent 22%),
+        linear-gradient(180deg, #faf6f0 0%, var(--bg) 40%, #efe8dc 100%);
+      min-height: 100vh;
+    }
+
+    button, textarea, input { font: inherit; }
+
+    .shell {
+      width: min(calc(100% - 32px), var(--max-width));
+      margin: 24px auto 56px;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .stage-panel,
+    .action-panel {
+      height: auto;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .stage-panel .panel-body,
+    .action-panel .panel-body {
+      min-height: 0;
+    }
+
+    .action-panel {
+      position: sticky;
+      top: 18px;
+    }
+
+    .action-panel .panel-body {
+      grid-template-rows: minmax(0, 1fr) auto;
+      min-height: 0;
+      padding-bottom: 14px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 245, 237, 0.92));
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.52);
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -0.03em;
+    }
+
+    .panel-subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .panel-body {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .candidate-board {
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    .candidate-strip::-webkit-scrollbar,
+    .code-preview::-webkit-scrollbar,
+    .action-scroll::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    .candidate-strip::-webkit-scrollbar-thumb,
+    .code-preview::-webkit-scrollbar-thumb,
+    .action-scroll::-webkit-scrollbar-thumb {
+      background: rgba(126, 102, 72, 0.28);
+      border-radius: 999px;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+    }
+
+    .slide-row {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(250,245,237,0.88));
+      box-shadow: 0 12px 26px rgba(52, 34, 9, 0.08);
+      overflow: hidden;
+    }
+
+    .slide-row-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 18px;
+      border-bottom: 1px solid rgba(73, 56, 34, 0.1);
+      background: rgba(255, 255, 255, 0.5);
+    }
+
+    .slide-row-title-wrap {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .slide-row-title {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.35;
+    }
+
+    .slide-row-subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .slide-row-selection {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(188, 91, 40, 0.10);
+      color: #6c2d08;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .page-code,
+    .variant-chip {
+      display: inline-flex;
+      width: fit-content;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: #6c2d08;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .page-title {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.35;
+      color: var(--text);
+    }
+
+    .page-meta,
+    .summary-meta {
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .stage-shell {
+      position: relative;
+      border-radius: 0;
+      border: 0;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.35), rgba(248, 240, 231, 0.5)),
+        linear-gradient(135deg, #efe6d8, #e2edf8);
+      overflow: hidden;
+    }
+
+    .stage-shell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(255,247,239,0.94) 0%, rgba(255,247,239,0.25) 16%, rgba(255,247,239,0.06) 34%, rgba(255,247,239,0.06) 66%, rgba(255,247,239,0.25) 84%, rgba(255,247,239,0.94) 100%);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .focus-rail {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: var(--focus-width);
+      transform: translateX(-50%);
+      border-left: 3px solid rgba(219, 168, 19, 0.9);
+      border-right: 3px solid rgba(219, 168, 19, 0.9);
+      background: linear-gradient(180deg, rgba(255, 226, 82, 0.12), rgba(255, 226, 82, 0.05));
+      pointer-events: none;
+      z-index: 3;
+      box-shadow: 0 0 0 1px rgba(255, 220, 75, 0.18) inset;
+    }
+
+    .candidate-strip {
+      position: relative;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scroll-behavior: smooth;
+      padding: 22px 0 26px;
+      z-index: 1;
+    }
+
+    .candidate-track {
+      display: flex;
+      gap: var(--candidate-gap);
+      align-items: stretch;
+      padding-inline: max(18px, calc(50% - (var(--candidate-width) / 2)));
+      width: max-content;
+      min-width: 100%;
+    }
+
+    .candidate-card {
+      width: var(--candidate-width);
+      flex: 0 0 var(--candidate-width);
+      border: 1px solid rgba(73, 56, 34, 0.12);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 10px 18px rgba(52, 34, 9, 0.08);
+      overflow: hidden;
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
+      cursor: pointer;
+      scroll-snap-align: center;
+    }
+
+    .candidate-card:hover {
+      transform: translateY(-3px) scale(1.01);
+      box-shadow: 0 18px 26px rgba(52, 34, 9, 0.14);
+    }
+
+    .candidate-card.active {
+      border-color: rgba(188, 91, 40, 0.68);
+      background: rgba(255, 250, 244, 0.99);
+      box-shadow: 0 0 0 3px rgba(188, 91, 40, 0.16), 0 24px 34px rgba(52, 34, 9, 0.2);
+      transform: translateY(-4px) scale(1.02);
+    }
+
+    .candidate-image {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      background: linear-gradient(135deg, #d9ccb7, #f7f0e5);
+      border-bottom: 1px solid rgba(73, 56, 34, 0.1);
+    }
+
+    .candidate-meta {
+      padding: 14px 14px 16px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .candidate-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .candidate-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .candidate-note {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    .candidate-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .candidate-state strong {
+      color: #6c2d08;
+      font-weight: 700;
+    }
+
+    .board-caption {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .primary,
+    .secondary,
+    .ghost {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 11px 14px;
+      cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .primary:hover,
+    .secondary:hover,
+    .ghost:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 20px rgba(52, 34, 9, 0.12);
+    }
+
+    .primary {
+      background: linear-gradient(180deg, #cc6f3d, #b95725);
+      color: #fff9f5;
+      border-color: rgba(116, 47, 13, 0.22);
+    }
+
+    .secondary {
+      background: rgba(255, 255, 255, 0.86);
+      color: var(--text);
+    }
+
+    .ghost {
+      background: rgba(255, 255, 255, 0.5);
+      color: var(--muted);
+    }
+
+    .action-scroll {
+      min-height: 0;
+      overflow-y: auto;
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      padding-right: 4px;
+    }
+
+    .action-footer {
+      display: grid;
+      gap: 10px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(73, 56, 34, 0.1);
+      background: linear-gradient(180deg, rgba(250,245,237,0), rgba(250,245,237,0.98) 26%);
+    }
+
+    .code-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.84);
+      display: grid;
+      gap: 10px;
+    }
+
+    .code-preview {
+      width: 100%;
+      min-height: 118px;
+      max-height: 156px;
+      overflow: auto;
+      resize: vertical;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--text);
+      padding: 12px 14px;
+      line-height: 1.65;
+      white-space: pre;
+      font-family: "Consolas", "SFMono-Regular", monospace;
+      font-size: 13px;
+    }
+
+    .helper-note {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .selection-status-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.82);
+      display: grid;
+      gap: 6px;
+    }
+
+    .selection-status-card strong {
+      font-size: 26px;
+      line-height: 1;
+      color: #6c2d08;
+    }
+
+    @media (max-width: 1280px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .action-panel {
+        position: static;
+      }
+    }
+
+    @media (max-width: 900px) {
+      :root {
+        --candidate-width: 300px;
+        --focus-width: 340px;
+      }
+
+      .slide-row-head {
+        flex-direction: column;
+        align-items: start;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .shell {
+        width: min(calc(100% - 20px), var(--max-width));
+        margin-top: 10px;
+      }
+    }
+
+
+    /* Step progress bar — shared across canvas shells. The candidate-picker
+       belongs to the [5] review stage (final-page selection before retouch). */
+    .step-progress {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      align-items: center;
+      padding: 14px 18px;
+      margin: 0 0 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--panel);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .step-progress .step-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .step-progress .step-item .step-num {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+    .step-progress .step-item[data-state="done"]   { color: var(--muted); opacity: 0.7; }
+    .step-progress .step-item[data-state="todo"]   { color: var(--muted); opacity: 0.45; }
+    .step-progress .step-item[data-state="active"] {
+      color: var(--accent);
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    .step-progress .step-sep { color: var(--line); opacity: 0.5; }
+
+    /* Web Canvas embed polish: content-owned UI, platform-owned chrome. */
+    :root {
+      --bg: #f6f7f9;
+      --bg-accent: #eef1f4;
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-strong: #ffffff;
+      --line: rgba(17, 24, 39, 0.12);
+      --text: #1f2933;
+      --muted: #667085;
+      --accent: #1c9c9c;
+      --accent-soft: #e8f7f7;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 8px 24px rgba(16, 24, 40, 0.06);
+      --radius-xl: 14px;
+      --radius-lg: 12px;
+      --radius-md: 10px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      background: #f6f7f9;
+    }
+
+    h1,
+    .panel-title,
+    .scheme-title,
+    .lightbox-title {
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.08;
+    }
+
+    .hero::after {
+      display: none;
+    }
+
+    .hero,
+    .scheme,
+    .panel,
+    .slide-row,
+    .meta-panel,
+    .note-card,
+    .code-card,
+    .selection-status-card,
+    .page-thumb-card,
+    .candidate-card,
+    .stage-frame,
+    .lightbox-panel {
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+    }
+
+    .primary {
+      background: #1c9c9c;
+      border-color: rgba(28, 156, 156, 0.28);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg: #1e1e1e;
+        --bg-accent: #252526;
+        --panel: rgba(37, 37, 38, 0.94);
+        --panel-strong: #252526;
+        --line: rgba(255, 255, 255, 0.14);
+        --text: #d4d4d4;
+        --muted: #969696;
+        --accent: #007acc;
+        --accent-soft: rgba(0, 122, 204, 0.18);
+        --shadow: none;
+      }
+
+      body {
+        background: #1e1e1e;
+      }
+
+      .panel,
+      .slide-row,
+      .candidate-card,
+      .code-card {
+        background: #252526;
+      }
+
+      .panel-head,
+      .slide-row-head,
+      .action-footer {
+        background: #2d2d30;
+      }
+
+      .stage-shell,
+      .candidate-image {
+        background: linear-gradient(135deg, #252526, #3c3c3c);
+      }
+
+      .stage-shell::before {
+        background: linear-gradient(90deg, rgba(30, 30, 30, 0.94) 0%, rgba(30, 30, 30, 0.24) 16%, rgba(30, 30, 30, 0.06) 34%, rgba(30, 30, 30, 0.06) 66%, rgba(30, 30, 30, 0.24) 84%, rgba(30, 30, 30, 0.94) 100%);
+      }
+
+      .focus-rail {
+        border-color: rgba(0, 122, 204, 0.72);
+        background: rgba(0, 122, 204, 0.08);
+      }
+
+      .slide-row-selection,
+      .page-code,
+      .variant-chip,
+      .candidate-card.active,
+      .selection-status-card {
+        background: var(--accent-soft);
+        color: #9cdcfe;
+      }
+
+      .candidate-card.active {
+        border-color: rgba(0, 122, 204, 0.72);
+        box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.22);
+      }
+
+      .secondary,
+      .ghost,
+      .code-preview,
+      .copy-status {
+        background: #2d2d30;
+        color: var(--text);
+      }
+
+      .primary {
+        background: #007acc;
+        color: #ffffff;
+        border-color: rgba(0, 122, 204, 0.7);
+      }
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #1e1e1e;
+      --bg-accent: #252526;
+      --panel: rgba(37, 37, 38, 0.94);
+      --panel-strong: #252526;
+      --line: rgba(255, 255, 255, 0.14);
+      --text: #d4d4d4;
+      --muted: #969696;
+      --accent: #007acc;
+      --accent-soft: rgba(0, 122, 204, 0.18);
+      --shadow: none;
+    }
+
+    html[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --bg-accent: #eef1f4;
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-strong: #ffffff;
+      --line: rgba(17, 24, 39, 0.12);
+      --text: #1f2933;
+      --muted: #667085;
+      --accent: #1c9c9c;
+      --accent-soft: #e8f7f7;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 8px 24px rgba(16, 24, 40, 0.06);
+    }
+
+    html[data-theme="dark"] body { background: #1e1e1e; }
+    html[data-theme="light"] body { background: #f6f7f9; }
+
+    html[data-theme="dark"] .panel,
+    html[data-theme="dark"] .slide-row,
+    html[data-theme="dark"] .candidate-card,
+    html[data-theme="dark"] .code-card { background: #252526; }
+
+    html[data-theme="light"] .panel,
+    html[data-theme="light"] .slide-row,
+    html[data-theme="light"] .candidate-card,
+    html[data-theme="light"] .code-card { background: var(--panel-strong); }
+
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="step-progress" aria-label="Workflow step indicator">
+      <span class="step-item" data-state="done"><span class="step-num">[1]</span>需求確認</span>
+      <span class="step-sep">›</span>
+      <span class="step-item" data-state="done"><span class="step-num">[2]</span>風格確認</span>
+      <span class="step-sep">›</span>
+      <span class="step-item" data-state="done"><span class="step-num">[3]</span>風格拆解確認</span>
+      <span class="step-sep">›</span>
+      <span class="step-item" data-state="done"><span class="step-num">[4]</span>產生前確認</span>
+      <span class="step-sep">›</span>
+      <span class="step-item" data-state="active"><span class="step-num">[5]</span>審閱確認（候選選圖）</span>
+    </nav>
+    <section class="workspace">
+      <div class="panel stage-panel">
+        <div class="panel-head">
+          <h2 class="panel-title" data-i18n="stage.title">頁面候選選擇</h2>
+          <p class="panel-subtitle" data-i18n="stage.subtitle">所有頁都放在同一個介面裡：第一行選第一頁，第二行選第二頁，逐行往下點；每一行內部仍然是橫向抽卡並自動把選中項置中。</p>
+        </div>
+        <div class="panel-body">
+          <div class="board-caption" id="selectionHint" data-i18n="stage.hint">目前是整頁多行選圖：每個頁面一整行候選圖，點中後會在本行自動置中；全部確認後直接複製下方編號結果即可。</div>
+          <div class="candidate-board" id="candidateBoard"></div>
+
+          <div class="button-row">
+            <button class="secondary" type="button" id="resetSelectionsButton" data-i18n="actions.reset">恢復預設選擇</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel action-panel">
+        <div class="panel-head">
+          <h2 class="panel-title" data-i18n="summary.title">目前選擇與複製編號</h2>
+          <p class="panel-subtitle" data-i18n="summary.subtitle">選完後複製編號，把結果貼回目前對話，後續就按這組圖去組裝最終 PPT。</p>
+        </div>
+        <div class="panel-body">
+          <div class="action-scroll">
+            <div class="selection-status-card">
+              <span class="summary-meta" data-i18n="summary.currentPage">目前頁面編號</span>
+              <strong id="currentPageCode">—</strong>
+              <span class="summary-meta" id="currentPageVariantLabel" data-i18n="status.notLoaded">還沒有載入候選。</span>
+            </div>
+
+            <div class="code-card">
+              <span class="summary-meta" data-i18n="summary.copyForAi">複製給 AI 的編號</span>
+              <textarea class="code-preview" id="codePreview" readonly></textarea>
+              <p class="helper-note" data-i18n="summary.helper">建議直接複製這個編號結果。每一行都帶頁面號，所以 AI 能知道每一頁最後採用的是哪張圖。</p>
+            </div>
+          </div>
+
+          <div class="action-footer">
+            <div class="button-row">
+              <button class="primary" type="button" id="copyAllButton" data-i18n="actions.copyAll">複製全部編號</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const AILERON_CANVAS_BRIDGE_SOURCE = 'aileron-canvas-bridge';
+    const AILERON_CANVAS_BRIDGE_VERSION = 2;
+
+    function applyAileronTheme(theme) {
+      if (theme !== 'dark' && theme !== 'light') return;
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+    }
+
+    window.addEventListener('message', (event) => {
+      const data = event.data || {};
+      if (
+        data.source !== AILERON_CANVAS_BRIDGE_SOURCE
+        || data.version !== AILERON_CANVAS_BRIDGE_VERSION
+        || data.type !== 'SET_THEME'
+      ) {
+        return;
+      }
+      applyAileronTheme(data.payload?.theme);
+    });
+
+    const translations = {
+      'zh-TW': {
+        'stage.title': '頁面候選選擇',
+        'stage.subtitle': '所有頁都放在同一個介面裡：第一行選第一頁，第二行選第二頁，逐行往下點；每一行內部仍然是橫向抽卡並自動把選中項置中。',
+        'stage.hint': '目前是整頁多行選圖：每個頁面一整行候選圖，點中後會在本行自動置中；全部確認後直接複製下方編號結果即可。',
+        'summary.title': '目前選擇與複製編號',
+        'summary.subtitle': '選完後複製編號，把結果貼回目前對話，後續就按這組圖去組裝最終 PPT。',
+        'summary.currentPage': '目前頁面編號',
+        'summary.copyForAi': '複製給 AI 的編號',
+        'summary.helper': '建議直接複製這個編號結果。每一行都帶頁面號，所以 AI 能知道每一頁最後採用的是哪張圖。',
+        'actions.reset': '恢復預設選擇',
+        'actions.copyAll': '複製全部編號',
+        'status.notLoaded': '還沒有載入候選。',
+        'status.selectedPrefix': '目前已選：',
+        'status.selected': '已選中',
+        'status.pick': '點選選中',
+        'status.copySuccess': '全部編號已複製，回到目前對話貼上即可。',
+        'status.copyFailed': '複製失敗，請檢查瀏覽器是否允許寫入剪貼簿。',
+        'candidate.title': '第 {number} 張',
+        'svg.contentReady': '內容承載更接近最終稿',
+        'svg.userSlot': '適合做使用者最終選圖卡位',
+        'svg.versionLabel': '候選版本號',
+        'svg.afterPick': '抽卡完成後',
+        'svg.copyToAi': '只複製編號給 AI'
+      },
+      en: {
+        'stage.title': 'Page Candidate Picker',
+        'stage.subtitle': 'All pages are in one workspace: choose page 1 in the first row, page 2 in the second row, and continue downward. Each row remains a horizontal picker and centers the selected item automatically.',
+        'stage.hint': 'This is a full-page multi-row picker: each page has its own row of candidates. Click a candidate to center it, then copy the final codes below after confirming all pages.',
+        'summary.title': 'Current Selection and Codes',
+        'summary.subtitle': 'After choosing, copy the codes back into the current chat so the final PPT can be assembled from this image set.',
+        'summary.currentPage': 'Current page code',
+        'summary.copyForAi': 'Codes for AI',
+        'summary.helper': 'Copy this code list directly. Each row includes the page number, so AI knows which image should be used for each page.',
+        'actions.reset': 'Reset defaults',
+        'actions.copyAll': 'Copy all codes',
+        'status.notLoaded': 'No candidates loaded yet.',
+        'status.selectedPrefix': 'Selected: ',
+        'status.selected': 'Selected',
+        'status.pick': 'Click to select',
+        'status.copySuccess': 'All codes copied. Paste them back into the current chat.',
+        'status.copyFailed': 'Copy failed. Check whether the browser allows clipboard writes.',
+        'candidate.title': 'Image {number}',
+        'svg.contentReady': 'Content capacity is closer to final output',
+        'svg.userSlot': 'Useful as the final user image slot',
+        'svg.versionLabel': 'Candidate version',
+        'svg.afterPick': 'After picking',
+        'svg.copyToAi': 'Copy only the code to AI'
+      }
+    };
+
+    function detectLocale() {
+      const requested = new URLSearchParams(window.location.search).get('lang');
+      const rawLocale = requested || navigator.language || document.documentElement.lang || 'zh-TW';
+      return rawLocale.toLowerCase().startsWith('zh') ? 'zh-TW' : 'en';
+    }
+
+    const locale = detectLocale();
+    document.documentElement.lang = locale === 'zh-TW' ? 'zh-Hant' : 'en';
+
+    function t(key, values = {}) {
+      const template = translations[locale]?.[key] || translations['zh-TW'][key] || key;
+      return Object.entries(values).reduce((result, [name, value]) => result.replaceAll(`{${name}}`, value), template);
+    }
+
+    function localize(value) {
+      if (!value || typeof value !== 'object') return value;
+      return value[locale] || value['zh-TW'] || value.en || '';
+    }
+
+    function applyI18n() {
+      document.querySelectorAll('[data-i18n]').forEach(node => {
+        node.textContent = t(node.dataset.i18n);
+      });
+    }
+
+    applyI18n();
+
+    const slideBlueprints = [
+      {
+        id: 'S01',
+        title: { 'zh-TW': '首頁｜研究答辯開場', en: 'Cover | Research Defense Opening' },
+        role: { 'zh-TW': '首頁', en: 'Cover' },
+        subtitle: { 'zh-TW': '封面主視覺 / 題目定調', en: 'Hero visual / topic framing' },
+        notes: [
+          { 'zh-TW': '校徽更明顯，主標題壓得更穩', en: 'More visible emblem, steadier main title' },
+          { 'zh-TW': '光感更剋制，學術感更強', en: 'More restrained lighting and stronger academic tone' },
+          { 'zh-TW': '背景層次更豐富，但不要太花', en: 'Background has richer depth without looking busy' },
+          { 'zh-TW': '標題和建築關係更緊', en: 'Tighter relationship between title and architecture' },
+          { 'zh-TW': '大氣雲層更有空間感', en: 'Atmospheric cloud layers add more depth' }
+        ],
+        palette: ['#bc5b28', '#a44d31', '#cc7d39', '#3f74b5', '#618cc8']
+      },
+      {
+        id: 'S02',
+        title: { 'zh-TW': '目錄頁｜結構總覽', en: 'Agenda | Structure Overview' },
+        role: { 'zh-TW': '目錄頁', en: 'Agenda' },
+        subtitle: { 'zh-TW': '章節組織 / 導航能力', en: 'Section organization / navigation' },
+        notes: [
+          { 'zh-TW': '目錄區塊更穩，章節對比更清楚', en: 'More stable agenda blocks and clearer section contrast' },
+          { 'zh-TW': '導航感更強，適合答辯結構', en: 'Stronger navigation fit for defense structure' },
+          { 'zh-TW': '層次更輕，但順序更清晰', en: 'Lighter hierarchy with clearer order' },
+          { 'zh-TW': '右側資訊更完整，承載力更強', en: 'More complete right-side information and stronger capacity' },
+          { 'zh-TW': '整體更有頁面系統感', en: 'More systematic page feel overall' }
+        ],
+        palette: ['#bc5b28', '#9b5f41', '#d08755', '#4d7fb7', '#7aa4d3']
+      },
+      {
+        id: 'S03',
+        title: { 'zh-TW': '內容頁｜關鍵結論承載', en: 'Content | Key Conclusion Support' },
+        role: { 'zh-TW': '內容頁', en: 'Content' },
+        subtitle: { 'zh-TW': '資訊承載 / 結論呈現', en: 'Information capacity / conclusion display' },
+        notes: [
+          { 'zh-TW': '結論區塊更強，數字更抓眼', en: 'Stronger conclusion block and more prominent numbers' },
+          { 'zh-TW': '左側論點更規整，適合答辯匯報', en: 'Tidier left-side arguments for defense reporting' },
+          { 'zh-TW': '視覺留白更好，重點更突出', en: 'Better whitespace and clearer emphasis' },
+          { 'zh-TW': '圖文關係更平衡，資訊感更強', en: 'Better image-text balance and stronger information feel' },
+          { 'zh-TW': '整體更像最終頁，不像草圖', en: 'Feels closer to a final slide, not a sketch' }
+        ],
+        palette: ['#bc5b28', '#b0602b', '#d38a46', '#4479b3', '#6b97cc']
+      }
+    ];
+
+    const defaultSelection = {
+      S01: '03',
+      S02: '02',
+      S03: '04'
+    };
+
+    const state = {
+      selectedPageId: 'S01',
+      selections: { ...defaultSelection }
+    };
+
+    const candidateBoard = document.getElementById('candidateBoard');
+    const codePreview = document.getElementById('codePreview');
+    const currentPageCode = document.getElementById('currentPageCode');
+    const currentPageVariantLabel = document.getElementById('currentPageVariantLabel');
+
+    const enrichedSlides = slideBlueprints.map(slide => ({
+      ...slide,
+      candidates: buildCandidates(slide)
+    }));
+
+    function buildCandidates(slide) {
+      return slide.palette.map((accent, index) => {
+        const number = String(index + 1).padStart(2, '0');
+        const code = `${slide.id}-${number}`;
+        return {
+          id: number,
+          code,
+          title: t('candidate.title', { number }),
+          note: localize(slide.notes[index]),
+          image: makeSlideSvg(slide, accent, number)
+        };
+      });
+    }
+
+    function makeSlideSvg(slide, accent, number) {
+      const accent2 = slide.palette[(Number(number) + 1) % slide.palette.length];
+      const title = escapeSvgText(localize(slide.title));
+      const subtitle = escapeSvgText(localize(slide.subtitle));
+      const label = escapeSvgText(`${slide.id}-${number}`);
+      const variant = escapeSvgText(`Variant ${number}`);
+      const note = escapeSvgText(localize(slide.notes[Number(number) - 1]));
+      const contentReady = escapeSvgText(t('svg.contentReady'));
+      const userSlot = escapeSvgText(t('svg.userSlot'));
+      const versionLabel = escapeSvgText(t('svg.versionLabel'));
+      const afterPick = escapeSvgText(t('svg.afterPick'));
+      const copyToAi = escapeSvgText(t('svg.copyToAi'));
+
+      const svg = `
+        <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900'>
+          <defs>
+            <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+              <stop stop-color='#f7f1e7'/>
+              <stop offset='1' stop-color='#d9e7f5'/>
+            </linearGradient>
+            <linearGradient id='warm' x1='0' y1='0' x2='1' y2='1'>
+              <stop stop-color='${accent}' stop-opacity='.32'/>
+              <stop offset='1' stop-color='${accent2}' stop-opacity='.18'/>
+            </linearGradient>
+          </defs>
+          <rect width='1600' height='900' fill='url(#bg)'/>
+          <circle cx='1310' cy='130' r='260' fill='url(#warm)'/>
+          <rect x='92' y='82' width='1416' height='736' rx='42' fill='rgba(255,255,255,.62)' stroke='rgba(96,110,134,.18)'/>
+          <rect x='128' y='118' width='170' height='44' rx='22' fill='rgba(255,255,255,.78)'/>
+          <text x='160' y='148' font-size='24' fill='${accent}' font-family='Segoe UI, Arial, sans-serif' font-weight='700'>${label}</text>
+          <text x='132' y='238' font-size='38' fill='#66798a' font-family='Segoe UI, Arial, sans-serif'>${variant}</text>
+          <text x='132' y='336' font-size='84' fill='#211a13' font-family='Segoe UI, Arial, sans-serif' font-weight='700'>${title}</text>
+          <text x='132' y='390' font-size='28' fill='#5f6f7f' font-family='Segoe UI, Arial, sans-serif'>${subtitle}</text>
+          <rect x='132' y='458' width='758' height='248' rx='28' fill='rgba(255,255,255,.84)'/>
+          <rect x='926' y='458' width='248' height='114' rx='28' fill='rgba(255,255,255,.86)'/>
+          <rect x='926' y='592' width='248' height='114' rx='28' fill='rgba(255,255,255,.76)'/>
+          <rect x='1204' y='458' width='220' height='248' rx='28' fill='rgba(255,255,255,.72)'/>
+          <text x='170' y='538' font-size='34' fill='#30485e' font-family='Segoe UI, Arial, sans-serif'>• ${note}</text>
+          <text x='170' y='598' font-size='32' fill='#30485e' font-family='Segoe UI, Arial, sans-serif'>• ${contentReady}</text>
+          <text x='170' y='658' font-size='32' fill='#30485e' font-family='Segoe UI, Arial, sans-serif'>• ${userSlot}</text>
+          <text x='962' y='528' font-size='52' fill='${accent}' font-family='Segoe UI, Arial, sans-serif' font-weight='700'>${number}</text>
+          <text x='962' y='562' font-size='24' fill='#6d5d4c' font-family='Segoe UI, Arial, sans-serif'>${versionLabel}</text>
+          <text x='962' y='662' font-size='40' fill='${accent2}' font-family='Segoe UI, Arial, sans-serif' font-weight='700'>Pick Me</text>
+          <text x='1236' y='536' font-size='24' fill='#6d5d4c' font-family='Segoe UI, Arial, sans-serif'>${afterPick}</text>
+          <text x='1236' y='574' font-size='24' fill='#6d5d4c' font-family='Segoe UI, Arial, sans-serif'>${copyToAi}</text>
+          <path d='M1220 648 C1278 596 1340 562 1428 512' stroke='${accent}' stroke-width='8' fill='none' opacity='.46'/>
+        </svg>`;
+
+      return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+    }
+
+    function getLeadSlide() {
+      return enrichedSlides[0];
+    }
+
+    function getLeadCandidate() {
+      const slide = getLeadSlide();
+      return slide.candidates.find(candidate => candidate.id === state.selections[slide.id]) || slide.candidates[0];
+    }
+
+    function renderCandidateBoard() {
+      candidateBoard.innerHTML = enrichedSlides.map(slide => {
+        const selectedId = state.selections[slide.id];
+        const selectedCandidate = slide.candidates.find(candidate => candidate.id === selectedId) || slide.candidates[0];
+        return `
+          <section class="slide-row" data-slide-id="${slide.id}">
+            <div class="slide-row-head">
+              <div class="slide-row-title-wrap">
+                <span class="page-code">${slide.id}</span>
+                <h3 class="slide-row-title">${localize(slide.title)}</h3>
+                <p class="slide-row-subtitle">${localize(slide.role)} · ${localize(slide.subtitle)}</p>
+              </div>
+              <div class="slide-row-selection">${t('status.selectedPrefix')}${selectedCandidate.code}</div>
+            </div>
+            <div class="stage-shell">
+              <div class="focus-rail" aria-hidden="true"></div>
+              <div class="candidate-strip" data-slide-id="${slide.id}">
+                <div class="candidate-track">
+                  ${slide.candidates.map(candidate => `
+                    <article class="candidate-card ${candidate.id === selectedId ? 'active' : ''}" data-slide-id="${slide.id}" data-candidate-id="${candidate.id}">
+                      <img class="candidate-image" src="${candidate.image}" alt="${escapeHtml(localize(slide.title))} ${candidate.code}">
+                      <div class="candidate-meta">
+                        <div class="candidate-top">
+                          <span class="variant-chip">${candidate.code}</span>
+                          <span class="candidate-state">${candidate.id === selectedId ? `<strong>${t('status.selected')}</strong>` : t('status.pick')}</span>
+                        </div>
+                        <h3 class="candidate-title">${candidate.title}</h3>
+                        <p class="candidate-note">${candidate.note}</p>
+                      </div>
+                    </article>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          </section>
+        `;
+      }).join('');
+    }
+
+    function updateSelectionStatus() {
+      const leadCandidate = getLeadCandidate();
+      currentPageCode.textContent = leadCandidate.code;
+      currentPageVariantLabel.textContent = `${leadCandidate.title} · ${leadCandidate.note}`;
+      codePreview.value = buildAllCodes();
+    }
+
+    function buildAllCodes() {
+      return enrichedSlides.map(slide => `${slide.id}-${state.selections[slide.id]}`).join('\n');
+    }
+
+    function buildCurrentCode() {
+      const leadSlide = getLeadSlide();
+      return `${leadSlide.id}-${state.selections[leadSlide.id]}`;
+    }
+
+    function centerSelectionForSlide(slideId, behavior = 'smooth') {
+      const strip = candidateBoard.querySelector(`.candidate-strip[data-slide-id="${slideId}"]`);
+      const selected = candidateBoard.querySelector(`.candidate-card.active[data-slide-id="${slideId}"]`);
+      if (!strip || !selected) return;
+      const target = selected.offsetLeft - (strip.clientWidth / 2) + (selected.clientWidth / 2);
+      const maxLeft = Math.max(0, strip.scrollWidth - strip.clientWidth);
+      const clamped = Math.max(0, Math.min(maxLeft, target));
+      strip.scrollTo({ left: clamped, behavior });
+    }
+
+    function centerAllSelections(behavior = 'auto') {
+      enrichedSlides.forEach(slide => centerSelectionForSlide(slide.id, behavior));
+    }
+
+    function updateSlideRowSelection(slideId) {
+      const slide = enrichedSlides.find(item => item.id === slideId);
+      if (!slide) return;
+      const selectedCandidate = slide.candidates.find(candidate => candidate.id === state.selections[slide.id]) || slide.candidates[0];
+      const row = candidateBoard.querySelector(`.slide-row[data-slide-id="${slideId}"]`);
+      if (!row) return;
+
+      const selectionLabel = row.querySelector('.slide-row-selection');
+      if (selectionLabel) selectionLabel.textContent = `${t('status.selectedPrefix')}${selectedCandidate.code}`;
+
+      row.querySelectorAll('.candidate-card').forEach(card => {
+        const isActive = card.dataset.candidateId === selectedCandidate.id;
+        card.classList.toggle('active', isActive);
+
+        const stateLabel = card.querySelector('.candidate-state');
+        if (stateLabel) {
+          stateLabel.innerHTML = isActive ? `<strong>${t('status.selected')}</strong>` : t('status.pick');
+        }
+      });
+    }
+
+    function selectCandidate(slideId, candidateId) {
+      const currentSelection = state.selections[slideId];
+      if (currentSelection === candidateId) {
+        centerSelectionForSlide(slideId, 'smooth');
+        return;
+      }
+
+      state.selections[slideId] = candidateId;
+      updateSlideRowSelection(slideId);
+      centerSelectionForSlide(slideId, 'smooth');
+      updateSelectionStatus();
+      emitSkillEvent('CANDIDATE_PICKED', {
+        slideId,
+        candidateId,
+        candidateCode: buildCurrentCode(),
+      });
+    }
+
+    function emitSkillEvent(eventType, data) {
+      const payload = JSON.stringify(data);
+      if (payload.length > 4096) return;
+      window.aileron?.bridge?.emit?.(eventType, data);
+    }
+
+    async function copyText(text, successMessage) {
+      try {
+        await navigator.clipboard.writeText(text);
+        currentPageVariantLabel.textContent = successMessage;
+      } catch {
+        currentPageVariantLabel.textContent = t('status.copyFailed');
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeSvgText(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    }
+
+    candidateBoard.addEventListener('click', event => {
+      const card = event.target.closest('.candidate-card');
+      if (!card) return;
+      selectCandidate(card.dataset.slideId, card.dataset.candidateId);
+    });
+
+    document.getElementById('copyAllButton').addEventListener('click', () => copyText(buildAllCodes(), t('status.copySuccess')));
+    document.getElementById('resetSelectionsButton').addEventListener('click', () => {
+      state.selections = { ...defaultSelection };
+      renderCandidateBoard();
+      updateSelectionStatus();
+    });
+
+    window.addEventListener('resize', centerAllSelections);
+
+    renderCandidateBoard();
+    updateSelectionStatus();
+  </script>
+</body>
+</html>

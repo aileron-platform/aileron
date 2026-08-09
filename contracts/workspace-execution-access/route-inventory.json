@@ -1,0 +1,18 @@
+{
+  "contractVersion": "workspace-execution-access/v1",
+  "audiences": {
+    "workspace-runtime": {
+      "allowedActions": [
+        "agent",
+        "automation",
+        "browser_automation",
+        "runtime_read",
+        "runtime_write",
+        "workspace_settings"
+      ]
+    },
+    "workspace-terminal": {
+      "allowedActions": ["terminal"]
+    }
+  }
+}

@@ -1,0 +1,1 @@
+"""Manager command domain module."""

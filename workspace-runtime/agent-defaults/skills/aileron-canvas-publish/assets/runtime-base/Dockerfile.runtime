@@ -1,0 +1,17 @@
+ARG NODE_IMAGE
+FROM ${NODE_IMAGE}
+
+ENV NODE_ENV=production \
+    PORT=8080 \
+    CANVAS_HOST=0.0.0.0 \
+    CANVAS_SITE_DIR=/opt/canvas/site
+
+RUN install -d -m 0755 /opt/canvas /opt/canvas/site
+
+COPY --chown=10001:10001 entrypoint.sh static-server.js publication-proxy.js /opt/canvas/
+RUN chmod 0755 /opt/canvas/entrypoint.sh
+
+USER 10001:10001
+EXPOSE 8080
+
+ENTRYPOINT ["/opt/canvas/entrypoint.sh"]

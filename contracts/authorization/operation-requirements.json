@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 2,
+  "requirements": [
+    {
+      "operationId": "marketplace.catalog.read",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "marketplace.install.execute",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "marketplace.user_copy.manage",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "marketplace.content.publish",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": true
+    },
+    {
+      "operationId": "marketplace.content.manage",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": true
+    },
+    {
+      "operationId": "marketplace.delete.execute",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": true
+    },
+    {
+      "operationId": "marketplace.registry.manage",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": true
+    },
+    {
+      "operationId": "workspace.collection.read",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.create",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "knowledge_base.collection.read",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "knowledge_base.create",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "user_management.manage",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": true
+    },
+    {
+      "operationId": "platform_resources.read",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": true
+    },
+    {
+      "operationId": "platform_resources.owner.reassign",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": true
+    },
+    {
+      "operationId": "platform_resources.knowledge_base.quota.update",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": true
+    },
+    {
+      "operationId": "platform_resources.workspace.capacity.expand",
+      "scope": "platform",
+      "minimumResourceRole": null,
+      "platformAdminOnly": true
+    },
+    {
+      "operationId": "workspace.detail.read",
+      "scope": "workspace",
+      "minimumResourceRole": "reader",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.content.write",
+      "scope": "workspace",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.lifecycle.execute",
+      "scope": "workspace",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.metadata.write",
+      "scope": "workspace",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.access.manage",
+      "scope": "workspace",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.attachment.write",
+      "scope": "workspace",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.firewall.read",
+      "scope": "workspace",
+      "minimumResourceRole": "reader",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.firewall.manage",
+      "scope": "workspace",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.sensitive_settings.read",
+      "scope": "workspace",
+      "minimumResourceRole": "reader",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.sensitive_settings.manage",
+      "scope": "workspace",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.terminal.use",
+      "scope": "workspace",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.agent_chat.use",
+      "scope": "workspace",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.automation.execute",
+      "scope": "workspace",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.browser_automation.use",
+      "scope": "workspace",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "workspace.delete",
+      "scope": "workspace",
+      "minimumResourceRole": "owner",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "knowledge_base.detail.read",
+      "scope": "knowledge_base",
+      "minimumResourceRole": "reader",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "knowledge_base.content.write",
+      "scope": "knowledge_base",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "knowledge_base.settings.manage",
+      "scope": "knowledge_base",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "knowledge_base.share.manage",
+      "scope": "knowledge_base",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "knowledge_base.visibility.manage",
+      "scope": "knowledge_base",
+      "minimumResourceRole": "manager",
+      "platformAdminOnly": false
+    },
+    {
+      "operationId": "knowledge_base.delete",
+      "scope": "knowledge_base",
+      "minimumResourceRole": "owner",
+      "platformAdminOnly": false
+    }
+  ]
+}

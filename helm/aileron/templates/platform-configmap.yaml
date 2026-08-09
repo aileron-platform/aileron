@@ -1,0 +1,39 @@
+{{- include "aileron.validateOIDCCA" . }}
+{{- include "aileron.validateIngressTLS" . }}
+{{- include "aileron.validateIngressClassSelection" . }}
+{{- include "aileron.validateAdminBootstrap" . }}
+{{- include "aileron.validateTurnConfiguration" . }}
+{{- include "aileron.validateProductionStorage" . }}
+{{- include "aileron.validateProductionRouting" . }}
+{{- include "aileron.validateProductionImages" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aileron.fullname" . }}-platform-config
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+data:
+  PLATFORM_PUBLIC_ORIGIN: {{ include "aileron.platformPublicOrigin" . | quote }}
+  OIDC_ISSUER_URL: {{ required "oidc.issuerUrl is required" .Values.oidc.issuerUrl | quote }}
+  OIDC_CLIENT_ID: {{ .Values.oidc.clientId | quote }}
+  RUNTIME_PROVISIONER: {{ .Values.kubernetes.provisioner | quote }}
+  RUNTIME_K8S_NAMESPACE: {{ .Values.kubernetes.workspaceRuntimeNamespace | quote }}
+  WORKSPACE_STORAGE_CLASS_NAME: {{ .Values.kubernetes.workspaceData.storageClassName | quote }}
+  WORKSPACE_STORAGE_SIZE: {{ .Values.kubernetes.workspaceData.size | quote }}
+  RUNTIME_HOME_STORAGE_CLASS_NAME: {{ .Values.kubernetes.runtimeHome.storageClassName | quote }}
+  RUNTIME_HOME_STORAGE_SIZE: {{ .Values.kubernetes.runtimeHome.size | quote }}
+  RUNTIME_HOME_STORAGE_ACCESS_MODE: {{ .Values.kubernetes.runtimeHome.accessMode | quote }}
+  KNOWLEDGE_BASES_PVC_NAME: {{ .Values.kubernetes.knowledgeBases.pvcName | quote }}
+  RUNTIME_ASSERTION_ISSUER: {{ .Values.runtimeAssertions.issuer | required "runtimeAssertions.issuer is required" | quote }}
+  RUNTIME_ASSERTION_KID: {{ .Values.runtimeAssertions.activeKid | required "runtimeAssertions.activeKid is required" | quote }}
+  RUNTIME_ASSERTION_PRIVATE_KEY_FILE: "/run/secrets/aileron/private-key.pem"
+  RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE: "/etc/aileron/runtime-assertions/jwks.json"
+  RUNTIME_ASSERTION_PUBLIC_KEY_SET_SECRET_NAME: {{ .Values.runtimeAssertions.publicKeySetSecretName | required "runtimeAssertions.publicKeySetSecretName is required" | quote }}
+  RUNTIME_K8S_IMAGE: {{ include "aileron.imageReference" (dict "name" "workspaceOperator.runtimeImage" "image" .Values.workspaceOperator.runtimeImage "production" .Values.security.requireStrongSecrets) | quote }}
+  RUNTIME_K8S_BROWSER_IMAGE: {{ include "aileron.imageReference" (dict "name" "kubernetes.browserImage" "image" .Values.kubernetes.browserImage "production" .Values.security.requireStrongSecrets) | quote }}
+  RUNTIME_K8S_CANVAS_IMAGE: {{ include "aileron.imageReference" (dict "name" "kubernetes.canvasImage" "image" .Values.kubernetes.canvasImage "production" .Values.security.requireStrongSecrets) | quote }}
+  RUNTIME_K8S_RUNTIME_RESOURCES: {{ .Values.kubernetes.workspaceDefaults.runtime.resources | toJson | quote }}
+  RUNTIME_K8S_BROWSER_RESOURCES: {{ .Values.kubernetes.workspaceDefaults.browser.resources | toJson | quote }}
+  RUNTIME_K8S_CANVAS_RESOURCES: {{ .Values.kubernetes.workspaceDefaults.canvas.resources | toJson | quote }}
+  CILIUM_ENABLED: {{ ternary "true" "false" .Values.cilium.enabled | quote }}

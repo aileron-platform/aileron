@@ -1,0 +1,11 @@
+services:
+  workspace-terminal-test:
+    image: ailerondocker/workspace-terminal-test:dev
+    pull_policy: never
+    working_dir: /workspace-terminal
+    command: go test -v ./...
+    environment:
+      AILERON_RUNTIME_ACCESS_REVISION: "0"
+      AILERON_PLATFORM_PUBLIC_ORIGIN: http://frontend.test
+    volumes:
+      - ../contracts:/contracts:ro

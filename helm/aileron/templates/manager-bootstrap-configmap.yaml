@@ -1,0 +1,11 @@
+{{- if .Values.workspaceManager.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aileron.fullname" . }}-manager-bootstrap
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+data:
+  firewall-seed.json: {{ .Values.firewall.seed | toJson | quote }}
+{{- end }}

@@ -1,0 +1,39 @@
+{
+  "contractVersion": "browser-connectivity/v1",
+  "vectors": [
+    {
+      "name": "canonical-profile",
+      "profile": {
+        "contractVersion": "browser-connectivity/v1",
+        "policyBackend": "unenforced",
+        "backend": {
+          "urls": ["turn:coturn:3478"],
+          "controlDestination": {"kind": "unenforced"},
+          "relayDestination": {"kind": "unenforced"},
+          "relayPortRange": {"min": 49160, "max": 49180}
+        },
+        "frontend": {"urls": ["turn:127.0.0.1:3478"]},
+        "credentialIssuer": {"kind": "turnRest", "secretRef": "turn-rest-shared-secret", "ttlSeconds": 300},
+        "evidence": {"intervalSeconds": 30, "ttlSeconds": 90, "requiredFrontendVantages": ["host"]}
+      },
+      "expectedRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa"
+    },
+    {
+      "name": "set-order-and-duplicates-do-not-change-identity",
+      "profile": {
+        "contractVersion": "browser-connectivity/v1",
+        "policyBackend": "unenforced",
+        "backend": {
+          "urls": ["turn:coturn:3478"],
+          "controlDestination": {"kind": "unenforced"},
+          "relayDestination": {"kind": "unenforced"},
+          "relayPortRange": {"min": 49160, "max": 49180}
+        },
+        "frontend": {"urls": ["turn:127.0.0.1:3478"]},
+        "credentialIssuer": {"kind": "turnRest", "secretRef": "turn-rest-shared-secret", "ttlSeconds": 300},
+        "evidence": {"intervalSeconds": 30, "ttlSeconds": 90, "requiredFrontendVantages": ["z-vantage", "host", "z-vantage"]}
+      },
+      "expectedRevision": "sha256:da263e3bf7371865b487218b03472768ff3997027dc71b178f2b9fe84f79b779"
+    }
+  ]
+}

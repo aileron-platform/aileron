@@ -1,0 +1,1 @@
+"""Application infrastructure integration tests."""

@@ -1,0 +1,16 @@
+platformPublicOrigin: https://aileron.apps.example.com
+
+ingress:
+  tlsMode: controllerManaged
+
+turn:
+  enabled: true
+  profile:
+    backend:
+      urls:
+        - turn:turn.internal.example:3478
+    frontend:
+      urls:
+        - turns:turn.example.com:5349
+    credentialIssuer:
+      kind: turnRest

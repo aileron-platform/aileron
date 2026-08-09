@@ -1,0 +1,37 @@
+kubernetes:
+  workspaceRuntimeNamespace: workspace-system
+  platformStorageGid: 2000
+  workspaceData:
+    storageClassName: longhorn-rwx
+  runtimeHome:
+    accessMode: ReadWriteOnce
+    storageClassName: longhorn
+  knowledgeBases:
+    accessModes:
+      - ReadWriteMany
+    storageClassName: longhorn-rwx
+  managerState:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: longhorn
+  storageVerification:
+    enabled: true
+    workspaceStorageClassName: longhorn-rwx-verification-delete
+    managerStateStorageClassName: longhorn-verification-delete
+    workspaceSize: 1Gi
+    managerStateSize: 1Gi
+
+frontend:
+  enabled: false
+postgres:
+  enabled: false
+redis:
+  enabled: false
+ingress:
+  enabled: false
+oidc:
+  issuerUrl: https://login.example.com/realms/aileron
+  clientSecretName: external-oidc-client
+bootstrap:
+  admin:
+    enabled: false

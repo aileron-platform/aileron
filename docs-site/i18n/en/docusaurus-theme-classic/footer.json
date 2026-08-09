@@ -1,0 +1,30 @@
+{
+  "link.title.文件": {
+    "message": "Docs",
+    "description": "The title of the footer links column with title=文件 in the footer"
+  },
+  "link.title.API": {
+    "message": "API",
+    "description": "The title of the footer links column with title=API in the footer"
+  },
+  "link.item.label.安裝說明": {
+    "message": "Installation",
+    "description": "The label of footer link with label=安裝說明 linking to /installation/getting-started"
+  },
+  "link.item.label.部署與環境": {
+    "message": "Deployment and Environments",
+    "description": "The label of footer link with label=部署與環境 linking to /installation/docker"
+  },
+  "link.item.label.系統架構說明": {
+    "message": "Architecture",
+    "description": "The label of footer link with label=系統架構說明 linking to /architecture/overview"
+  },
+  "link.item.label.Manager API": {
+    "message": "Manager API",
+    "description": "The label of footer link with label=Manager API linking to /api/manager-api"
+  },
+  "link.item.label.Runtime API": {
+    "message": "Runtime API",
+    "description": "The label of footer link with label=Runtime API linking to /api/runtime-api"
+  }
+}

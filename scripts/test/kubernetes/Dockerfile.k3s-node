@@ -1,0 +1,13 @@
+FROM alpine:3.20 AS nfs-client
+
+RUN apk add --no-cache helm jq nfs-utils
+
+FROM rancher/k3s:v1.31.6-k3s1
+
+COPY --from=nfs-client /sbin/mount.nfs /sbin/mount.nfs
+COPY --from=nfs-client /sbin/mount.nfs4 /sbin/mount.nfs4
+COPY --from=nfs-client /usr/bin/jq /usr/bin/jq
+COPY --from=nfs-client /usr/bin/helm /usr/bin/helm
+COPY --from=nfs-client /lib/ /lib/
+COPY --from=nfs-client /usr/lib/ /usr/lib/
+COPY --from=nfs-client /etc/netconfig /etc/netconfig

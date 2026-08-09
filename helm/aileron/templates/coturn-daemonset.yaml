@@ -1,0 +1,158 @@
+{{- if and .Values.turn.enabled .Values.coturn.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "aileron.fullname" . }}-coturn
+  namespace: {{ .Values.coturn.namespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: coturn
+spec:
+  selector:
+    matchLabels:
+      {{- include "aileron.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: coturn
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: coturn
+        app.kubernetes.io/part-of: aileron
+      annotations:
+        aileron.io/turn-credential-revision: {{ .Values.turn.credentialRevision | quote }}
+        checksum/turn-credential-contract: {{ include "aileron.turnCredentialsChecksum" . }}
+    spec:
+      serviceAccountName: {{ include "aileron.fullname" . }}-coturn
+      automountServiceAccountToken: false
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: coturn
+          image: {{ include "aileron.imageReference" (dict "name" "coturn.image" "image" .Values.coturn.image "production" .Values.security.requireStrongSecrets) | quote }}
+          imagePullPolicy: {{ .Values.coturn.image.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              config_file=/tmp/coturn/turnserver.conf
+              install -d -m 0700 /tmp/coturn
+              umask 077
+              username="$(cat "$TURN_USERNAME_FILE")"
+              credential="$(cat "$TURN_CREDENTIAL_FILE")"
+              probe_username="$(cat "$TURN_PROBE_USERNAME_FILE")"
+              probe_credential="$(cat "$TURN_PROBE_CREDENTIAL_FILE")"
+              test -n "$username"
+              test -n "$credential"
+              test -n "$probe_username"
+              test -n "$probe_credential"
+              {
+                printf '%s\n' \
+                  'listening-ip=0.0.0.0' \
+                  "relay-ip=$NODE_IP" \
+                  "external-ip=$NODE_IP" \
+                  'listening-port={{ .Values.coturn.listenerPort }}' \
+                  'min-port={{ .Values.turn.profile.backend.relayPortRange.min }}' \
+                  'max-port={{ .Values.turn.profile.backend.relayPortRange.max }}' \
+                  'realm={{ .Values.coturn.realm }}' \
+                  "user=$username:$credential" \
+                  "user=$probe_username:$probe_credential" \
+                  'fingerprint' \
+                  'lt-cred-mech' \
+                  'no-cli' \
+                  'no-tls' \
+                  'no-dtls' \
+                  'no-multicast-peers' \
+                  'pidfile=/tmp/turnserver.pid' \
+                  'log-file=stdout' \
+                  'simple-log'
+              } > "$config_file"
+              chmod 0600 "$config_file"
+              unset username credential probe_username probe_credential
+              exec turnserver -c "$config_file"
+          env:
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: TURN_USERNAME_FILE
+              value: /run/secrets/aileron-coturn/username
+            - name: TURN_CREDENTIAL_FILE
+              value: /run/secrets/aileron-coturn/credential
+            - name: TURN_PROBE_USERNAME_FILE
+              value: /run/secrets/aileron-coturn/probe-username
+            - name: TURN_PROBE_CREDENTIAL_FILE
+              value: /run/secrets/aileron-coturn/probe-credential
+          ports:
+            - name: turn-udp
+              containerPort: {{ .Values.coturn.listenerPort }}
+              protocol: UDP
+            - name: turn-tcp
+              containerPort: {{ .Values.coturn.listenerPort }}
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: turn-tcp
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            tcpSocket:
+              port: turn-tcp
+            periodSeconds: 10
+            timeoutSeconds: 2
+          livenessProbe:
+            tcpSocket:
+              port: turn-tcp
+            periodSeconds: 30
+            timeoutSeconds: 2
+          resources:
+            {{- toYaml .Values.coturn.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+          volumeMounts:
+            - name: coturn-auth
+              mountPath: /run/secrets/aileron-coturn
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: state
+              mountPath: /var/lib/coturn
+      volumes:
+        - name: coturn-auth
+          secret:
+            secretName: {{ .Values.coturn.auth.existingSecretName }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.coturn.auth.usernameKey }}
+                path: username
+              - key: {{ .Values.coturn.auth.credentialSecretKey }}
+                path: credential
+              - key: {{ .Values.coturn.auth.probeUsernameKey }}
+                path: probe-username
+              - key: {{ .Values.coturn.auth.probeCredentialKey }}
+                path: probe-credential
+        - name: tmp
+          emptyDir: {}
+        - name: state
+          emptyDir: {}
+      {{- with .Values.coturn.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.coturn.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

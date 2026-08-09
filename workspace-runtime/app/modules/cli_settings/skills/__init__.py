@@ -1,0 +1,1 @@
+"""CLI skills settings subdomain."""

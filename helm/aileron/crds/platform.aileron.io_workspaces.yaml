@@ -1,0 +1,778 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workspaces.platform.aileron.io
+spec:
+  group: platform.aileron.io
+  scope: Namespaced
+  names:
+    plural: workspaces
+    singular: workspace
+    kind: Workspace
+    shortNames:
+      - ws
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - workspaceId
+                - ownerId
+                - provisioner
+                - bootstrap
+                - runtime
+                - browser
+                - canvas
+                - workspacePath
+                - worktreeSubdir
+                - firewall
+                - storage
+              properties:
+                workspaceId:
+                  type: string
+                  minLength: 1
+                ownerId:
+                  type: string
+                  minLength: 1
+                provisioner:
+                  type: string
+                  enum:
+                    - kubernetes
+                bootstrap:
+                  type: object
+                  required:
+                    - revision
+                  properties:
+                    revision:
+                      type: integer
+                      format: int64
+                      minimum: 1
+                runtime:
+                  type: object
+                  required:
+                    - image
+                    - resources
+                    - assertion
+                    - runtimeSecretName
+                    - desiredState
+                    - instanceId
+                    - revision
+                    - mountRevision
+                    - accessRevision
+                  properties:
+                    image:
+                      type: string
+                      pattern: '^[a-z0-9](?:[a-z0-9._:/-]*[a-z0-9])?@sha256:[0-9a-f]{64}$'
+                    resources:
+                      type: object
+                      required:
+                        - requests
+                        - limits
+                      properties:
+                        requests:
+                          type: object
+                          required:
+                            - cpu
+                            - memory
+                          properties:
+                            cpu:
+                              type: string
+                            memory:
+                              type: string
+                        limits:
+                          type: object
+                          required:
+                            - cpu
+                            - memory
+                          properties:
+                            cpu:
+                              type: string
+                            memory:
+                              type: string
+                    runtimeSecretName:
+                      type: string
+                      minLength: 1
+                      maxLength: 253
+                      pattern: '^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*$'
+                    desiredState:
+                      type: string
+                      enum:
+                        - Running
+                        - Stopped
+                    instanceId:
+                      type: string
+                      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                    revision:
+                      type: integer
+                      format: int64
+                      minimum: 1
+                    mountRevision:
+                      type: integer
+                      format: int64
+                      minimum: 0
+                    accessRevision:
+                      type: integer
+                      format: int64
+                      minimum: 0
+                    assertion:
+                      type: object
+                      required:
+                        - issuer
+                        - publicKeySetSecretName
+                      properties:
+                        issuer:
+                          type: string
+                          minLength: 1
+                          maxLength: 128
+                        publicKeySetSecretName:
+                          type: string
+                          minLength: 1
+                          maxLength: 253
+                          pattern: '^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*$'
+                browser:
+                  type: object
+                  required:
+                    - image
+                    - resources
+                    - desiredState
+                    - instanceId
+                    - revision
+                    - credentialSecretName
+                    - credentialRevision
+                    - credentialKeyId
+                    - credentialAlgorithm
+                  properties:
+                    enabled:
+                      type: boolean
+                    desiredState:
+                      type: string
+                      enum:
+                        - Running
+                        - Stopped
+                    instanceId:
+                      type: string
+                      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                    revision:
+                      type: integer
+                      format: int64
+                      minimum: 1
+                    image:
+                      type: string
+                      pattern: '^[a-z0-9](?:[a-z0-9._:/-]*[a-z0-9])?@sha256:[0-9a-f]{64}$'
+                    resources:
+                      type: object
+                      required:
+                        - requests
+                        - limits
+                      properties:
+                        requests:
+                          type: object
+                          required:
+                            - cpu
+                            - memory
+                          properties:
+                            cpu:
+                              type: string
+                            memory:
+                              type: string
+                        limits:
+                          type: object
+                          required:
+                            - cpu
+                            - memory
+                          properties:
+                            cpu:
+                              type: string
+                            memory:
+                              type: string
+                    credentialSecretName:
+                      type: string
+                      minLength: 1
+                      maxLength: 253
+                    credentialRevision:
+                      type: integer
+                      format: int64
+                      minimum: 1
+                    credentialKeyId:
+                      type: string
+                      minLength: 1
+                      maxLength: 128
+                    credentialAlgorithm:
+                      type: string
+                      enum:
+                        - hkdf-sha256-v1
+                canvas:
+                  type: object
+                  required:
+                    - image
+                    - resources
+                    - desiredState
+                    - instanceId
+                    - revision
+                  properties:
+                    enabled:
+                      type: boolean
+                    desiredState:
+                      type: string
+                      enum:
+                        - Running
+                        - Stopped
+                    instanceId:
+                      type: string
+                      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                    revision:
+                      type: integer
+                      format: int64
+                      minimum: 1
+                    image:
+                      type: string
+                      pattern: '^[a-z0-9](?:[a-z0-9._:/-]*[a-z0-9])?@sha256:[0-9a-f]{64}$'
+                    resources:
+                      type: object
+                      required:
+                        - requests
+                        - limits
+                      properties:
+                        requests:
+                          type: object
+                          required:
+                            - cpu
+                            - memory
+                          properties:
+                            cpu:
+                              type: string
+                            memory:
+                              type: string
+                        limits:
+                          type: object
+                          required:
+                            - cpu
+                            - memory
+                          properties:
+                            cpu:
+                              type: string
+                            memory:
+                              type: string
+                git:
+                  type: object
+                  properties:
+                    url:
+                      type: string
+                    branch:
+                      type: string
+                workspacePath:
+                  type: string
+                worktreeSubdir:
+                  type: string
+                  minLength: 1
+                targetNamespace:
+                  type: string
+                  description: Deployment-derived namespace assertion; empty uses metadata.namespace and a non-empty value must match metadata.namespace.
+                envVars:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - key
+                      - value
+                    properties:
+                      key:
+                        type: string
+                      value:
+                        type: string
+                knowledgeBases:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - kbId
+                      - alias
+                    properties:
+                      kbId:
+                        type: string
+                        pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+                      alias:
+                        type: string
+                        minLength: 1
+                        maxLength: 63
+                        pattern: '^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$'
+                firewall:
+                  type: object
+                  required:
+                    - revision
+                    - workspace
+                    - browser
+                  properties:
+                    revision:
+                      type: integer
+                      format: int64
+                      minimum: 1
+                    workspace:
+                      type: object
+                      required:
+                        - egressMode
+                        - allowedDomains
+                      x-kubernetes-validations:
+                        - rule: "self.egressMode == 'allowlist' || size(self.allowedDomains) == 0"
+                          message: allowedDomains must be empty unless egressMode is allowlist
+                        - rule: "self.egressMode != 'allowlist' || size(self.allowedDomains) > 0"
+                          message: allowedDomains must contain at least one hostname when egressMode is allowlist
+                      properties:
+                        egressMode:
+                          type: string
+                          enum:
+                            - blocked
+                            - allowlist
+                            - unrestricted
+                        allowedDomains:
+                          type: array
+                          maxItems: 128
+                          items:
+                            type: string
+                            minLength: 1
+                            maxLength: 253
+                            pattern: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$'
+                    browser:
+                      type: object
+                      required:
+                        - egressMode
+                        - allowedDomains
+                      x-kubernetes-validations:
+                        - rule: "self.egressMode == 'allowlist' || size(self.allowedDomains) == 0"
+                          message: allowedDomains must be empty unless egressMode is allowlist
+                        - rule: "self.egressMode != 'allowlist' || size(self.allowedDomains) > 0"
+                          message: allowedDomains must contain at least one hostname when egressMode is allowlist
+                      properties:
+                        egressMode:
+                          type: string
+                          enum:
+                            - blocked
+                            - allowlist
+                            - unrestricted
+                        allowedDomains:
+                          type: array
+                          maxItems: 128
+                          items:
+                            type: string
+                            minLength: 1
+                            maxLength: 253
+                            pattern: '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$'
+                storage:
+                  type: object
+                  required:
+                    - workspaceData
+                    - runtimeHome
+                  properties:
+                    workspaceData:
+                      type: object
+                      required:
+                        - capacityBytes
+                        - revision
+                      properties:
+                        capacityBytes:
+                          type: integer
+                          format: int64
+                          minimum: 1
+                        revision:
+                          type: integer
+                          format: int64
+                          minimum: 1
+                    runtimeHome:
+                      type: object
+                      required:
+                        - capacityBytes
+                        - revision
+                      properties:
+                        capacityBytes:
+                          type: integer
+                          format: int64
+                          minimum: 1
+                        revision:
+                          type: integer
+                          format: int64
+                          minimum: 1
+            status:
+              type: object
+              properties:
+                browserConnectivity:
+                  type: object
+                  required:
+                    - contractVersion
+                    - state
+                    - admission
+                  properties:
+                    contractVersion:
+                      type: string
+                      enum:
+                        - browser-connectivity/v1
+                    state:
+                      type: string
+                      enum:
+                        - pending
+                        - ready
+                        - degraded
+                        - not_ready
+                        - unavailable
+                    admission:
+                      type: string
+                      enum:
+                        - allowed
+                        - denied
+                    observedBrowserGeneration:
+                      type: string
+                    profileRevision:
+                      type: string
+                    credentialRevision:
+                      type: string
+                    backendState:
+                      type: string
+                      enum:
+                        - pending
+                        - ready
+                        - degraded
+                        - not_ready
+                        - unavailable
+                    backendAcceptedAt:
+                      type: string
+                      format: date-time
+                    backendExpiresAt:
+                      type: string
+                      format: date-time
+                    backendReason:
+                      type: string
+                    backendErrorCode:
+                      type: string
+                    frontendState:
+                      type: string
+                      enum:
+                        - pending
+                        - ready
+                        - degraded
+                        - not_ready
+                        - unavailable
+                    frontendAcceptedAt:
+                      type: string
+                      format: date-time
+                    frontendExpiresAt:
+                      type: string
+                      format: date-time
+                    frontendReason:
+                      type: string
+                    frontendErrorCode:
+                      type: string
+                    acceptedAt:
+                      type: string
+                      format: date-time
+                    expiresAt:
+                      type: string
+                      format: date-time
+                    reason:
+                      type: string
+                    errorCode:
+                      type: string
+                    lastTransitionAt:
+                      type: string
+                      format: date-time
+                firewall:
+                  type: object
+                  properties:
+                    targetRevision:
+                      type: integer
+                      format: int64
+                      minimum: 0
+                    targetDeliveryId:
+                      type: string
+                    observedRevision:
+                      type: integer
+                      format: int64
+                    phase:
+                      type: string
+                      enum:
+                        - Applied
+                        - Applying
+                        - Degraded
+                        - Error
+                    reason:
+                      type: string
+                    errorCode:
+                      type: string
+                    workspacePolicyName:
+                      type: string
+                    workspacePolicyGeneration:
+                      type: integer
+                      format: int64
+                      minimum: 0
+                    runtimePeerPolicyName:
+                      type: string
+                    runtimePeerPolicyGeneration:
+                      type: integer
+                      format: int64
+                      minimum: 0
+                    browserPolicyName:
+                      type: string
+                    browserPolicyGeneration:
+                      type: integer
+                      format: int64
+                      minimum: 0
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+                phase:
+                  type: string
+                observedGeneration:
+                  type: integer
+                  format: int64
+                targetNamespace:
+                  type: string
+                  description: Canonical Workspace namespace copied from metadata.namespace.
+                bootstrap:
+                  type: object
+                  properties:
+                    observedRevision:
+                      type: integer
+                      format: int64
+                      minimum: 0
+                    phase:
+                      type: string
+                      enum:
+                        - Pending
+                        - Running
+                        - Succeeded
+                        - Error
+                    reason:
+                      type: string
+                    errorCode:
+                      type: string
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+                components:
+                  type: object
+                  properties:
+                    runtime:
+                      type: object
+                      properties:
+                        observedRevision:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                        phase:
+                          type: string
+                          enum:
+                            - Disabled
+                            - Stopped
+                            - Pending
+                            - Starting
+                            - Running
+                            - Stopping
+                            - Error
+                        podUid:
+                          type: string
+                        observedInstanceId:
+                          type: string
+                        ready:
+                          type: boolean
+                        terminalReady:
+                          type: boolean
+                        reason:
+                          type: string
+                        errorCode:
+                          type: string
+                        lastTransitionTime:
+                          type: string
+                          format: date-time
+                        mountObservedRevision:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                        lastKnownGoodMountRevision:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                        accessObservedRevision:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                    browser:
+                      type: object
+                      properties:
+                        observedRevision:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                        phase:
+                          type: string
+                          enum:
+                            - Disabled
+                            - Stopped
+                            - Pending
+                            - Starting
+                            - Running
+                            - Stopping
+                            - Error
+                        podUid:
+                          type: string
+                        observedInstanceId:
+                          type: string
+                        ready:
+                          type: boolean
+                        reason:
+                          type: string
+                        errorCode:
+                          type: string
+                        lastTransitionTime:
+                          type: string
+                          format: date-time
+                        credentialObservedRevision:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                        credentialObservedKeyId:
+                          type: string
+                        credentialObservedAlgorithm:
+                          type: string
+                          enum:
+                            - hkdf-sha256-v1
+                    canvas:
+                      type: object
+                      properties:
+                        observedRevision:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                        phase:
+                          type: string
+                          enum:
+                            - Disabled
+                            - Stopped
+                            - Pending
+                            - Starting
+                            - Running
+                            - Stopping
+                            - Error
+                        podUid:
+                          type: string
+                        observedInstanceId:
+                          type: string
+                        ready:
+                          type: boolean
+                        reason:
+                          type: string
+                        errorCode:
+                          type: string
+                        lastTransitionTime:
+                          type: string
+                          format: date-time
+                storage:
+                  type: object
+                  properties:
+                    workspaceData:
+                      type: object
+                      required:
+                        - allocatedBytes
+                        - observedRevision
+                        - expansionSupported
+                      properties:
+                        allocatedBytes:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                        observedRevision:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                        expansionSupported:
+                          type: boolean
+                        observedAt:
+                          type: string
+                          format: date-time
+                        errorCode:
+                          type: string
+                          enum:
+                            - STORAGE_CAPACITY_INVALID
+                            - STORAGE_CAPACITY_SHRINK_UNSUPPORTED
+                            - STORAGE_CLASS_EXPANSION_UNSUPPORTED
+                            - STORAGE_CLASS_NOT_FOUND
+                    runtimeHome:
+                      type: object
+                      required:
+                        - allocatedBytes
+                        - observedRevision
+                        - expansionSupported
+                      properties:
+                        allocatedBytes:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                        observedRevision:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                        expansionSupported:
+                          type: boolean
+                        observedAt:
+                          type: string
+                          format: date-time
+                        errorCode:
+                          type: string
+                          enum:
+                            - STORAGE_CAPACITY_INVALID
+                            - STORAGE_CAPACITY_SHRINK_UNSUPPORTED
+                            - STORAGE_CLASS_EXPANSION_UNSUPPORTED
+                            - STORAGE_CLASS_NOT_FOUND
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+      additionalPrinterColumns:
+        - name: Workspace ID
+          type: string
+          jsonPath: .spec.workspaceId
+        - name: Owner
+          type: string
+          jsonPath: .spec.ownerId
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Namespace
+          type: string
+          jsonPath: .status.targetNamespace

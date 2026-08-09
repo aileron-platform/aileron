@@ -1,0 +1,48 @@
+services:
+  product-conformance-postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: product_conformance
+      POSTGRES_PASSWORD: product_conformance
+      POSTGRES_DB: aileron
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U product_conformance -d aileron
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ../../../../init-sql/001_init_schema.sql:/docker-entrypoint-initdb.d/001_init_schema.sql:ro
+
+  product-conformance-test:
+    image: python:3.12-slim
+    working_dir: /repo/scripts/test/kubernetes/product-conformance
+    depends_on:
+      product-conformance-postgres:
+        condition: service_healthy
+    environment:
+      PRODUCT_CONFORMANCE_TEST_POSTGRES_DSN: postgresql://product_conformance:product_conformance@product-conformance-postgres:5432/aileron
+    volumes:
+      - ../../../..:/repo:ro
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        pip install --disable-pip-version-check --no-cache-dir -r requirements.txt
+        python -m unittest discover -s tests -v
+
+  kubernetes-conformance-hardening-test:
+    image: alpine:3.20
+    working_dir: /repo
+    volumes:
+      - ../../../..:/repo:ro
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        apk add --no-cache jq python3 py3-jsonschema py3-yaml >/dev/null
+        REPO_ROOT=/repo scripts/test/kubernetes/tests/assert-conformance-hardening.sh
+        REPO_ROOT=/repo scripts/test/kubernetes/tests/assert-workspace-conformance-cr-contract.sh

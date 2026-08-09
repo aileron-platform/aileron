@@ -1,0 +1,24 @@
+{{- if and .Values.turn.enabled .Values.coturn.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aileron.fullname" . }}-coturn
+  namespace: {{ .Values.coturn.namespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: coturn
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "aileron.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: coturn
+  ports:
+    - name: turn-udp
+      port: {{ .Values.coturn.listenerPort }}
+      targetPort: turn-udp
+      protocol: UDP
+    - name: turn-tcp
+      port: {{ .Values.coturn.listenerPort }}
+      targetPort: turn-tcp
+      protocol: TCP
+{{- end }}

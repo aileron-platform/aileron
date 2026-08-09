@@ -1,0 +1,21 @@
+{
+  "$schema": "./conformance-vectors.schema.json",
+  "vectors": [
+    {"id":"accept-repository-contract","kind":"repository-contract","valid":true},
+    {"id":"reject-public-origin-with-path","kind":"origin","value":"https://aileron.example.test/app","valid":false,"diagnostic":"platformPublicOrigin: must be an exact origin without path, query, fragment, credentials, or trailing slash"},
+    {"id":"reject-public-origin-with-trailing-slash","kind":"origin","value":"https://aileron.example.test/","valid":false,"diagnostic":"platformPublicOrigin: must be an exact origin without path, query, fragment, credentials, or trailing slash"},
+    {"id":"reject-public-origin-with-invalid-port","kind":"origin","value":"https://aileron.example.test:65536","valid":false,"diagnostic":"platformPublicOrigin: must be an exact origin without path, query, fragment, credentials, or trailing slash"},
+    {"id":"accept-exact-public-origin","kind":"origin","value":"https://aileron.example.test:8443","valid":true},
+    {"id":"reject-duplicate-compose-owner","kind":"contract-mutation","mutation":"duplicate-first-output","valid":false,"diagnostic":"duplicate Compose output owner: postgres.POSTGRES_DB"},
+    {"id":"reject-unknown-helm-values-mapping","kind":"contract-mutation","mutation":"restore-old-oidc-helm-mapping","valid":false,"diagnostic":"unknown Helm values mapping: oidcIssuerUrl -> workspaceManager.oidc.issuerUrl"},
+    {"id":"reject-compose-helm-derived-output-drift","kind":"contract-mutation","mutation":"diverge-helm-derived-callback","valid":false,"diagnostic":"adapter parity mismatch: oidcCallbackUrl"},
+    {"id":"reject-missing-test-fixture-path","kind":"contract-mutation","mutation":"missing-test-fixture-path","valid":false,"diagnostic":"missing test fixture path: scripts/test/platform-configuration/fixtures/missing-compose.yml"},
+    {"id":"reject-forbidden-alias","kind":"compose-fixture","fixture":"scripts/test/platform-configuration/fixtures/forbidden-alias.yml","valid":false,"diagnostic":"forbidden alias: FRONTEND_ORIGIN"},
+    {"id":"reject-host-secret-pass-through","kind":"compose-fixture","fixture":"scripts/test/platform-configuration/fixtures/host-secret-pass-through.yml","valid":false,"diagnostic":"host secret pass-through: OPENAI_API_KEY"},
+    {"id":"reject-plaintext-secret","kind":"compose-fixture","fixture":"scripts/test/platform-configuration/fixtures/plaintext-secret.yml","valid":false,"diagnostic":"plaintext secret environment: OIDC_CLIENT_SECRET"},
+    {"id":"reject-plaintext-command-secret","kind":"compose-fixture","fixture":"scripts/test/platform-configuration/fixtures/plaintext-command-secret.yml","valid":false,"diagnostic":"plaintext Secret process argument: coturn.STATIC_AUTH_SECRET"},
+    {"id":"reject-plaintext-args-secret","kind":"compose-fixture","fixture":"scripts/test/platform-configuration/fixtures/plaintext-args-secret.yml","valid":false,"diagnostic":"plaintext Secret process argument: worker.API_TOKEN"},
+    {"id":"accept-secret-file-reference","kind":"compose-fixture","fixture":"scripts/test/platform-configuration/fixtures/secret-file-reference.yml","valid":true},
+    {"id":"reject-derived-env-input","kind":"env-fixture","fixture":"scripts/test/platform-configuration/fixtures/derived-input.env","valid":false,"diagnostic":"unknown or derived .env input: OIDC_REDIRECT_URI"}
+  ]
+}

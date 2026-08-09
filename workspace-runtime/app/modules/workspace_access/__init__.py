@@ -1,0 +1,1 @@
+"""Workspace access domain module."""

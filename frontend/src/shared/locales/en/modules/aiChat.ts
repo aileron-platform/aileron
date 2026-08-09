@@ -1,0 +1,360 @@
+const aiChat = {
+  nav: {
+    home: "AI Chat",
+  },
+  thread: {
+    untitled: "New thread",
+  },
+  messages: {
+    empty: "No messages yet",
+    scrollToBottom: "Scroll to bottom",
+    loading: "Loading messages...",
+    loadFailed: "Could not load messages",
+    retry: "Retry",
+    loadOlder: "Load older messages",
+    loadingOlder: "Loading older messages...",
+    retryOlder: "Retry loading older messages",
+    returnToLatest: "Return to latest messages",
+    newUpdates: "{{count}} new updates",
+  },
+  queue: {
+    title: "{{count}} queued",
+    remove: "Remove queued message",
+  },
+  questionForm: {
+    submit: "Submit",
+    submitting: "Submitting...",
+    answered: "Answered",
+    required: "Required",
+    yes: "Yes",
+    no: "No",
+    customColor: "Custom...",
+    selectColor: "Pick a color",
+    numberOutOfRange: "Value out of allowed range",
+    expired: "This question is no longer answerable; reply with a message instead",
+    submitFailed: "Could not submit the answer. Try again later",
+  },
+  canvasArtifact: {
+    defaultTitle: "Canvas artifact",
+    open: "Open in canvas",
+  },
+  threadList: {
+    title: "Threads",
+    newThread: "New thread",
+    empty: "No threads yet",
+    emptyTitle: "No threads yet",
+    emptyDescription:
+      "Create a new thread to start working with the workspace agent.",
+    loading: "Loading threads...",
+    unread: "Unread",
+    filter: {
+      label: "Thread filter",
+      active: "Active",
+      archived: "Archived",
+    },
+    sort: {
+      label: "Sort threads",
+      activity: "Recent activity",
+      created: "Created time",
+      title: "Title",
+    },
+    relative: {
+      now: "Now",
+      minutesAgo: "{{count}}m ago",
+      hoursAgo: "{{count}}h ago",
+      daysAgo: "{{count}}d ago",
+    },
+  },
+  threadActions: {
+    menu: "Thread actions",
+    showInitMessages: "Show initialization messages",
+    archive: "Archive",
+    delete: "Delete",
+    copyThreadId: "Copy Thread ID",
+    copyThreadIdSuccess: {
+      title: "Thread ID copied",
+      description: "The thread ID is ready to paste.",
+    },
+  },
+  status: {
+    draft: "Draft",
+    queued: "Queued",
+    booting: "Booting",
+    working: "Working",
+    stopping: "Stopping",
+    complete: "Complete",
+    stopped: "Stopped",
+    error: "Error",
+    canceled: "Canceled",
+  },
+  working: {
+    queued: "Waiting for an available agent...",
+    booting: "Starting the agent environment...",
+    working: "Working on the task...",
+    stopping: "Stopping the task...",
+  },
+  input: {
+    placeholder: "Ask the agent to work on this workspace...",
+    queuedPlaceholder: "Message will be queued after the current run...",
+    send: "Send",
+    fileReference: "Add file reference",
+    uploadFile: "Upload file",
+    removeAttachment: "Remove attachment",
+    removeCodeReference: "Remove code reference",
+    codeReferenceLine: "Line {{line}}",
+    codeReferenceRange: "Lines {{startLine}}–{{endLine}}",
+    attachmentUploading: "Uploading {{progress}}%",
+    attachmentReady: "Ready",
+    attachmentUploadFailed: "Upload failed",
+    slashCommand: "Insert slash command",
+    voice: {
+      start: "Voice input",
+      stop: "Stop recording",
+      processing: "Transcribing",
+      unavailable: "Voice input unavailable",
+      transcriptionFailed: "Voice transcription failed",
+      unsupportedAudioType: "Unsupported audio type",
+      recordingTooLarge: "Recording is too large",
+    },
+  },
+  settings: {
+    tool: "Tool",
+    model: "Model",
+    mode: "Mode",
+    execute: "Execute",
+    plan: "Plan",
+    locked: "Locked after submit",
+  },
+  workbench: {
+    header: "Chat",
+    newTaskTitle: "Start a new task",
+    cancel: "Cancel",
+    retry: "Retry",
+  },
+  newTask: {
+    placeholder: "Describe the task you want the agent to handle...",
+    submit: "Start task",
+  },
+  contextUsage: {
+    tooltip: "{{used}} / {{limit}} tokens ({{percent}}%)",
+  },
+  activity: {
+    finished: "Finished working",
+    working: "Working...",
+  },
+  thinking: {
+    collapsed: "Thinking...",
+    expanded: "Thinking...",
+  },
+  init: {
+    title: "System initialized",
+    agentResume: "Agent Resume ID",
+    model: "Model",
+    cwd: "CWD",
+    outputStyle: "Output style",
+    slashCommands: "Slash commands",
+    agents: "Agents",
+    skills: "Skills",
+    plugins: "Plugins",
+    tools: "Tools",
+    toolCount: "{{count}} tools",
+    mcpServices: "MCP services",
+  },
+  tool: {
+    interrupted: "Tool execution was interrupted.",
+    noOutput: "(no output)",
+    resultLoading: "Loading full result...",
+    resultLoadFailed: "Could not load the full result.",
+    retryResult: "Retry",
+    copyAll: "Copy all",
+    status: {
+      pending: "Pending",
+      completed: "Completed",
+      error: "Error",
+    },
+    preview: {
+      working: "Working...",
+      done: "Done",
+      failed: "Failed to run tool",
+      showAll: "Show all",
+      showLess: "Show less",
+    },
+    bash: {
+      running: "Running...",
+    },
+    write: {
+      writing: "Writing...",
+      wrote: "Wrote",
+      lines: "lines",
+      showLines: "Show lines",
+      hideLines: "Hide lines",
+    },
+    read: {
+      reading: "Reading...",
+      read: "Read",
+      lines: "lines",
+      showLines: "Show lines",
+      hideLines: "Hide lines",
+    },
+    multiEdit: {
+      applied: "Applied",
+      edits: "edits",
+      showEdits: "Show edits",
+      hideEdits: "Hide edits",
+    },
+    search: {
+      searching: "Searching...",
+      found: "Found",
+      files: "files",
+      showFileList: "Show file list",
+      hideFileList: "Hide file list",
+    },
+    ls: {
+      listing: "Listing Files...",
+      listed: "Listed",
+      paths: "paths",
+    },
+    web: {
+      fetching: "Fetching...",
+    },
+    todo: {
+      updating: "Updating todo list...",
+      readFailed: "Failed to read todo list",
+      updateFailed: "Failed to update todo list",
+    },
+    edit: {
+      update: "Update",
+      editing: "Editing...",
+      showDiff: "Show diff",
+      hideDiff: "Hide diff",
+    },
+    task: {
+      tools: "tools",
+      showAllTools: "Show all tools",
+      showLessTools: "Show less",
+      showingAllTools: "Showing all tools",
+    },
+    plan: {
+      noContent: "(No plan content available)",
+    },
+    followUp: {
+      start: "Start",
+    },
+    lines: {
+      noOutput: "(no output)",
+      more: "more lines",
+    },
+  },
+  filesChanged: {
+    title: "Files Changed",
+  },
+  companion: {
+    title: "AI Chat",
+    openInHome: "Open in AI Chat",
+    expand: "Expand AI Chat",
+    restore: "Restore companion panel",
+    collapse: "Collapse AI Chat",
+    dockTerminal: 'Dock terminal below',
+    undockTerminal: 'Restore terminal to side',
+    resizeTerminalDock: 'Resize terminal dock',
+    switchThread: "Switch thread",
+    tabs: {
+      label: "Companion panel",
+      aiChat: "AI Chat",
+      terminal: "Terminal",
+    },
+    terminal: {
+      openFull: "Open full terminal",
+      status: {
+        error: "Terminal connection error",
+      },
+    },
+    empty:
+      "No active thread yet. Start a new thread to chat with the workspace agent.",
+  },
+  error: {
+    agentFailed: {
+      title: "{{agentName}} exited with an error",
+      description: "The agent failed while running this task. Review the details and retry when ready.",
+    },
+    promptTooLong: {
+      title: "Context window full",
+      description: "This conversation is too large for the selected model. Compact or clear context before continuing.",
+    },
+    invalidToolSelection: {
+      title: "Tool settings are no longer compatible",
+      description: "This thread uses an agent or model setting that is no longer available. Adjust the settings and send again.",
+    },
+    runtimeRestarted: {
+      title: "Runtime restarted",
+      description: "The workspace runtime restarted during this task. Retry this task when ready.",
+    },
+    queuedMessageDrainFailed: {
+      title: "Follow-up message failed",
+      description: "The system could not continue with a queued message. Retry this task when ready.",
+    },
+    unknown: {
+      title: "An error occurred",
+      description: "The agent hit an unclassified error while running this task. Review the details and retry when ready.",
+    },
+    details: {
+      show: "Show details",
+      hide: "Hide details",
+    },
+    retry: "Retry",
+    agent_rate_limit: "The agent is rate limited. Please retry later.",
+    runtime_restarted:
+      "The workspace runtime restarted. Please retry this task.",
+    capabilities_unavailable:
+      "Agent capabilities are unavailable for this workspace.",
+    invalid_tool_selection: "The selected tool, model, or mode is unavailable.",
+    thread_locked: "This thread is locked while a run is active.",
+    use_submit_for_draft: "Submit the draft before posting follow-up messages.",
+    retry_required: "Retry is required before continuing this thread.",
+    invalid_state: "This action is not available for the current thread state.",
+    generic: "Something went wrong. Please try again.",
+  },
+  mock: {
+    threadTitles: {
+      messageShowcase: "AI Chat message showcase",
+      working: "Review workspace startup",
+      queued: "Update Codex settings",
+      complete: "Plan package import flow",
+      error: "Fix OpenCode command",
+      draft: "Draft task",
+    },
+    messages: {
+      systemNotice:
+        "Workspace permissions and runtime settings have been applied.",
+      showcaseUser:
+        "Review the AI Chat home message rendering, including attachments, tools, question forms, and canvas artifacts.",
+      showcaseThinking:
+        "Collecting requirements, checking frontend message components, and preparing the required tool calls.",
+      readResult:
+        "Read ChatView and confirmed where the message list and input area are mounted.",
+      showcaseAgent:
+        "Review complete. This response stays outside the activity toggle as the final agent answer.",
+      showcaseError:
+        "Demo: when a non-blocking tool reports an error, the error appears as a standalone message.",
+      workingUser: "Inspect the app shell startup path.",
+      workingThinking: "Checking route and provider wiring.",
+      queuedFollowUp: "Also verify the right column behavior.",
+      queuedUser: "Prepare the Codex settings update.",
+      completeUser: "Plan the package import flow.",
+      completeAgent: "The plan is ready with the selected option.",
+      errorUser: "Run the OpenCode command.",
+      errorText: "The provider returned a temporary rate-limit error.",
+      draftText: "Draft a follow-up task.",
+    },
+    questionForm: {
+      title: "Choose the import strategy",
+      optionA: "Use the existing registry",
+      optionB: "Create a new package",
+    },
+    canvas: {
+      title: "Workspace home review artifact",
+    },
+  },
+};
+
+export default aiChat;

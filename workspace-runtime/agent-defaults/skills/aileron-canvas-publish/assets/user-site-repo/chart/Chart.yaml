@@ -1,0 +1,6 @@
+apiVersion: v2
+name: aileron-site
+description: Managed Aileron Canvas site runtime
+type: application
+version: 0.1.0-0
+appVersion: pub-00000000000000000000000000000000

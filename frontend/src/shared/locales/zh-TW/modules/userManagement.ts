@@ -1,0 +1,207 @@
+const userManagementTranslations = {
+  navigation: {
+    title: '使用者管理',
+    mainLabel: '使用者管理主要內容',
+    users: '使用者',
+    groups: '使用者群組',
+    statusSummary: '狀態摘要',
+    pendingIssues: '待處理',
+  },
+  filters: {
+    all: '全部',
+    role: '角色',
+    accountState: '帳號狀態',
+    roleStatus: '角色狀態',
+    memberCount: '成員數',
+    hasDescription: '描述',
+    updatedWithinDays: '更新時間',
+    source: '來源',
+    clearAll: '清除全部',
+    advanced: '篩選',
+    advancedDescription: '設定較少使用的精準條件',
+    summary: '目前顯示 {{count}} / {{total}} 筆',
+    roleStatusValue: {
+      valid: '正常',
+      issue: '角色異常',
+    },
+    accountStateValue: {
+      disabled: '已停用',
+    },
+    sourceValue: {
+      manual: '手動加入',
+    },
+    memberCountRange: {
+      empty: '空使用者群組',
+      small: '1-10 位',
+      large: '10 位以上',
+    },
+    description: {
+      withDescription: '有描述',
+      withoutDescription: '無描述',
+    },
+    updated: {
+      '7d': '7 天內',
+      '30d': '30 天內',
+    },
+  },
+  sort: {
+    label: '排序',
+    users: {
+      nameAsc: '帳號 A-Z',
+      createdDesc: '最近建立',
+      updatedDesc: '最近更新',
+    },
+    groups: {
+      nameAsc: '群組名稱 A-Z',
+      membersDesc: '成員數多到少',
+      updatedDesc: '最近更新',
+    },
+    members: {
+      usernameAsc: '帳號 A-Z',
+      emailAsc: 'Email A-Z',
+      joinedDesc: '最近加入',
+      updatedDesc: '最近更新',
+    },
+  },
+  roles: {
+    admin: '系統管理者',
+    member: '一般成員',
+    none: '未指派角色',
+  },
+  roleIssues: {
+    valid: '正常',
+    missing: '缺少角色',
+    multiple: '多重角色',
+  },
+  values: {
+    yes: '是',
+    no: '否',
+    notAvailable: '無資料',
+  },
+  errors: {
+    title: '使用者管理操作失敗',
+    invalidRequest: '請檢查送出的欄位後再試一次。',
+    forbidden: '你沒有管理使用者的權限。',
+    userNotFound: '此使用者已不存在。',
+    invalidPageRequest: '使用者列表的篩選或分頁條件無效。',
+    invalidRole: '請選擇支援的平台角色。',
+    roleProvisioningRequired: '平台角色尚未建置，請聯絡維運人員。',
+    roleStateInvalid: '請先修復此使用者的角色狀態。',
+    lastAdminForbidden: '不可降級最後一位有效管理者。',
+    selfDemoteForbidden: '不可降級自己的管理者帳號。',
+    localShadowSyncFailed: '無法安全儲存本地使用者快照。',
+    identitySyncFailed: '無法安全同步身分提供者與本地快照。',
+    identityUnavailable: '身分提供者暫時無法使用，請稍後再試。',
+    reconciliationFailed: '身分同步未完成，請稍後再試。',
+    identityFreshnessExpired: '身分資料已過期，請等待同步後再試。',
+    groupInvalidRequest: '請檢查群組操作內容後再試一次。',
+    groupDuplicateName: '已有同名的使用者群組。',
+    groupNotFound: '此使用者群組已不存在。',
+    groupMemberNotFound: '一或多位選取的使用者已不存在。',
+    groupMemberNotAuthorizable: '一或多位選取的使用者目前不可被授權。',
+    groupInvalidPageRequest: '群組列表的篩選或分頁條件無效。',
+  },
+  pagination: {
+    range: '顯示 {{start}}-{{end}} / 共 {{total}} 筆',
+    pageSize: '每頁筆數',
+    previous: '上一頁',
+    next: '下一頁',
+  },
+  users: {
+    title: '使用者',
+    roleIssuesTitle: '角色異常使用者',
+    count: '{{count}} 位使用者',
+    searchLabel: '搜尋使用者',
+    searchPlaceholder: '以 Email、帳號或姓名搜尋',
+    fields: {
+      issuer: '發行者',
+      subject: '主體',
+      username: '帳號',
+      localActive: '本地啟用',
+      identityEnabled: '身分提供者啟用',
+    },
+    accountState: {
+      active: '啟用中',
+      local_disabled: '產品端停用',
+      identity_disabled: '身分提供者停用',
+      sync_failed: '同步失敗',
+      shadow_missing: '缺少本地 shadow',
+    },
+    actions: {
+      assignRole: '指派角色',
+    },
+    assignRoleDialog: {
+      title: '指派平台角色',
+      description: '替換本地平台角色；身分提供者仍是權威來源。',
+      fields: {
+        role: '平台角色',
+      },
+      actions: {
+        cancel: '取消',
+        save: '儲存角色',
+      },
+    },
+  },
+  groups: {
+    title: '使用者群組',
+    count: '{{count}} 個群組',
+    searchLabel: '搜尋使用者群組',
+    searchPlaceholder: '以群組名稱或描述搜尋',
+    members: {
+      title: '成員',
+      searchLabel: '搜尋群組成員',
+      searchPlaceholder: '以 Email、帳號或姓名搜尋成員',
+    },
+    addUsers: {
+      title: '加入使用者',
+      description: '從尚未加入此群組的使用者中搜尋並批次加入。',
+      searchLabel: '搜尋可加入的使用者',
+      searchPlaceholder: '以 Email、帳號或姓名搜尋全系統使用者',
+      actions: {
+        cancel: '取消',
+      },
+    },
+    membership: {
+      member: '已加入',
+      not_member: '未加入',
+    },
+    summary: {
+      title: '群組摘要',
+      memberCount: '成員數',
+      sharedKnowledgeBases: '共享知識庫',
+      updatedAt: '最後更新',
+      permissionImpact: '成員變更會影響此群組已被授權的知識庫存取；實際掛載權限依 runtime 收斂狀態生效。',
+    },
+    selection: {
+      count: '已選 {{count}} 位',
+    },
+    actions: {
+      create: '建立群組',
+      addMember: '加入成員',
+      addSelectedMembers: '加入已選成員',
+      removeSelectedMembers: '移除已選成員',
+      manageMembers: '管理成員',
+      backToGroups: '返回群組',
+    },
+    createDialog: {
+      title: '建立使用者群組',
+      description: '先建立可集中管理成員的使用者群組，再到群組成員工作區管理使用者。',
+      fields: {
+        name: '群組名稱',
+        description: '描述',
+      },
+      placeholders: {
+        name: 'Platform Team',
+        description: 'Shared platform knowledge access',
+      },
+      previewTitle: '建立後狀態',
+      previewDescription: '群組會加入列表並維持 0 位成員，成員管理會在完整工作區操作。',
+      actions: {
+        cancel: '取消',
+        create: '建立群組',
+      },
+    },
+  },
+};
+
+export default userManagementTranslations;

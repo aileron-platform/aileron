@@ -1,0 +1,87 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aileron.fullname" . }}-postgres-bootstrap
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres-bootstrap
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentPodLabels" (dict "component" "postgres-bootstrap" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: init-sql
+          configMap:
+            name: {{ include "aileron.fullname" . }}-postgres-init
+        - name: tmp
+          emptyDir: {}
+        - name: postgres-credentials
+          secret:
+            secretName: {{ .Values.platformSecrets.existingSecretName }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.platformSecrets.postgresUsernameKey }}
+                path: postgres-username
+              - key: {{ .Values.platformSecrets.postgresPasswordKey }}
+                path: postgres-password
+      containers:
+        - name: postgres-bootstrap
+          image: {{ include "aileron.imageReference" (dict "name" "postgres.image" "image" .Values.postgres.image "production" .Values.security.requireStrongSecrets) | quote }}
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          env:
+            - name: PGHOST
+              value: {{ include "aileron.fullname" . }}-postgres
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER_FILE
+              value: /run/secrets/aileron/postgres-username
+            - name: PGPASSWORD_FILE
+              value: /run/secrets/aileron/postgres-password
+            - name: APP_DATABASE
+              value: {{ .Values.postgres.auth.appDatabase | quote }}
+          volumeMounts:
+            - name: init-sql
+              mountPath: /init-sql
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: postgres-credentials
+              mountPath: /run/secrets/aileron
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - sh
+            - -lc
+            - |
+              set -e
+              PGUSER=$(cat "$PGUSER_FILE")
+              PGPASSWORD=$(cat "$PGPASSWORD_FILE")
+              export PGUSER PGPASSWORD
+              until pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER"; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+
+              echo "==> Running init schema on $APP_DATABASE..."
+              psql -v ON_ERROR_STOP=1 -d "$APP_DATABASE" -f /init-sql/001_init_schema.sql
+              echo "==> Bootstrap complete."
+{{- end }}

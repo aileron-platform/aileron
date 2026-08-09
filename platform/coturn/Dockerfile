@@ -1,0 +1,3 @@
+FROM coturn/coturn@sha256:908d02955aee04adac06b4b04805de55ca0fda04c2677cb50efa3e8407bb4366
+
+USER 65534:65534

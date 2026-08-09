@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Chrome Extension Diagnostic Tool</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .section {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #4CAF50;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #555;
+      margin-top: 0;
+    }
+    .step {
+      background: #f9f9f9;
+      padding: 15px;
+      margin: 10px 0;
+      border-left: 4px solid #4CAF50;
+    }
+    .warning {
+      background: #fff3cd;
+      border-left-color: #ff9800;
+      color: #856404;
+    }
+    .code {
+      background: #272822;
+      color: #f8f8f2;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+    a {
+      color: #4CAF50;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    ol {
+      line-height: 1.8;
+    }
+    .highlight {
+      background: #ffeb3b;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔍 Chrome Extension Connection Issue Diagnostics</h1>
+
+  <div class="section">
+    <h2>Problem Description</h2>
+    <p>Extension experiences infinite connect/disconnect loop with relay server; server receives numerous repeated connection requests.</p>
+  </div>
+
+  <div class="section">
+    <h2>Step 1: Check Service Worker Instances</h2>
+    <div class="step">
+      <ol>
+        <li>Open new tab and navigate to: <a href="chrome://serviceworker-internals/" target="_blank">chrome://serviceworker-internals/</a></li>
+        <li>Press <span class="highlight">Ctrl+F</span> (Mac: Cmd+F) to search for <code>dev-browser</code> or <code>3002</code></li>
+        <li>Check if there are <strong>multiple service workers</strong> running</li>
+        <li>Record the count of all related service workers</li>
+      </ol>
+    </div>
+
+    <div class="step warning">
+      <strong>⚠️ If multiple instances are found:</strong>
+      <ol>
+        <li>Click the <strong>Unregister</strong> button next to each service worker</li>
+        <li>Wait for all instances to be removed</li>
+        <li>Proceed to Step 2</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Step 2: Completely Reset Extension</h2>
+    <div class="step">
+      <ol>
+        <li>Open new tab and navigate to: <a href="chrome://extensions/" target="_blank">chrome://extensions/</a></li>
+        <li>Locate the <strong>dev-browser</strong> extension</li>
+        <li>Click the <strong>Remove</strong> button to completely remove the extension</li>
+        <li>Close all Chrome windows</li>
+        <li>Restart Chrome</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Step 3: Reload Extension</h2>
+    <div class="step">
+      <ol>
+        <li>Navigate to: <a href="chrome://extensions/" target="_blank">chrome://extensions/</a></li>
+        <li>Enable <strong>Developer mode</strong> in the top-right corner</li>
+        <li>Click <strong>Load unpacked</strong></li>
+        <li>Select folder: <code>/Users/chenshengyang/Documents/aileron/chrome-extension/.output/chrome-mv3</code></li>
+        <li>Confirm it loads only once</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Step 4: Verify Connection</h2>
+    <div class="step">
+      <ol>
+        <li>Click extension icon to open popup</li>
+        <li>Confirm it shows "Disabled" + gray dot</li>
+        <li>Click toggle to enable</li>
+        <li>Should see "Enabled" + orange blinking dot (connecting)</li>
+        <li>After a few seconds, changes to green dot (connected)</li>
+        <li><strong>Should NOT see frequent disconnect/reconnect cycles</strong></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Step 5: Check Service Worker Console</h2>
+    <div class="step">
+      <ol>
+        <li>Locate dev-browser in <a href="chrome://extensions/" target="_blank">chrome://extensions/</a></li>
+        <li>Click the <strong>service worker</strong> link (blue text)</li>
+        <li>Check Console output, should only see:
+          <div class="code">
+[background] Extension initializing at 2026-01-25T...
+ConnectionManager created with client ID: ext-xxxxxxxxx-xxxxx
+          </div>
+        </li>
+        <li>Confirm <span class="highlight">there is only one client ID</span> and it does not repeat</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Step 6: Check Server Logs</h2>
+    <div class="step">
+      <p>Run in terminal:</p>
+      <div class="code">docker logs workspace-runtime-1 --tail 50 -f</div>
+      <p>Should only see:</p>
+      <div class="code">
+[conn-xxxxxxx] Extension WebSocket connection initiated
+[conn-xxxxxxx] Accepting WebSocket...
+[conn-xxxxxxx] WebSocket accepted, registering extension...
+[relay] Extension connected (ws id: xxxxxxxxx)
+      </div>
+      <p><strong>Should NOT see repeated connections or "Extension Replaced" messages</strong></p>
+    </div>
+  </div>
+
+  <div class="section warning">
+    <h2>⚠️ If Problem Persists</h2>
+    <div class="step">
+      <p>Please perform the following checks and report results:</p>
+      <ol>
+        <li>Verify Chrome version (chrome://version/)</li>
+        <li>Check if other extensions or antivirus software are interfering with WebSocket connection</li>
+        <li>Try testing in incognito mode (remember to allow extension to run in incognito)</li>
+        <li>Provide complete output from service worker console</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📋 Checklist</h2>
+    <div class="step">
+      <p>After completion, please confirm:</p>
+      <ul>
+        <li>✓ Only one service worker is running</li>
+        <li>✓ Extension has been completely removed and reloaded</li>
+        <li>✓ Client ID is singular and not repeating</li>
+        <li>✓ Connection is stable, no "Extension Replaced" errors</li>
+        <li>✓ Server logs are normal, no massive repeated connections</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

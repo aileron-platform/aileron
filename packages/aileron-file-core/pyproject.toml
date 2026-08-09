@@ -1,0 +1,25 @@
+[project]
+name = "aileron-file-core"
+version = "0.1.0"
+description = "Shared host filesystem safety primitives for Aileron services"
+requires-python = ">=3.9"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+dev-mode-dirs = ["src"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aileron_file_core"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q --strict-markers --strict-config"

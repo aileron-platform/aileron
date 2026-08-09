@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "queries": [
+    "repository.status",
+    "branch.list",
+    "changes.list",
+    "changes.numstat",
+    "commit.files",
+    "history.list",
+    "diff.get",
+    "blob.get",
+    "remote.settings.get",
+    "lfs.patterns.get"
+  ],
+  "mutations": [
+    "repository.initialize",
+    "repository.clone",
+    "branch.createAndSwitch",
+    "branch.switch",
+    "branch.renameLocal",
+    "branch.deleteLocal",
+    "branch.publish",
+    "changes.stagePaths",
+    "changes.unstagePaths",
+    "changes.stageAll",
+    "changes.unstageAll",
+    "changes.discard",
+    "commit.create",
+    "remote.fetch",
+    "remote.pullFastForward",
+    "remote.push",
+    "remote.settings.update",
+    "conflict.markResolved",
+    "conflict.abort",
+    "commit.revert",
+    "lfs.patterns.update",
+    "lfs.snapshot.preview",
+    "lfs.snapshot.convert",
+    "operation.forceUnlock",
+    "operation.cancel"
+  ],
+  "enums": {
+    "blockingScope": [
+      "working_tree_target",
+      "common_repository"
+    ],
+    "branchKind": [
+      "local",
+      "remote"
+    ],
+    "historyScope": [
+      "current",
+      "all",
+      "local",
+      "remote"
+    ]
+  },
+  "readModels": {
+    "RepositoryStatus": [
+      "isInitialized",
+      "currentBranch",
+      "detachedHead",
+      "headSha",
+      "hasOrigin",
+      "upstream",
+      "ahead",
+      "behind",
+      "hasConflicts",
+      "stagedTotal",
+      "unstagedTotal",
+      "untrackedTotal",
+      "conflictTotal",
+      "operationStatus"
+    ],
+    "BranchSummary": [
+      "name",
+      "displayName",
+      "kind",
+      "isCurrent",
+      "upstream",
+      "ahead",
+      "behind",
+      "checkedOutTarget",
+      "capabilities"
+    ],
+    "OperationStatus": [
+      "isActive",
+      "operation",
+      "actorDisplayName",
+      "startedAt",
+      "blockingScope",
+      "stale",
+      "retryable",
+      "progressCurrent",
+      "progressTotal",
+      "phase",
+      "cancellable",
+      "cancelRequested"
+    ],
+    "PagedChanges": [
+      "staged",
+      "unstaged",
+      "untracked",
+      "conflicts"
+    ],
+    "ChangePage": [
+      "items",
+      "total",
+      "nextCursor",
+      "hasMore"
+    ],
+    "CommitHistoryPage": [
+      "items",
+      "total",
+      "nextCursor",
+      "hasMore",
+      "queryScope"
+    ],
+    "RemoteSettings": [
+      "remoteName",
+      "remoteUrl",
+      "hasOrigin"
+    ],
+    "LfsPatterns": [
+      "patterns"
+    ],
+    "LfsSnapshotPreview": [
+      "matchedTotal",
+      "totalSize",
+      "pathSample"
+    ],
+    "NumstatEntry": [
+      "path",
+      "additions",
+      "deletions",
+      "binary"
+    ]
+  },
+  "errors": [
+    "repository_not_initialized",
+    "repository_dirty",
+    "branch_not_found",
+    "branch_name_invalid",
+    "branch_name_conflict",
+    "branch_checked_out",
+    "branch_unmerged",
+    "branch_default_protected",
+    "upstream_missing",
+    "remote_history_incompatible",
+    "fast_forward_required",
+    "unresolved_conflicts",
+    "git_identity_missing",
+    "operation_locked",
+    "operation_lock_not_stale",
+    "operation_cancelled",
+    "operation_not_cancellable",
+    "lfs_unavailable",
+    "lfs_pattern_invalid",
+    "revert_merge_commit_unsupported",
+    "file_conflict",
+    "permission_denied"
+  ],
+  "errorEnvelope": [
+    "errorCode",
+    "messageKey",
+    "blockingScope",
+    "operationStatus",
+    "stale",
+    "canForceUnlock"
+  ],
+  "forbiddenMutationFields": [
+    "repositoryPath",
+    "actorIdentity",
+    "force",
+    "amend",
+    "commitPaths",
+    "autoStash",
+    "includeUntracked",
+    "hooksBypass"
+  ]
+}

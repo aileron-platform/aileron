@@ -1,0 +1,10 @@
+# Aileron-managed Codex defaults.
+# Runtime-specific sandbox and approval policy are passed by workspace-runtime.
+
+model_reasoning_effort = "medium"
+model_auto_compact_token_limit = 128000
+tool_output_token_limit = 12000
+
+[features]
+shell_snapshot = true
+multi_agent = true

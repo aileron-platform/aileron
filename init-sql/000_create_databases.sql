@@ -1,0 +1,1 @@
+-- Reserved for installation-level PostgreSQL bootstrap.

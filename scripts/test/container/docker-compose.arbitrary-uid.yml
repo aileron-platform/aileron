@@ -1,0 +1,119 @@
+name: aileron-arbitrary-uid
+
+services:
+  operator-image:
+    image: aileron/workspace-operator:kubernetes-arbitrary-uid-test
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        test "$$(id -u)" -ne 0 &&
+        test -x /app/workspace-operator &&
+        exec sleep 3600
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+
+  manager-image:
+    image: aileron/workspace-manager:kubernetes-arbitrary-uid-test
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        test "$$(id -u)" -ne 0 &&
+        test -x /workspace-manager/.venv/bin/python &&
+        test -x /workspace-manager/.venv/bin/celery &&
+        exec sleep 3600
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - manager-state:/state
+      - storage:/host/knowledge-bases
+
+  runtime-image:
+    image: aileron/workspace-runtime:kubernetes-arbitrary-uid-test
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        test "$$(id -u)" -ne 0 &&
+        test -x /workspace-runtime/.venv/bin/python &&
+        test -x /opt/terminal-service/bin/terminal-service &&
+        ! command -v sshd >/dev/null 2>&1 &&
+        ! command -v dockerd >/dev/null 2>&1 &&
+        exec sleep 3600
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - runtime-workspace:/workspace
+      - runtime-home:/home/developer
+      - storage:/knowledge:ro
+
+  frontend-image:
+    image: aileron/workspace-ui:kubernetes-arbitrary-uid-test
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        test "$$(id -u)" -ne 0 &&
+        exec sleep 3600
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+
+  browser-image:
+    image: aileron/workspace-chrome:kubernetes-arbitrary-uid-test
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  canvas-image:
+    image: aileron/workspace-canvas:kubernetes-arbitrary-uid-test
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  arbitrary-uid-probe:
+    image: docker:27-cli
+    depends_on:
+      operator-image:
+        condition: service_started
+      manager-image:
+        condition: service_started
+      runtime-image:
+        condition: service_started
+      frontend-image:
+        condition: service_started
+      browser-image:
+        condition: service_started
+      canvas-image:
+        condition: service_started
+    environment:
+      OPERATOR_IMAGE: aileron/workspace-operator:kubernetes-arbitrary-uid-test
+      MANAGER_IMAGE: aileron/workspace-manager:kubernetes-arbitrary-uid-test
+      RUNTIME_IMAGE: aileron/workspace-runtime:kubernetes-arbitrary-uid-test
+      FRONTEND_IMAGE: aileron/workspace-ui:kubernetes-arbitrary-uid-test
+      BROWSER_IMAGE: aileron/workspace-chrome:kubernetes-arbitrary-uid-test
+      CANVAS_IMAGE: aileron/workspace-canvas:kubernetes-arbitrary-uid-test
+      MANAGER_STATE_VOLUME: aileron-arbitrary-uid-manager-state
+      RUNTIME_WORKSPACE_VOLUME: aileron-arbitrary-uid-runtime-workspace
+      RUNTIME_HOME_VOLUME: aileron-arbitrary-uid-runtime-home
+      STORAGE_VOLUME: aileron-arbitrary-uid-storage
+      STORAGE_GID: "2000"
+    entrypoint:
+      - /repo/scripts/test/container/assert-kubernetes-arbitrary-uid-images.sh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../../..:/repo:ro
+
+volumes:
+  manager-state:
+    name: aileron-arbitrary-uid-manager-state
+  runtime-workspace:
+    name: aileron-arbitrary-uid-runtime-workspace
+  runtime-home:
+    name: aileron-arbitrary-uid-runtime-home
+  storage:
+    name: aileron-arbitrary-uid-storage

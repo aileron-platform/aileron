@@ -1,0 +1,118 @@
+{{- if and .Values.kubernetes.enabled .Values.kubernetes.storageVerification.enabled }}
+{{- $workspaceVerificationStorageClass := required "kubernetes.storageVerification.workspaceStorageClassName is required when storage verification is enabled" (.Values.kubernetes.storageVerification.workspaceStorageClassName | trim) }}
+{{- $managerStateVerificationStorageClass := required "kubernetes.storageVerification.managerStateStorageClassName is required when storage verification is enabled" (.Values.kubernetes.storageVerification.managerStateStorageClassName | trim) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aileron.fullname" . }}-storage-verification
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage-verification
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentPodLabels" (dict "component" "storage-verification" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+        {{- with .Values.kubernetes.platformStorageGid }}
+        fsGroup: {{ . }}
+        fsGroupChangePolicy: OnRootMismatch
+        {{- end }}
+      containers:
+        - name: verify-storage-contract
+          image: {{ include "aileron.imageReference" (dict "name" "workspaceManager.image" "image" .Values.workspaceManager.image "production" .Values.security.requireStrongSecrets) | quote }}
+          imagePullPolicy: {{ .Values.workspaceManager.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              verify_root() {
+                root="$1"
+                label="$2"
+                root_gid="$(stat -c '%g' "${root}")"
+                root_mode="$(stat -c '%a' "${root}")"
+                if [ "$((0${root_mode} & 02000))" -eq 0 ]; then
+                  echo "${label} root is missing the setgid bit" >&2
+                  exit 1
+                fi
+                if [ "$((0${root_mode} & 0002))" -ne 0 ]; then
+                  echo "${label} root must not be writable by other users" >&2
+                  exit 1
+                fi
+
+                probe_dir="${root}/.aileron-storage-probe-${HOSTNAME}"
+                probe_file="${probe_dir}/write-probe"
+                mkdir "${probe_dir}"
+                printf '%s\n' "${HOSTNAME}" > "${probe_file}"
+                test "$(cat "${probe_file}")" = "${HOSTNAME}"
+                test "$(stat -c '%g' "${probe_dir}")" = "${root_gid}"
+                test "$(stat -c '%g' "${probe_file}")" = "${root_gid}"
+                rm "${probe_file}"
+                rmdir "${probe_dir}"
+              }
+
+              umask 0007
+              verify_root /knowledge-bases knowledge-bases
+              verify_root /workspace-data workspace-data
+              verify_root /manager-state manager-state
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: knowledge-bases
+              mountPath: /knowledge-bases
+            - name: workspace-data
+              mountPath: /workspace-data
+            - name: manager-state
+              mountPath: /manager-state
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: knowledge-bases
+          persistentVolumeClaim:
+            claimName: {{ .Values.kubernetes.knowledgeBases.pvcName }}
+        - name: workspace-data
+          ephemeral:
+            volumeClaimTemplate:
+              metadata:
+                labels:
+                  app.kubernetes.io/component: workspace-storage-verification
+              spec:
+                accessModes:
+                  - ReadWriteMany
+                resources:
+                  requests:
+                    storage: {{ .Values.kubernetes.storageVerification.workspaceSize | quote }}
+                storageClassName: {{ $workspaceVerificationStorageClass | quote }}
+        - name: manager-state
+          ephemeral:
+            volumeClaimTemplate:
+              metadata:
+                labels:
+                  app.kubernetes.io/component: manager-state-storage-verification
+              spec:
+                accessModes:
+                  {{- toYaml .Values.kubernetes.managerState.accessModes | nindent 18 }}
+                resources:
+                  requests:
+                    storage: {{ .Values.kubernetes.storageVerification.managerStateSize | quote }}
+                storageClassName: {{ $managerStateVerificationStorageClass | quote }}
+        - name: tmp
+          emptyDir: {}
+{{- end }}

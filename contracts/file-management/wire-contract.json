@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "conflictStrategies": ["keep-both", "replace", "skip", "cancel"],
+  "operations": ["upload", "paste", "extract"],
+  "routes": {
+    "preflightSuffix": "/files/conflicts/preflight",
+    "uploadSuffix": "/files/upload",
+    "pasteSuffix": "/files/paste",
+    "extractSuffix": "/files/extract"
+  },
+  "preflightRequest": {
+    "required": ["operation", "targetPath"],
+    "fields": {
+      "operation": "upload | paste | extract",
+      "targetPath": "string",
+      "sources": "FileConflictSource[] | null",
+      "archivePath": "string | null"
+    }
+  },
+  "fileConflictSource": {
+    "required": ["sourcePath", "entryType"],
+    "fields": {
+      "sourcePath": "string",
+      "entryType": "file | directory"
+    }
+  },
+  "preflightResponse": {
+    "required": ["conflicts", "total"],
+    "fields": {
+      "conflicts": "FileConflictItem[]",
+      "total": "integer"
+    }
+  },
+  "fileConflictItem": {
+    "required": ["sourcePath", "targetPath", "sourceType", "targetType", "canReplace"],
+    "fields": {
+      "sourcePath": "string",
+      "targetPath": "string",
+      "sourceType": "file | directory",
+      "targetType": "file | directory",
+      "canReplace": "boolean"
+    }
+  },
+  "executionConflictFields": {
+    "required": ["defaultStrategy", "resolutions"],
+    "fields": {
+      "defaultStrategy": "keep-both | replace | skip | cancel",
+      "resolutions": "FileConflictResolution[]"
+    }
+  },
+  "fileConflictResolution": {
+    "required": ["sourcePath", "strategy"],
+    "fields": {
+      "sourcePath": "string",
+      "strategy": "keep-both | replace | skip | cancel"
+    }
+  },
+  "batchResult": {
+    "required": ["items", "total", "succeeded", "skipped", "failed"],
+    "fields": {
+      "items": "FileConflictResultItem[]",
+      "total": "integer",
+      "succeeded": "integer",
+      "skipped": "integer",
+      "failed": "integer"
+    }
+  },
+  "fileConflictResultItem": {
+    "required": ["sourcePath", "finalPath", "status", "size", "type", "error"],
+    "fields": {
+      "sourcePath": "string",
+      "finalPath": "string | null",
+      "status": "created | kept-both | replaced | merged | skipped | cancelled | failed",
+      "size": "integer",
+      "type": "file | directory",
+      "error": "string | null"
+    }
+  },
+  "rules": {
+    "createRename": "Return FILE_ALREADY_EXISTS and keep the original dialog open.",
+    "preflight": "Upload, paste, and extract execute only after one batch preflight.",
+    "cancel": "Cancel prevents every mutation in the batch.",
+    "keepBoth": "The backend allocates final paths atomically with the shared naming rule.",
+    "replaceFile": "Replace overwrites a file only when source and target types match.",
+    "replaceDirectory": "Replace merges directories and never deletes the existing directory first.",
+    "typeConflict": "Replace is forbidden when source and target types differ.",
+    "compatibility": "rename, overwrite, reject, silent defaults, success booleans, filename, and path result aliases are forbidden."
+  }
+}

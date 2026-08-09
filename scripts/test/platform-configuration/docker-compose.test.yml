@@ -1,0 +1,9 @@
+services:
+  platform-configuration-validator-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      REPOSITORY_ROOT: /repo
+    volumes:
+      - ../../..:/repo:ro

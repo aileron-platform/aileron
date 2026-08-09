@@ -1,0 +1,1200 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "platformPublicOrigin"
+  ],
+  "properties": {
+    "platformPublicOrigin": {
+      "type": "string",
+      "pattern": "^https?://(?:localhost|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)(?::[1-9][0-9]{0,4})?$"
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requireStrongSecrets"],
+      "properties": {
+        "requireStrongSecrets": { "type": "boolean" }
+      }
+    },
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "publicRouting": {
+      "not": {}
+    },
+    "platformSecrets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["existingSecretName", "databaseUrlKey", "runtimeDatabaseCredentialKey", "postgresUsernameKey", "postgresPasswordKey"],
+      "properties": {
+        "existingSecretName": { "$ref": "#/definitions/kubernetesName" },
+        "databaseUrlKey": { "$ref": "#/definitions/secretDataKey" },
+        "runtimeDatabaseCredentialKey": { "$ref": "#/definitions/secretDataKey" },
+        "postgresUsernameKey": { "$ref": "#/definitions/secretDataKey" },
+        "postgresPasswordKey": { "$ref": "#/definitions/secretDataKey" }
+      }
+    },
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "imagePullSecrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "storageClass": {
+          "type": "string"
+        }
+      }
+    },
+    "canvasPublish": {
+      "not": {}
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "className",
+        "useDefaultClass",
+        "tlsMode",
+        "tlsSecretName",
+        "annotations"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "className": {
+          "type": "string"
+        },
+        "useDefaultClass": {
+          "type": "boolean"
+        },
+        "tlsMode": {
+          "type": "string",
+          "enum": [
+            "disabled",
+            "kubernetesSecret",
+            "controllerManaged"
+          ]
+        },
+        "tlsSecretName": {
+          "type": "string"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "kubernetes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workspaceDefaults"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "provisioner": { "const": "kubernetes" },
+        "workspaceRuntimeNamespace": { "$ref": "#/definitions/kubernetesName" },
+        "platformStorageGid": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "browserImage": {
+          "$ref": "#/definitions/imageReference"
+        },
+        "canvasImage": {
+          "$ref": "#/definitions/imageReference"
+        },
+        "workspaceData": {
+          "$ref": "#/definitions/storageProfile"
+        },
+        "runtimeHome": {
+          "$ref": "#/definitions/runtimeHomeStorageProfile"
+        },
+        "knowledgeBases": {
+          "$ref": "#/definitions/storageProfile"
+        },
+        "managerState": {
+          "$ref": "#/definitions/storageProfile"
+        },
+        "workspaceDefaults": {
+          "$ref": "#/definitions/workspaceExecutionPlaneResources"
+        },
+        "storageVerification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "workspaceStorageClassName",
+            "managerStateStorageClassName",
+            "workspaceSize",
+            "managerStateSize"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "workspaceStorageClassName": {
+              "$ref": "#/definitions/optionalStorageClassName"
+            },
+            "managerStateStorageClassName": {
+              "$ref": "#/definitions/optionalStorageClassName"
+            },
+            "workspaceSize": {
+              "$ref": "#/definitions/positiveKubernetesQuantity"
+            },
+            "managerStateSize": {
+              "$ref": "#/definitions/positiveKubernetesQuantity"
+            }
+          }
+        }
+      }
+    },
+    "runtimeAssertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issuer", "activeKid", "privateKeySecretName", "privateKeySecretKey", "publicKeySetSecretName", "publicKeySetSecretKey"],
+      "properties": {
+        "issuer": { "type": "string", "minLength": 1 },
+        "activeKid": { "type": "string", "minLength": 1 },
+        "privateKeySecretName": { "$ref": "#/definitions/kubernetesName" },
+        "privateKeySecretKey": { "$ref": "#/definitions/secretDataKey" },
+        "publicKeySetSecretName": { "$ref": "#/definitions/kubernetesName" },
+        "publicKeySetSecretKey": { "$ref": "#/definitions/secretDataKey" }
+      }
+    },
+    "cilium": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["admin"],
+      "properties": {
+        "admin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "subject", "username", "email", "resources"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "subject": { "type": "string", "format": "uuid" },
+            "username": { "type": "string", "minLength": 1 },
+            "email": { "type": "string", "format": "email" },
+            "resources": { "$ref": "#/definitions/containerResources" }
+          }
+        }
+      }
+    },
+    "frontend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "replicaCount", "image", "service", "resources"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicaCount": { "type": "integer", "minimum": 0 },
+        "image": {
+          "$ref": "#/definitions/imageReference"
+        },
+        "service": { "type": "object" },
+        "resources": { "type": "object" }
+      }
+    },
+    "oidc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issuerUrl",
+        "clientSecretName",
+        "clientSecretKey",
+        "caSecretName",
+        "caSecretKey",
+        "clientId"
+      ],
+      "properties": {
+        "issuerUrl": { "type": "string" },
+        "clientSecretName": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" },
+        "clientSecretKey": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+        "caSecretName": { "type": "string" },
+        "caSecretKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+        "clientId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "workspaceManager": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "replicaCount", "image", "serviceAccount", "service", "resources"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicaCount": { "type": "integer", "minimum": 0 },
+        "image": {
+          "$ref": "#/definitions/imageReference"
+        },
+        "serviceAccount": { "type": "object" },
+        "service": { "type": "object" },
+        "resources": { "type": "object" }
+      }
+    },
+    "workspaceOperator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "firewallAttestor"
+      ],
+      "properties": {
+        "env": { "not": {} },
+        "enabled": { "type": "boolean" },
+        "replicaCount": { "type": "integer", "minimum": 0 },
+        "runtimeImage": {
+          "$ref": "#/definitions/imageReference"
+        },
+        "image": {
+          "$ref": "#/definitions/imageReference"
+        },
+        "serviceAccount": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["create", "name"],
+          "properties": {
+            "create": { "type": "boolean" },
+            "name": { "type": "string" }
+          }
+        },
+        "resources": { "type": "object" },
+        "rbac": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["create"],
+          "properties": {
+            "create": { "type": "boolean" }
+          }
+        },
+        "firewallAttestor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "socketPath",
+            "pollInterval",
+            "maxAge",
+            "serviceAccount",
+            "nodeSelector",
+            "tolerations",
+            "resources"
+          ],
+          "properties": {
+            "socketPath": {
+              "type": "string",
+              "pattern": "^/.+\\.sock$"
+            },
+            "pollInterval": {
+              "$ref": "#/definitions/positiveGoDuration"
+            },
+            "maxAge": {
+              "$ref": "#/definitions/positiveGoDuration"
+            },
+            "serviceAccount": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "create",
+                "name"
+              ],
+              "properties": {
+                "create": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            },
+            "nodeSelector": {
+              "type": "object"
+            },
+            "tolerations": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "resources": {
+              "$ref": "#/definitions/containerResources"
+            }
+          }
+        }
+      }
+    },
+    "workspaceRuntimePrepuller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "nodeSelector", "tolerations", "resources"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "nodeSelector": { "type": "object" },
+        "tolerations": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "resources": { "type": "object" }
+      }
+    },
+    "browserCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "existingSecretName",
+        "key",
+        "revision"
+      ],
+      "properties": {
+        "existingSecretName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "postgres": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "runAsUser": { "type": ["integer", "null"], "minimum": 1 },
+        "image": {
+          "$ref": "#/definitions/imageReference"
+        },
+        "persistence": {
+          "$ref": "#/definitions/persistenceProfile"
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["port"],
+          "properties": {
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          }
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["appDatabase"],
+          "properties": {
+            "appDatabase": { "type": "string", "minLength": 1 }
+          }
+        },
+        "resources": { "type": "object" }
+      }
+    },
+    "redis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": {
+          "$ref": "#/definitions/imageReference"
+        },
+        "persistence": {
+          "$ref": "#/definitions/persistenceProfile"
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["port"],
+          "properties": {
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          }
+        },
+        "resources": { "type": "object" },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotations"],
+      "properties": {
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "firewall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seed"
+      ],
+      "properties": {
+        "seed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "workspace",
+            "browser"
+          ],
+          "properties": {
+            "workspace": {
+              "$ref": "#/definitions/firewallRule"
+            },
+            "browser": {
+              "$ref": "#/definitions/firewallRule"
+            }
+          }
+        }
+      }
+    },
+    "turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "existingSecretName",
+        "backendIceServersKey",
+        "frontendIceServersKey",
+        "restSharedSecretKey",
+        "credentialRevision",
+        "profile"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "existingSecretName": {
+          "$ref": "#/definitions/kubernetesName"
+        },
+        "backendIceServersKey": {
+          "$ref": "#/definitions/secretDataKey"
+        },
+        "frontendIceServersKey": {
+          "$ref": "#/definitions/secretDataKey"
+        },
+        "restSharedSecretKey": {
+          "$ref": "#/definitions/secretDataKey"
+        },
+        "credentialRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profile": {
+          "$ref": "#/definitions/turnReachabilityProfile"
+        }
+      }
+    },
+    "connectivityEvidenceGateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "installationId",
+        "auth",
+        "hostAgent",
+        "resources"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "installationId": { "type": "string", "minLength": 1 },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["existingSecretName", "internalTokenKey", "agentTokensJsonKey", "probeIceServersJsonKey", "agentTokenKeyPrefix"],
+          "properties": {
+            "existingSecretName": { "$ref": "#/definitions/kubernetesName" },
+            "internalTokenKey": { "$ref": "#/definitions/secretDataKey" },
+            "agentTokensJsonKey": { "$ref": "#/definitions/secretDataKey" },
+            "probeIceServersJsonKey": { "$ref": "#/definitions/secretDataKey" },
+            "agentTokenKeyPrefix": { "type": "string", "minLength": 1, "pattern": "^[-._a-zA-Z0-9]+$" }
+          }
+        },
+        "hostAgent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "vantageId", "tls", "nodeSelector", "tolerations", "resources"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "vantageId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+            },
+            "tls": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["caSecretName", "caSecretKey"],
+              "properties": {
+                "caSecretName": {
+                  "type": "string",
+                  "maxLength": 253,
+                  "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                },
+                "caSecretKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^[-._a-zA-Z0-9]+$"
+                }
+              }
+            },
+            "nodeSelector": { "type": "object" },
+            "tolerations": {
+              "type": "array",
+              "items": { "type": "object" }
+            },
+            "resources": { "type": "object" }
+          }
+        },
+        "resources": { "type": "object" }
+      }
+    },
+    "coturn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "namespace",
+        "frontendHost",
+        "image",
+        "listenerPort",
+        "realm",
+        "auth",
+        "nodeSelector",
+        "tolerations",
+        "resources"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "frontendHost": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image": {
+          "$ref": "#/definitions/imageReference"
+        },
+        "listenerPort": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "realm": {
+          "type": "string",
+          "minLength": 1
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "existingSecretName",
+            "usernameKey",
+            "credentialSecretKey",
+            "probeUsernameKey",
+            "probeCredentialKey"
+          ],
+          "properties": {
+            "existingSecretName": { "$ref": "#/definitions/kubernetesName" },
+            "usernameKey": { "$ref": "#/definitions/secretDataKey" },
+            "credentialSecretKey": { "$ref": "#/definitions/secretDataKey" },
+            "probeUsernameKey": { "$ref": "#/definitions/secretDataKey" },
+            "probeCredentialKey": { "$ref": "#/definitions/secretDataKey" }
+          }
+        },
+        "nodeSelector": {
+          "type": "object"
+        },
+        "tolerations": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "resources": {
+          "type": "object"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "positiveGoDuration": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(?:ms|s|m)$"
+    },
+    "containerResources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requests",
+        "limits"
+      ],
+      "properties": {
+        "requests": {
+          "$ref": "#/definitions/workspaceResourceValues"
+        },
+        "limits": {
+          "$ref": "#/definitions/workspaceResourceValues"
+        }
+      }
+    },
+    "imageReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "digest",
+        "tag"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      }
+    },
+    "optionalStorageClassName": {
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^$|^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+    },
+    "optionalKubernetesName": {
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+    },
+    "kubernetesName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+    },
+    "turnReachabilityProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "policyBackend",
+        "backend",
+        "frontend",
+        "credentialIssuer",
+        "evidence"
+      ],
+      "properties": {
+        "contractVersion": {
+          "const": "browser-connectivity/v1"
+        },
+        "policyBackend": {
+          "type": "string",
+          "enum": [
+            "cilium",
+            "kubernetes",
+            "unenforced"
+          ]
+        },
+        "backend": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "urls",
+            "controlDestination",
+            "relayDestination",
+            "relayPortRange"
+          ],
+          "properties": {
+            "urls": {
+              "$ref": "#/definitions/turnURLs"
+            },
+            "controlDestination": {
+              "$ref": "#/definitions/turnPolicyDestination"
+            },
+            "relayDestination": {
+              "$ref": "#/definitions/turnPolicyDestination"
+            },
+            "relayPortRange": {
+              "$ref": "#/definitions/turnRelayPortRange"
+            }
+          }
+        },
+        "frontend": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "urls"
+          ],
+          "properties": {
+            "urls": {
+              "$ref": "#/definitions/turnURLs"
+            }
+          }
+        },
+        "credentialIssuer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "ttlSeconds"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["turnRest", "staticSecret"]
+            },
+            "ttlSeconds": {
+              "type": "integer",
+              "minimum": 60
+            }
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "intervalSeconds",
+            "ttlSeconds",
+            "requiredFrontendVantages"
+          ],
+          "properties": {
+            "intervalSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "ttlSeconds": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "requiredFrontendVantages": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "turnURLs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[tT][uU][rR][nN][sS]?:"
+      }
+    },
+    "turnRelayPortRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min",
+        "max"
+      ],
+      "properties": {
+        "min": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        }
+      }
+    },
+    "turnPolicyDestination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ciliumEntities",
+            "cidrs",
+            "namespacePods",
+            "fqdns",
+            "unenforced"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "podLabels": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "positiveKubernetesQuantity": {
+      "type": "string",
+      "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]*)?|0\\.0*[1-9][0-9]*|\\.0*[1-9][0-9]*)(?:[KMGTPE]i|[eE][+-]?[0-9]+|m|k|M|G|T|P|E)?$"
+    },
+    "secretDataKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^[-._a-zA-Z0-9]+$"
+    },
+    "storageProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pvcName": { "$ref": "#/definitions/kubernetesName" },
+        "size": { "$ref": "#/definitions/positiveKubernetesQuantity" },
+        "accessModes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany", "ReadWriteOncePod"]
+          }
+        },
+        "storageClassName": {
+          "$ref": "#/definitions/optionalStorageClassName"
+        }
+      }
+    },
+    "runtimeHomeStorageProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "size",
+        "accessMode",
+        "storageClassName"
+      ],
+      "properties": {
+        "size": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accessMode": {
+          "type": "string",
+          "enum": [
+            "ReadWriteOnce",
+            "ReadWriteMany"
+          ]
+        },
+        "storageClassName": {
+          "$ref": "#/definitions/optionalStorageClassName"
+        }
+      }
+    },
+    "persistenceProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "size": { "$ref": "#/definitions/positiveKubernetesQuantity" },
+        "accessModes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany", "ReadWriteOncePod"]
+          }
+        },
+        "storageClassName": {
+          "$ref": "#/definitions/optionalStorageClassName"
+        }
+      }
+    },
+    "workspaceExecutionPlaneResources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime",
+        "browser",
+        "canvas"
+      ],
+      "properties": {
+        "runtime": {
+          "$ref": "#/definitions/runtimeResourceProfile"
+        },
+        "browser": {
+          "$ref": "#/definitions/browserResourceProfile"
+        },
+        "canvas": {
+          "$ref": "#/definitions/canvasResourceProfile"
+        }
+      }
+    },
+    "runtimeResourceProfile": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/workspaceResourceProfile"
+        },
+        {
+          "properties": {
+            "resources": {
+              "properties": {
+                "requests": {
+                  "properties": {
+                    "cpu": {
+                      "const": "500m"
+                    },
+                    "memory": {
+                      "const": "1Gi"
+                    }
+                  }
+                },
+                "limits": {
+                  "properties": {
+                    "cpu": {
+                      "const": "2000m"
+                    },
+                    "memory": {
+                      "const": "3Gi"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "browserResourceProfile": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/workspaceResourceProfile"
+        },
+        {
+          "properties": {
+            "resources": {
+              "properties": {
+                "requests": {
+                  "properties": {
+                    "cpu": {
+                      "const": "500m"
+                    },
+                    "memory": {
+                      "const": "1Gi"
+                    }
+                  }
+                },
+                "limits": {
+                  "properties": {
+                    "cpu": {
+                      "const": "2000m"
+                    },
+                    "memory": {
+                      "const": "2Gi"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "canvasResourceProfile": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/workspaceResourceProfile"
+        },
+        {
+          "properties": {
+            "resources": {
+              "properties": {
+                "requests": {
+                  "properties": {
+                    "cpu": {
+                      "const": "100m"
+                    },
+                    "memory": {
+                      "const": "1Gi"
+                    }
+                  }
+                },
+                "limits": {
+                  "properties": {
+                    "cpu": {
+                      "const": "1000m"
+                    },
+                    "memory": {
+                      "const": "2Gi"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "workspaceResourceProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resources"
+      ],
+      "properties": {
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requests",
+            "limits"
+          ],
+          "properties": {
+            "requests": {
+              "$ref": "#/definitions/workspaceResourceValues"
+            },
+            "limits": {
+              "$ref": "#/definitions/workspaceResourceValues"
+            }
+          }
+        }
+      }
+    },
+    "workspaceResourceValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cpu",
+        "memory"
+      ],
+      "properties": {
+        "cpu": {
+          "type": "string",
+          "pattern": "^(?:[1-9][0-9]*|[1-9][0-9]*m)$"
+        },
+        "memory": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(?:Ki|Mi|Gi|Ti)$"
+        }
+      }
+    },
+    "firewallRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "egressMode",
+        "allowedDomains"
+      ],
+      "properties": {
+        "egressMode": {
+          "type": "string",
+          "enum": [
+            "blocked",
+            "allowlist",
+            "unrestricted"
+          ]
+        },
+        "allowedDomains": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$"
+          },
+          "uniqueItems": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "egressMode": {
+                "const": "allowlist"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "allowedDomains": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "egressMode": {
+                "enum": [
+                  "blocked",
+                  "unrestricted"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "allowedDomains": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

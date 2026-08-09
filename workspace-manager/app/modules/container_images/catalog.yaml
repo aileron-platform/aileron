@@ -1,0 +1,127 @@
+# Container image configuration.
+# Defines all available container image options for workspace creation and container management.
+
+version: "1.0"
+
+# Default image. Keep this aligned with the database default value.
+default_image: "universal"
+
+# Supporting container images for browser, canvas, and other auxiliary containers.
+# Local image tags are architecture-neutral because Docker stores native images per host.
+browser_image: "ailerondocker/workspace-chrome:dev"
+canvas_image: "ailerondocker/workspace-canvas:dev"
+
+# Available container image list.
+images:
+  - id: "universal"
+    name: "Standard Container Image"
+    description: "Aileron standard runtime environment with a complete toolchain including Python, Node.js, Git, SSH, and Claude Code"
+    icon: "🌐"
+    image: "ailerondocker/workspace-runtime:dev-lite"
+    tags:
+      - "universal"
+      - "python"
+      - "nodejs"
+      - "git"
+      - "ssh"
+      - "claude-code"
+    features:
+      - "Python 3.14+"
+      - "Node.js 24+"
+      - "Git version control"
+      - "SSH remote access"
+      - "Claude Code CLI"
+      - "Docker-in-Docker"
+      - "Complete development toolchain"
+    recommended: true
+    active: true
+    sort_order: 1
+
+  - id: "java"
+    name: "Java 21 + Maven"
+    description: "Eclipse Temurin JDK 21 (LTS) with Apache Maven 3.9, ready for Spring Boot and Maven projects"
+    icon: "☕"
+    image: "ailerondocker/workspace-runtime:dev-java"
+    tags:
+      - "java"
+      - "maven"
+      - "jvm"
+      - "temurin"
+    features:
+      - "Java 21 (Temurin LTS)"
+      - "Apache Maven 3.9"
+      - "Inherits standard developer toolchain (Node.js, Python, Git, uv)"
+      - "SSH remote access"
+      - "Docker-in-Docker"
+    recommended: false
+    active: true
+    sort_order: 2
+
+  # Future extensible image options, currently commented out.
+  # - id: "python-data-science"
+  #   name: "Python Data Science"
+  #   description: "Python environment optimized for data science and machine learning"
+  #   icon: "🐍"
+  #   image: "aileron-python-ds:latest"
+  #   tags:
+  #     - "python"
+  #     - "data-science"
+  #     - "ml"
+  #   features:
+  #     - "Python 3.11"
+  #     - "NumPy, Pandas, Scikit-learn"
+  #     - "Jupyter Notebook"
+  #     - "TensorFlow, PyTorch"
+  #   recommended: false
+  #   active: false
+  #   sort_order: 2
+
+  # - id: "nodejs-fullstack"
+  #   name: "Node.js Full-stack Development"
+  #   description: "Node.js + TypeScript full-stack development environment"
+  #   icon: "🟢"
+  #   image: "aileron-nodejs:latest"
+  #   tags:
+  #     - "nodejs"
+  #     - "typescript"
+  #     - "fullstack"
+  #   features:
+  #     - "Node.js 20 LTS"
+  #     - "TypeScript 5+"
+  #     - "pnpm, yarn, npm"
+  #     - "React, Vue, Next.js"
+  #   recommended: false
+  #   active: false
+  #   sort_order: 3
+
+  # - id: "go-microservices"
+  #   name: "Go Microservices"
+  #   description: "Go microservice development environment"
+  #   icon: "🔷"
+  #   image: "aileron-golang:latest"
+  #   tags:
+  #     - "golang"
+  #     - "microservices"
+  #   features:
+  #     - "Go 1.21+"
+  #     - "gRPC, Protocol Buffers"
+  #     - "Docker, Kubernetes"
+  #   recommended: false
+  #   active: false
+  #   sort_order: 4
+
+  # - id: "rust-systems"
+  #   name: "Rust Systems Programming"
+  #   description: "Rust systems programming environment"
+  #   icon: "🦀"
+  #   image: "aileron-rust:latest"
+  #   tags:
+  #     - "rust"
+  #     - "systems"
+  #   features:
+  #     - "Rust 1.75+"
+  #     - "Cargo, Clippy"
+  #     - "WebAssembly support"
+  #   recommended: false
+  #   active: false
+  #   sort_order: 5

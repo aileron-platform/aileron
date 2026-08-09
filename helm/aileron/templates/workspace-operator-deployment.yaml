@@ -1,0 +1,155 @@
+{{- if .Values.workspaceOperator.enabled }}
+{{- $workspaceImagePullSecretNames := list -}}
+{{- range $pullSecret := .Values.global.imagePullSecrets -}}
+{{- $workspaceImagePullSecretNames = append $workspaceImagePullSecretNames (required "global.imagePullSecrets[].name is required" $pullSecret.name) -}}
+{{- end -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-operator
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.workspaceOperator.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "aileron.componentLabels" (dict "component" "workspace-operator" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentPodLabels" (dict "component" "workspace-operator" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+      annotations:
+        checksum/platform-config: {{ include (print $.Template.BasePath "/platform-configmap.yaml") . | sha256sum }}
+        aileron.io/browser-credential-keyring-revision: {{ .Values.browserCredentials.revision | required "browserCredentials.revision is required" | quote }}
+        {{- if .Values.turn.enabled }}
+        checksum/turn-credential-contract: {{ include "aileron.turnCredentialsChecksum" . }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" .Values.workspaceOperator.serviceAccount "nameSuffix" "workspace-operator") }}
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+        {{- with .Values.kubernetes.platformStorageGid }}
+        fsGroup: {{ . }}
+        fsGroupChangePolicy: OnRootMismatch
+        {{- end }}
+      containers:
+        - name: workspace-operator
+          image: {{ include "aileron.imageReference" (dict "name" "workspaceOperator.image" "image" .Values.workspaceOperator.image "production" .Values.security.requireStrongSecrets) | quote }}
+          imagePullPolicy: {{ .Values.workspaceOperator.image.pullPolicy }}
+          args:
+            - --firewall-attestation-max-age={{ .Values.workspaceOperator.firewallAttestor.maxAge }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: KNOWLEDGE_BASES_PVC_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: KNOWLEDGE_BASES_PVC_NAME
+            - name: WORKSPACE_STORAGE_CLASS_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: WORKSPACE_STORAGE_CLASS_NAME
+            - name: RUNTIME_HOME_STORAGE_CLASS_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_HOME_STORAGE_CLASS_NAME
+            - name: RUNTIME_HOME_STORAGE_ACCESS_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_HOME_STORAGE_ACCESS_MODE
+            {{- with .Values.kubernetes.platformStorageGid }}
+            - name: PLATFORM_STORAGE_GID
+              value: {{ . | quote }}
+            {{- end }}
+            - name: CILIUM_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: CILIUM_ENABLED
+            - name: AILERON_MANAGER_INTERNAL_URL
+              value: "http://{{ include "aileron.fullname" . }}-workspace-manager.{{ .Release.Namespace }}.svc.cluster.local:3001"
+            - name: AILERON_PLATFORM_PUBLIC_ORIGIN
+              value: {{ include "aileron.platformPublicOrigin" . | quote }}
+            {{- if gt (len $workspaceImagePullSecretNames) 0 }}
+            - name: WORKSPACE_IMAGE_PULL_SECRET_NAMES
+              value: {{ join "," $workspaceImagePullSecretNames | quote }}
+            {{- end }}
+            {{- if .Values.turn.enabled }}
+            - name: BROWSER_CONNECTIVITY_PROBE_IMAGE
+              value: {{ include "aileron.imageReference" (dict "name" "workspaceOperator.image" "image" .Values.workspaceOperator.image "production" .Values.security.requireStrongSecrets) | quote }}
+            {{- if .Values.connectivityEvidenceGateway.enabled }}
+            - name: CONNECTIVITY_EVIDENCE_GATEWAY_URL
+              value: "http://{{ include "aileron.fullname" . }}-connectivity-evidence-gateway.{{ .Release.Namespace }}.svc.cluster.local:8083"
+            - name: CONNECTIVITY_GATEWAY_INTERNAL_TOKEN_FILE
+              value: /run/secrets/aileron-connectivity/internal-token
+            {{- end }}
+            - name: TURN_REACHABILITY_PROFILE_JSON
+              value: {{ include "aileron.turnReachabilityProfileJSON" . | quote }}
+            - name: TURN_ICE_SERVERS_SECRET_NAME
+              value: {{ include "aileron.turnSecretName" . | quote }}
+            - name: TURN_BACKEND_ICE_SERVERS_SECRET_KEY
+              value: {{ .Values.turn.backendIceServersKey | quote }}
+            - name: TURN_FRONTEND_ICE_SERVERS_SECRET_KEY
+              value: {{ .Values.turn.frontendIceServersKey | quote }}
+            - name: TURN_CREDENTIAL_REVISION
+              value: {{ .Values.turn.credentialRevision | quote }}
+            - name: AILERON_INSTALLATION_ID
+              value: {{ .Values.connectivityEvidenceGateway.installationId | quote }}
+            {{- end }}
+            - name: LOG_LEVEL
+              value: info
+            - name: WORKSPACE_CRD_GROUP
+              value: platform.aileron.io
+            - name: WORKSPACE_CRD_VERSION
+              value: v1alpha1
+            - name: BROWSER_CREDENTIAL_KEYRING_FILE
+              value: /etc/aileron/browser-credentials/keyring.json
+          resources:
+            {{- toYaml .Values.workspaceOperator.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: browser-credential-keyring
+              mountPath: /etc/aileron/browser-credentials
+              readOnly: true
+            {{- if and .Values.turn.enabled .Values.connectivityEvidenceGateway.enabled }}
+            - name: connectivity-auth
+              mountPath: /run/secrets/aileron-connectivity
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: browser-credential-keyring
+          secret:
+            secretName: {{ .Values.browserCredentials.existingSecretName | required "browserCredentials.existingSecretName is required" }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.browserCredentials.key | required "browserCredentials.key is required" }}
+                path: keyring.json
+        {{- if and .Values.turn.enabled .Values.connectivityEvidenceGateway.enabled }}
+        - name: connectivity-auth
+          secret:
+            secretName: {{ .Values.connectivityEvidenceGateway.auth.existingSecretName }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.connectivityEvidenceGateway.auth.internalTokenKey }}
+                path: internal-token
+        {{- end }}
+{{- end }}

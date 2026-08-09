@@ -1,0 +1,2 @@
+"""Workspace resource telemetry reporting."""
+

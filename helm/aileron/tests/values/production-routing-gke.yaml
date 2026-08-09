@@ -1,0 +1,11 @@
+platformPublicOrigin: https://aileron.apps.example.com
+
+ingress:
+  enabled: true
+  className: ""
+  useDefaultClass: false
+  tlsMode: controllerManaged
+  tlsSecretName: ""
+  annotations:
+    kubernetes.io/ingress.class: gce
+    ingress.gcp.kubernetes.io/pre-shared-cert: aileron-public

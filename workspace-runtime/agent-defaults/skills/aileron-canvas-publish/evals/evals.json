@@ -1,0 +1,23 @@
+{
+  "skill_name": "aileron-canvas-publish",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "把我現在 Canvas 裡的銷售儀表板正式發佈，完成後給我網址。",
+      "expected_output": "檢查 Workspace publishing environment 與管理員建立的 Project，必要時 bootstrap managed repository，觸發 API Pipeline 並追蹤至 READY 或回報可診斷錯誤。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "幫我看上一版 Canvas 發佈到哪了，若失敗請說是哪個 job。",
+      "expected_output": "使用本地 Publication pointer 查詢 GitLab、Argo CD 與 HTTPS verification endpoint，不重新觸發 Pipeline。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "把這個已上線的 Canvas 撤下，不要影響我其他網站。",
+      "expected_output": "只刪除目前 siteId 的 Argo CD Application，保留 Git branch、OCI artifacts 與其他 Workspace 的部署。",
+      "files": []
+    }
+  ]
+}

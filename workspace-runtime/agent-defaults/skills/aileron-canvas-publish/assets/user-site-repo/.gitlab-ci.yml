@@ -1,0 +1,41 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "api" && $AILERON_PUBLISH_TRIGGER == "skill"'
+    - when: never
+
+stages:
+  - validate
+  - build
+  - package
+
+validate:
+  stage: validate
+  image: python:3.12-alpine
+  script:
+    - python3 ci/validate_source.py
+
+build:
+  stage: build
+  image: docker:27-cli
+  before_script:
+    - apk add --no-cache python3
+  script:
+    - sh ci/build-site.sh
+  artifacts:
+    paths:
+      - .canvas-build/site/
+    expire_in: 1 day
+
+package:
+  stage: package
+  image: docker:27-cli
+  environment:
+    name: package
+  needs:
+    - job: validate
+    - job: build
+      artifacts: true
+  before_script:
+    - apk add --no-cache helm python3
+  script:
+    - python3 ci/package.py

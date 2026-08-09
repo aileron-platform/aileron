@@ -1,0 +1,37 @@
+kubernetes:
+  workspaceRuntimeNamespace: workspace-system
+  platformStorageGid: null
+  workspaceData:
+    storageClassName: ocs-storagecluster-cephfs
+  runtimeHome:
+    accessMode: ReadWriteOnce
+    storageClassName: ocs-storagecluster-ceph-rbd
+  knowledgeBases:
+    accessModes:
+      - ReadWriteMany
+    storageClassName: ocs-storagecluster-cephfs
+  managerState:
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: ocs-storagecluster-ceph-rbd
+  storageVerification:
+    enabled: true
+    workspaceStorageClassName: ocs-storagecluster-cephfs-verification-delete
+    managerStateStorageClassName: ocs-storagecluster-ceph-rbd-verification-delete
+    workspaceSize: 1Gi
+    managerStateSize: 1Gi
+
+frontend:
+  enabled: false
+postgres:
+  enabled: false
+redis:
+  enabled: false
+ingress:
+  enabled: false
+oidc:
+  issuerUrl: https://login.example.com/realms/aileron
+  clientSecretName: external-oidc-client
+bootstrap:
+  admin:
+    enabled: false

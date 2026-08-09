@@ -1,0 +1,1 @@
+"""CLI settings domain module."""

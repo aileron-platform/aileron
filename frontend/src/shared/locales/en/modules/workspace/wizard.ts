@@ -1,0 +1,181 @@
+const wizard = {
+  buttons: {
+    cancel: 'Cancel',
+    next: 'Next',
+    previous: 'Previous',
+    retry: 'Retry',
+    finish: 'Finish setup',
+    processing: 'Processing...',
+  },
+  validation: {
+    basicInfo: 'Please complete all required fields before continuing.',
+  },
+  notifications: {
+    completedTitle: 'Workspace ready',
+    completedDescription: 'Your workspace was created successfully.',
+    copied: 'Copied to clipboard',
+    copyFailed: 'Copy failed',
+    errorTitle: 'Something went wrong',
+  },
+  steps: {
+    basicInfo: {
+      title: 'Create a new workspace',
+      subtitle: 'Step {{current}}/{{total}}: Provide basic information',
+      cardTitle: 'Project details',
+      cardDescription: 'These details identify your workspace and help teammates understand the project.',
+      fields: {
+        name: {
+          label: 'Project name',
+          placeholder: 'Enter a project name',
+          helper: 'Used as the workspace display name.',
+        },
+        description: {
+          label: 'Project description',
+          placeholder: 'Summarise the goal of this workspace',
+          helper: 'Give teammates context about what this workspace is for.',
+        },
+        agenticTool: {
+          label: 'Agent tool',
+          placeholder: 'Select an agent tool',
+          helper: 'This cannot be changed after creation and determines which templates are compatible.',
+          options: {
+            claudeCode: 'Claude Code',
+            codex: 'Codex',
+            opencode: 'OpenCode',
+          },
+          descriptions: {
+            claudeCode: 'Create a Claude Code workspace with Claude-compatible sessions, hooks, MCP, and packages.',
+            codex: 'Create a Codex workspace with Codex sessions and marketplace packages for OpenAI workflows.',
+            opencode: 'Create an OpenCode workspace with ACP-backed sessions and marketplace packages.',
+          },
+          selected: 'Selected',
+        },
+      },
+    },
+    runtimeConfig: {
+      title: 'Configure runtime environment',
+      subtitle: 'Step {{current}}/{{total}}: Configure workspace runtime',
+      cardTitle: 'Runtime configuration',
+      cardDescription: 'Choose the container image and optional automation commands.',
+      optional: '(Optional)',
+      fields: {
+        runtime: {
+          label: 'Container image',
+          placeholder: 'Select a runtime image',
+          loading: 'Loading...',
+          recommended: 'Recommended',
+        },
+        setupScript: {
+          label: 'Setup script',
+          placeholder: 'npm install\nnpm run build',
+          helper: 'Executed after your workspace is provisioned.',
+        },
+        envVars: {
+          label: 'Environment variables',
+          empty: 'No environment variables added yet.',
+          namePlaceholder: 'Variable name',
+          valuePlaceholder: 'Variable value',
+          add: 'Add environment variable',
+        },
+      },
+      runtimeOptions: {
+        universal: {
+          label: 'Universal runtime',
+          description: 'Ubuntu base image with common developer tooling.',
+        },
+        node: {
+          label: 'Node.js runtime',
+          description: 'Optimised Node.js environment with npm and yarn.',
+        },
+        python: {
+          label: 'Python runtime',
+          description: 'Optimised Python environment with pip and poetry.',
+        },
+        java: {
+          label: 'Java 21 + Maven',
+          description: 'Eclipse Temurin JDK 21 with Apache Maven 3.9, ready for Spring Boot and Maven projects.',
+        },
+      },
+    },
+    workspaceCreation: {
+      title: 'Provisioning workspace',
+      subtitle: 'Step {{current}}/{{total}}: Building runtime environment',
+      cardTitle: 'Workspace status',
+      cardDescription: 'We are preparing infrastructure and containers for your workspace.',
+      pendingTitle: 'Setting up your workspace...',
+      pendingDescription: 'This usually takes a moment. We will move on automatically when everything is ready.',
+      readyTitle: 'Workspace is ready!',
+      readyDescription: 'Workspace {{workspaceId}} is now online. Continue with the CLI setup to finish.',
+      progress: {
+        label: 'Workspace creation progress',
+        percent: '{{value}}%',
+        provisioningTitle: 'Creating workspace infrastructure',
+        provisioningDescription: 'Containers and workspace resources are being prepared.',
+        healthTitle: 'Verifying runtime health',
+        healthDescription: 'The runtime service is starting. This step can take a little longer than provisioning.',
+        readyTitle: 'Workspace runtime is ready',
+        readyDescription: 'All required services are healthy. Continue to finish setup.',
+        failedTitle: 'Workspace creation needs attention',
+        failedDescription: 'Review the error and logs, then retry provisioning.',
+      },
+      infrastructure: {
+        title: 'Container provisioning',
+        pending: 'Creating containers...',
+        failed: 'Provisioning failed',
+        success: 'Containers are ready',
+      },
+      health: {
+        title: 'Service health check',
+        pending: 'Checking service availability...',
+        success: 'Service is healthy',
+        waiting: 'Waiting for containers to start',
+        retrying: 'Service is starting up. Please wait...',
+      },
+      workspaceId: {
+        label: 'Workspace ID',
+        copyTitle: 'Copy full workspace ID',
+      },
+      logs: {
+        title: 'Provisioning logs',
+        open: 'Logs ({{count}})',
+        dialogTitle: 'Provisioning log details',
+        dialogDescription: 'Runtime events collected while the workspace is being created.',
+        empty: 'No logs yet',
+        loading: 'Loading logs...',
+      },
+    },
+    cliSetup: {
+      badge: 'Workspace CLI',
+      title: 'Connect with the CLI',
+      subtitle: 'Step {{current}}/{{total}}: Authenticate from your terminal',
+      cardTitle: 'Command line guide',
+      cardDescription: 'Follow these steps to finish configuring your workspace.',
+      loading: 'Loading CLI instructions...',
+      instructionsTitle: 'Follow these steps:',
+      commandsTitle: 'Commands',
+      instructions: {
+        login: 'Sign in to the Workspace CLI from your terminal.',
+        enterCode: 'Complete authentication by pasting the verification code from the browser.',
+        pull: 'Pull the workspace repository to sync project files locally.',
+      },
+      terminal: {
+        loginCommand: '$ workspace login',
+        openBrowser: 'Opening browser for authentication...',
+        authSuccess: 'Authentication successful',
+        pullCommand: '$ workspace pull {{workspaceId}}',
+        fetchingMetadata: 'Fetching workspace metadata...',
+        syncComplete: 'Sync complete. Ready to code!',
+      },
+      readyTitle: 'All set',
+      readyDescription: 'Once you finish the commands above you can start collaborating.',
+    },
+  },
+  error: {
+    createWorkspace: 'We could not create your workspace. Please try again.',
+    pollWorkspace: 'We could not verify the workspace status. Please try again later.',
+    provisionWorkspace: 'Workspace provisioning failed. Review the logs, then retry.',
+    retryWorkspace: 'We could not restart workspace provisioning. Please try again.',
+  },
+};
+
+export default wizard;

@@ -1,0 +1,83 @@
+{{- if .Values.bootstrap.admin.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aileron.fullname" . }}-admin-bootstrap
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin-bootstrap
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentPodLabels" (dict "component" "admin-bootstrap" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap-administrator
+          image: {{ include "aileron.imageReference" (dict "name" "workspaceManager.image" "image" .Values.workspaceManager.image "production" .Values.security.requireStrongSecrets) | quote }}
+          imagePullPolicy: {{ .Values.workspaceManager.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              exec /workspace-manager/.venv/bin/python \
+                /workspace-manager/scripts/bootstrap_admin_user.py \
+                --issuer "${OIDC_ISSUER_URL}" \
+                --subject "${BOOTSTRAP_ADMIN_SUBJECT}" \
+                --username "${BOOTSTRAP_ADMIN_USERNAME}" \
+                --email "${BOOTSTRAP_ADMIN_EMAIL}"
+          env:
+            - name: DATABASE_URL_FILE
+              value: /run/secrets/aileron/database-url
+            - name: OIDC_ISSUER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: OIDC_ISSUER_URL
+            - name: BOOTSTRAP_ADMIN_SUBJECT
+              value: {{ .Values.bootstrap.admin.subject | quote }}
+            - name: BOOTSTRAP_ADMIN_USERNAME
+              value: {{ .Values.bootstrap.admin.username | quote }}
+            - name: BOOTSTRAP_ADMIN_EMAIL
+              value: {{ .Values.bootstrap.admin.email | quote }}
+            - name: PYTHONPATH
+              value: /workspace-manager
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            {{- toYaml .Values.bootstrap.admin.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: platform-secrets
+              mountPath: /run/secrets/aileron
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: platform-secrets
+          secret:
+            secretName: {{ .Values.platformSecrets.existingSecretName }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.platformSecrets.databaseUrlKey }}
+                path: database-url
+{{- end }}

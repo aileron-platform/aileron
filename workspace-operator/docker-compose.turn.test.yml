@@ -1,0 +1,106 @@
+services:
+  turn-secret-init:
+    image: alpine:3.22
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        umask 077
+        temporary_file=/generated/turn-integration-shared-secret.tmp
+        final_file=/generated/turn-integration-shared-secret
+        head -c 32 /dev/urandom | base64 | tr -d '\n' > "$${temporary_file}"
+        test -s "$${temporary_file}"
+        chmod 0400 "$${temporary_file}"
+        mv -f "$${temporary_file}" "$${final_file}"
+    volumes:
+      - turn-integration-secret:/generated
+
+  coturn-test:
+    image: coturn/coturn@sha256:0c0e8fc0c263b85a134e9e4242b5e46e1f4c077c5029633511191c05b5c2c814
+    user: "0:0"
+    depends_on:
+      turn-secret-init:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        config_file=/run/aileron-coturn-test/turnserver.conf
+        umask 077
+        {
+          printf '%s\n' \
+            'listening-ip=0.0.0.0' \
+            'listening-port=3478' \
+            'min-port=49160' \
+            'max-port=49180' \
+            'realm=aileron-test' \
+            'use-auth-secret'
+          printf 'static-auth-secret='
+          cat /run/secrets/turn-integration/turn-integration-shared-secret
+          printf '%s\n' \
+            '' \
+            'max-allocate-lifetime=5' \
+            'fingerprint' \
+            'no-cli' \
+            'no-tls' \
+            'no-dtls' \
+            'no-multicast-peers' \
+            'log-file=stdout' \
+            'simple-log'
+        } > "$${config_file}"
+        chmod 0600 "$${config_file}"
+        exec turnserver -c "$${config_file}"
+    tmpfs:
+      - /run/aileron-coturn-test:mode=0700,noexec,nosuid,nodev
+    volumes:
+      - turn-integration-secret:/run/secrets/turn-integration:ro
+
+  turn-secret-process-contract-test:
+    image: docker:27-cli
+    depends_on:
+      coturn-test:
+        condition: service_started
+    environment:
+      TURN_TEST_COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-workspace-operator}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        target="$$(docker ps -q \
+          --filter "label=com.docker.compose.project=$${TURN_TEST_COMPOSE_PROJECT}" \
+          --filter 'label=com.docker.compose.service=coturn-test')"
+        test -n "$${target}"
+        if docker exec "$${target}" sh -ec 'cat /proc/1/cmdline; cat /proc/1/environ' |
+          grep -aF -f /run/secrets/turn-integration/turn-integration-shared-secret >/dev/null; then
+          echo 'Coturn materialized the shared secret in argv or environ' >&2
+          exit 1
+        fi
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - turn-integration-secret:/run/secrets/turn-integration:ro
+
+  turn-probe-test:
+    image: golang:1.22
+    depends_on:
+      turn-secret-process-contract-test:
+        condition: service_completed_successfully
+    working_dir: /workspace
+    environment:
+      TURN_INTEGRATION_ENDPOINT: turn:coturn-test:3478
+      TURN_INTEGRATION_SHARED_SECRET_FILE: /run/secrets/turn-integration/turn-integration-shared-secret
+    volumes:
+      - .:/workspace
+      - turn-integration-secret:/run/secrets/turn-integration:ro
+      - turn-go-build-cache:/root/.cache/go-build
+      - turn-go-module-cache:/go/pkg/mod
+    command:
+      - go
+      - test
+      - ./internal/controller
+      - -run
+      - ^TestTURNProbe
+      - -count=1
+      - -v
+
+volumes:
+  turn-integration-secret:
+  turn-go-build-cache:
+  turn-go-module-cache:

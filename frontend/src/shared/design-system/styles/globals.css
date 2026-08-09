@@ -1,0 +1,220 @@
+/**
+ * Global application styles.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ClaudeCode Dev Hub - Light Theme with Teal Primary */
+    --background: 0 0% 100%;
+    --foreground: 210 11% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 11% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 11% 15%;
+
+    /* Teal Primary Color System */
+    --primary: 180 70% 36%; /* deeper teal */
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 180 72% 31%;
+    --primary-light: 180 52% 93%;
+
+    /* Soft Teal Secondary System */
+    --secondary: 180 15% 95%;
+    --secondary-foreground: 210 11% 15%;
+    --secondary-hover: 180 18% 91%;
+
+    --muted: 180 17% 96%;
+    --muted-foreground: 200 10% 43%;
+
+    --accent: 180 46% 93%;
+    --accent-foreground: 184 74% 18%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --warning: 32 95% 44%;
+
+    --border: 180 14% 85%;
+    --input: 180 14% 85%;
+    --ring: 180 70% 36%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar System */
+    --sidebar-background: 180 16% 97%;
+    --sidebar-foreground: 210 11% 20%;
+    --sidebar-primary: 180 70% 36%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 180 18% 92%;
+    --sidebar-accent-foreground: 210 11% 15%;
+    --sidebar-border: 180 14% 85%;
+    --sidebar-ring: 180 70% 36%;
+  }
+
+  .dark {
+    /* VSCode dark theme matching the test-terminal palette */
+    /* Use VSCode #1e1e1e as the main background */
+    --background: 0 0% 11.76%;       /* Main background #1e1e1e */
+    --foreground: 0 0% 83%;          /* Primary text #d4d4d4 */
+
+    --card: 0 0% 11.76%;             /* Card background #1e1e1e, matching the main background */
+    --card-foreground: 0 0% 83%;     /* #d4d4d4 */
+
+    --popover: 0 0% 15%;             /* Popover background #252526 */
+    --popover-foreground: 0 0% 83%;  /* #d4d4d4 */
+
+    /* VSCode blue primary color */
+    --primary: 207 100% 41%;         /* VSCode blue #007acc */
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 207 86% 38%;    /* Hover blue #0e639c */
+
+    /* VSCode dark gray secondary color */
+    --secondary: 0 0% 18%;           /* #2d2d30 */
+    --secondary-foreground: 0 0% 80%; /* #cccccc */
+    --secondary-hover: 0 0% 22%;     /* Slightly lighter hover #37373d */
+
+    /* Muted colors */
+    --muted: 0 0% 15%;               /* #252526 */
+    --muted-foreground: 0 0% 59%;    /* Mid-gray text #969696 */
+
+    /* Accent colors */
+    --accent: 0 0% 24%;              /* Input background #3c3c3c */
+    --accent-foreground: 0 0% 80%;   /* #cccccc */
+
+    /* VSCode red destructive color */
+    --destructive: 0 73% 55%;        /* #dc3545 */
+    --destructive-foreground: 0 0% 100%;
+
+    --warning: 43 96% 56%;           /* Amber tuned for dark background */
+
+    /* Borders and inputs */
+    --border: 0 0% 24%;              /* Border #3e3e42 */
+    --input: 0 0% 24%;               /* Input background #3c3c3c */
+    --ring: 207 100% 41%;            /* Blue focus ring #007acc */
+
+    /* Sidebar colors for dark mode */
+    --sidebar-background: 0 0% 18%;  /* Sidebar background #2d2d30 */
+    --sidebar-foreground: 0 0% 80%;  /* #cccccc */
+    --sidebar-primary: 207 100% 41%; /* VSCode blue #007acc */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 22%;      /* Sidebar accent #37373d */
+    --sidebar-accent-foreground: 0 0% 80%;
+    --sidebar-border: 0 0% 24%;      /* Sidebar border #3e3e42 */
+    --sidebar-ring: 207 100% 41%;    /* VSCode blue #007acc */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  #root {
+    width: 100vw;
+    height: 100vh;
+    box-sizing: border-box;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  /* Remove the default outline to avoid a blue border during multi-selection */
+  *:focus {
+    outline: none !important;
+  }
+
+  *:focus-visible {
+    outline: none !important;
+  }
+}
+
+/* Custom VSCode-style scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 5px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #424242;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+/* Dialog animation */
+.dialog-container {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Keep paragraphs inline inside Markdown list items */
+li > p {
+  display: inline;
+  margin: 0;
+}
+
+/* XTerm Scrollbar Customization */
+.xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+
+.xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background-color: rgba(107, 114, 128, 0.5); /* gray-500/50 */
+  border-radius: 9999px;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(107, 114, 128, 0.8); /* gray-500/80 */
+}

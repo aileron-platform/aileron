@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aileron.dev/contracts/platform-configuration/conformance-vectors.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["vectors"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "vectors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/vector"}
+    }
+  },
+  "$defs": {
+    "vector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "valid"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "kind": {"enum": ["repository-contract", "origin", "contract-mutation", "compose-fixture", "env-fixture"]},
+        "value": {"type": "string"},
+        "mutation": {"type": "string"},
+        "fixture": {"type": "string"},
+        "valid": {"type": "boolean"},
+        "diagnostic": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"valid": {"const": false}}},
+          "then": {"required": ["diagnostic"]}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "origin"}}},
+          "then": {"required": ["value"]}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "contract-mutation"}}},
+          "then": {"required": ["mutation"]}
+        },
+        {
+          "if": {"properties": {"kind": {"enum": ["compose-fixture", "env-fixture"]}}},
+          "then": {"required": ["fixture"]}
+        }
+      ]
+    }
+  }
+}

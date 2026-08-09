@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aileron.dev/contracts/browser-connectivity/turn-reachability-profile.schema.json",
+  "title": "TURN Reachability Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "policyBackend", "backend", "frontend", "credentialIssuer", "evidence"],
+  "properties": {
+    "contractVersion": {"const": "browser-connectivity/v1"},
+    "policyBackend": {"enum": ["cilium", "kubernetes", "unenforced"]},
+    "backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["urls", "controlDestination", "relayDestination", "relayPortRange"],
+      "properties": {
+        "urls": {"$ref": "#/$defs/turnURLs"},
+        "controlDestination": {"$ref": "#/$defs/destination"},
+        "relayDestination": {"$ref": "#/$defs/destination"},
+        "relayPortRange": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min", "max"],
+          "properties": {
+            "min": {"type": "integer", "minimum": 1024, "maximum": 65535},
+            "max": {"type": "integer", "minimum": 1024, "maximum": 65535}
+          }
+        }
+      }
+    },
+    "frontend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["urls"],
+      "properties": {"urls": {"$ref": "#/$defs/turnURLs"}}
+    },
+    "credentialIssuer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "secretRef", "ttlSeconds"],
+      "properties": {
+        "kind": {"enum": ["turnRest", "staticSecret"]},
+        "secretRef": {"type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+        "ttlSeconds": {"type": "integer", "minimum": 60}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intervalSeconds", "ttlSeconds", "requiredFrontendVantages"],
+      "properties": {
+        "intervalSeconds": {"type": "integer", "minimum": 1},
+        "ttlSeconds": {"type": "integer", "minimum": 2},
+        "requiredFrontendVantages": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "turnURLs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "pattern": "^[tT][uU][rR][nN][sS]?:"}
+    },
+    "destination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["ciliumEntities", "cidrs", "fqdns", "namespacePods", "unenforced"]},
+        "values": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "namespace": {"type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"},
+        "podLabels": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+global:
+  imagePullSecrets:
+    - name: harbor-pull
+
+platformPublicOrigin: https://aileron.apps.example.com
+
+ingress:
+  enabled: true
+  className: nginx
+  useDefaultClass: false
+  tlsMode: kubernetesSecret
+  tlsSecretName: aileron-tls
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "1100m"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"

@@ -1,0 +1,60 @@
+{
+  "name": "aileron-docs",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "docusaurus": "docusaurus",
+    "start": "docusaurus start",
+    "build": "npm run check:structure && docusaurus build",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run check:helm-values-contract && npm run check:structure && node --test scripts/check-workspace-availability-contract.test.mjs && npm run check:workspace-contract && npm run check:authorization-contract && npm run check:platform-resource-contract",
+    "check:structure": "node scripts/check-doc-structure.mjs",
+    "check:workspace-contract": "node scripts/check-workspace-availability-contract.mjs",
+    "check:authorization-contract": "node --test scripts/check-authorization-contract.test.mjs && node scripts/check-authorization-contract.mjs",
+    "check:platform-resource-contract": "node --test scripts/check-platform-resource-observability-contract.test.mjs && node scripts/check-platform-resource-observability-contract.mjs",
+    "check:helm-values-contract": "node scripts/check-helm-values-contract.mjs",
+    "generate:authorization-contract": "node scripts/check-authorization-contract.mjs --write",
+    "generate:workspace-contract": "node scripts/check-workspace-availability-contract.mjs --write",
+    "swizzle": "docusaurus swizzle",
+    "deploy": "docusaurus deploy",
+    "clear": "docusaurus clear",
+    "serve": "docusaurus serve",
+    "write-translations": "docusaurus write-translations",
+    "write-heading-ids": "docusaurus write-heading-ids"
+  },
+  "dependencies": {
+    "@docusaurus/core": "3.10.2",
+    "@docusaurus/preset-classic": "3.10.2",
+    "@docusaurus/theme-mermaid": "3.10.2",
+    "@mdx-js/react": "^3.0.0",
+    "clsx": "^2.0.0",
+    "prism-react-renderer": "^2.3.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "devDependencies": {
+    "@docusaurus/module-type-aliases": "3.10.2",
+    "@docusaurus/tsconfig": "3.10.2",
+    "@docusaurus/types": "3.10.2",
+    "typescript": "~5.2.2"
+  },
+  "overrides": {
+    "webpackbar": "5.0.2",
+    "webpack": "5.97.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.5%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "engines": {
+    "node": ">=20.0"
+  }
+}

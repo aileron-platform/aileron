@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aileron.dev/contracts/browser-connectivity/browser-connectivity-projection.schema.json",
+  "title": "Browser Connectivity Projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "state", "admission", "reason", "backendState", "frontendState"],
+  "properties": {
+    "contractVersion": {"const": "browser-connectivity/v1"},
+    "state": {"enum": ["pending", "ready", "degraded", "not_ready", "unavailable"]},
+    "admission": {"enum": ["allowed", "denied"]},
+    "observedBrowserGeneration": {"type": "string"},
+    "profileRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "credentialRevision": {"type": "string", "minLength": 1},
+    "backendState": {"enum": ["pending", "ready", "degraded", "not_ready", "unavailable"]},
+    "backendAcceptedAt": {"type": "string", "format": "date-time"},
+    "backendExpiresAt": {"type": "string", "format": "date-time"},
+    "backendReason": {"type": "string"},
+    "backendErrorCode": {"type": "string"},
+    "frontendState": {"enum": ["pending", "ready", "degraded", "not_ready", "unavailable"]},
+    "frontendAcceptedAt": {"type": "string", "format": "date-time"},
+    "frontendExpiresAt": {"type": "string", "format": "date-time"},
+    "frontendReason": {"type": "string"},
+    "frontendErrorCode": {"type": "string"},
+    "acceptedAt": {"type": "string", "format": "date-time"},
+    "expiresAt": {"type": "string", "format": "date-time"},
+    "reason": {
+      "enum": [
+        "BrowserNotRunning",
+        "BrowserConnectivityPending",
+        "BrowserConnectivityReady",
+        "TURNProfileUnavailable",
+        "BackendEvidenceUnavailable",
+        "BackendTURNPathNotReady",
+        "FrontendTURNPathNotReady",
+        "BrowserConnectivityContractRejected"
+      ]
+    },
+    "errorCode": {
+      "enum": [
+        "TURN_PROFILE_UNAVAILABLE",
+        "BACKEND_EVIDENCE_UNAVAILABLE",
+        "BACKEND_TURN_PATH_NOT_READY",
+        "FRONTEND_TURN_PATH_NOT_READY",
+        "BROWSER_CONNECTIVITY_CONTRACT_REJECTED"
+      ]
+    },
+    "lastTransitionAt": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"state": {"enum": ["ready", "degraded"]}}, "required": ["state"]},
+      "then": {
+        "required": ["profileRevision", "credentialRevision", "acceptedAt", "expiresAt"],
+        "properties": {"admission": {"const": "allowed"}}
+      },
+      "else": {"properties": {"admission": {"const": "denied"}}}
+    }
+  ]
+}

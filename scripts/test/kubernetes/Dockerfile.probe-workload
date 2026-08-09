@@ -1,0 +1,15 @@
+FROM python:3.12.10-alpine3.21
+
+COPY scripts/test/kubernetes/probe_server.py /opt/aileron-e2e/probe_server.py
+
+RUN apk add --no-cache curl \
+    && addgroup -g 10001 aileron \
+    && adduser -D -H -u 10001 -G aileron aileron \
+    && chmod 0555 /opt/aileron-e2e/probe_server.py
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+USER 10001:10001
+
+ENTRYPOINT ["python3", "/opt/aileron-e2e/probe_server.py"]

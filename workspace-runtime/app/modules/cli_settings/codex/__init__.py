@@ -1,0 +1,1 @@
+"""Codex settings subdomain."""

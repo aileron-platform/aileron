@@ -1,0 +1,23 @@
+{
+  "drawio.save_success": "Draw.io diagram saved successfully",
+  "drawio.errors.empty_file": "File content is empty",
+  "drawio.errors.file_not_found": "File not found: {file_path}",
+  "drawio.errors.url_generation_failed": "Failed to generate Draw.io URL: {error}",
+  "drawio.errors.service_unavailable": "Draw.io preview service is not enabled or cannot be reached.",
+  "drawio.errors.empty_content": "Diagram content cannot be empty",
+  "drawio.errors.invalid_xml": "Invalid Draw.io XML format",
+  "drawio.errors.save_failed": "Failed to save Draw.io file: {error}",
+  "drawio.errors.invalid_format": "Unsupported export format: {format}",
+  "drawio.errors.export_failed": "Failed to export Draw.io diagram: {error}",
+  "agentSession.errors.workspacePath.notAbsolute": "Workspace path must be an absolute path",
+  "agentSession.errors.workspacePath.outsideAllowedRoots": "Workspace path must be under one of the allowed runtime roots",
+  "errors.internal_server": "An internal server error occurred. Please try again later.",
+  "authorization.runtime.action_forbidden": "This Workspace Runtime action is not allowed.",
+  "authorization.runtime.missing_auth_header": "A Bearer authorization header is required.",
+  "authorization.runtime.empty_token": "The authentication token is empty.",
+  "authorization.runtime.token_expired": "The authentication token is invalid or has expired.",
+  "authorization.runtime.authentication_failed": "Authentication could not be completed.",
+  "authorization.runtime.denied": "You do not have access to this Workspace Runtime action.",
+  "authorization.runtime.locked": "Workspace Runtime access is temporarily locked.",
+  "authorization.runtime.verification_failed": "Workspace authorization could not be verified."
+}

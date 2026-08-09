@@ -1,0 +1,42 @@
+stages:
+  - images
+
+default:
+  image: docker:27-cli
+  before_script:
+    - test -n "${PUBLISHING_OCI_REGISTRY:-}"
+    - test -n "${PUBLISHING_OCI_BASE_REPOSITORY:-}"
+    - test -n "${PUBLISHING_OCI_USERNAME:-}"
+    - test -n "${PUBLISHING_OCI_PASSWORD:-}"
+    - test -n "${PUBLISHING_NODE_IMAGE:-}"
+    - printf '%s\n' "$PUBLISHING_NODE_IMAGE" | grep -Eq '@sha256:[0-9a-f]{64}$'
+    - printf '%s' "$PUBLISHING_OCI_PASSWORD" | docker login "$PUBLISHING_OCI_REGISTRY" --username "$PUBLISHING_OCI_USERNAME" --password-stdin
+
+runtime-base:
+  stage: images
+  script:
+    - export IMAGE="${PUBLISHING_OCI_REGISTRY}/${PUBLISHING_OCI_BASE_REPOSITORY}/runtime-base"
+    - docker build --pull --build-arg NODE_IMAGE="$PUBLISHING_NODE_IMAGE" --file Dockerfile.runtime --tag "${IMAGE}:${CI_COMMIT_SHA}" .
+    - docker push "${IMAGE}:${CI_COMMIT_SHA}"
+    - docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "${IMAGE}:${CI_COMMIT_SHA}"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api"'
+    - changes:
+        - Dockerfile.runtime
+        - entrypoint.sh
+        - static-server.js
+
+nextjs-builder:
+  stage: images
+  script:
+    - export IMAGE="${PUBLISHING_OCI_REGISTRY}/${PUBLISHING_OCI_BASE_REPOSITORY}/nextjs-builder"
+    - docker build --pull --build-arg NODE_IMAGE="$PUBLISHING_NODE_IMAGE" --file Dockerfile.builder --tag "${IMAGE}:${CI_COMMIT_SHA}" .
+    - docker push "${IMAGE}:${CI_COMMIT_SHA}"
+    - docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "${IMAGE}:${CI_COMMIT_SHA}"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api"'
+    - changes:
+        - Dockerfile.builder
+        - build-nextjs.sh
+        - package.json
+        - package-lock.json

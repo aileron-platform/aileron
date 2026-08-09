@@ -1,0 +1,1046 @@
+{
+  "contracts": {
+    "browser-connectivity-projection.schema.json": {
+      "$id": "https://aileron.dev/contracts/browser-connectivity/browser-connectivity-projection.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "admission": {
+                "const": "denied"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "ready",
+                  "degraded"
+                ]
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "admission": {
+                "const": "allowed"
+              }
+            },
+            "required": [
+              "profileRevision",
+              "credentialRevision",
+              "acceptedAt",
+              "expiresAt"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "acceptedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "admission": {
+          "enum": [
+            "allowed",
+            "denied"
+          ]
+        },
+        "backendAcceptedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "backendErrorCode": {
+          "type": "string"
+        },
+        "backendExpiresAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "backendReason": {
+          "type": "string"
+        },
+        "backendState": {
+          "enum": [
+            "pending",
+            "ready",
+            "degraded",
+            "not_ready",
+            "unavailable"
+          ]
+        },
+        "contractVersion": {
+          "const": "browser-connectivity/v1"
+        },
+        "credentialRevision": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "errorCode": {
+          "enum": [
+            "TURN_PROFILE_UNAVAILABLE",
+            "BACKEND_EVIDENCE_UNAVAILABLE",
+            "BACKEND_TURN_PATH_NOT_READY",
+            "FRONTEND_TURN_PATH_NOT_READY",
+            "BROWSER_CONNECTIVITY_CONTRACT_REJECTED"
+          ]
+        },
+        "expiresAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "frontendAcceptedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "frontendErrorCode": {
+          "type": "string"
+        },
+        "frontendExpiresAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "frontendReason": {
+          "type": "string"
+        },
+        "frontendState": {
+          "enum": [
+            "pending",
+            "ready",
+            "degraded",
+            "not_ready",
+            "unavailable"
+          ]
+        },
+        "lastTransitionAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "observedBrowserGeneration": {
+          "type": "string"
+        },
+        "profileRevision": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "BrowserNotRunning",
+            "BrowserConnectivityPending",
+            "BrowserConnectivityReady",
+            "TURNProfileUnavailable",
+            "BackendEvidenceUnavailable",
+            "BackendTURNPathNotReady",
+            "FrontendTURNPathNotReady",
+            "BrowserConnectivityContractRejected"
+          ]
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "ready",
+            "degraded",
+            "not_ready",
+            "unavailable"
+          ]
+        }
+      },
+      "required": [
+        "contractVersion",
+        "state",
+        "admission",
+        "reason",
+        "backendState",
+        "frontendState"
+      ],
+      "title": "Browser Connectivity Projection",
+      "type": "object"
+    },
+    "evaluator-cases.json": {
+      "cases": [
+        {
+          "backend": {
+            "contractVersion": "browser-connectivity/v1",
+            "lastSuccess": {
+              "acceptedAt": "2026-08-04T23:59:45Z",
+              "contractVersion": "browser-connectivity/v1",
+              "credentialRevision": "docker-compose-v1",
+              "expiresAt": "2026-08-05T00:01:15Z",
+              "measuredAt": "2026-08-04T23:59:40Z",
+              "outcome": "success",
+              "producer": {
+                "installationId": "compose",
+                "vantageId": "backend:workspace-1"
+              },
+              "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+              "relayAddress": "127.0.0.1:49160"
+            },
+            "latestAttempt": {
+              "acceptedAt": "2026-08-04T23:59:45Z",
+              "contractVersion": "browser-connectivity/v1",
+              "credentialRevision": "docker-compose-v1",
+              "expiresAt": "2026-08-05T00:01:15Z",
+              "measuredAt": "2026-08-04T23:59:40Z",
+              "outcome": "success",
+              "producer": {
+                "installationId": "compose",
+                "vantageId": "backend:workspace-1"
+              },
+              "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+              "relayAddress": "127.0.0.1:49160"
+            }
+          },
+          "expected": {
+            "admission": "allowed",
+            "backendState": "ready",
+            "errorCode": null,
+            "frontendState": "ready",
+            "reason": "BrowserConnectivityReady",
+            "state": "ready"
+          },
+          "frontend": {
+            "host": {
+              "contractVersion": "browser-connectivity/v1",
+              "lastSuccess": {
+                "acceptedAt": "2026-08-04T23:59:50Z",
+                "contractVersion": "browser-connectivity/v1",
+                "credentialRevision": "docker-compose-v1",
+                "expiresAt": "2026-08-05T00:01:20Z",
+                "outcome": "success",
+                "producer": {
+                  "installationId": "compose",
+                  "vantageId": "host"
+                },
+                "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+                "relayAddress": "127.0.0.1:49161"
+              },
+              "latestAttempt": {
+                "acceptedAt": "2026-08-04T23:59:50Z",
+                "contractVersion": "browser-connectivity/v1",
+                "credentialRevision": "docker-compose-v1",
+                "expiresAt": "2026-08-05T00:01:20Z",
+                "outcome": "success",
+                "producer": {
+                  "installationId": "compose",
+                  "vantageId": "host"
+                },
+                "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+                "relayAddress": "127.0.0.1:49161"
+              }
+            }
+          },
+          "name": "all-current-success-evidence-is-ready-and-allowed"
+        },
+        {
+          "backendRef": "all-current-success-evidence-is-ready-and-allowed",
+          "expected": {
+            "admission": "allowed",
+            "backendState": "ready",
+            "errorCode": "FRONTEND_TURN_PATH_NOT_READY",
+            "frontendState": "degraded",
+            "reason": "FrontendTURNPathNotReady",
+            "state": "degraded"
+          },
+          "frontend": {
+            "host": {
+              "contractVersion": "browser-connectivity/v1",
+              "lastSuccess": {
+                "acceptedAt": "2026-08-04T23:59:20Z",
+                "contractVersion": "browser-connectivity/v1",
+                "credentialRevision": "docker-compose-v1",
+                "expiresAt": "2026-08-05T00:00:50Z",
+                "outcome": "success",
+                "producer": {
+                  "installationId": "compose",
+                  "vantageId": "host"
+                },
+                "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+                "relayAddress": "127.0.0.1:49161"
+              },
+              "latestAttempt": {
+                "acceptedAt": "2026-08-04T23:59:59Z",
+                "contractVersion": "browser-connectivity/v1",
+                "credentialRevision": "docker-compose-v1",
+                "errorCode": "TURN_RELAY_UNAVAILABLE",
+                "expiresAt": "2026-08-05T00:01:29Z",
+                "outcome": "failure",
+                "producer": {
+                  "installationId": "compose",
+                  "vantageId": "host"
+                },
+                "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa"
+              }
+            }
+          },
+          "name": "frontend-failure-with-current-last-success-is-degraded-and-allowed"
+        },
+        {
+          "backendRef": "all-current-success-evidence-is-ready-and-allowed",
+          "expected": {
+            "admission": "denied",
+            "backendState": "ready",
+            "errorCode": "FRONTEND_TURN_PATH_NOT_READY",
+            "frontendState": "not_ready",
+            "reason": "FrontendTURNPathNotReady",
+            "state": "not_ready"
+          },
+          "frontend": {
+            "host": {
+              "contractVersion": "browser-connectivity/v1",
+              "lastSuccess": {
+                "acceptedAt": "2026-08-04T23:57:00Z",
+                "contractVersion": "browser-connectivity/v1",
+                "credentialRevision": "docker-compose-v1",
+                "expiresAt": "2026-08-05T00:00:00Z",
+                "outcome": "success",
+                "producer": {
+                  "installationId": "compose",
+                  "vantageId": "host"
+                },
+                "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+                "relayAddress": "127.0.0.1:49161"
+              },
+              "latestAttempt": {
+                "acceptedAt": "2026-08-04T23:59:59Z",
+                "contractVersion": "browser-connectivity/v1",
+                "credentialRevision": "docker-compose-v1",
+                "errorCode": "TURN_RELAY_UNAVAILABLE",
+                "expiresAt": "2026-08-05T00:01:29Z",
+                "outcome": "failure",
+                "producer": {
+                  "installationId": "compose",
+                  "vantageId": "host"
+                },
+                "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa"
+              }
+            }
+          },
+          "name": "frontend-last-success-expiring-at-authority-now-is-not-ready-and-denied"
+        },
+        {
+          "backendRef": "all-current-success-evidence-is-ready-and-allowed",
+          "expected": {
+            "admission": "denied",
+            "backendState": "ready",
+            "errorCode": "FRONTEND_TURN_PATH_NOT_READY",
+            "frontendState": "not_ready",
+            "reason": "FrontendTURNPathNotReady",
+            "state": "not_ready"
+          },
+          "frontend": {
+            "host": {
+              "contractVersion": "browser-connectivity/v1",
+              "lastSuccess": {
+                "acceptedAt": "2026-08-04T23:59:50Z",
+                "contractVersion": "browser-connectivity/v1",
+                "credentialRevision": "docker-compose-v1",
+                "expiresAt": "2026-08-05T00:01:20Z",
+                "outcome": "success",
+                "producer": {
+                  "installationId": "compose",
+                  "vantageId": "host"
+                },
+                "profileRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "relayAddress": "127.0.0.1:49161"
+              },
+              "latestAttempt": {
+                "acceptedAt": "2026-08-04T23:59:50Z",
+                "contractVersion": "browser-connectivity/v1",
+                "credentialRevision": "docker-compose-v1",
+                "expiresAt": "2026-08-05T00:01:20Z",
+                "outcome": "success",
+                "producer": {
+                  "installationId": "compose",
+                  "vantageId": "host"
+                },
+                "profileRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "relayAddress": "127.0.0.1:49161"
+              }
+            }
+          },
+          "name": "frontend-profile-revision-mismatch-is-not-ready-and-denied"
+        },
+        {
+          "backendRef": "all-current-success-evidence-is-ready-and-allowed",
+          "expected": {
+            "admission": "denied",
+            "backendState": "ready",
+            "errorCode": "FRONTEND_TURN_PATH_NOT_READY",
+            "frontendState": "not_ready",
+            "reason": "FrontendTURNPathNotReady",
+            "state": "not_ready"
+          },
+          "frontend": {
+            "host": {
+              "contractVersion": "browser-connectivity/v1",
+              "lastSuccess": {
+                "acceptedAt": "2026-08-04T23:59:50Z",
+                "contractVersion": "browser-connectivity/v1",
+                "credentialRevision": "retired-credential",
+                "expiresAt": "2026-08-05T00:01:20Z",
+                "outcome": "success",
+                "producer": {
+                  "installationId": "compose",
+                  "vantageId": "host"
+                },
+                "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+                "relayAddress": "127.0.0.1:49161"
+              },
+              "latestAttempt": {
+                "acceptedAt": "2026-08-04T23:59:50Z",
+                "contractVersion": "browser-connectivity/v1",
+                "credentialRevision": "retired-credential",
+                "expiresAt": "2026-08-05T00:01:20Z",
+                "outcome": "success",
+                "producer": {
+                  "installationId": "compose",
+                  "vantageId": "host"
+                },
+                "profileRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+                "relayAddress": "127.0.0.1:49161"
+              }
+            }
+          },
+          "name": "frontend-credential-revision-mismatch-is-not-ready-and-denied"
+        },
+        {
+          "backend": null,
+          "backendError": "evidence_unavailable",
+          "expected": {
+            "admission": "denied",
+            "backendState": "unavailable",
+            "errorCode": "BACKEND_EVIDENCE_UNAVAILABLE",
+            "frontendState": "pending",
+            "reason": "BackendEvidenceUnavailable",
+            "state": "unavailable"
+          },
+          "frontend": {},
+          "name": "backend-authority-unavailable-is-unavailable-and-denied"
+        },
+        {
+          "backend": null,
+          "expected": {
+            "admission": "denied",
+            "backendState": "pending",
+            "errorCode": null,
+            "frontendState": "pending",
+            "reason": "BrowserConnectivityPending",
+            "state": "pending"
+          },
+          "frontend": {},
+          "name": "missing-current-evidence-is-pending-and-denied"
+        }
+      ],
+      "contractVersion": "browser-connectivity/v1",
+      "credentialRevision": "docker-compose-v1",
+      "now": "2026-08-05T00:00:00Z"
+    },
+    "profile-digest-vectors.json": {
+      "contractVersion": "browser-connectivity/v1",
+      "vectors": [
+        {
+          "expectedRevision": "sha256:dec4c3e486c36aa2fb937400a10e28c924f5737b0a7af4e7a94ce94de29c6aaa",
+          "name": "canonical-profile",
+          "profile": {
+            "backend": {
+              "controlDestination": {
+                "kind": "unenforced"
+              },
+              "relayDestination": {
+                "kind": "unenforced"
+              },
+              "relayPortRange": {
+                "max": 49180,
+                "min": 49160
+              },
+              "urls": [
+                "turn:coturn:3478"
+              ]
+            },
+            "contractVersion": "browser-connectivity/v1",
+            "credentialIssuer": {
+              "kind": "turnRest",
+              "secretRef": "turn-rest-shared-secret",
+              "ttlSeconds": 300
+            },
+            "evidence": {
+              "intervalSeconds": 30,
+              "requiredFrontendVantages": [
+                "host"
+              ],
+              "ttlSeconds": 90
+            },
+            "frontend": {
+              "urls": [
+                "turn:127.0.0.1:3478"
+              ]
+            },
+            "policyBackend": "unenforced"
+          }
+        },
+        {
+          "expectedRevision": "sha256:da263e3bf7371865b487218b03472768ff3997027dc71b178f2b9fe84f79b779",
+          "name": "set-order-and-duplicates-do-not-change-identity",
+          "profile": {
+            "backend": {
+              "controlDestination": {
+                "kind": "unenforced"
+              },
+              "relayDestination": {
+                "kind": "unenforced"
+              },
+              "relayPortRange": {
+                "max": 49180,
+                "min": 49160
+              },
+              "urls": [
+                "turn:coturn:3478"
+              ]
+            },
+            "contractVersion": "browser-connectivity/v1",
+            "credentialIssuer": {
+              "kind": "turnRest",
+              "secretRef": "turn-rest-shared-secret",
+              "ttlSeconds": 300
+            },
+            "evidence": {
+              "intervalSeconds": 30,
+              "requiredFrontendVantages": [
+                "z-vantage",
+                "host",
+                "z-vantage"
+              ],
+              "ttlSeconds": 90
+            },
+            "frontend": {
+              "urls": [
+                "turn:127.0.0.1:3478"
+              ]
+            },
+            "policyBackend": "unenforced"
+          }
+        }
+      ]
+    },
+    "schema-conformance-vectors.json": {
+      "vectors": [
+        {
+          "name": "canonical-valid",
+          "profile": {
+            "backend": {
+              "controlDestination": {
+                "kind": "unenforced"
+              },
+              "relayDestination": {
+                "kind": "unenforced"
+              },
+              "relayPortRange": {
+                "max": 49180,
+                "min": 49160
+              },
+              "urls": [
+                "turn:coturn:3478"
+              ]
+            },
+            "contractVersion": "browser-connectivity/v1",
+            "credentialIssuer": {
+              "kind": "turnRest",
+              "secretRef": "turn-rest-secret",
+              "ttlSeconds": 300
+            },
+            "evidence": {
+              "intervalSeconds": 30,
+              "requiredFrontendVantages": [
+                "host",
+                "remote-browser"
+              ],
+              "ttlSeconds": 90
+            },
+            "frontend": {
+              "urls": [
+                "turns:turn.example.test:5349"
+              ]
+            },
+            "policyBackend": "unenforced"
+          },
+          "valid": true
+        },
+        {
+          "name": "missing-frontend-vantage-contract",
+          "profile": {
+            "backend": {
+              "controlDestination": {
+                "kind": "unenforced"
+              },
+              "relayDestination": {
+                "kind": "unenforced"
+              },
+              "relayPortRange": {
+                "max": 49180,
+                "min": 49160
+              },
+              "urls": [
+                "turn:coturn:3478"
+              ]
+            },
+            "contractVersion": "browser-connectivity/v1",
+            "credentialIssuer": {
+              "kind": "turnRest",
+              "secretRef": "turn-rest-secret",
+              "ttlSeconds": 300
+            },
+            "evidence": {
+              "intervalSeconds": 30,
+              "ttlSeconds": 90
+            },
+            "frontend": {
+              "urls": [
+                "turn:turn.example.test:3478"
+              ]
+            },
+            "policyBackend": "unenforced"
+          },
+          "valid": false
+        },
+        {
+          "name": "unknown-field",
+          "profile": {
+            "backend": {
+              "controlDestination": {
+                "kind": "unenforced"
+              },
+              "relayDestination": {
+                "kind": "unenforced"
+              },
+              "relayPortRange": {
+                "max": 49180,
+                "min": 49160
+              },
+              "urls": [
+                "turn:coturn:3478"
+              ]
+            },
+            "contractVersion": "browser-connectivity/v1",
+            "credentialIssuer": {
+              "kind": "turnRest",
+              "secretRef": "turn-rest-secret",
+              "ttlSeconds": 300
+            },
+            "evidence": {
+              "intervalSeconds": 30,
+              "requiredFrontendVantages": [],
+              "ttlSeconds": 90
+            },
+            "frontend": {
+              "urls": [
+                "turn:turn.example.test:3478"
+              ]
+            },
+            "policyBackend": "unenforced",
+            "unknown": true
+          },
+          "valid": false
+        },
+        {
+          "name": "invalid-backend-url",
+          "profile": {
+            "backend": {
+              "controlDestination": {
+                "kind": "unenforced"
+              },
+              "relayDestination": {
+                "kind": "unenforced"
+              },
+              "relayPortRange": {
+                "max": 49180,
+                "min": 49160
+              },
+              "urls": [
+                "https://not-turn.example.test"
+              ]
+            },
+            "contractVersion": "browser-connectivity/v1",
+            "credentialIssuer": {
+              "kind": "turnRest",
+              "secretRef": "turn-rest-secret",
+              "ttlSeconds": 300
+            },
+            "evidence": {
+              "intervalSeconds": 30,
+              "requiredFrontendVantages": [],
+              "ttlSeconds": 90
+            },
+            "frontend": {
+              "urls": [
+                "turn:turn.example.test:3478"
+              ]
+            },
+            "policyBackend": "unenforced"
+          },
+          "valid": false
+        },
+        {
+          "name": "invalid-frontend-url",
+          "profile": {
+            "backend": {
+              "controlDestination": {
+                "kind": "unenforced"
+              },
+              "relayDestination": {
+                "kind": "unenforced"
+              },
+              "relayPortRange": {
+                "max": 49180,
+                "min": 49160
+              },
+              "urls": [
+                "turn:coturn:3478"
+              ]
+            },
+            "contractVersion": "browser-connectivity/v1",
+            "credentialIssuer": {
+              "kind": "turnRest",
+              "secretRef": "turn-rest-secret",
+              "ttlSeconds": 300
+            },
+            "evidence": {
+              "intervalSeconds": 30,
+              "requiredFrontendVantages": [
+                "host"
+              ],
+              "ttlSeconds": 90
+            },
+            "frontend": {
+              "urls": [
+                "https://not-turn.example.test"
+              ]
+            },
+            "policyBackend": "unenforced"
+          },
+          "valid": false
+        }
+      ]
+    },
+    "turn-path-evidence.schema.json": {
+      "$defs": {
+        "evidence": {
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "else": {
+                "not": {
+                  "required": [
+                    "relayAddress"
+                  ]
+                },
+                "required": [
+                  "errorCode"
+                ]
+              },
+              "if": {
+                "properties": {
+                  "outcome": {
+                    "const": "success"
+                  }
+                },
+                "required": [
+                  "outcome"
+                ]
+              },
+              "then": {
+                "not": {
+                  "required": [
+                    "errorCode"
+                  ]
+                },
+                "required": [
+                  "relayAddress"
+                ]
+              }
+            }
+          ],
+          "properties": {
+            "acceptedAt": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "contractVersion": {
+              "const": "browser-connectivity/v1"
+            },
+            "credentialRevision": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "errorCode": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "expiresAt": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "measuredAt": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "outcome": {
+              "enum": [
+                "success",
+                "failure"
+              ]
+            },
+            "producer": {
+              "$ref": "#/$defs/producer"
+            },
+            "profileRevision": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "relayAddress": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "contractVersion",
+            "producer",
+            "profileRevision",
+            "credentialRevision",
+            "outcome",
+            "acceptedAt",
+            "expiresAt"
+          ],
+          "type": "object"
+        },
+        "producer": {
+          "additionalProperties": false,
+          "properties": {
+            "installationId": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "vantageId": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "installationId",
+            "vantageId"
+          ],
+          "type": "object"
+        }
+      },
+      "$id": "https://aileron.dev/contracts/browser-connectivity/turn-path-evidence.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "browser-connectivity/v1"
+        },
+        "lastSuccess": {
+          "$ref": "#/$defs/evidence"
+        },
+        "latestAttempt": {
+          "$ref": "#/$defs/evidence"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "latestAttempt"
+      ],
+      "title": "TURN Path Evidence Snapshot",
+      "type": "object"
+    },
+    "turn-reachability-profile.schema.json": {
+      "$defs": {
+        "destination": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "ciliumEntities",
+                "cidrs",
+                "fqdns",
+                "namespacePods",
+                "unenforced"
+              ]
+            },
+            "namespace": {
+              "maxLength": 253,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+              "type": "string"
+            },
+            "podLabels": {
+              "additionalProperties": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "minProperties": 1,
+              "type": "object"
+            },
+            "values": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        "turnURLs": {
+          "items": {
+            "pattern": "^[tT][uU][rR][nN][sS]?:",
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "$id": "https://aileron.dev/contracts/browser-connectivity/turn-reachability-profile.schema.json",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "additionalProperties": false,
+          "properties": {
+            "controlDestination": {
+              "$ref": "#/$defs/destination"
+            },
+            "relayDestination": {
+              "$ref": "#/$defs/destination"
+            },
+            "relayPortRange": {
+              "additionalProperties": false,
+              "properties": {
+                "max": {
+                  "maximum": 65535,
+                  "minimum": 1024,
+                  "type": "integer"
+                },
+                "min": {
+                  "maximum": 65535,
+                  "minimum": 1024,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "min",
+                "max"
+              ],
+              "type": "object"
+            },
+            "urls": {
+              "$ref": "#/$defs/turnURLs"
+            }
+          },
+          "required": [
+            "urls",
+            "controlDestination",
+            "relayDestination",
+            "relayPortRange"
+          ],
+          "type": "object"
+        },
+        "contractVersion": {
+          "const": "browser-connectivity/v1"
+        },
+        "credentialIssuer": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "turnRest",
+                "staticSecret"
+              ]
+            },
+            "secretRef": {
+              "maxLength": 253,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+              "type": "string"
+            },
+            "ttlSeconds": {
+              "minimum": 60,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "secretRef",
+            "ttlSeconds"
+          ],
+          "type": "object"
+        },
+        "evidence": {
+          "additionalProperties": false,
+          "properties": {
+            "intervalSeconds": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "requiredFrontendVantages": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "ttlSeconds": {
+              "minimum": 2,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "intervalSeconds",
+            "ttlSeconds",
+            "requiredFrontendVantages"
+          ],
+          "type": "object"
+        },
+        "frontend": {
+          "additionalProperties": false,
+          "properties": {
+            "urls": {
+              "$ref": "#/$defs/turnURLs"
+            }
+          },
+          "required": [
+            "urls"
+          ],
+          "type": "object"
+        },
+        "policyBackend": {
+          "enum": [
+            "cilium",
+            "kubernetes",
+            "unenforced"
+          ]
+        }
+      },
+      "required": [
+        "contractVersion",
+        "policyBackend",
+        "backend",
+        "frontend",
+        "credentialIssuer",
+        "evidence"
+      ],
+      "title": "TURN Reachability Profile",
+      "type": "object"
+    }
+  },
+  "generated": true,
+  "message": "DO NOT EDIT; run generate_contract_bundle.py"
+}

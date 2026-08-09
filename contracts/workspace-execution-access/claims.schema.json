@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aileron.dev/contracts/workspace-execution-access/claims.schema.json",
+  "title": "Workspace Execution Access Grant Claims",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "iss",
+    "sub",
+    "aud",
+    "kind",
+    "workspaceId",
+    "runtimeInstanceId",
+    "runtimeAccessRevision",
+    "actions",
+    "iat",
+    "exp",
+    "jti"
+  ],
+  "properties": {
+    "iss": {"type": "string", "minLength": 1},
+    "sub": {"type": "string", "minLength": 1},
+    "aud": {
+      "enum": ["workspace-runtime", "workspace-terminal"]
+    },
+    "kind": {"const": "workspace-execution-access-grant"},
+    "workspaceId": {"type": "string", "minLength": 1},
+    "runtimeInstanceId": {"type": "string", "minLength": 1},
+    "runtimeAccessRevision": {"type": "integer", "minimum": 0},
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "runtime_read",
+          "runtime_write",
+          "workspace_settings",
+          "terminal",
+          "agent",
+          "automation",
+          "browser_automation"
+        ]
+      }
+    },
+    "iat": {"type": "integer", "minimum": 1},
+    "exp": {"type": "integer", "minimum": 1},
+    "jti": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"aud": {"const": "workspace-runtime"}}},
+      "then": {
+        "properties": {
+          "actions": {
+            "not": {"contains": {"const": "terminal"}}
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"aud": {"const": "workspace-terminal"}}},
+      "then": {
+        "properties": {
+          "actions": {
+            "const": ["terminal"]
+          }
+        }
+      }
+    }
+  ],
+  "x-aileron-token-ttl-seconds": 60,
+  "x-aileron-actions-are-canonical-sorted": true
+}

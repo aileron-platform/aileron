@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "kitVersion": "2026.08.04",
+  "scaffoldVersion": 2,
+  "chartSchemaVersion": 1,
+  "checksumsFile": "assets/kit/checksums.sha256",
+  "supportedBuildTypes": [
+    "static",
+    "nextjs-standalone"
+  ],
+  "providers": {
+    "build": [
+      "gitlab"
+    ],
+    "deploy": [
+      "argocd"
+    ]
+  },
+  "managedPaths": [
+    ".gitlab-ci.yml",
+    ".aileron/publishing/repository.json",
+    ".aileron/publishing/site-manifest.json",
+    "ci/",
+    "chart/"
+  ],
+  "artifactRules": {
+    "siteImage": "write-once",
+    "helmChart": "write-once",
+    "publicationId": "project-identity + siteId + sourceCommit"
+  },
+  "securityProfile": {
+    "runAsNonRoot": true,
+    "readOnlyRootFilesystem": true,
+    "dropCapabilities": "ALL",
+    "seccompProfile": "RuntimeDefault",
+    "automountServiceAccountToken": false,
+    "allowHostPath": false,
+    "allowPrivileged": false
+  },
+  "baseImages": {
+    "runtime": "assets/runtime-base/Dockerfile.runtime",
+    "nextjsBuilder": "assets/runtime-base/Dockerfile.builder"
+  }
+}

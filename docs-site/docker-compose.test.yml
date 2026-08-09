@@ -1,0 +1,37 @@
+services:
+  docs-site-test:
+    image: node:20.19.4-bookworm-slim@sha256:6db5e436948af8f0244488a1f658c2c8e55a3ae51ca2e1686ed042be8f25f70a
+    working_dir: /workspace/docs-site
+    volumes:
+      - ..:/workspace:ro
+      - docs_node_modules:/workspace/docs-site/node_modules
+      - docs_build:/workspace/docs-site/build
+      - docs_cache:/workspace/docs-site/.docusaurus
+    command:
+      - /bin/sh
+      - -lc
+      - npm ci && npm run test && npm run typecheck && npm run build -- --locale zh-Hant --out-dir build/zh-Hant && npm run build -- --locale en --out-dir build/en
+
+  docs-site-contract-generate:
+    profiles:
+      - contract-generate
+    image: node:20.19.4-bookworm-slim@sha256:6db5e436948af8f0244488a1f658c2c8e55a3ae51ca2e1686ed042be8f25f70a
+    working_dir: /workspace/docs-site
+    volumes:
+      - ..:/workspace:ro
+      - ./docs/features:/workspace/docs-site/docs/features
+      - ./docs/architecture:/workspace/docs-site/docs/architecture
+      - ./docs/api:/workspace/docs-site/docs/api
+      - ./i18n/en/docusaurus-plugin-content-docs/current/features:/workspace/docs-site/i18n/en/docusaurus-plugin-content-docs/current/features
+      - ./i18n/en/docusaurus-plugin-content-docs/current/architecture:/workspace/docs-site/i18n/en/docusaurus-plugin-content-docs/current/architecture
+      - ./i18n/en/docusaurus-plugin-content-docs/current/api:/workspace/docs-site/i18n/en/docusaurus-plugin-content-docs/current/api
+      - docs_node_modules:/workspace/docs-site/node_modules
+    command:
+      - /bin/sh
+      - -lc
+      - npm ci && npm run generate:authorization-contract
+
+volumes:
+  docs_node_modules:
+  docs_build:
+  docs_cache:

@@ -1,0 +1,319 @@
+{{- if .Values.workspaceManager.enabled }}
+{{- $oidcCASecretName := .Values.oidc.caSecretName | default "" | trim }}
+{{- $oidcCASecretKey := .Values.oidc.caSecretKey | default "ca.crt" | trim }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-manager
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.workspaceManager.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "aileron.componentLabels" (dict "component" "workspace-manager" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentPodLabels" (dict "component" "workspace-manager" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+      annotations:
+        checksum/platform-config: {{ include (print $.Template.BasePath "/platform-configmap.yaml") . | sha256sum }}
+        checksum/manager-bootstrap: {{ include (print $.Template.BasePath "/manager-bootstrap-configmap.yaml") . | sha256sum }}
+        aileron.io/browser-credential-keyring-revision: {{ .Values.browserCredentials.revision | required "browserCredentials.revision is required" | quote }}
+    spec:
+      serviceAccountName: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" .Values.workspaceManager.serviceAccount "nameSuffix" "workspace-manager") }}
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+        {{- with .Values.kubernetes.platformStorageGid }}
+        fsGroup: {{ . }}
+        fsGroupChangePolicy: OnRootMismatch
+        {{- end }}
+      containers:
+        - name: workspace-manager
+          image: {{ include "aileron.imageReference" (dict "name" "workspaceManager.image" "image" .Values.workspaceManager.image "production" .Values.security.requireStrongSecrets) | quote }}
+          imagePullPolicy: {{ .Values.workspaceManager.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3001
+            - name: flower
+              containerPort: 5555
+          env:
+            - name: PLATFORM_PUBLIC_ORIGIN
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PLATFORM_PUBLIC_ORIGIN
+            - name: RUNTIME_PROVISIONER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_PROVISIONER
+            - name: RUNTIME_K8S_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_NAMESPACE
+            - name: WORKSPACE_STORAGE_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: WORKSPACE_STORAGE_SIZE
+            - name: RUNTIME_HOME_STORAGE_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_HOME_STORAGE_SIZE
+            - name: KNOWLEDGE_BASES_PVC_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: KNOWLEDGE_BASES_PVC_NAME
+            - name: RUNTIME_ASSERTION_ISSUER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_ASSERTION_ISSUER
+            - name: RUNTIME_ASSERTION_KID
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_ASSERTION_KID
+            - name: RUNTIME_ASSERTION_PRIVATE_KEY_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_ASSERTION_PRIVATE_KEY_FILE
+            - name: RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE
+            - name: RUNTIME_ASSERTION_PUBLIC_KEY_SET_SECRET_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_ASSERTION_PUBLIC_KEY_SET_SECRET_NAME
+            - name: RUNTIME_DATABASE_CREDENTIAL_KEY_FILE
+              value: /run/secrets/aileron/runtime-database-credential.key
+            - name: BROWSER_CREDENTIAL_KEYRING_FILE
+              value: /etc/aileron/browser-credentials/keyring.json
+            {{- if and .Values.turn.enabled (eq .Values.turn.profile.credentialIssuer.kind "turnRest") }}
+            - name: TURN_BROWSER_CREDENTIAL_ISSUER_KIND
+              value: turnRest
+            - name: TURN_BROWSER_CREDENTIAL_TTL_SECONDS
+              value: {{ .Values.turn.profile.credentialIssuer.ttlSeconds | quote }}
+            - name: TURN_FRONTEND_ICE_SERVERS_JSON_FILE
+              value: /run/secrets/aileron/turn-frontend-ice-servers.json
+            - name: TURN_REST_SHARED_SECRET_FILE
+              value: /run/secrets/aileron/turn-rest-shared-secret
+            {{- end }}
+            - name: RUNTIME_K8S_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_IMAGE
+            - name: RUNTIME_K8S_BROWSER_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_BROWSER_IMAGE
+            - name: RUNTIME_K8S_CANVAS_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_CANVAS_IMAGE
+            - name: RUNTIME_K8S_RUNTIME_RESOURCES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_RUNTIME_RESOURCES
+            - name: RUNTIME_K8S_BROWSER_RESOURCES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_BROWSER_RESOURCES
+            - name: RUNTIME_K8S_CANVAS_RESOURCES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_CANVAS_RESOURCES
+            - name: CILIUM_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: CILIUM_ENABLED
+            - name: FIREWALL_SEED_FILE
+              value: /etc/aileron/bootstrap/firewall-seed.json
+            - name: REDIS_URL
+              value: "redis://{{ include "aileron.fullname" . }}-redis:6379/0"
+            - name: CELERY_BROKER_URL
+              value: "redis://{{ include "aileron.fullname" . }}-redis:6379/0"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://{{ include "aileron.fullname" . }}-redis:6379/1"
+            - name: DATABASE_URL_FILE
+              value: /run/secrets/aileron/database-url
+            - name: ENV
+              value: {{ ternary "production" "development" (eq (include "aileron.platformPublicScheme" .) "https") | quote }}
+            - name: OIDC_ISSUER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: OIDC_ISSUER_URL
+            - name: OIDC_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: OIDC_CLIENT_ID
+            - name: OIDC_CLIENT_SECRET_FILE
+              value: /run/secrets/aileron/oidc-client-secret
+            {{- if ne $oidcCASecretName "" }}
+            - name: OIDC_CA_CERT_FILE
+              value: /etc/aileron/oidc-ca/ca.crt
+            {{- end }}
+            - name: TZ
+              value: Asia/Taipei
+            - name: HOST_KNOWLEDGE_BASES_DIR
+              value: /host/knowledge-bases
+            - name: MANAGER_KNOWLEDGE_BASES_DIR
+              value: /host/knowledge-bases
+            - name: MANAGER_LOCAL_HISTORY_DIR
+              value: /state/local-history
+            - name: MANAGER_MARKETPLACE_INSTALL_DIR
+              value: /state/marketplace
+            - name: MARKETPLACE_STORAGE_PATH
+              value: /state/marketplace
+            - name: CODEX_MANAGER_STATE_DIR
+              value: /state/codex
+            - name: RUNTIME_SCRIPT_ROOT
+              value: /tmp/runtime-scripts
+            - name: HOME
+              value: /state/home
+            - name: CODEX_HOME
+              value: /state/codex
+          livenessProbe:
+            exec:
+              command:
+                - /workspace-manager/scripts/kubernetes_healthcheck.sh
+            failureThreshold: 3
+            periodSeconds: 30
+            timeoutSeconds: 20
+          startupProbe:
+            exec:
+              command:
+                - /workspace-manager/scripts/kubernetes_healthcheck.sh
+            failureThreshold: 60
+            periodSeconds: 5
+            timeoutSeconds: 20
+          readinessProbe:
+            exec:
+              command:
+                - /workspace-manager/scripts/kubernetes_healthcheck.sh
+                - --ready
+            failureThreshold: 2
+            periodSeconds: 15
+            timeoutSeconds: 20
+          resources:
+            {{- toYaml .Values.workspaceManager.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: knowledge-bases
+              mountPath: /host/knowledge-bases
+            - name: manager-state
+              mountPath: /state
+            - name: tmp
+              mountPath: /tmp
+            - name: manager-private-secrets
+              mountPath: /run/secrets/aileron
+              readOnly: true
+            - name: runtime-assertion-public-jwks
+              mountPath: /etc/aileron/runtime-assertions
+              readOnly: true
+            - name: manager-bootstrap
+              mountPath: /etc/aileron/bootstrap
+              readOnly: true
+            - name: browser-credential-keyring
+              mountPath: /etc/aileron/browser-credentials
+              readOnly: true
+            {{- if ne $oidcCASecretName "" }}
+            - name: oidc-ca
+              mountPath: /etc/aileron/oidc-ca
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: knowledge-bases
+          persistentVolumeClaim:
+            claimName: {{ .Values.kubernetes.knowledgeBases.pvcName }}
+        - name: manager-state
+          persistentVolumeClaim:
+            claimName: {{ .Values.kubernetes.managerState.pvcName }}
+        - name: tmp
+          emptyDir: {}
+        - name: manager-private-secrets
+          projected:
+            defaultMode: 0440
+            sources:
+              - secret:
+                  name: {{ .Values.runtimeAssertions.privateKeySecretName | required "runtimeAssertions.privateKeySecretName is required" }}
+                  items:
+                    - key: {{ .Values.runtimeAssertions.privateKeySecretKey | required "runtimeAssertions.privateKeySecretKey is required" }}
+                      path: private-key.pem
+              - secret:
+                  name: {{ .Values.platformSecrets.existingSecretName | required "platformSecrets.existingSecretName is required" }}
+                  items:
+                    - key: {{ .Values.platformSecrets.runtimeDatabaseCredentialKey | required "platformSecrets.runtimeDatabaseCredentialKey is required" }}
+                      path: runtime-database-credential.key
+                    - key: {{ .Values.platformSecrets.databaseUrlKey | required "platformSecrets.databaseUrlKey is required" }}
+                      path: database-url
+              - secret:
+                  name: {{ .Values.oidc.clientSecretName | required "oidc.clientSecretName is required" }}
+                  items:
+                    - key: {{ .Values.oidc.clientSecretKey | required "oidc.clientSecretKey is required" }}
+                      path: oidc-client-secret
+              {{- if and .Values.turn.enabled (eq .Values.turn.profile.credentialIssuer.kind "turnRest") }}
+              - secret:
+                  name: {{ include "aileron.turnSecretName" . }}
+                  items:
+                    - key: {{ .Values.turn.frontendIceServersKey }}
+                      path: turn-frontend-ice-servers.json
+                    - key: {{ .Values.turn.restSharedSecretKey }}
+                      path: turn-rest-shared-secret
+              {{- end }}
+        - name: runtime-assertion-public-jwks
+          secret:
+            secretName: {{ .Values.runtimeAssertions.publicKeySetSecretName | required "runtimeAssertions.publicKeySetSecretName is required" }}
+            defaultMode: 0444
+            items:
+              - key: {{ .Values.runtimeAssertions.publicKeySetSecretKey | required "runtimeAssertions.publicKeySetSecretKey is required" }}
+                path: jwks.json
+        - name: manager-bootstrap
+          configMap:
+            name: {{ include "aileron.fullname" . }}-manager-bootstrap
+            defaultMode: 0444
+        - name: browser-credential-keyring
+          secret:
+            secretName: {{ .Values.browserCredentials.existingSecretName | required "browserCredentials.existingSecretName is required" }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.browserCredentials.key | required "browserCredentials.key is required" }}
+                path: keyring.json
+        {{- if ne $oidcCASecretName "" }}
+        - name: oidc-ca
+          secret:
+            secretName: {{ $oidcCASecretName }}
+            defaultMode: 0444
+            items:
+              - key: {{ $oidcCASecretKey }}
+                path: ca.crt
+        {{- end }}
+{{- end }}

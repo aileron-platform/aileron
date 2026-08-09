@@ -1,0 +1,23 @@
+{
+  "contractVersion": "browser-connectivity/v1",
+  "policyBackend": "unenforced",
+  "backend": {
+    "urls": ["turn:coturn:3478"],
+    "controlDestination": {"kind": "unenforced"},
+    "relayDestination": {"kind": "unenforced"},
+    "relayPortRange": {"min": 49160, "max": 49180}
+  },
+  "frontend": {
+    "urls": ["turn:127.0.0.1:3478"]
+  },
+  "credentialIssuer": {
+    "kind": "turnRest",
+    "secretRef": "turn-rest-shared-secret",
+    "ttlSeconds": 300
+  },
+  "evidence": {
+    "intervalSeconds": 30,
+    "ttlSeconds": 90,
+    "requiredFrontendVantages": ["host"]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "treatConfigHintsAsErrors": true,
+  "entry": [
+    "index.html",
+    "e2e/fixtures/index.html",
+    "e2e/fixtures/product-shell.tsx"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx,css}",
+    "e2e/**/*.{ts,tsx,css}",
+    "config/**/*.ts"
+  ],
+  "vitest": {
+    "config": ["vite.config.test.ts", "vite.config.gateway-test.ts"],
+    "entry": [
+      "src/__tests__/setup.ts",
+      "src/**/*.test.{ts,tsx}",
+      "config/**/*.test.ts"
+    ]
+  },
+  "playwright": {
+    "config": ["playwright.config.ts"],
+    "entry": ["e2e/**/*.spec.ts"]
+  }
+}

@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PPT Review Workspace</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --bg-accent: #eef1f4;
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-strong: #ffffff;
+      --line: rgba(17, 24, 39, 0.12);
+      --text: #1f2933;
+      --muted: #667085;
+      --accent: #1c9c9c;
+      --accent-soft: #e8f7f7;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 8px 24px rgba(16, 24, 40, 0.06);
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+      --max-width: 1520px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Segoe UI Variable Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+    }
+
+    /* Step progress bar — shared across canvas shells. Width matches .shell;
+       no horizontal margin so it aligns with the workspace panels below. */
+    .step-progress {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      align-items: center;
+      padding: 14px 18px;
+      margin: 0 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .step-progress .step-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .step-progress .step-item .step-num {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+    .step-progress .step-item[data-state="done"]   { color: var(--muted); opacity: 0.7; }
+    .step-progress .step-item[data-state="todo"]   { color: var(--muted); opacity: 0.45; }
+    .step-progress .step-item[data-state="active"] {
+      color: var(--accent);
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    .step-progress .step-sep { color: var(--line); opacity: 0.5; }
+
+    button, textarea, select, input { font: inherit; }
+    .shell {
+      width: min(calc(100% - 32px), var(--max-width));
+      margin: 24px auto 56px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 30px;
+      border: 1px solid var(--line);
+      border-radius: 32px;
+      background: var(--panel-strong);
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: none;
+      position: absolute;
+      inset: auto -60px -90px auto;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: radial-gradient(circle, color-mix(in srgb, var(--accent) 20%, transparent), transparent);
+      pointer-events: none;
+    }
+
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .hero-title { max-width: 860px; }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 14px 0 10px;
+      font-size: clamp(34px, 6vw, 64px);
+      line-height: 0.96;
+      letter-spacing: -0.05em;
+    }
+
+    .intro {
+      margin: 0;
+      max-width: 860px;
+      font-size: 16px;
+      line-height: 1.7;
+      color: var(--muted);
+    }
+
+    .hero-notes {
+      display: grid;
+      gap: 12px;
+      min-width: 260px;
+      flex: 0 0 320px;
+    }
+
+    .note-card {
+      padding: 16px 18px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid var(--line);
+    }
+
+    .note-label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .note-value {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .summary-bar {
+      margin-top: 18px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .summary-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.74);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .workspace {
+      position: relative;
+      min-height: calc(100vh - 24px);
+      margin-top: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .stage-panel {
+      grid-row: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .stage-panel .panel-body {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto auto;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      background: var(--panel-strong);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.52);
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -0.03em;
+    }
+
+    .panel-subtitle {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .panel-body {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .page-list {
+      min-height: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      display: flex;
+      gap: 8px;
+      padding: 2px 3px 2px 1px;
+    }
+
+    .page-list::-webkit-scrollbar {
+      height: 10px;
+    }
+
+    .page-list::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--muted) 32%, transparent);
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, var(--panel-strong) 72%, transparent);
+    }
+
+    .page-button {
+      flex: 0 0 156px;
+      padding: 0;
+      border-radius: 18px;
+      border: 1px solid transparent;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }
+
+    .page-button:hover {
+      transform: translateY(-1px);
+    }
+
+    .page-button.active .page-thumb-card {
+      border-color: color-mix(in srgb, var(--accent) 72%, var(--line));
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent), var(--shadow);
+      background: color-mix(in srgb, var(--accent-soft) 44%, var(--panel-strong));
+    }
+
+    .page-thumb-entry {
+      display: block;
+    }
+
+    .page-order {
+      display: none;
+    }
+
+    .page-thumb-card {
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: var(--panel-strong);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    }
+
+    .page-thumb-image {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      background: linear-gradient(135deg, var(--bg-accent), var(--panel-strong));
+      border-bottom: 1px solid var(--line);
+    }
+
+    .page-thumb-meta {
+      padding: 8px 10px 10px;
+      display: grid;
+      gap: 3px;
+    }
+
+    .page-code {
+      display: inline-flex;
+      width: fit-content;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: color-mix(in srgb, var(--accent) 62%, var(--text));
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .page-title {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.35;
+      color: var(--text);
+    }
+
+    .page-meta {
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .page-count {
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+
+    .stage-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .stage-toolbar-spacer {
+      flex: 1 1 auto;
+    }
+
+    .segmented {
+      display: inline-flex;
+      flex-wrap: nowrap;
+      gap: 2px;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel-strong) 86%, var(--bg-accent));
+    }
+
+    .tool-chip {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      padding: 7px 10px;
+      border-radius: 9px;
+      cursor: pointer;
+      min-height: 30px;
+      font-size: 13px;
+      line-height: 1.2;
+      transition: background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    .tool-chip:hover {
+      background: color-mix(in srgb, var(--accent-soft) 42%, transparent);
+      color: var(--text);
+    }
+
+    .tool-chip.active {
+      color: color-mix(in srgb, var(--accent) 68%, var(--text));
+      border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+      background: var(--accent-soft);
+      box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+
+    .inline-field {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.74);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .inline-field input[type="range"] {
+      width: 110px;
+      accent-color: var(--accent);
+    }
+
+    .action-scroll {
+      min-height: 0;
+      overflow-y: auto;
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      padding-right: 4px;
+    }
+
+    .sidebar-panel {
+      grid-row: 2;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+    }
+
+    .sidebar-panel .panel-head {
+      display: none;
+    }
+
+    .sidebar-panel .panel-body {
+      display: contents;
+    }
+
+    .action-panel {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 10;
+      width: min(380px, calc(100% - 24px));
+      max-height: calc(100% - 24px);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      transition: transform 180ms ease, opacity 180ms ease;
+    }
+
+    .action-panel.drawer-hidden {
+      transform: translateX(calc(100% + 24px));
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .action-panel .panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .drawer-close-button {
+      flex: 0 0 auto;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+    }
+
+    .action-panel .panel-body {
+      min-height: 0;
+      grid-template-rows: minmax(0, 1fr) auto;
+      padding-bottom: 14px;
+    }
+
+    .action-row {
+      display: grid;
+      gap: 12px;
+    }
+
+    .action-footer {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--panel-strong) 88%, var(--bg-accent));
+    }
+
+    .draft-maintenance {
+      display: grid;
+      gap: 6px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+
+    .draft-maintenance .ghost {
+      width: 100%;
+      justify-content: center;
+      color: var(--muted);
+    }
+
+    select, textarea {
+      width: 100%;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--text);
+      padding: 12px 14px;
+      resize: vertical;
+    }
+
+    textarea {
+      min-height: 110px;
+      line-height: 1.6;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .action-footer .button-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+    }
+
+    .primary,
+    .secondary,
+    .ghost {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 12px;
+      cursor: pointer;
+      transition: transform 160ms ease, box-shadow 160ms ease;
+      min-height: 34px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .primary:hover,
+    .secondary:hover,
+    .ghost:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow);
+    }
+
+    .primary {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: color-mix(in srgb, var(--accent) 76%, #000000);
+    }
+
+    .secondary {
+      background: var(--panel-strong);
+      color: var(--text);
+    }
+
+    .ghost {
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .action-footer .primary,
+    .action-footer .secondary,
+    .action-footer .ghost {
+      width: 100%;
+      justify-content: center;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .stage-frame {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: linear-gradient(135deg, var(--bg-accent), var(--panel-strong));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.5);
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    .stage-image,
+    .stage-canvas,
+    .stage-notes {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .stage-image {
+      object-fit: cover;
+      display: block;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .stage-canvas {
+      z-index: 2;
+    }
+
+    .stage-notes {
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .annotation-pin {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: var(--accent);
+      color: white;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+    }
+
+    .stage-caption {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+
+    .toolbar-actions {
+      display: inline-flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .note-list {
+      display: grid;
+      gap: 10px;
+      max-height: 280px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .note-item {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.82);
+      display: grid;
+      gap: 8px;
+    }
+
+    .note-item-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .note-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: color-mix(in srgb, var(--accent) 68%, var(--text));
+      font-size: 12px;
+    }
+
+    .note-remove {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .note-input {
+      width: 100%;
+      min-height: 72px;
+      resize: vertical;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--text);
+      padding: 10px 12px;
+      line-height: 1.55;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .note-input:focus {
+      outline: 2px solid rgba(50, 107, 124, 0.24);
+      border-color: rgba(50, 107, 124, 0.42);
+    }
+
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
+    @media (max-width: 1280px) {
+      .action-panel {
+        top: auto;
+        right: 10px;
+        bottom: 82px;
+        width: min(520px, calc(100% - 20px));
+        max-height: calc(100% - 104px);
+      }
+
+      .action-panel.drawer-hidden {
+        transform: translateY(calc(100% + 24px));
+      }
+    }
+
+    @media (max-width: 700px) {
+      .shell {
+        width: min(calc(100% - 20px), var(--max-width));
+        margin-top: 10px;
+      }
+
+      .hero {
+        padding: 24px;
+        border-radius: 22px;
+      }
+    }
+
+
+    /* Web Canvas embed polish: content-owned UI, platform-owned chrome. */
+    :root {
+      --bg: #f6f7f9;
+      --bg-accent: #eef1f4;
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-strong: #ffffff;
+      --line: rgba(17, 24, 39, 0.12);
+      --text: #1f2933;
+      --muted: #667085;
+      --accent: #1c9c9c;
+      --accent-soft: #e8f7f7;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 8px 24px rgba(16, 24, 40, 0.06);
+      --radius-xl: 14px;
+      --radius-lg: 12px;
+      --radius-md: 10px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      background: #f6f7f9;
+    }
+
+    h1,
+    .panel-title,
+    .scheme-title,
+    .lightbox-title {
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.08;
+    }
+
+    .hero::after {
+      display: none;
+    }
+
+    .hero,
+    .scheme,
+    .panel,
+    .slide-row,
+    .meta-panel,
+    .note-card,
+    .code-card,
+    .selection-status-card,
+    .page-thumb-card,
+    .candidate-card,
+    .stage-frame,
+    .lightbox-panel {
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+    }
+
+    .primary {
+      background: #1c9c9c;
+      border-color: rgba(28, 156, 156, 0.28);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg: #1e1e1e;
+        --bg-accent: #252526;
+        --panel: rgba(37, 37, 38, 0.94);
+        --panel-strong: #252526;
+        --line: rgba(255, 255, 255, 0.14);
+        --text: #d4d4d4;
+        --muted: #969696;
+        --accent: #007acc;
+        --accent-soft: rgba(0, 122, 204, 0.18);
+        --shadow: none;
+      }
+
+      body {
+        background: #1e1e1e;
+      }
+
+      .hero,
+      .panel,
+      .page-thumb-card,
+      .action-panel,
+      .feedback-card,
+      textarea,
+      select,
+      input[type="text"] {
+        background: #252526;
+      }
+
+      .panel-head,
+      .sidebar-panel,
+      .action-footer {
+        background: #2d2d30;
+      }
+
+      .eyebrow,
+      .note-card,
+      .summary-chip,
+      .tool-chip,
+      .inline-field,
+      .secondary,
+      .ghost {
+        background: #2d2d30;
+        border-color: var(--line);
+        color: var(--text);
+      }
+
+      .page-button.active .page-thumb-card,
+      .tool-chip.active,
+      .page-code {
+        background: var(--accent-soft);
+        border-color: rgba(0, 122, 204, 0.72);
+        color: #9cdcfe;
+      }
+
+      .stage-frame,
+      .page-thumb-image {
+        background: linear-gradient(135deg, #252526, #3c3c3c);
+      }
+
+      .primary {
+        background: #007acc;
+        color: #ffffff;
+        border-color: rgba(0, 122, 204, 0.7);
+      }
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #1e1e1e;
+      --bg-accent: #252526;
+      --panel: rgba(37, 37, 38, 0.94);
+      --panel-strong: #252526;
+      --line: rgba(255, 255, 255, 0.14);
+      --text: #d4d4d4;
+      --muted: #969696;
+      --accent: #007acc;
+      --accent-soft: rgba(0, 122, 204, 0.18);
+      --shadow: none;
+    }
+
+    html[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --bg-accent: #eef1f4;
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-strong: #ffffff;
+      --line: rgba(17, 24, 39, 0.12);
+      --text: #1f2933;
+      --muted: #667085;
+      --accent: #1c9c9c;
+      --accent-soft: #e8f7f7;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 8px 24px rgba(16, 24, 40, 0.06);
+    }
+
+    html[data-theme="dark"] body { background: #1e1e1e; }
+    html[data-theme="light"] body { background: #f6f7f9; }
+
+    html[data-theme="dark"] .hero,
+    html[data-theme="dark"] .panel,
+    html[data-theme="dark"] .page-thumb-card,
+    html[data-theme="dark"] .action-panel,
+    html[data-theme="dark"] .action-footer,
+    html[data-theme="dark"] .feedback-card { background: #252526; }
+
+    html[data-theme="light"] .hero,
+    html[data-theme="light"] .panel,
+    html[data-theme="light"] .page-thumb-card,
+    html[data-theme="light"] .action-panel,
+    html[data-theme="light"] .action-footer,
+    html[data-theme="light"] .feedback-card { background: var(--panel-strong); }
+
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="step-progress" aria-label="Workflow step indicator">
+      <span class="step-item" data-state="done"><span class="step-num">[1]</span>需求確認</span>
+      <span class="step-sep">›</span>
+      <span class="step-item" data-state="done"><span class="step-num">[2]</span>風格確認</span>
+      <span class="step-sep">›</span>
+      <span class="step-item" data-state="done"><span class="step-num">[3]</span>風格拆解確認</span>
+      <span class="step-sep">›</span>
+      <span class="step-item" data-state="done"><span class="step-num">[4]</span>產生前確認</span>
+      <span class="step-sep">›</span>
+      <span class="step-item" data-state="active"><span class="step-num">[5]</span>審閱確認</span>
+    </nav>
+    <section class="workspace">
+      <div class="panel sidebar-panel">
+        <div class="panel-head">
+          <h2 class="panel-title" data-i18n="sidebar.title">頁面縮圖</h2>
+          <p class="panel-subtitle" data-i18n="sidebar.subtitle">先看縮圖選頁；圖片多時，這一欄內部滾動。</p>
+        </div>
+        <div class="panel-body">
+          <div class="page-list" id="pageList"></div>
+        </div>
+      </div>
+
+      <div class="panel stage-panel">
+        <div class="panel-head">
+          <h2 class="panel-title" id="stageTitle" data-i18n="stage.title">頁面審閱</h2>
+          <p class="panel-subtitle" id="stageSubtitle" data-i18n="stage.subtitle">點選左側頁面開始。</p>
+        </div>
+        <div class="panel-body">
+          <div class="stage-toolbar">
+            <div class="segmented" id="toolGroup">
+              <button class="tool-chip active" type="button" data-tool="pen" data-i18n="tools.pen">畫筆</button>
+              <button class="tool-chip" type="button" data-tool="rect" data-i18n="tools.rect">矩形</button>
+              <button class="tool-chip" type="button" data-tool="note" data-i18n="tools.note">註解點</button>
+            </div>
+            <label class="inline-field"><span data-i18n="tools.strokeWidth">線寬</span>
+              <input type="range" min="2" max="12" step="1" value="4" id="strokeWidthInput">
+            </label>
+            <label class="inline-field"><span data-i18n="tools.color">顏色</span>
+              <input type="color" value="#1c9c9c" id="strokeColorInput">
+            </label>
+            <span class="stage-toolbar-spacer"></span>
+            <div class="toolbar-actions">
+              <button class="secondary" type="button" id="undoButton" data-i18n="actions.undo">復原上一步</button>
+              <button class="ghost" type="button" id="clearPageButton" data-i18n="actions.clearPage">清空本頁標註</button>
+            </div>
+            <button class="secondary" type="button" id="actionPanelToggle" data-i18n="actions.showNotes">展開註解</button>
+          </div>
+
+          <div class="stage-frame slide-wrap" id="stageFrame" data-slide-id="" aria-label="審閱畫布區域">
+            <img class="stage-image slide-img" id="stageImage" alt="目前頁面預覽">
+            <canvas class="stage-canvas" id="stageCanvas"></canvas>
+            <div class="stage-notes" id="stageNotes"></div>
+          </div>
+          <div class="stage-caption">
+            <div id="stageHint" data-i18n="stage.hint">提示：矩形和畫筆直接畫；註解點模式下點選頁面後輸入說明。</div>
+            <div id="draftStatus" data-i18n="status.savedInitial">草稿已自動儲存在瀏覽器快取中。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel action-panel drawer-hidden" id="actionPanel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title" data-i18n="actionPanel.title">本頁動作與說明</h2>
+            <p class="panel-subtitle" data-i18n="actionPanel.subtitle">這裡的內容會和圖上標註座標一起送到 AI Chat，圖片由 agent 本機還原。</p>
+          </div>
+          <button class="secondary drawer-close-button" type="button" id="actionPanelClose" data-i18n-aria-label="actions.hideNotes" aria-label="隱藏註解">×</button>
+        </div>
+        <div class="panel-body">
+          <div class="action-scroll">
+            <div class="action-row">
+              <label>
+                <span class="note-label" data-i18n="form.requestedAction">建議動作</span>
+                <select id="requestedActionSelect">
+                  <option value="edit-local" data-i18n="form.actions.editLocal">局部編輯</option>
+                  <option value="regenerate" data-i18n="form.actions.regenerate">整頁重新產生</option>
+                  <option value="note-only" data-i18n="form.actions.noteOnly">僅記錄意見</option>
+                </select>
+              </label>
+              <label>
+                <span class="note-label" data-i18n="form.pageComment">本頁總評</span>
+                <textarea id="pageCommentInput" data-i18n-placeholder="form.pageCommentPlaceholder" placeholder="例如：這頁整體不錯，但右上區域太空，主標題壓得不夠穩。"></textarea>
+              </label>
+            </div>
+
+            <div>
+              <span class="note-label" data-i18n="form.positionNotes">定位註解</span>
+              <div class="note-list" id="noteList"></div>
+            </div>
+          </div>
+
+          <div class="action-footer">
+            <div class="button-row">
+              <button class="primary" type="button" id="sendCurrentToChatButton" data-i18n="actions.sendCurrent">送本頁</button>
+              <button class="secondary" type="button" id="sendAllToChatButton" data-i18n="actions.sendAll">送全部</button>
+            </div>
+            <div class="button-row">
+              <button class="ghost" type="button" id="copyCurrentButton" data-i18n="actions.copyCurrent">複製本頁</button>
+              <button class="ghost" type="button" id="copyAllButton" data-i18n="actions.copyAll">複製全部</button>
+            </div>
+            <div class="draft-maintenance">
+              <button class="ghost" type="button" id="clearStorageButton" data-i18n="actions.clearStorage" data-i18n-aria-label="actions.clearStorageAria" aria-label="清空本機所有頁面的暫存註解與標註">清空所有草稿</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <template id="noteItemTemplate">
+    <div class="note-item">
+      <div class="note-item-top">
+        <span class="note-pill"></span>
+        <button class="note-remove" type="button" data-i18n="actions.delete">刪除</button>
+      </div>
+      <textarea class="note-input"></textarea>
+      <div class="page-meta note-position"></div>
+    </div>
+  </template>
+
+  <script>
+    const AILERON_CANVAS_BRIDGE_SOURCE = 'aileron-canvas-bridge';
+    const AILERON_CANVAS_BRIDGE_VERSION = 2;
+
+    function applyAileronTheme(theme) {
+      if (theme !== 'dark' && theme !== 'light') return;
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+    }
+
+    window.addEventListener('message', (event) => {
+      const data = event.data || {};
+      if (
+        data.source !== AILERON_CANVAS_BRIDGE_SOURCE
+        || data.version !== AILERON_CANVAS_BRIDGE_VERSION
+        || data.type !== 'SET_THEME'
+      ) {
+        return;
+      }
+      applyAileronTheme(data.payload?.theme);
+    });
+
+    const STORAGE_KEY = 'ppt-design-flow-review-prototype-v1';
+    const SKILL_EVENT_TYPE = 'REVIEW_FEEDBACK_SUBMITTED';
+    const MAX_SKILL_EVENT_BYTES = 32 * 1024;
+
+    const translations = {
+      'zh-TW': {
+        'sidebar.title': '頁面縮圖',
+        'sidebar.subtitle': '先看縮圖選頁；圖片多時，這一欄內部滾動。',
+        'stage.title': '頁面審閱',
+        'stage.subtitle': '點選左側頁面開始。',
+        'stage.subtitleWithSlide': '{{role}} · 在圖上直接圈選、畫框、加註解點；註解點留言會在右側列表編輯。',
+        'stage.hint': '提示：矩形和畫筆直接畫；註解點模式下點選頁面，然後在右側輸入該標記的留言。',
+        'tools.pen': '畫筆',
+        'tools.rect': '矩形',
+        'tools.note': '註解點',
+        'tools.strokeWidth': '線寬',
+        'tools.color': '顏色',
+        'actionPanel.title': '本頁動作與說明',
+        'actionPanel.subtitle': '這裡的內容會和圖上標註座標一起送到 AI Chat，圖片由 agent 本機還原。',
+        'form.requestedAction': '建議動作',
+        'form.actions.editLocal': '局部編輯',
+        'form.actions.regenerate': '整頁重新產生',
+        'form.actions.noteOnly': '僅記錄意見',
+        'form.pageComment': '本頁總評',
+        'form.pageCommentPlaceholder': '例如：這頁整體不錯，但右上區域太空，主標題壓得不夠穩。',
+        'form.positionNotes': '定位註解',
+        'actions.clearStorage': '清空所有草稿',
+        'actions.clearStorageAria': '清空本機所有頁面的暫存註解與標註',
+        'actions.undo': '復原上一步',
+        'actions.clearPage': '清空本頁標註',
+        'actions.showNotes': '展開註解',
+        'actions.hideNotes': '隱藏註解',
+        'actions.sendCurrent': '送本頁',
+        'actions.sendAll': '送全部',
+        'actions.copyCurrent': '複製本頁',
+        'actions.copyAll': '複製全部',
+        'actions.delete': '刪除',
+        'status.savedInitial': '草稿已自動儲存在瀏覽器快取中。',
+        'status.savedAt': '草稿已自動儲存在瀏覽器快取中 · {{time}}',
+        'status.cacheCleared': '本機快取已清空。',
+        'status.noFeedback': '尚未有可送出的內容：請先標記、加註解或填寫本頁總評。',
+        'status.sentCurrent': '已送出目前頁 feedback 到 AI Chat 草稿。',
+        'status.sentAll': '已送出全部頁面 feedback 到 AI Chat 草稿。',
+        'status.copiedCurrent': '已複製目前頁 JSON。',
+        'status.copiedAll': '已複製全部 JSON。',
+        'status.copyFailed': '無法寫入剪貼簿，請改用瀏覽器許可權允許後重試。',
+        'status.payloadTooLarge': 'Feedback 超過 32 KB，請改用複製 JSON 或拆成單頁送出。',
+        'notes.empty': '目前頁還沒有定位註解。',
+        'notes.label': '註解 {{marker}}',
+        'notes.position': '位置參考：圖上標記 {{marker}}',
+        'notes.placeholder': '輸入這個標記的調整意見...',
+        'thumb.alt': '{{title}} 縮圖',
+        'thumb.count': '{{count}} 條標註 / 圖形',
+        'prompt.note': '請輸入這條定位批註：',
+        'status.noteAdded': '已新增標記 {{marker}}，請在右側輸入這個標記的留言。',
+      },
+      en: {
+        'sidebar.title': 'Page Thumbnails',
+        'sidebar.subtitle': 'Select a page from thumbnails; this column scrolls when there are many images.',
+        'stage.title': 'Page Review',
+        'stage.subtitle': 'Select a page on the left to start.',
+        'stage.subtitleWithSlide': '{{role}} · Mark directly on the slide, draw boxes, or add note pins. Edit note pin comments in the list on the right.',
+        'stage.hint': 'Tip: draw directly with pen or rectangle; in note mode, click the page, then enter that marker comment on the right.',
+        'tools.pen': 'Pen',
+        'tools.rect': 'Rectangle',
+        'tools.note': 'Note pin',
+        'tools.strokeWidth': 'Width',
+        'tools.color': 'Color',
+        'actionPanel.title': 'Page Action & Notes',
+        'actionPanel.subtitle': 'These notes and markup coordinates will be sent to AI Chat; the agent restores the image locally.',
+        'form.requestedAction': 'Requested action',
+        'form.actions.editLocal': 'Local edit',
+        'form.actions.regenerate': 'Full-page regeneration',
+        'form.actions.noteOnly': 'Note only',
+        'form.pageComment': 'Page comment',
+        'form.pageCommentPlaceholder': 'Example: This page works overall, but the upper-right area feels empty and the title needs stronger weight.',
+        'form.positionNotes': 'Position notes',
+        'actions.clearStorage': 'Clear all drafts',
+        'actions.clearStorageAria': 'Clear temporary notes and markup for all pages on this device',
+        'actions.undo': 'Undo last step',
+        'actions.clearPage': 'Clear page markup',
+        'actions.showNotes': 'Show notes',
+        'actions.hideNotes': 'Hide notes',
+        'actions.sendCurrent': 'Send page',
+        'actions.sendAll': 'Send all',
+        'actions.copyCurrent': 'Copy page',
+        'actions.copyAll': 'Copy all',
+        'actions.delete': 'Delete',
+        'status.savedInitial': 'Draft is autosaved in browser storage.',
+        'status.savedAt': 'Draft is autosaved in browser storage · {{time}}',
+        'status.cacheCleared': 'Local cache cleared.',
+        'status.noFeedback': 'Nothing to send yet: add markup, a note, or a page comment first.',
+        'status.sentCurrent': 'Current page feedback was sent to the AI Chat draft.',
+        'status.sentAll': 'All page feedback was sent to the AI Chat draft.',
+        'status.copiedCurrent': 'Current page JSON copied.',
+        'status.copiedAll': 'All page JSON copied.',
+        'status.copyFailed': 'Could not write to clipboard. Allow browser permission and try again.',
+        'status.payloadTooLarge': 'Feedback is over 32 KB. Copy JSON instead or send one page at a time.',
+        'notes.empty': 'This page has no position notes yet.',
+        'notes.label': 'Note {{marker}}',
+        'notes.position': 'Position reference: marker {{marker}} on the slide',
+        'notes.placeholder': 'Enter feedback for this marker...',
+        'thumb.alt': '{{title}} thumbnail',
+        'thumb.count': '{{count}} annotations / marks',
+        'prompt.note': 'Enter this position note:',
+        'status.noteAdded': 'Marker {{marker}} added. Enter its comment in the list on the right.',
+      },
+    };
+
+    function detectLocale() {
+      const params = new URLSearchParams(window.location.search);
+      const explicitLocale = params.get('lang');
+      if (explicitLocale) return String(explicitLocale).toLowerCase().startsWith('zh') ? 'zh-TW' : 'en';
+      const candidates = [
+        navigator.language,
+        ...(navigator.languages || []),
+        document.documentElement.lang,
+      ].filter(Boolean).map(value => String(value).toLowerCase());
+      const firstLocale = candidates[0] || 'zh-TW';
+      return firstLocale.startsWith('zh') ? 'zh-TW' : 'en';
+    }
+
+    const locale = detectLocale();
+    document.documentElement.lang = locale;
+
+    function t(key, params = {}) {
+      const template = translations[locale]?.[key] || translations.en[key] || key;
+      return template.replace(/\{\{(\w+)\}\}/g, (_, name) => params[name] ?? '');
+    }
+
+    function applyI18n() {
+      document.querySelectorAll('[data-i18n]').forEach(element => {
+        element.textContent = t(element.dataset.i18n);
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+        element.setAttribute('placeholder', t(element.dataset.i18nPlaceholder));
+      });
+      document.querySelectorAll('[data-i18n-aria-label]').forEach(element => {
+        element.setAttribute('aria-label', t(element.dataset.i18nAriaLabel));
+      });
+    }
+
+    const sampleSlides = [
+      {
+        id: 'S01',
+        code: 'S01',
+        title: '首頁｜研究答辯開場',
+        role: '首頁',
+        image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23f7f1e7'/%3E%3Cstop offset='1' stop-color='%23d8e6f5'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23bg)'/%3E%3Ccircle cx='1230' cy='160' r='250' fill='%23bc5b28' fill-opacity='.14'/%3E%3Crect x='100' y='100' width='1400' height='700' rx='42' fill='white' fill-opacity='.58' stroke='%239bb4cf' stroke-opacity='.34'/%3E%3Ctext x='160' y='235' font-size='34' fill='%23647586' font-family='Segoe UI, Arial, sans-serif'%3EAcademic Defense Prototype%3C/text%3E%3Ctext x='160' y='420' font-size='112' fill='%231f1a14' font-family='Segoe UI, Arial, sans-serif' font-weight='700'%3EREMOTE SENSING%3C/text%3E%3Ctext x='160' y='520' font-size='64' fill='%23324f70' font-family='Segoe UI, Arial, sans-serif' font-weight='600'%3ETemperature Profile Research%3C/text%3E%3Ctext x='160' y='650' font-size='36' fill='%236d5d4c' font-family='Segoe UI, Arial, sans-serif'%3ECommittee Review / 2026%3C/text%3E%3Cpath d='M980 610 C1120 480 1240 430 1400 360' stroke='%233b7bbd' stroke-width='8' fill='none' opacity='.45'/%3E%3Cpath d='M1010 660 C1170 590 1290 560 1440 520' stroke='%23bc5b28' stroke-width='8' fill='none' opacity='.34'/%3E%3C/svg%3E"
+      },
+      {
+        id: 'S02',
+        code: 'S02',
+        title: '目錄頁｜結構總覽',
+        role: '目錄頁',
+        image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23edf4fb'/%3E%3Cstop offset='1' stop-color='%23f5ede2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23bg)'/%3E%3Crect x='100' y='90' width='1400' height='720' rx='42' fill='white' fill-opacity='.62' stroke='%23a9bdd5' stroke-opacity='.32'/%3E%3Ctext x='150' y='200' font-size='96' fill='%231f1a14' font-family='Segoe UI, Arial, sans-serif' font-weight='700'%3ECONTENTS%3C/text%3E%3Ctext x='152' y='252' font-size='28' fill='%23647586' font-family='Segoe UI, Arial, sans-serif'%3EStructure and decision path%3C/text%3E%3Cg fill='white' fill-opacity='.84'%3E%3Crect x='150' y='320' width='520' height='132' rx='28'/%3E%3Crect x='150' y='486' width='520' height='132' rx='28'/%3E%3Crect x='150' y='652' width='520' height='98' rx='28'/%3E%3Crect x='730' y='320' width='700' height='96' rx='28'/%3E%3Crect x='730' y='450' width='700' height='96' rx='28'/%3E%3Crect x='730' y='580' width='700' height='96' rx='28'/%3E%3C/g%3E%3Cg font-family='Segoe UI, Arial, sans-serif'%3E%3Ctext x='186' y='392' font-size='38' fill='%23324f70'%3E01 Background and Problem%3C/text%3E%3Ctext x='186' y='558' font-size='38' fill='%23324f70'%3E02 Method and Data%3C/text%3E%3Ctext x='186' y='713' font-size='34' fill='%23324f70'%3E03 Results / Conclusion%3C/text%3E%3Ctext x='770' y='380' font-size='30' fill='%236d5d4c'%3EResearch context, current gap, committee focus%3C/text%3E%3Ctext x='770' y='510' font-size='30' fill='%236d5d4c'%3EModel path, retrieval strategy, experiment setup%3C/text%3E%3Ctext x='770' y='640' font-size='30' fill='%236d5d4c'%3EValidation, comparison, implications and future work%3C/text%3E%3C/g%3E%3C/svg%3E"
+      },
+      {
+        id: 'S03',
+        code: 'S03',
+        title: '內容頁｜關鍵結論承載',
+        role: '內容頁',
+        image: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23f5eee5'/%3E%3Cstop offset='1' stop-color='%23dce8f3'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1600' height='900' fill='url(%23bg)'/%3E%3Crect x='100' y='90' width='1400' height='720' rx='42' fill='white' fill-opacity='.6' stroke='%23a3b8d0' stroke-opacity='.28'/%3E%3Ctext x='150' y='180' font-size='40' fill='%23647586' font-family='Segoe UI, Arial, sans-serif'%3EResult Snapshot%3C/text%3E%3Ctext x='150' y='270' font-size='84' fill='%231f1a14' font-family='Segoe UI, Arial, sans-serif' font-weight='700'%3ETemperature inversion is the main error source%3C/text%3E%3Crect x='150' y='340' width='720' height='350' rx='30' fill='white' fill-opacity='.82'/%3E%3Crect x='910' y='340' width='430' height='170' rx='30' fill='white' fill-opacity='.82'/%3E%3Crect x='910' y='540' width='430' height='150' rx='30' fill='white' fill-opacity='.76'/%3E%3Crect x='1365' y='340' width='90' height='350' rx='30' fill='%23dce8f3' fill-opacity='.9'/%3E%3Ctext x='190' y='412' font-size='34' fill='%23324f70' font-family='Segoe UI, Arial, sans-serif'%3E- Retrieval error rises sharply above 2.8km%3C/text%3E%3Ctext x='190' y='474' font-size='34' fill='%23324f70' font-family='Segoe UI, Arial, sans-serif'%3E- Humidity profile remains comparatively stable%3C/text%3E%3Ctext x='190' y='536' font-size='34' fill='%23324f70' font-family='Segoe UI, Arial, sans-serif'%3E- Boundary layer mismatch explains most deviation%3C/text%3E%3Cpath d='M220 650 C340 570 490 500 760 430' stroke='%23bc5b28' stroke-width='10' fill='none' opacity='.46'/%3E%3Ctext x='950' y='428' font-size='62' fill='%231f1a14' font-family='Segoe UI, Arial, sans-serif' font-weight='700'%3E31%25%3C/text%3E%3Ctext x='950' y='470' font-size='28' fill='%236d5d4c' font-family='Segoe UI, Arial, sans-serif'%3EMSE reduction after correction%3C/text%3E%3Ctext x='950' y='612' font-size='52' fill='%23324f70' font-family='Segoe UI, Arial, sans-serif' font-weight='700'%3ECommittee concern:%3C/text%3E%3Ctext x='950' y='654' font-size='28' fill='%236d5d4c' font-family='Segoe UI, Arial, sans-serif'%3EExplain why instability concentrates in the inversion layer%3C/text%3E%3C/svg%3E"
+      }
+    ];
+
+    const defaultState = {
+      selectedPageId: sampleSlides[0].id,
+      tool: 'pen',
+      strokeWidth: 4,
+      strokeColor: '#1c9c9c',
+      pages: Object.fromEntries(sampleSlides.map(slide => [slide.id, {
+        requested_action: 'edit-local',
+        page_comment: '',
+        penStrokes: [],
+        rects: [],
+        notes: []
+      }]))
+    };
+
+    const pageList = document.getElementById('pageList');
+    const stageTitle = document.getElementById('stageTitle');
+    const stageSubtitle = document.getElementById('stageSubtitle');
+    const stageImage = document.getElementById('stageImage');
+    const stageFrame = document.getElementById('stageFrame');
+    const stageCanvas = document.getElementById('stageCanvas');
+    const stageNotes = document.getElementById('stageNotes');
+    const noteList = document.getElementById('noteList');
+    const noteItemTemplate = document.getElementById('noteItemTemplate');
+    const requestedActionSelect = document.getElementById('requestedActionSelect');
+    const pageCommentInput = document.getElementById('pageCommentInput');
+    const strokeWidthInput = document.getElementById('strokeWidthInput');
+    const strokeColorInput = document.getElementById('strokeColorInput');
+    const draftStatus = document.getElementById('draftStatus');
+    const sendCurrentToChatButton = document.getElementById('sendCurrentToChatButton');
+    const sendAllToChatButton = document.getElementById('sendAllToChatButton');
+    const copyCurrentButton = document.getElementById('copyCurrentButton');
+    const copyAllButton = document.getElementById('copyAllButton');
+    const actionPanelToggle = document.getElementById('actionPanelToggle');
+    const actionPanelClose = document.getElementById('actionPanelClose');
+    const stagePanel = document.querySelector('.stage-panel');
+    const sidebarPanel = document.querySelector('.sidebar-panel');
+    const actionPanel = document.querySelector('.action-panel');
+
+    const ctx = stageCanvas.getContext('2d');
+    let state = loadState();
+    let drawing = null;
+
+    function deepClone(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return deepClone(defaultState);
+        const parsed = JSON.parse(raw);
+        return {
+          ...deepClone(defaultState),
+          ...parsed,
+          pages: { ...deepClone(defaultState).pages, ...(parsed.pages || {}) }
+        };
+      } catch {
+        return deepClone(defaultState);
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      draftStatus.textContent = t('status.savedAt', {
+        time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      });
+    }
+
+    function isActionPanelOpen() {
+      return !actionPanel.classList.contains('drawer-hidden');
+    }
+
+    function setActionPanelOpen(open) {
+      actionPanel.classList.toggle('drawer-hidden', !open);
+      actionPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+      actionPanelToggle.textContent = t(open ? 'actions.hideNotes' : 'actions.showNotes');
+      actionPanelToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    function getCurrentSlide() {
+      return sampleSlides.find(slide => slide.id === state.selectedPageId) || sampleSlides[0];
+    }
+
+    function getPageState(pageId = state.selectedPageId) {
+      if (!state.pages[pageId]) {
+        state.pages[pageId] = deepClone(defaultState.pages[sampleSlides[0].id]);
+      }
+      return state.pages[pageId];
+    }
+
+    function renderPageList() {
+      pageList.innerHTML = sampleSlides.map((slide, index) => {
+        const pageState = getPageState(slide.id);
+        const count = pageState.notes.length + pageState.penStrokes.length + pageState.rects.length;
+        return `
+          <button class="page-button ${slide.id === state.selectedPageId ? 'active' : ''}" type="button" data-page-id="${slide.id}">
+            <div class="page-thumb-entry">
+              <div class="page-order">${index + 1}</div>
+              <div class="page-thumb-card">
+                <img class="page-thumb-image" src="${slide.image}" alt="${escapeHtml(t('thumb.alt', { title: slide.title }))}">
+                <div class="page-thumb-meta">
+                  <span class="page-code">${slide.code}</span>
+                  <span class="page-title">${slide.title}</span>
+                  <span class="page-meta">${slide.role}</span>
+                  <span class="page-count">${t('thumb.count', { count })}</span>
+                </div>
+              </div>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function syncPanelHeights() {
+      const stageHeight = stagePanel.getBoundingClientRect().height;
+      if (!stageHeight) return;
+      actionPanel.style.maxHeight = `${Math.max(stageHeight - 24, 320)}px`;
+    }
+
+    function syncStageImageAspectRatio() {
+      if (!stageImage.naturalWidth || !stageImage.naturalHeight) return false;
+      stageFrame.style.aspectRatio = `${stageImage.naturalWidth} / ${stageImage.naturalHeight}`;
+      return true;
+    }
+
+    function resizeCanvas() {
+      const rect = stageFrame.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      stageCanvas.width = Math.round(rect.width * ratio);
+      stageCanvas.height = Math.round(rect.height * ratio);
+      stageCanvas.style.width = `${rect.width}px`;
+      stageCanvas.style.height = `${rect.height}px`;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      renderCanvas();
+      syncPanelHeights();
+    }
+
+    function toCanvasPoint(event) {
+      const rect = stageFrame.getBoundingClientRect();
+      return {
+        x: Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1),
+        y: Math.min(Math.max((event.clientY - rect.top) / rect.height, 0), 1),
+        px: event.clientX - rect.left,
+        py: event.clientY - rect.top,
+        width: rect.width,
+        height: rect.height
+      };
+    }
+
+    function drawPenStroke(stroke, rect) {
+      if (!stroke.points.length) return;
+      ctx.beginPath();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+      stroke.points.forEach((point, index) => {
+        const x = point.x * rect.width;
+        const y = point.y * rect.height;
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    function drawRectMarkup(item, rect) {
+      ctx.beginPath();
+      ctx.strokeStyle = item.color;
+      ctx.lineWidth = item.width;
+      ctx.setLineDash([10, 8]);
+      ctx.strokeRect(item.x * rect.width, item.y * rect.height, item.w * rect.width, item.h * rect.height);
+      ctx.setLineDash([]);
+    }
+
+    function renderCanvas() {
+      const rect = stageFrame.getBoundingClientRect();
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      const pageState = getPageState();
+
+      pageState.penStrokes.forEach(stroke => drawPenStroke(stroke, rect));
+      pageState.rects.forEach(item => drawRectMarkup(item, rect));
+
+      if (drawing?.type === 'pen') {
+        drawPenStroke(drawing.stroke, rect);
+      }
+      if (drawing?.type === 'rect') {
+        drawRectMarkup(drawing.rect, rect);
+      }
+
+      renderNotes();
+    }
+
+    function getNoteMarker(index) {
+      const markers = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+      return markers[index] || String(index + 1);
+    }
+
+    function renderNotes() {
+      const pageState = getPageState();
+      stageNotes.innerHTML = pageState.notes.map((note, index) => `
+        <div class="annotation-pin" style="left:${note.x * 100}%; top:${note.y * 100}%" title="${escapeHtml(note.text)}">${getNoteMarker(index)}</div>
+      `).join('');
+    }
+
+    function renderNoteList(focusNoteId = null) {
+      const pageState = getPageState();
+      noteList.innerHTML = '';
+      if (!pageState.notes.length) {
+        noteList.innerHTML = `<div class="page-meta">${t('notes.empty')}</div>`;
+        return;
+      }
+      pageState.notes.forEach((note, index) => {
+        const node = noteItemTemplate.content.firstElementChild.cloneNode(true);
+        node.querySelector('.note-pill').textContent = t('notes.label', { marker: getNoteMarker(index) });
+        const input = node.querySelector('.note-input');
+        input.value = note.text || '';
+        input.placeholder = t('notes.placeholder');
+        input.dataset.noteRef = note.id;
+        node.querySelector('.note-position').textContent = t('notes.position', { marker: getNoteMarker(index) });
+        node.querySelector('.note-remove').dataset.noteId = note.id;
+        noteList.appendChild(node);
+      });
+      if (focusNoteId) {
+        const input = noteList.querySelector(`.note-input[data-note-ref="${CSS.escape(focusNoteId)}"]`);
+        input?.focus();
+      }
+    }
+
+    function renderStage(focusNoteId = null) {
+      const slide = getCurrentSlide();
+      const pageState = getPageState();
+      stageFrame.dataset.slideId = slide.id;
+      stageTitle.textContent = `${slide.code} · ${slide.title}`;
+      stageSubtitle.textContent = t('stage.subtitleWithSlide', { role: slide.role });
+      stageImage.src = slide.image;
+      stageImage.alt = slide.title;
+      if (stageImage.complete) {
+        syncStageImageAspectRatio();
+      }
+      requestedActionSelect.value = pageState.requested_action;
+      pageCommentInput.value = pageState.page_comment;
+      renderNoteList(focusNoteId);
+      renderPageList();
+      resizeCanvas();
+      syncToolUI();
+    }
+
+    function syncToolUI() {
+      document.querySelectorAll('[data-tool]').forEach(button => {
+        button.classList.toggle('active', button.dataset.tool === state.tool);
+      });
+      strokeWidthInput.value = state.strokeWidth;
+      strokeColorInput.value = state.strokeColor;
+    }
+
+    function switchPage(pageId) {
+      state.selectedPageId = pageId;
+      saveState();
+      renderStage();
+    }
+
+    function beginPen(point) {
+      drawing = {
+        type: 'pen',
+        stroke: {
+          id: crypto.randomUUID(),
+          color: state.strokeColor,
+          width: state.strokeWidth,
+          points: [{ x: point.x, y: point.y }]
+        }
+      };
+    }
+
+    function beginRect(point) {
+      drawing = {
+        type: 'rect',
+        origin: point,
+        rect: {
+          id: crypto.randomUUID(),
+          color: state.strokeColor,
+          width: state.strokeWidth,
+          x: point.x,
+          y: point.y,
+          w: 0,
+          h: 0
+        }
+      };
+    }
+
+    function updateDrawing(point) {
+      if (!drawing) return;
+      if (drawing.type === 'pen') {
+        drawing.stroke.points.push({ x: point.x, y: point.y });
+        renderCanvas();
+      }
+      if (drawing.type === 'rect') {
+        const x1 = Math.min(drawing.origin.x, point.x);
+        const y1 = Math.min(drawing.origin.y, point.y);
+        const x2 = Math.max(drawing.origin.x, point.x);
+        const y2 = Math.max(drawing.origin.y, point.y);
+        drawing.rect.x = x1;
+        drawing.rect.y = y1;
+        drawing.rect.w = x2 - x1;
+        drawing.rect.h = y2 - y1;
+        renderCanvas();
+      }
+    }
+
+    function endDrawing() {
+      if (!drawing) return;
+      const pageState = getPageState();
+      if (drawing.type === 'pen' && drawing.stroke.points.length > 1) {
+        pageState.penStrokes.push(drawing.stroke);
+      }
+      if (drawing.type === 'rect' && drawing.rect.w > 0.003 && drawing.rect.h > 0.003) {
+        pageState.rects.push(drawing.rect);
+      }
+      drawing = null;
+      saveState();
+      renderStage();
+    }
+
+    function addNote(point) {
+      const pageState = getPageState();
+      const noteId = crypto.randomUUID();
+      pageState.notes.push({
+        id: noteId,
+        x: point.x,
+        y: point.y,
+        text: ''
+      });
+      saveState();
+      renderStage(noteId);
+      setActionPanelOpen(true);
+      draftStatus.textContent = t('status.noteAdded', { marker: getNoteMarker(pageState.notes.length - 1) });
+    }
+
+    function undoLast() {
+      const pageState = getPageState();
+      if (pageState.penStrokes.length) pageState.penStrokes.pop();
+      else if (pageState.rects.length) pageState.rects.pop();
+      else if (pageState.notes.length) pageState.notes.pop();
+      saveState();
+      renderStage();
+    }
+
+    function clearCurrentPage() {
+      state.pages[state.selectedPageId] = {
+        requested_action: 'edit-local',
+        page_comment: '',
+        penStrokes: [],
+        rects: [],
+        notes: []
+      };
+      saveState();
+      renderStage();
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function roundCoordinate(value) {
+      return Number(Math.min(Math.max(value, 0), 1).toFixed(4));
+    }
+
+    function roundStrokeWidth(value) {
+      return Number(Math.max(Number(value) || 0, 0).toFixed(2));
+    }
+
+    function simplifyPoints(points, maxPoints = 120) {
+      if (!points.length) return [];
+      const source = points.length <= maxPoints
+        ? points
+        : Array.from({ length: maxPoints }, (_, index) => {
+            const sourceIndex = Math.round(index * (points.length - 1) / (maxPoints - 1));
+            return points[sourceIndex];
+          });
+      const rounded = source.map(point => ({
+        x: roundCoordinate(point.x),
+        y: roundCoordinate(point.y)
+      }));
+      return rounded.filter((point, index) => {
+        if (index === 0) return true;
+        const prev = rounded[index - 1];
+        return point.x !== prev.x || point.y !== prev.y;
+      });
+    }
+
+    function buildMarkupPayload(pageState) {
+      return {
+        coordinate_space: 'normalized_0_1',
+        render_instruction: 'Agent should render this markup onto the local source slide image before retouch/regeneration.',
+        notes: pageState.notes.map((note, index) => ({
+          marker: getNoteMarker(index),
+          x: roundCoordinate(note.x),
+          y: roundCoordinate(note.y),
+          comment: note.text
+        })),
+        rects: pageState.rects.map(item => ({
+          x: roundCoordinate(item.x),
+          y: roundCoordinate(item.y),
+          w: roundCoordinate(item.w),
+          h: roundCoordinate(item.h),
+          color: item.color,
+          width: roundStrokeWidth(item.width)
+        })),
+        pen_strokes: pageState.penStrokes.map(stroke => ({
+          color: stroke.color,
+          width: roundStrokeWidth(stroke.width),
+          points: simplifyPoints(stroke.points)
+        })).filter(stroke => stroke.points.length > 1)
+      };
+    }
+
+    async function buildPayload(mode) {
+      const targetSlides = mode === 'current' ? [getCurrentSlide()] : sampleSlides;
+      const pages = [];
+      for (const slide of targetSlides) {
+        const pageState = getPageState(slide.id);
+        const trimmedComment = (pageState.page_comment || '').trim();
+        const hasNotes = pageState.notes.length > 0;
+        const hasPenMarks = pageState.penStrokes.length > 0;
+        const hasRectMarks = pageState.rects.length > 0;
+        const hasVisualMarkup = hasNotes || hasPenMarks || hasRectMarks;
+        const hasPageComment = Boolean(trimmedComment);
+        const hasMeaningfulFeedback = hasVisualMarkup || hasPageComment;
+
+        if (!hasMeaningfulFeedback) {
+          continue;
+        }
+
+        const pagePayload = {
+          page_id: slide.id,
+          page_code: slide.code,
+          title: slide.title,
+          page_role: slide.role,
+          requested_action: pageState.requested_action,
+          page_comment: trimmedComment,
+          note_comments: pageState.notes.map((note, index) => ({
+            marker: getNoteMarker(index),
+            comment: note.text
+          }))
+        };
+
+        if (hasVisualMarkup) {
+          pagePayload.markup = buildMarkupPayload(pageState);
+        }
+
+        pages.push(pagePayload);
+      }
+
+      return {
+        schema_version: 'review-shell-v2',
+        markup_transport: 'coordinates_only',
+        agent_instruction: 'Before retouching or regenerating pages, render each page.markup onto the corresponding local slide image with scripts/render_review_markup.py, then use the marked image plus separate textual comments as the edit reference.',
+        submitted_at: new Date().toISOString(),
+        mode,
+        page_count: pages.length,
+        pages
+      };
+    }
+
+    function payloadByteLength(payload) {
+      return new TextEncoder().encode(JSON.stringify(payload)).length;
+    }
+
+    function emitSkillEvent(eventType, data) {
+      const payload = JSON.stringify(data);
+      if (payloadByteLength(data) > MAX_SKILL_EVENT_BYTES) {
+        draftStatus.textContent = t('status.payloadTooLarge');
+        return false;
+      }
+      window.aileron?.bridge?.emit?.(eventType, data);
+      return true;
+    }
+
+    async function sendFeedbackToChat(mode) {
+      const payload = await buildPayload(mode);
+      if (!payload.pages.length) {
+        draftStatus.textContent = t('status.noFeedback');
+        return;
+      }
+      const sent = emitSkillEvent(SKILL_EVENT_TYPE, payload);
+      if (sent) {
+        draftStatus.textContent = mode === 'current' ? t('status.sentCurrent') : t('status.sentAll');
+      }
+    }
+
+    async function copyFeedback(mode) {
+      const payload = await buildPayload(mode);
+      if (!payload.pages.length) {
+        draftStatus.textContent = t('status.noFeedback');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+        draftStatus.textContent = mode === 'current' ? t('status.copiedCurrent') : t('status.copiedAll');
+      } catch {
+        draftStatus.textContent = t('status.copyFailed');
+      }
+    }
+
+    pageList.addEventListener('click', event => {
+      const button = event.target.closest('[data-page-id]');
+      if (!button) return;
+      switchPage(button.dataset.pageId);
+    });
+
+    document.getElementById('toolGroup').addEventListener('click', event => {
+      const button = event.target.closest('[data-tool]');
+      if (!button) return;
+      state.tool = button.dataset.tool;
+      saveState();
+      syncToolUI();
+    });
+
+    strokeWidthInput.addEventListener('input', () => {
+      state.strokeWidth = Number(strokeWidthInput.value);
+      saveState();
+    });
+
+    strokeColorInput.addEventListener('input', () => {
+      state.strokeColor = strokeColorInput.value;
+      saveState();
+    });
+
+    requestedActionSelect.addEventListener('change', () => {
+      getPageState().requested_action = requestedActionSelect.value;
+      saveState();
+      renderPageList();
+    });
+
+    pageCommentInput.addEventListener('input', () => {
+      getPageState().page_comment = pageCommentInput.value;
+      saveState();
+    });
+
+    noteList.addEventListener('click', event => {
+      const button = event.target.closest('.note-remove[data-note-id]');
+      if (!button) return;
+      const pageState = getPageState();
+      pageState.notes = pageState.notes.filter(note => note.id !== button.dataset.noteId);
+      saveState();
+      renderStage();
+    });
+
+    noteList.addEventListener('input', event => {
+      const input = event.target.closest('.note-input[data-note-ref]');
+      if (!input) return;
+      const note = getPageState().notes.find(item => item.id === input.dataset.noteRef);
+      if (!note) return;
+      note.text = input.value;
+      saveState();
+      renderNotes();
+    });
+
+    stageFrame.addEventListener('pointerdown', event => {
+      const point = toCanvasPoint(event);
+      if (state.tool === 'note') {
+        addNote(point);
+        return;
+      }
+      stageCanvas.setPointerCapture(event.pointerId);
+      if (state.tool === 'pen') beginPen(point);
+      if (state.tool === 'rect') beginRect(point);
+    });
+
+    stageFrame.addEventListener('pointermove', event => {
+      if (!drawing) return;
+      updateDrawing(toCanvasPoint(event));
+    });
+
+    stageFrame.addEventListener('pointerup', () => endDrawing());
+    stageFrame.addEventListener('pointercancel', () => endDrawing());
+
+    document.getElementById('undoButton').addEventListener('click', undoLast);
+    document.getElementById('clearPageButton').addEventListener('click', clearCurrentPage);
+    actionPanelToggle.addEventListener('click', () => setActionPanelOpen(!isActionPanelOpen()));
+    actionPanelClose.addEventListener('click', () => setActionPanelOpen(false));
+    document.getElementById('clearStorageButton').addEventListener('click', () => {
+      localStorage.removeItem(STORAGE_KEY);
+      state = deepClone(defaultState);
+      renderStage();
+      draftStatus.textContent = t('status.cacheCleared');
+    });
+    sendCurrentToChatButton.addEventListener('click', () => void sendFeedbackToChat('current'));
+    sendAllToChatButton.addEventListener('click', () => void sendFeedbackToChat('all'));
+    copyCurrentButton.addEventListener('click', () => void copyFeedback('current'));
+    copyAllButton.addEventListener('click', () => void copyFeedback('all'));
+
+    window.addEventListener('resize', resizeCanvas);
+    stageImage.addEventListener('load', () => {
+      syncStageImageAspectRatio();
+      resizeCanvas();
+    });
+
+    applyI18n();
+    setActionPanelOpen(false);
+    renderPageList();
+    renderStage();
+    syncPanelHeights();
+  </script>
+</body>
+</html>

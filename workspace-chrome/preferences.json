@@ -1,0 +1,65 @@
+{
+  "homepage": "about:blank",
+  "homepage_is_newtabpage": false,
+  "first_run_tabs": [
+    "about:blank"
+  ],
+  "custom_links": {
+    "initialized": true,
+    "list": []
+  },
+  "browser": {
+    "custom_chrome_frame": false,
+    "show_home_button": true,
+    "window_placement": {
+      "maximized": true
+    }
+  },
+  "bookmark_bar": {
+    "show_on_all_tabs": false
+  },
+  "sync_promo": {
+    "show_on_first_run_allowed": false
+  },
+  "distribution": {
+    "import_bookmarks_from_file": "bookmarks.html",
+    "import_bookmarks": true,
+    "import_history": true,
+    "import_home_page": true,
+    "import_search_engine": true,
+    "ping_delay": 60,
+    "do_not_create_desktop_shortcut": true,
+    "do_not_create_quick_launch_shortcut": true,
+    "do_not_create_taskbar_shortcut": true,
+    "do_not_launch_chrome": true,
+    "do_not_register_for_update_launch": true,
+    "make_chrome_default": true,
+    "make_chrome_default_for_user": true,
+    "system_level": false,
+    "verbose_logging": false
+  },
+  "profile": {
+    "avatar_index": 26,
+    "default_content_setting_values": {
+      "clipboard": 2,
+      "cookies": 4,
+      "geolocation": 2,
+      "media_stream_camera": 2,
+      "media_stream_mic": 2,
+      "midi_sysex": 2,
+      "payment_handler": 2,
+      "usb_guard": 2
+    },
+    "gaia_picture_file_name": "Google Profile Picture.png",
+    "name": "Aileron",
+    "using_default_avatar": false,
+    "using_default_name": false,
+    "using_gaia_avatar": true
+  },
+  "intl": {
+    "accept_languages": "zh-TW,zh,en-US,en"
+  },
+  "signin": {
+    "allowed": false
+  }
+}

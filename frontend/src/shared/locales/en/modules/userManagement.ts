@@ -1,0 +1,207 @@
+const userManagementTranslations = {
+  navigation: {
+    title: 'User Management',
+    mainLabel: 'User management main content',
+    users: 'Users',
+    groups: 'User groups',
+    statusSummary: 'Status summary',
+    pendingIssues: 'Needs attention',
+  },
+  filters: {
+    all: 'All',
+    role: 'Role',
+    accountState: 'Account state',
+    roleStatus: 'Role status',
+    memberCount: 'Members',
+    hasDescription: 'Description',
+    updatedWithinDays: 'Updated',
+    source: 'Source',
+    clearAll: 'Clear all',
+    advanced: 'Filters',
+    advancedDescription: 'Set precise conditions used less often',
+    summary: 'Showing {{count}} of {{total}}',
+    roleStatusValue: {
+      valid: 'Normal',
+      issue: 'Role issues',
+    },
+    accountStateValue: {
+      disabled: 'Disabled',
+    },
+    sourceValue: {
+      manual: 'Manual',
+    },
+    memberCountRange: {
+      empty: 'Empty',
+      small: '1-10 members',
+      large: 'More than 10',
+    },
+    description: {
+      withDescription: 'Has description',
+      withoutDescription: 'No description',
+    },
+    updated: {
+      '7d': 'Last 7 days',
+      '30d': 'Last 30 days',
+    },
+  },
+  sort: {
+    label: 'Sort',
+    users: {
+      nameAsc: 'Username A-Z',
+      createdDesc: 'Recently created',
+      updatedDesc: 'Recently updated',
+    },
+    groups: {
+      nameAsc: 'Group name A-Z',
+      membersDesc: 'Most members',
+      updatedDesc: 'Recently updated',
+    },
+    members: {
+      usernameAsc: 'Username A-Z',
+      emailAsc: 'Email A-Z',
+      joinedDesc: 'Recently joined',
+      updatedDesc: 'Recently updated',
+    },
+  },
+  roles: {
+    admin: 'Admin',
+    member: 'Member',
+    none: 'No role',
+  },
+  roleIssues: {
+    valid: 'Normal',
+    missing: 'Missing role',
+    multiple: 'Multiple roles',
+  },
+  values: {
+    yes: 'Yes',
+    no: 'No',
+    notAvailable: 'Not available',
+  },
+  errors: {
+    title: 'User management request failed',
+    invalidRequest: 'Review the submitted fields and try again.',
+    forbidden: 'You do not have permission to manage users.',
+    userNotFound: 'The user no longer exists.',
+    invalidPageRequest: 'The user list filters or page are invalid.',
+    invalidRole: 'Select a supported platform role.',
+    roleProvisioningRequired: 'Platform roles have not been provisioned. Contact an operator.',
+    roleStateInvalid: 'Resolve this user’s role state before continuing.',
+    lastAdminForbidden: 'The last active admin cannot be demoted.',
+    selfDemoteForbidden: 'You cannot demote your own admin account.',
+    localShadowSyncFailed: 'The local user snapshot could not be saved safely.',
+    identitySyncFailed: 'The identity provider and local snapshot could not be synchronized safely.',
+    identityUnavailable: 'The identity provider is unavailable. Try again later.',
+    reconciliationFailed: 'Identity reconciliation did not complete. Try again later.',
+    identityFreshnessExpired: 'Identity data is no longer fresh. Try again after reconciliation.',
+    groupInvalidRequest: 'Review the group request and try again.',
+    groupDuplicateName: 'A group with that name already exists.',
+    groupNotFound: 'The user group no longer exists.',
+    groupMemberNotFound: 'One or more selected users no longer exist.',
+    groupMemberNotAuthorizable: 'One or more selected users are not currently authorizable.',
+    groupInvalidPageRequest: 'The group list filters or page are invalid.',
+  },
+  pagination: {
+    range: 'Showing {{start}}-{{end}} of {{total}}',
+    pageSize: 'Rows per page',
+    previous: 'Previous page',
+    next: 'Next page',
+  },
+  users: {
+    title: 'Users',
+    roleIssuesTitle: 'Role issues',
+    count: '{{count}} users',
+    searchLabel: 'Search users',
+    searchPlaceholder: 'Search by email, username, or name',
+    fields: {
+      issuer: 'Issuer',
+      subject: 'Subject',
+      username: 'Username',
+      localActive: 'Local active',
+      identityEnabled: 'Identity enabled',
+    },
+    accountState: {
+      active: 'Active',
+      local_disabled: 'Disabled locally',
+      identity_disabled: 'Disabled by identity provider',
+      sync_failed: 'Sync failed',
+      shadow_missing: 'Missing local shadow',
+    },
+    actions: {
+      assignRole: 'Assign role',
+    },
+    assignRoleDialog: {
+      title: 'Assign platform role',
+      description: 'Replace the local platform role. The identity provider remains authoritative.',
+      fields: {
+        role: 'Platform role',
+      },
+      actions: {
+        cancel: 'Cancel',
+        save: 'Save role',
+      },
+    },
+  },
+  groups: {
+    title: 'User groups',
+    count: '{{count}} groups',
+    searchLabel: 'Search user groups',
+    searchPlaceholder: 'Search by group name or description',
+    members: {
+      title: 'Members',
+      searchLabel: 'Search group members',
+      searchPlaceholder: 'Search members by email, username, or name',
+    },
+    addUsers: {
+      title: 'Add users',
+      description: 'Search users who are not yet in this group and add them in batches.',
+      searchLabel: 'Search users to add',
+      searchPlaceholder: 'Search all users by email, username, or name',
+      actions: {
+        cancel: 'Cancel',
+      },
+    },
+    membership: {
+      member: 'Already added',
+      not_member: 'Not added',
+    },
+    summary: {
+      title: 'Group summary',
+      memberCount: 'Members',
+      sharedKnowledgeBases: 'Shared knowledge bases',
+      updatedAt: 'Last updated',
+      permissionImpact: 'Member changes affect knowledge base access granted to this group; mounted access follows runtime convergence status.',
+    },
+    selection: {
+      count: '{{count}} selected',
+    },
+    actions: {
+      create: 'Create group',
+      addMember: 'Add member',
+      addSelectedMembers: 'Add selected',
+      removeSelectedMembers: 'Remove selected',
+      manageMembers: 'Manage members',
+      backToGroups: 'Back to groups',
+    },
+    createDialog: {
+      title: 'Create user group',
+      description: 'Create a user group for centralized membership management, then manage users in the member workspace.',
+      fields: {
+        name: 'Group name',
+        description: 'Description',
+      },
+      placeholders: {
+        name: 'Platform Team',
+        description: 'Shared platform knowledge access',
+      },
+      previewTitle: 'Created state',
+      previewDescription: 'The group is added to the list with zero members; member management stays in the full workspace.',
+      actions: {
+        cancel: 'Cancel',
+        create: 'Create group',
+      },
+    },
+  },
+};
+
+export default userManagementTranslations;

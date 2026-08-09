@@ -1,0 +1,83 @@
+{{- if and .Values.workspaceOperator.enabled .Values.cilium.enabled }}
+{{- $runtimeNamespace := include "aileron.workspaceRuntimeNamespace" . }}
+{{- $attestor := .Values.workspaceOperator.firewallAttestor }}
+{{- if $attestor.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" $attestor.serviceAccount "nameSuffix" "workspace-firewall-attestor") }}
+  namespace: {{ $runtimeNamespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-firewall-attestor
+  namespace: {{ $runtimeNamespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workspace-firewall-attestor
+spec:
+  selector:
+    matchLabels:
+      {{- include "aileron.componentLabels" (dict "component" "workspace-firewall-attestor" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentPodLabels" (dict "component" "workspace-firewall-attestor" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" $attestor.serviceAccount "nameSuffix" "workspace-firewall-attestor") }}
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with $attestor.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $attestor.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: firewall-attestor
+          image: {{ include "aileron.imageReference" (dict "name" "workspaceOperator.image" "image" .Values.workspaceOperator.image "production" .Values.security.requireStrongSecrets) | quote }}
+          imagePullPolicy: {{ .Values.workspaceOperator.image.pullPolicy }}
+          args:
+            - --mode=firewall-attestor
+            - --attestor-node-name=$(NODE_NAME)
+            - --cilium-socket-path={{ $attestor.socketPath }}
+            - --firewall-attestor-poll-interval={{ $attestor.pollInterval }}
+            - --firewall-attestation-max-age={{ $attestor.maxAge }}
+            - --metrics-bind-address=0
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            {{- toYaml $attestor.resources | nindent 12 }}
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: cilium-run
+              mountPath: {{ $attestor.socketPath | quote }}
+              readOnly: true
+      volumes:
+        - name: cilium-run
+          hostPath:
+            path: {{ $attestor.socketPath | quote }}
+            type: Socket
+{{- end }}
