@@ -1190,7 +1190,7 @@ class TestRuntimeProvisionService:
             tmp_path / "workspace-runtime" / "tests"
         )
         assert sources["/workspace-runtime/vendor"] == str(
-            tmp_path / "workspace-runtime" / "import"
+            tmp_path / "workspace-runtime" / "vendor"
         )
         assert sources["/workspace-runtime/pyproject.toml"] == str(
             tmp_path / "workspace-runtime" / "pyproject.toml"
