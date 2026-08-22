@@ -18,7 +18,7 @@ Workspace Manager 是 Aileron 的核心服務，負責管理開發工作區的�
 - **Component revision fence**：Runtime、Browser、Canvas各自保存desired／observed
   revision、phase與workload identity，只替換job指定的元件；完整收斂流程請見
   [Execution-Plane 生命週期與安全機制](/architecture/overview/execution-plane)
-- **Marketplace 支援**：管理 agent 套件與 provider 設定
+- **Marketplace 支援**：管理 agent 套件、套件格式與目標客戶端設定
 - **網路配置**：防火牆規則和端口映射管理
 
 ### 使用者與 Workspace 協作

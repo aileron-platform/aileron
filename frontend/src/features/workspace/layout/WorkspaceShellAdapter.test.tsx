@@ -1,10 +1,11 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { render } from '@/__tests__/utils/render';
 import type { ProductShellProps } from '@/shared/components/shell';
 import { initialState } from '../providers/workspaceStateConstants';
 import type { WorkspaceState } from '../providers/workspaceStateTypes';
+import type { AgentSelectedFile } from '../features/agent-settings/model/documents';
 import { WorkspaceShellAdapter } from './WorkspaceShellAdapter';
 
 const mocks = vi.hoisted(() => ({
@@ -111,6 +112,20 @@ const getRegionsBody = (props: ProductShellProps) => {
   return props.body;
 };
 
+interface SkillFeatureContentProps {
+  activeAgentToolId: string;
+  skillSelectedFile: AgentSelectedFile | null;
+  onSkillSelect: (file: AgentSelectedFile | null) => void;
+}
+
+const getMainFeatureProps = (): SkillFeatureContentProps => {
+  const content = getRegionsBody(getProductShellProps()).main.content;
+  if (!React.isValidElement<SkillFeatureContentProps>(content)) {
+    throw new Error('Expected WorkspaceFeatureContent in the main region');
+  }
+  return content.props;
+};
+
 describe('WorkspaceShellAdapter', () => {
   beforeEach(() => {
     mocks.productShellMock.mockReset();
@@ -129,6 +144,7 @@ describe('WorkspaceShellAdapter', () => {
       containerManagement: { ...initialState.containerManagement, subView: 'runtime' },
     };
     mocks.workspaceRuntime.workspaceId = 'ws-1';
+    mocks.workspaceRuntime.agenticTools = ['claude-code'];
     mocks.permissions.canRead = true;
     mocks.permissions.canUseChat = true;
     mocks.permissions.canUseTerminal = true;
@@ -229,6 +245,58 @@ describe('WorkspaceShellAdapter', () => {
     });
   });
 
+  it('drives the FileManagementSidebar local manager refresh from the second-column header', () => {
+    mocks.workspaceState.currentFeature = 'file-management';
+
+    render(
+      <WorkspaceShellAdapter navigationSlot={<div />}>
+        <div />
+      </WorkspaceShellAdapter>,
+    );
+
+    const getNavigatorContentProps = () => {
+      const body = getRegionsBody(getProductShellProps());
+      const content = body.navigator?.content;
+      if (typeof content !== 'function') {
+        throw new Error('Expected a navigator content renderer');
+      }
+      const element = content({ collapsed: false });
+      if (!React.isValidElement<{
+        fileTreeRefreshSignal: number;
+        onFileTreeRefreshingChange: (isRefreshing: boolean) => void;
+      }>(element)) {
+        throw new Error('Expected WorkspaceFeatureContent in the navigator region');
+      }
+      return element.props;
+    };
+
+    expect(getNavigatorContentProps().fileTreeRefreshSignal).toBe(0);
+
+    const header = getRegionsBody(getProductShellProps()).navigator?.presentation.header;
+    const actionView = render(<>{header?.actions}</>);
+    fireEvent.click(screen.getByRole('button', {
+      name: 'common.fileTree.contextMenu.refresh',
+    }));
+
+    expect(getNavigatorContentProps().fileTreeRefreshSignal).toBe(1);
+
+    act(() => getNavigatorContentProps().onFileTreeRefreshingChange(true));
+
+    const refreshingHeader = getRegionsBody(getProductShellProps()).navigator?.presentation.header;
+    actionView.rerender(<>{refreshingHeader?.actions}</>);
+    const refreshButton = screen.getByRole('button', { name: 'common.fileTree.contextMenu.refresh' });
+    expect(refreshButton).toBeDisabled();
+
+    fireEvent.click(refreshButton);
+    expect(getNavigatorContentProps().fileTreeRefreshSignal).toBe(1);
+
+    act(() => getNavigatorContentProps().onFileTreeRefreshingChange(false));
+    const idleHeader = getRegionsBody(getProductShellProps()).navigator?.presentation.header;
+    actionView.rerender(<>{idleHeader?.actions}</>);
+    fireEvent.click(screen.getByRole('button', { name: 'common.fileTree.contextMenu.refresh' }));
+    expect(getNavigatorContentProps().fileTreeRefreshSignal).toBe(2);
+  });
+
   it('omits the companion presentation header for bottom Terminal without CSS hiding', () => {
     mocks.workspaceState.companionActiveTab = 'terminal';
     mocks.workspaceState.companionTerminalPlacement = 'bottom';
@@ -259,6 +327,50 @@ describe('WorkspaceShellAdapter', () => {
     mocks.workspaceState.containerManagement = { subView: 'terminal' };
     view.rerender(<WorkspaceShellAdapter navigationSlot={<div />} />);
     expect(getRegionsBody(getProductShellProps()).companion).toBeUndefined();
+  });
+
+  it('does not carry a Skills selection across agent providers', async () => {
+    mocks.workspaceState.currentFeature = 'claude-code';
+    mocks.workspaceState.agentToolSettings = {
+      ...mocks.workspaceState.agentToolSettings,
+      subView: 'skills',
+    };
+    mocks.workspaceRuntime.agenticTools = ['claude-code', 'opencode', 'codex'];
+    const selectedFile: AgentSelectedFile = {
+      path: 'shared/SKILL.md',
+      scope: 'project',
+    };
+    const view = render(<WorkspaceShellAdapter navigationSlot={<div />} />);
+
+    expect(getMainFeatureProps().activeAgentToolId).toBe('claude');
+    act(() => getMainFeatureProps().onSkillSelect(selectedFile));
+    await waitFor(() => {
+      expect(getMainFeatureProps().skillSelectedFile).toEqual(selectedFile);
+    });
+
+    mocks.workspaceState.currentFeature = 'opencode';
+    view.rerender(<WorkspaceShellAdapter navigationSlot={<div />} />);
+
+    expect(getMainFeatureProps().activeAgentToolId).toBe('opencode');
+    expect(getMainFeatureProps().skillSelectedFile).toBeNull();
+
+    act(() => getMainFeatureProps().onSkillSelect(selectedFile));
+    await waitFor(() => {
+      expect(getMainFeatureProps().skillSelectedFile).toEqual(selectedFile);
+    });
+
+    mocks.workspaceState.currentFeature = 'codex';
+    view.rerender(<WorkspaceShellAdapter navigationSlot={<div />} />);
+
+    expect(getMainFeatureProps().activeAgentToolId).toBe('codex');
+    expect(getMainFeatureProps().skillSelectedFile).toBeNull();
+
+    mocks.workspaceState.currentFeature = 'claude-code';
+    view.rerender(<WorkspaceShellAdapter navigationSlot={<div />} />);
+
+    await waitFor(() => {
+      expect(getMainFeatureProps().skillSelectedFile).toBeNull();
+    });
   });
 
   it('keeps state, denied, loading and fullscreen surfaces on the intended paths', () => {

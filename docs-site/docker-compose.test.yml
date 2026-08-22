@@ -1,6 +1,7 @@
 services:
   docs-site-test:
-    image: node:20.19.4-bookworm-slim@sha256:6db5e436948af8f0244488a1f658c2c8e55a3ae51ca2e1686ed042be8f25f70a
+    image: node:20.19.4-bookworm-slim@sha256:a25e59a5562406b0a4f34ce94ccad6c3902dcf3269b40e1fe12d881090c6f9be
+    platform: linux/amd64
     working_dir: /workspace/docs-site
     volumes:
       - ..:/workspace:ro
@@ -12,10 +13,77 @@ services:
       - -lc
       - npm ci && npm run test && npm run typecheck && npm run build -- --locale zh-Hant --out-dir build/zh-Hant && npm run build -- --locale en --out-dir build/en
 
+  docs-site-build-zh-hant:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      args:
+        SOURCE_REVISION: ${AILERON_SOURCE_REVISION:-development}
+    image: ${AILERON_DOCS_SITE_TEST_IMAGE:-ailerondocker/docs-site-test:development}
+    platform: linux/amd64
+    working_dir: /opt/docs-site
+    volumes:
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/docs:/opt/docs-site/docs:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/i18n:/opt/docs-site/i18n:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/scripts:/opt/docs-site/scripts:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/src:/opt/docs-site/src:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/static:/opt/docs-site/static:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/docusaurus.config.ts:/opt/docs-site/docusaurus.config.ts:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/sidebars.ts:/opt/docs-site/sidebars.ts:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/tsconfig.json:/opt/docs-site/tsconfig.json:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/frontend:/opt/frontend:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/workspace-manager:/opt/workspace-manager:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/workspace-runtime:/opt/workspace-runtime:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/workspace-operator:/opt/workspace-operator:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/workspace-terminal:/opt/workspace-terminal:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/packages:/opt/packages:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/contracts:/opt/contracts:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/helm:/opt/helm:ro
+      - docs_suite_build:/opt/docs-site/build
+      - docs_suite_cache:/opt/docs-site/.docusaurus
+    command:
+      - /bin/sh
+      - -lc
+      - npm run build -- --locale zh-Hant --out-dir build/zh-Hant
+
+  docs-site-build-en:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      args:
+        SOURCE_REVISION: ${AILERON_SOURCE_REVISION:-development}
+    image: ${AILERON_DOCS_SITE_TEST_IMAGE:-ailerondocker/docs-site-test:development}
+    platform: linux/amd64
+    working_dir: /opt/docs-site
+    volumes:
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/docs:/opt/docs-site/docs:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/i18n:/opt/docs-site/i18n:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/scripts:/opt/docs-site/scripts:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/src:/opt/docs-site/src:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/static:/opt/docs-site/static:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/docusaurus.config.ts:/opt/docs-site/docusaurus.config.ts:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/sidebars.ts:/opt/docs-site/sidebars.ts:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/docs-site/tsconfig.json:/opt/docs-site/tsconfig.json:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/frontend:/opt/frontend:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/workspace-manager:/opt/workspace-manager:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/workspace-runtime:/opt/workspace-runtime:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/workspace-operator:/opt/workspace-operator:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/workspace-terminal:/opt/workspace-terminal:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/packages:/opt/packages:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/contracts:/opt/contracts:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/helm:/opt/helm:ro
+      - docs_suite_build:/opt/docs-site/build
+      - docs_suite_cache:/opt/docs-site/.docusaurus
+    command:
+      - /bin/sh
+      - -lc
+      - npm run build -- --locale en --out-dir build/en
+
   docs-site-contract-generate:
     profiles:
       - contract-generate
-    image: node:20.19.4-bookworm-slim@sha256:6db5e436948af8f0244488a1f658c2c8e55a3ae51ca2e1686ed042be8f25f70a
+    image: node:20.19.4-bookworm-slim@sha256:a25e59a5562406b0a4f34ce94ccad6c3902dcf3269b40e1fe12d881090c6f9be
+    platform: linux/amd64
     working_dir: /workspace/docs-site
     volumes:
       - ..:/workspace:ro
@@ -35,3 +103,5 @@ volumes:
   docs_node_modules:
   docs_build:
   docs_cache:
+  docs_suite_build:
+  docs_suite_cache:

@@ -34,7 +34,8 @@ interface ChatViewProps {
   questionAnswerState?: QuestionAnswerUiState;
   onPatchDraft: (patch: Partial<ThreadSettings> & { draftMessage?: OutgoingMessage | null }) => void;
   onRemoveQueuedMessage?: (queuedMessageId: string) => void;
-  onCancel: () => void;
+  onStop: () => void;
+  isStopping?: boolean;
   onRetry: () => void;
   showHeader?: boolean;
   draftHandoff?: AiChatHandoffRequest | null;
@@ -53,7 +54,8 @@ export const ChatView = ({
   onAnswerQuestion,
   questionAnswerState,
   onPatchDraft,
-  onCancel,
+  onStop,
+  isStopping = false,
   onRetry,
   showHeader,
   onRemoveQueuedMessage,
@@ -299,7 +301,8 @@ export const ChatView = ({
           capabilities={capabilities}
           onSubmitDraft={onSubmitDraft}
           onPostMessage={onPostMessage}
-          onCancel={onCancel}
+          onStop={onStop}
+          isStopping={isStopping}
           onPatchDraft={(patch) => {
             if (isLocked(thread.status) && patch.agenticTool && patch.agenticTool !== thread.agenticTool) {
               return;

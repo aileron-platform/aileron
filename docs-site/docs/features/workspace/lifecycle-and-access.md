@@ -73,6 +73,8 @@ Availability Gate 以 `deletion.phase` 顯示後端已確認的階段，不顯�
 | `WORKSPACE_AVAILABILITY_ACTION_ACCEPTED` | `transitioning` | `workspace` | `202` | 否 | `return` |
 | `WORKSPACE_RUNTIME_INSTANCE_MISMATCH` | `transitioning` | `workspace` | `423` | 否 | `return` |
 | `WORKSPACE_BROWSER_WORKLOAD_NOT_READY` | `ready` | `browser` | `423` | 否 | — |
+| `WORKSPACE_EXECUTION_PLANE_DRIFT` | `blocked` | `workspace` | `409` | 否 | — |
+| `WORKSPACE_EXECUTION_PLANE_OBSERVATION_UNAVAILABLE` | `transitioning` | `workspace` | `503` | 否 | — |
 | `WORKSPACE_KB_MOUNT_SYNC_IN_PROGRESS` | `ready` | `knowledge_mount` | `409` | 否 | — |
 
 ### Workspace 永久刪除投影

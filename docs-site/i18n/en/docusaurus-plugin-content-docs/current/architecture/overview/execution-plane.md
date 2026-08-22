@@ -71,6 +71,8 @@ The table below is generated from `contracts/workspace-availability.json`. Manag
 | `WORKSPACE_AVAILABILITY_ACTION_ACCEPTED` | `transitioning` | `workspace` | `202` | No | `return` |
 | `WORKSPACE_RUNTIME_INSTANCE_MISMATCH` | `transitioning` | `workspace` | `423` | No | `return` |
 | `WORKSPACE_BROWSER_WORKLOAD_NOT_READY` | `ready` | `browser` | `423` | No | — |
+| `WORKSPACE_EXECUTION_PLANE_DRIFT` | `blocked` | `workspace` | `409` | No | — |
+| `WORKSPACE_EXECUTION_PLANE_OBSERVATION_UNAVAILABLE` | `transitioning` | `workspace` | `503` | No | — |
 | `WORKSPACE_KB_MOUNT_SYNC_IN_PROGRESS` | `ready` | `knowledge_mount` | `409` | No | — |
 
 ### Workspace permanent-deletion projection
@@ -212,20 +214,21 @@ A Runtime instance login is not a platform DB administration account. It has no 
 
 `AILERON_RUNTIME_CONTROL_TOKEN_FILE` is a separate boundary. Its read-only file contains an opaque token scoped to one Runtime instance, and plaintext is given only to that Runtime. Manager stores only a digest in the database and validates Workspace ID, current Runtime instance, and lifecycle state together. It can call only that Workspace's Manager automation-control endpoints. It is neither a user access token nor a cross-Workspace or platform-wide token.
 
-Kubernetes maintains one `Opaque` Runtime Secret for each Workspace with exactly these values:
+Kubernetes maintains one `Opaque` generation bundle Secret named `workspace-generation-<sha256[:16]>` for each Workspace with exactly these values:
 
 | Secret key | Runtime environment variable | Purpose |
 | --- | --- | --- |
-| `state-database-url` | `AILERON_RUNTIME_STATE_DATABASE_URL_FILE` | PostgreSQL login for the current Runtime instance and fixed Workspace schema |
+| `runtime-database-connection` | `AILERON_RUNTIME_DATABASE_CONNECTION_FILE` | Runtime login for the current Workspace generation and fixed Workspace schema |
 | `runtime-control-token` | `AILERON_RUNTIME_CONTROL_TOKEN_FILE` | Opaque token for that Workspace's automation-control endpoints |
+| `custom-setup.sh` | None; mounted through a read-only subPath | Setup script for the current Workspace generation |
 
-Only the Runtime container mounts this Secret as a read-only volume, and `*_FILE` variables point to its files. Browser and Canvas receive none of it. Manager's credential-derivation key, Ed25519 private key, platform database credential, and Redis credential are never placed in this Secret. Docker uses the same read-only Secret-file contract.
+Only the Runtime container mounts this generation bundle as a read-only volume, and `*_FILE` variables point to its credential files. Browser and Canvas receive none of it. Manager's credential-derivation key, Ed25519 private key, platform database credential, and Redis credential are never placed in this Secret. Docker uses the same read-only Secret-file contract.
 
 Lifecycle handling of schema, login, token, and Secret is:
 
-| Event | PostgreSQL schema | Runtime instance login/token | Kubernetes Runtime Secret |
+| Event | PostgreSQL schema | Runtime instance login/token | Kubernetes generation bundle |
 | --- | --- | --- | --- |
-| Start | Create if absent; reuse if present | Create a new login and opaque token | Create or update with exactly two fixed keys |
+| Start | Create if absent; reuse if present | Create a new login and opaque token | Create or update the generation bundle with exactly three fixed keys |
 | Runtime component restart | Preserve data and the same schema | Terminate superseded connections and rotate login, password, and token | Update with the new Runtime revision's values |
 | Browser/Canvas component restart | Preserve | Unchanged | Unchanged |
 | Stop | Preserve for the next start | Terminate connections, set login to `NOLOGIN`, and clear the current token fence | Preserve together with Workspace CR and PVC |
@@ -242,9 +245,12 @@ relay evidence produced by a sidecar inside the Browser Pod and required externa
 by Connectivity Evidence Gateway. Every evidence item binds the TURN Reachability Profile revision,
 credential revision, observation time, and expiry.
 
-Operator is the only connectivity-state writer. Manager projects CR status into Workspace detail and the
-database, then checks `ready` and freshness only when admitting new Browser access. With `turnRest`, Manager
-uses the installation-managed shared secret to issue Workspace-scoped, short-lived `iceServers` for every
+Operator is the only connectivity-state writer and derives the authoritative `admission` projection from
+evidence freshness. Manager projects CR status into Workspace detail and the database; new Browser access
+consumes only that projection. `ready`, or TTL-valid `degraded`, must be `allowed` to issue access. A
+`denied` projection in `pending` / `not_ready`, including evidence expired at admission time, returns 409.
+Only `unavailable` returns 503. With `turnRest`, Manager uses the installation-managed shared secret to issue
+Workspace-scoped, short-lived `iceServers` for every
 Browser access. The sidecar inside each Browser Pod also issues fresh short-lived credentials for every
 backend probe, with the probe identity bound to the Workspace ID. The Neko container never receives the
 TURN REST shared secret.

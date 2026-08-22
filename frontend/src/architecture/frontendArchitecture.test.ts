@@ -61,7 +61,7 @@ const APPROVED_PUBLIC_SHARED_PACKAGE_NAMES = [
   'resource-workflow',
   'settings-workflow',
   'shell',
-  'slash-command-picker',
+  'prompt-invocation-picker',
   'split-pane',
   'version-control',
 ] as const;

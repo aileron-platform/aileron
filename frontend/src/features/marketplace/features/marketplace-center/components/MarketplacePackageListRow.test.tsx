@@ -11,7 +11,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 const packageItem: MarketplacePackageSummary = {
-  provider: 'codex',
+  targetClient: 'codex',
   packageType: 'plugin',
   packageId: 'figma-context',
   displayName: 'Figma Context',
@@ -19,21 +19,25 @@ const packageItem: MarketplacePackageSummary = {
   description: 'Figma context plugin.',
   category: 'coding',
   tags: ['mcp'],
-  sourceType: 'created',
   indexedResourceNames: ['mcp'],
   validationSeverity: 'none',
-  lifecycleStatus: 'ready',
+  authoringCapabilities: {
+    basic: 'read-write', agentsMd: 'read-write', hooks: 'read-write', mcp: 'read-write',
+    agents: 'read-write', commands: 'read-write', outputStyle: 'unsupported', skills: 'read-write', files: 'read-write',
+  },
   registryPath: 'codex/plugins/figma-context',
   revision: 'rev-1',
   updatedAt: '2026-05-07T00:00:00.000Z',
   variants: [{
-    provider: 'codex',
+    targetClient: 'codex',
+    packageFormat: 'codex-native',
     packageId: 'figma-context',
     displayName: 'Figma Context',
     registryPath: 'codex/plugins/figma-context',
     revision: 'rev-1',
   }, {
-    provider: 'claude-code',
+    targetClient: 'claude-code',
+    packageFormat: 'claude-native',
     packageId: 'figma-context',
     displayName: 'Figma Context',
     registryPath: 'claude-code/plugins/figma-context',
@@ -64,8 +68,8 @@ describe('MarketplacePackageListRow', () => {
     expect(screen.getByText('Figma Context')).toBeInTheDocument();
     expect(screen.getByText('figma-context')).toBeInTheDocument();
     expect(screen.getByText('Figma context plugin.')).toBeInTheDocument();
-    expect(screen.getAllByText('marketplace.providers.codex').length).toBeGreaterThan(0);
-    expect(screen.getByText('marketplace.providers.claude-code')).toBeInTheDocument();
+    expect(screen.getAllByText('marketplace.targetClients.codex').length).toBeGreaterThan(0);
+    expect(screen.getByText('marketplace.targetClients.claude-code · claude-native')).toBeInTheDocument();
     expect(screen.getByText('coding')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Figma Context/ }));
@@ -95,23 +99,19 @@ describe('MarketplacePackageListRow', () => {
     expect(screen.queryByRole('button', { name: 'marketplace.center.card.actions.delete' })).not.toBeInTheDocument();
   });
 
-  it('shows draft state and disables install even when an action is supplied', () => {
+  it('shows validation errors without disabling install', () => {
     render(
       <MarketplacePackageListRow
-        item={{ ...packageItem, lifecycleStatus: 'draft' }}
+        item={{ ...packageItem, validationSeverity: 'error' }}
         onOpenDetail={vi.fn()}
         onInstall={vi.fn()}
       />,
     );
 
-    expect(screen.getByText('marketplace.lifecycle.draft')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.validation.severity.error')).toBeInTheDocument();
     const installButton = screen.getByRole('button', {
       name: 'marketplace.center.card.actions.install',
     });
-    expect(installButton).toBeDisabled();
-    expect(installButton).toHaveAttribute(
-      'title',
-      'marketplace.lifecycle.draftInstallDisabled',
-    );
+    expect(installButton).toBeEnabled();
   });
 });

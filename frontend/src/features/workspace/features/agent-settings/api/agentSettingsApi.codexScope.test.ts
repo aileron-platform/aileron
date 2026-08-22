@@ -8,6 +8,7 @@ vi.mock('@/shared/api/apiClient', () => ({
 
 const client = {
   get: vi.fn(),
+  getBlob: vi.fn(),
   put: vi.fn(),
   patch: vi.fn(),
   delete: vi.fn(),
@@ -18,6 +19,7 @@ describe('agentSettingsApi Codex scope contract', () => {
     vi.clearAllMocks();
     vi.mocked(ApiClient).mockReturnValue(client as never);
     client.get.mockResolvedValue({});
+    client.getBlob.mockResolvedValue(new Blob(['image'], { type: 'image/png' }));
     client.put.mockResolvedValue({});
     client.patch.mockResolvedValue({});
     client.delete.mockResolvedValue({});
@@ -47,6 +49,39 @@ describe('agentSettingsApi Codex scope contract', () => {
       undefined,
       undefined,
     );
+  });
+
+  it('loads project and plugin skill blobs with encoded document identity', async () => {
+    const api = createAgentSettingsApi('codex');
+
+    await api.getSkillBlob(
+      'http://runtime.test',
+      'workspace-1',
+      'review assets/logo final.png',
+      'project',
+    );
+    await api.getCodexFileBlob(
+      'http://runtime.test',
+      'workspace-1',
+      'skills',
+      'plugin',
+      'review assets/SKILL.md',
+      'demo tools@local',
+    );
+
+    expect(client.getBlob).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/workspaces/workspace-1/codex/skills/content?path=review+assets%2Flogo+final.png&scope=project&raw=true',
+    );
+    expect(client.getBlob).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/workspaces/workspace-1/codex/skills/file?scope=plugin&path=review+assets%2FSKILL.md&raw=true&pluginId=demo+tools%40local',
+    );
+    expect(ApiClient).toHaveBeenCalledWith({
+      baseUrl: 'http://runtime.test',
+      unauthorizedBehavior: 'propagate',
+      executionAudience: 'workspace-runtime',
+    });
   });
 
   it('sends Codex plugin and subagent mutations with scope', async () => {

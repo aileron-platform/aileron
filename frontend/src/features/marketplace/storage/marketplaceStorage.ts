@@ -1,11 +1,11 @@
-import type { MarketplaceFeatureKey, MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplaceFeatureKey, MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 import type { AgenticTool } from '@/shared/types/agenticTool';
 import { readSelectedWorkspaceId } from '@/features/workspace/public';
 
 export type MarketplaceCenterViewMode = 'grid' | 'list';
 
 export interface MarketplaceCenterFilterState {
-  provider: MarketplaceProvider | 'all';
+  targetClient: MarketplaceTargetClient | 'all';
   category: string;
   features: MarketplaceFeatureKey[];
 }
@@ -23,7 +23,7 @@ const MARKETPLACE_CENTER_FILTERS_KEY = 'marketplace.center.filters.v1';
 const MARKETPLACE_CENTER_VIEW_MODE_KEY = 'marketplace.center.viewMode.v1';
 const MARKETPLACE_INSTALL_WORKSPACE_KEY = 'marketplace.install.lastWorkspace.v1';
 
-const marketplaceProviders = new Set<MarketplaceProvider | 'all'>(['all', 'claude-code', 'codex']);
+const marketplaceTargetClients = new Set<MarketplaceTargetClient | 'all'>(['all', 'claude-code', 'codex']);
 const marketplaceFeatures = new Set<MarketplaceFeatureKey>(['mcp', 'commands', 'hooks', 'agentsMd', 'agents', 'outputStyle', 'skills']);
 
 const getStorage = (): Storage | null => (
@@ -61,7 +61,7 @@ const writeJson = (key: string, value: unknown): void => {
 export const loadMarketplaceCenterFilters = (userScope?: string | null): MarketplaceCenterFilterState => {
   const value = readJson<Partial<MarketplaceCenterFilterState>>(getScopedKey(MARKETPLACE_CENTER_FILTERS_KEY, userScope));
   return {
-    provider: value?.provider && marketplaceProviders.has(value.provider) ? value.provider : 'all',
+    targetClient: value?.targetClient && marketplaceTargetClients.has(value.targetClient) ? value.targetClient : 'all',
     category: typeof value?.category === 'string' && value.category ? value.category : 'all',
     features: Array.isArray(value?.features)
       ? value.features.filter((feature): feature is MarketplaceFeatureKey => marketplaceFeatures.has(feature as MarketplaceFeatureKey))
@@ -74,7 +74,7 @@ export const saveMarketplaceCenterFilters = (
   value: MarketplaceCenterFilterState,
 ): void => {
   writeJson(getScopedKey(MARKETPLACE_CENTER_FILTERS_KEY, userScope), {
-    provider: value.provider,
+    targetClient: value.targetClient,
     category: value.category,
     features: value.features,
   });

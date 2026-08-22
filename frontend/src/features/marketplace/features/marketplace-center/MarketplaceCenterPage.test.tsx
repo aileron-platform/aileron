@@ -29,7 +29,10 @@ vi.mock('@/features/auth/public', () => ({
 }));
 
 const mockPackage: MarketplacePackageSummary = {
-  provider: 'codex',
+  targetClient: 'codex',
+  packageFormat: 'codex-native',
+  catalogPluginId: 'aileron-internal/figma-context',
+  userCopyTargetClient: 'codex',
   packageType: 'plugin',
   packageId: 'figma-context',
   displayName: 'Figma Context',
@@ -37,15 +40,19 @@ const mockPackage: MarketplacePackageSummary = {
   description: 'Figma context plugin.',
   category: 'coding',
   tags: ['mcp'],
-  sourceType: 'created',
   indexedResourceNames: ['mcp'],
   validationSeverity: 'none',
-  lifecycleStatus: 'ready',
+  authoringCapabilities: {
+    basic: 'read-write', agentsMd: 'read-write', hooks: 'read-write',
+    mcp: 'read-write', agents: 'read-write', commands: 'read-write',
+    outputStyle: 'unsupported', skills: 'read-write', files: 'read-write',
+  },
   registryPath: 'codex/plugins/figma-context',
   revision: 'rev-1',
   updatedAt: '2026-05-07T00:00:00.000Z',
   variants: [{
-    provider: 'codex',
+    targetClient: 'codex',
+    packageFormat: 'codex-native',
     packageId: 'figma-context',
     displayName: 'Figma Context',
     registryPath: 'codex/plugins/figma-context',
@@ -60,7 +67,6 @@ const mockListResult: MarketplaceListResult = {
   pageSize: 12,
   totalPages: 1,
   categories: ['coding'],
-  sourceTypes: ['created'],
   validationSeverities: ['none'],
 };
 
@@ -71,12 +77,14 @@ const mockGetRegistrySettings = vi.fn();
 const mockInitializeRegistry = vi.fn();
 const mockListPackages = vi.fn();
 const mockCreatePackage = vi.fn();
+const mockListPackageFormatOptions = vi.fn();
 const mockScanImportSource = vi.fn();
 const mockImportCandidates = vi.fn();
 const mockToast = vi.fn();
 
 vi.mock('../../api/marketplaceApi', () => ({
   createPackage: (...args: unknown[]) => mockCreatePackage(...args),
+  listPackageFormatOptions: (...args: unknown[]) => mockListPackageFormatOptions(...args),
   getRegistrySettings: (...args: unknown[]) => mockGetRegistrySettings(...args),
   preflightMarketplaceUserCopy: vi.fn(),
   createMarketplaceUserCopy: vi.fn(),
@@ -143,6 +151,19 @@ const openImportDialog = async () => {
   return within(await screen.findByRole('dialog'));
 };
 
+const completeImportMetadata = (
+  dialog: ReturnType<typeof within>,
+) => {
+  for (const input of dialog.getAllByLabelText('marketplace.import.fields.version')) {
+    fireEvent.change(input, { target: { value: '1.0.1' } });
+  }
+  const checkboxes = dialog.getAllByRole('checkbox');
+  const replacement = checkboxes.length > 2 ? checkboxes.at(-1) : null;
+  if (replacement && replacement.getAttribute('aria-checked') !== 'true') {
+    fireEvent.click(replacement);
+  }
+};
+
 const scanGitImport = async (source = 'git@github.com:example/marketplace.git') => {
   const dialog = await openImportDialog();
   fireEvent.change(dialog.getByLabelText('marketplace.import.fields.source'), {
@@ -167,6 +188,7 @@ describe('MarketplaceCenterPage', () => {
     mockInitializeRegistry.mockReset();
     mockListPackages.mockReset();
     mockCreatePackage.mockReset();
+    mockListPackageFormatOptions.mockReset();
     mockNavigate.mockReset();
     mockInstallPlugin.mockReset();
     mockDeletePackage.mockReset();
@@ -185,7 +207,7 @@ describe('MarketplaceCenterPage', () => {
     mockListPackages.mockResolvedValue(mockListResult);
     mockInstallPlugin.mockResolvedValue({
       status: 'installed',
-      provider: 'codex',
+      targetClient: 'codex',
       packageId: 'figma-context',
       marketplaceId: 'team-tools',
       workspaceId: 'ws-1',
@@ -199,15 +221,22 @@ describe('MarketplaceCenterPage', () => {
     });
     mockDeletePackage.mockResolvedValue({ deleted: true });
     mockExportPackage.mockResolvedValue({ archiveName: 'pkg.zip' });
+    mockListPackageFormatOptions.mockResolvedValue([{
+      packageFormat: 'codex-native',
+      targetClients: ['codex'],
+      authoringCapabilities: mockPackage.authoringCapabilities,
+      defaultVersion: '1.0.0',
+    }]);
     mockScanImportSource.mockResolvedValue([
       {
         id: 'claude-code:review-assistant',
-        provider: 'claude-code',
+        targetClient: 'claude-code',
+        packageFormat: 'claude-native',
         packageId: 'review-assistant',
+        version: '1.0.0',
         displayName: 'Review Assistant',
         sourcePath: 'plugins/review-assistant',
         duplicate: false,
-        duplicateAction: 'skip',
         variantStatus: 'new-family',
         variants: [],
         validationSeverity: 'warning',
@@ -219,16 +248,17 @@ describe('MarketplaceCenterPage', () => {
       },
       {
         id: 'claude-code:existing-package',
-        provider: 'claude-code',
+        targetClient: 'claude-code',
+        packageFormat: 'claude-native',
         packageId: 'existing-package',
+        version: '1.0.0',
         displayName: 'Existing Package',
         sourcePath: 'plugins/existing-package',
         duplicate: true,
-        duplicateAction: 'skip',
-        newPackageId: 'existing-package-copy',
         variantStatus: 'duplicate-variant',
         variants: [{
-          provider: 'claude-code',
+          targetClient: 'claude-code',
+          packageFormat: 'claude-native',
           packageId: 'existing-package',
           displayName: 'Existing Package',
         }],
@@ -240,7 +270,7 @@ describe('MarketplaceCenterPage', () => {
         }],
       },
     ]);
-    mockImportCandidates.mockResolvedValue({ imported: [], skipped: [], failed: [], warnings: [] });
+    mockImportCandidates.mockResolvedValue({ imported: [], failed: [], warnings: [] });
   });
 
   it('single-flights identical initial requests under StrictMode', async () => {
@@ -251,7 +281,7 @@ describe('MarketplaceCenterPage', () => {
     expect(mockListPackages).toHaveBeenCalledTimes(1);
     expect(mockListPackages).toHaveBeenCalledWith({
       q: '',
-      provider: 'all',
+      targetClient: 'all',
       category: 'all',
       features: [],
       sort: 'updatedAt',
@@ -312,14 +342,14 @@ describe('MarketplaceCenterPage', () => {
     mockListPackages.mockClear();
 
     await user.click(screen.getByRole('button', {
-      name: 'marketplace.providers.codex',
+      name: 'marketplace.targetClients.codex',
     }));
 
     await waitFor(() => {
       expect(mockListPackages).toHaveBeenCalledTimes(1);
       expect(mockListPackages).toHaveBeenCalledWith(
         expect.objectContaining({
-          provider: 'codex',
+          targetClient: 'codex',
           page: 1,
         }),
       );
@@ -342,7 +372,7 @@ describe('MarketplaceCenterPage', () => {
       expect(mockListPackages).toHaveBeenCalledTimes(1);
     });
     fireEvent.click(screen.getByRole('button', {
-      name: 'marketplace.providers.codex',
+      name: 'marketplace.targetClients.codex',
     }));
     await waitFor(() => {
       expect(mockListPackages).toHaveBeenCalledTimes(2);
@@ -421,10 +451,13 @@ describe('MarketplaceCenterPage', () => {
     expect(mockDeletePackage).not.toHaveBeenCalled();
   });
 
-  it('creates a provider-native package from the header dialog and navigates to the editor', async () => {
+  it('creates a targetClient-native package from the header dialog and navigates to the editor', async () => {
     const user = userEvent.setup();
     const createdPackage: MarketplacePackageSummary = {
-      provider: 'codex',
+      targetClient: 'codex',
+      packageFormat: 'codex-native',
+      catalogPluginId: 'review-helper',
+      userCopyTargetClient: 'codex',
       packageType: 'plugin',
       packageId: 'review-helper',
       displayName: 'Review Helper',
@@ -432,18 +465,18 @@ describe('MarketplaceCenterPage', () => {
       description: 'Helps review changes',
       category: 'coding',
       tags: [],
-      sourceType: 'created',
       indexedResourceNames: [],
       validationSeverity: 'none',
-      lifecycleStatus: 'ready',
-      registryPath: 'codex/plugins/review-helper',
+      authoringCapabilities: mockPackage.authoringCapabilities,
+      registryPath: 'codex/plugins/codex-native/review-helper',
       revision: 'rev-created',
       updatedAt: '2026-06-27T00:00:00.000Z',
       variants: [{
-        provider: 'codex',
+        targetClient: 'codex',
+        packageFormat: 'codex-native',
         packageId: 'review-helper',
         displayName: 'Review Helper',
-        registryPath: 'codex/plugins/review-helper',
+        registryPath: 'codex/plugins/codex-native/review-helper',
         revision: 'rev-created',
       }],
     };
@@ -454,20 +487,24 @@ describe('MarketplaceCenterPage', () => {
     await user.click(await screen.findByRole('button', { name: 'marketplace.center.actions.create' }));
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    await user.click(screen.getByRole('combobox', { name: 'marketplace.createPackage.fields.provider' }));
-    await user.click(screen.getByRole('option', { name: 'marketplace.providers.codex' }));
+    await user.click(screen.getByRole('combobox', { name: 'marketplace.createPackage.fields.targetClient' }));
+    await user.click(screen.getByRole('option', { name: 'marketplace.targetClients.codex' }));
     await user.type(screen.getByLabelText('marketplace.createPackage.fields.packageId'), 'review-helper');
     await user.type(screen.getByLabelText('marketplace.createPackage.fields.displayName'), 'Review Helper');
     await user.type(screen.getByLabelText('marketplace.createPackage.fields.description'), 'Helps review changes');
     await user.click(screen.getByRole('button', { name: 'marketplace.createPackage.actions.create' }));
 
     await waitFor(() => expect(mockCreatePackage).toHaveBeenCalledWith({
-      provider: 'codex',
+      packageFormat: 'codex-native',
+      targetClients: ['codex'],
       packageId: 'review-helper',
       displayName: 'Review Helper',
+      version: '1.0.0',
       description: 'Helps review changes',
     }));
-    expect(mockNavigate).toHaveBeenCalledWith('/marketplace/packages/codex/review-helper/edit/basic');
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/marketplace/packages/codex/review-helper/edit/basic?packageFormat=codex-native',
+    );
   });
 
   it('keeps the create dialog open with the entered values when package creation fails', async () => {
@@ -560,7 +597,7 @@ describe('MarketplaceCenterPage', () => {
 
     await waitFor(() => {
       expect(mockListPackages).toHaveBeenLastCalledWith(expect.objectContaining({
-        provider: 'all',
+        targetClient: 'all',
         category: 'all',
         features: [],
         page: 1,
@@ -573,13 +610,13 @@ describe('MarketplaceCenterPage', () => {
     renderCenter();
 
     await screen.findByText('Figma Context');
-    await user.click(screen.getByRole('button', { name: 'marketplace.providers.codex' }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.targetClients.codex' }));
     await user.click(screen.getByRole('button', { name: 'marketplace.features.mcp' }));
     await user.click(screen.getByRole('button', { name: 'coding' }));
     await user.click(screen.getByRole('button', { name: 'marketplace.center.viewModes.list' }));
 
     await waitFor(() => {
-      expect(window.localStorage.getItem('marketplace.center.filters.v1:local-user')).toContain('"provider":"codex"');
+      expect(window.localStorage.getItem('marketplace.center.filters.v1:local-user')).toContain('"targetClient":"codex"');
       expect(window.localStorage.getItem('marketplace.center.filters.v1:local-user')).toContain('"category":"coding"');
       expect(window.localStorage.getItem('marketplace.center.filters.v1:local-user')).toContain('"mcp"');
       expect(window.localStorage.getItem('marketplace.center.viewMode.v1:local-user')).toBe('list');
@@ -609,7 +646,7 @@ describe('MarketplaceCenterPage', () => {
     const user = userEvent.setup();
     mockInstallPlugin.mockResolvedValue({
       status: 'failed',
-      provider: 'codex',
+      targetClient: 'codex',
       packageId: 'figma-context',
       marketplaceId: 'team-tools',
       workspaceId: 'ws-1',
@@ -644,9 +681,9 @@ describe('MarketplaceCenterPage', () => {
 
     await waitFor(() => {
       expect(mockExportPackage).toHaveBeenCalledWith({
-        provider: 'codex',
+        targetClient: 'codex',
+        packageFormat: 'codex-native',
         packageId: 'figma-context',
-        revision: 'rev-1',
       });
     });
     expect(screen.getByText('marketplace.export.result.ready')).toBeInTheDocument();
@@ -689,7 +726,7 @@ describe('MarketplaceCenterPage', () => {
     expect(dialog.getByRole('button', { name: 'marketplace.import.actions.scan' })).toBeInTheDocument();
   });
 
-  it('requires typing the package id before deleting a package from the list row', async () => {
+  it('deletes a package from the list row without typed confirmation', async () => {
     const user = userEvent.setup();
     renderCenter();
 
@@ -699,17 +736,14 @@ describe('MarketplaceCenterPage', () => {
 
     const deleteButtons = screen.getAllByRole('button', { name: 'marketplace.delete.actions.delete' });
     const confirmDelete = deleteButtons[deleteButtons.length - 1];
-    expect(confirmDelete).toBeDisabled();
-
-    await user.type(screen.getByLabelText('marketplace.delete.fields.confirm'), mockPackage.packageId);
     expect(confirmDelete).toBeEnabled();
     await user.click(confirmDelete);
 
     await waitFor(() => {
       expect(mockDeletePackage).toHaveBeenCalledWith(expect.objectContaining({
-        provider: 'codex',
+        targetClient: 'codex',
+        packageFormat: 'codex-native',
         packageId: 'figma-context',
-        revision: 'rev-1',
       }));
     });
   });
@@ -737,28 +771,6 @@ describe('MarketplaceCenterPage', () => {
     expect(mockDeletePackage).not.toHaveBeenCalled();
   });
 
-  it('keeps delete dialog open when center delete hits a revision conflict', async () => {
-    const user = userEvent.setup();
-    mockDeletePackage.mockResolvedValue({
-      deleted: false,
-      errorCode: 'marketplace.package.revision_conflict',
-    });
-    renderCenter();
-
-    await screen.findByText('Figma Context');
-    await user.click(screen.getByRole('button', { name: 'marketplace.center.viewModes.list' }));
-    await user.click(screen.getByRole('button', { name: 'marketplace.center.card.actions.delete' }));
-    await user.type(screen.getByLabelText('marketplace.delete.fields.confirm'), mockPackage.packageId);
-    const deleteButtons = screen.getAllByRole('button', { name: 'marketplace.delete.actions.delete' });
-    await user.click(deleteButtons[deleteButtons.length - 1]);
-
-    expect(
-      await screen.findByText(
-        'marketplace.install.errors.packageRevisionConflict',
-      ),
-    ).toBeInTheDocument();
-  });
-
   it('scans import candidates without selecting them by default and imports selected candidates', async () => {
     renderCenter();
 
@@ -780,17 +792,20 @@ describe('MarketplaceCenterPage', () => {
     fireEvent.click(dialog.getByRole('button', { name: 'marketplace.import.actions.clearSelection' }));
     expect(dialog.getByRole('button', { name: 'marketplace.import.actions.import' })).toBeDisabled();
     fireEvent.click(dialog.getByRole('button', { name: 'marketplace.import.actions.selectAll' }));
+    completeImportMetadata(dialog);
     fireEvent.click(dialog.getByRole('button', { name: 'marketplace.import.actions.import' }));
 
     await waitFor(() => {
       expect(mockScanImportSource).toHaveBeenCalledWith(expect.objectContaining({
-        provider: 'all',
+        targetClient: 'all',
         sourceKind: 'git',
       }));
       expect(mockScanImportSource).toHaveBeenCalledWith(expect.not.objectContaining({
         ref: expect.any(String),
       }));
-      expect(mockImportCandidates).toHaveBeenCalledWith([
+      expect(mockImportCandidates).toHaveBeenCalledWith(
+        expect.objectContaining({ targetClient: 'all', sourceKind: 'git' }),
+        [
         expect.objectContaining({
           packageId: 'review-assistant',
           duplicate: false,
@@ -799,7 +814,8 @@ describe('MarketplaceCenterPage', () => {
           packageId: 'existing-package',
           duplicate: true,
         }),
-      ]);
+        ],
+      );
     });
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
@@ -810,26 +826,26 @@ describe('MarketplaceCenterPage', () => {
     });
   });
 
-  it('reveals imported packages by clearing filters and switching to the imported provider', async () => {
+  it('reveals imported packages by clearing filters and switching to the imported targetClient', async () => {
     mockImportCandidates.mockResolvedValue({
       imported: [{
         ...mockPackage,
-        provider: 'claude-code',
+        targetClient: 'claude-code',
         packageId: 'review-assistant',
         displayName: 'Review Assistant',
       }],
-      skipped: [],
       failed: [],
       warnings: [],
     });
     renderCenter();
 
     await screen.findByText('Figma Context');
-    fireEvent.click(screen.getByRole('button', { name: 'marketplace.providers.codex' }));
+    fireEvent.click(screen.getByRole('button', { name: 'marketplace.targetClients.codex' }));
     fireEvent.click(screen.getByRole('button', { name: 'marketplace.features.mcp' }));
     const dialog = await scanGitImport();
     expect(await dialog.findByText('Review Assistant')).toBeInTheDocument();
     fireEvent.click(dialog.getByRole('button', { name: 'marketplace.import.actions.selectAll' }));
+    completeImportMetadata(dialog);
     mockListPackages.mockClear();
     fireEvent.click(dialog.getByRole('button', { name: 'marketplace.import.actions.import' }));
 
@@ -837,7 +853,7 @@ describe('MarketplaceCenterPage', () => {
       expect(mockListPackages).toHaveBeenCalledTimes(1);
       expect(mockListPackages).toHaveBeenCalledWith(expect.objectContaining({
         q: '',
-        provider: 'claude-code',
+        targetClient: 'claude-code',
         category: 'all',
         features: [],
         page: 1,
@@ -845,64 +861,66 @@ describe('MarketplaceCenterPage', () => {
     });
   });
 
-  it('imports a duplicate candidate as a new package id', async () => {
-    const user = userEvent.setup();
+  it('requires explicit replacement for a duplicate import', async () => {
     renderCenter();
 
     const dialog = await scanGitImport();
     expect(await dialog.findByText('Existing Package')).toBeInTheDocument();
     const checkboxes = dialog.getAllByRole('checkbox');
     fireEvent.click(checkboxes[checkboxes.length - 1]);
-    const duplicateActionSelects = dialog.getAllByRole('combobox');
-    await user.click(duplicateActionSelects[duplicateActionSelects.length - 1]);
-    await user.click(screen.getByRole('option', { name: 'marketplace.import.duplicateActions.importAsNew' }));
-    fireEvent.change(dialog.getByLabelText('marketplace.import.fields.newPackageId'), {
-      target: { value: 'existing-package-team' },
-    });
+    completeImportMetadata(dialog);
     fireEvent.click(dialog.getByRole('button', { name: 'marketplace.import.actions.import' }));
 
     await waitFor(() => {
-      expect(mockImportCandidates).toHaveBeenCalledWith(expect.arrayContaining([
+      expect(mockImportCandidates).toHaveBeenCalledWith(
+        expect.objectContaining({ targetClient: 'all', sourceKind: 'git' }),
+        expect.arrayContaining([
         expect.objectContaining({
           packageId: 'existing-package',
           duplicate: true,
-          duplicateAction: 'import-as-new',
-          newPackageId: 'existing-package-team',
+          import: expect.objectContaining({
+            version: '1.0.1',
+            overwrite: true,
+          }),
         }),
-      ]));
+        ]),
+      );
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 
-  it('shows an import error when importing selected candidates fails', async () => {
+  it('shows a importing error when selected candidates fail', async () => {
     mockImportCandidates.mockRejectedValue(new Error('marketplace.import.validation.cloneFailed'));
     renderCenter();
 
     const dialog = await scanGitImport();
     expect(await dialog.findByText('Review Assistant')).toBeInTheDocument();
     fireEvent.click(dialog.getByRole('button', { name: 'marketplace.import.actions.selectAll' }));
+    completeImportMetadata(dialog);
     fireEvent.click(dialog.getByRole('button', { name: 'marketplace.import.actions.import' }));
 
     expect(await dialog.findByText('marketplace.import.validation.cloneFailed')).toBeInTheDocument();
   });
 
-  it('shows failed candidate details from an import result', async () => {
+  it('shows structured failed candidate details from a import result', async () => {
     mockImportCandidates.mockResolvedValue({
       imported: [],
-      skipped: [],
       failed: [{
         id: 'claude-code:review-assistant',
-        provider: 'claude-code',
+        targetClient: 'claude-code',
+        packageFormat: 'claude-native',
         packageId: 'review-assistant',
+        version: '1.0.0',
         displayName: 'Review Assistant',
         sourcePath: 'plugins/review-assistant',
         duplicate: false,
-        duplicateAction: 'skip',
         variantStatus: 'new-family',
         variants: [],
         validationSeverity: 'none',
         validationResults: [],
         errorCode: 'marketplace.validation.required_manifest_missing',
+        stage: 'validate',
+        category: 'validation',
       }],
       warnings: [],
     });
@@ -911,6 +929,7 @@ describe('MarketplaceCenterPage', () => {
     const dialog = await scanGitImport();
     expect(await dialog.findByText('Review Assistant')).toBeInTheDocument();
     fireEvent.click(dialog.getByRole('button', { name: 'marketplace.import.actions.selectAll' }));
+    completeImportMetadata(dialog);
     fireEvent.click(dialog.getByRole('button', { name: 'marketplace.import.actions.import' }));
 
     await waitFor(() => {
@@ -923,34 +942,4 @@ describe('MarketplaceCenterPage', () => {
     });
   });
 
-  it('shows draft badge and can filter drafts', async () => {
-    const user = userEvent.setup();
-    mockListPackages.mockResolvedValueOnce({
-      ...mockListResult,
-      items: [
-        {
-          ...mockPackage,
-          packageId: 'draft-package',
-          displayName: 'Draft Package',
-          lifecycleStatus: 'draft',
-        },
-        {
-          ...mockPackage,
-          packageId: 'ready-package',
-          displayName: 'Ready Package',
-          lifecycleStatus: 'ready',
-          revision: 'rev-ready',
-        },
-      ],
-      total: 2,
-    });
-
-    renderCenter();
-
-    expect(await screen.findByText('Draft Package')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'marketplace.lifecycle.draft' }));
-
-    expect(screen.getByText('Draft Package')).toBeInTheDocument();
-    expect(screen.queryByText('Ready Package')).not.toBeInTheDocument();
-  });
 });

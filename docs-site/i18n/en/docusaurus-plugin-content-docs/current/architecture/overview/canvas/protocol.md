@@ -189,6 +189,8 @@ The bridge source is `aileron-canvas-bridge`, and the version is `2`. Canvas con
 window.aileron.bridge.emit("STYLE_SELECTED", { direction: "B" });
 ```
 
+Every `routePath` reported by the bridge is an absolute path within the Canvas application. For example, the root page is `/`; the public Workspace Gateway prefix `/workspaces/{workspaceId}/canvas` is not part of a Canvas route. The frontend sends the current resolved `light` or `dark` theme through the `SET_THEME` command. The bridge stores it in `window.aileron.theme` and emits an `aileron:themechange` event so the Canvas application can apply it after initialization without interfering with framework hydration.
+
 ### Built-in review event family
 
 The platform reserves and handles these events:

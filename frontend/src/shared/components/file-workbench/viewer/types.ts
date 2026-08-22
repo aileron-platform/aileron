@@ -17,8 +17,6 @@ export interface FileViewerWorkbenchAdapter {
   readFile: (path: string) => Promise<string>;
   readBlob?: (path: string) => Promise<Blob>;
   saveFile?: (path: string, content: string) => Promise<void>;
-  getDrawioViewerUrl?: (path: string, mode: 'view' | 'edit') => Promise<string>;
-  saveDrawio?: (path: string, content: string) => Promise<void>;
   copyPath?: (path: string) => Promise<void>;
   revealInTree?: (path: string) => void;
 }
@@ -27,7 +25,6 @@ export interface FileViewerWorkbenchCapabilities {
   canEdit?: boolean;
   canSave?: boolean;
   canReadBlob?: boolean;
-  canPreviewDrawio?: boolean;
   canCopyPath?: boolean;
   canRevealInTree?: boolean;
   canCloseTabs?: boolean;

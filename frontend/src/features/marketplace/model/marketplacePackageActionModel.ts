@@ -1,16 +1,48 @@
 import { ApiError } from '@/shared/api/apiClient';
-import type { MarketplaceProvider } from './marketplaceTypes';
+import type { MarketplaceTargetClient } from './marketplaceTypes';
 
 export const getMarketplaceInstallCommandName = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   t: (key: string) => string,
-) => t(`marketplace.install.commandNames.${provider}`);
+) => t(`marketplace.install.commandNames.${targetClient}`);
 
 export const getMarketplaceErrorCode = (err: unknown, fallback: string) => (
   err instanceof ApiError
     ? (err.errorCode ?? fallback)
     : fallback
 );
+
+export interface MarketplaceInstallErrorContext {
+  stage: string;
+  source: string | null;
+  destination: string | null;
+  category: string;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === 'object' && value !== null
+);
+
+export const getMarketplaceInstallErrorContext = (
+  err: unknown,
+): MarketplaceInstallErrorContext | null => {
+  if (!(err instanceof ApiError) || !isRecord(err.responseData)) return null;
+  const detail = err.responseData.detail;
+  if (!isRecord(detail)) return null;
+  if (typeof detail.stage !== 'string' || typeof detail.category !== 'string') {
+    return null;
+  }
+  const source = typeof detail.source === 'string' ? detail.source : null;
+  const destination = typeof detail.destination === 'string'
+    ? detail.destination
+    : null;
+  return {
+    stage: detail.stage,
+    source,
+    destination,
+    category: detail.category,
+  };
+};
 
 export type MarketplacePackageActionType =
   | 'export'
@@ -19,8 +51,6 @@ export type MarketplacePackageActionType =
 const PACKAGE_ACTION_ERROR_KEYS: Record<string, string> = {
   'marketplace.package.not_found': 'marketplace.errors.packageNotFound',
   'marketplace.package.path_escape': 'marketplace.errors.packagePathInvalid',
-  'marketplace.package.revision_conflict':
-    'marketplace.install.errors.packageRevisionConflict',
   'marketplace.permission.denied': 'marketplace.errors.permission.denied',
 };
 

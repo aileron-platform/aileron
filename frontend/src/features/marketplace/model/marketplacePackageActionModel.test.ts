@@ -7,7 +7,7 @@ import {
 } from './marketplacePackageActionModel';
 
 describe('marketplacePackageActionModel', () => {
-  it('resolves localized install command names by provider', () => {
+  it('resolves localized install command names by targetClient', () => {
     const t = (key: string) => key;
 
     expect(getMarketplaceInstallCommandName('codex', t)).toBe('marketplace.install.commandNames.codex');
@@ -28,10 +28,6 @@ describe('marketplacePackageActionModel', () => {
       'export',
       'marketplace.package.symlink_rejected',
     )).toBe('marketplace.export.errors.symlinkRejected');
-    expect(getMarketplacePackageActionErrorKey(
-      'delete',
-      'marketplace.package.revision_conflict',
-    )).toBe('marketplace.install.errors.packageRevisionConflict');
     expect(getMarketplacePackageActionErrorKey(
       'delete',
       'marketplace.package.path_escape',

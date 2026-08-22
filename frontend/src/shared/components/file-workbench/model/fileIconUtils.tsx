@@ -40,7 +40,6 @@ const FILE_ICON_MAP = {
   text: <FileText className="w-4 h-4 text-gray-600" />,
   log: <FileText className="w-4 h-4 text-gray-500" />,
   mermaid: <Network className="w-4 h-4 text-purple-600" />,
-  drawio: <Network className="w-4 h-4 text-orange-600" />,
   image: <FileImage className="w-4 h-4 text-green-500" />,
   video: <FileVideo className="w-4 h-4 text-red-500" />,
   audio: <FileAudio className="w-4 h-4 text-purple-500" />,
@@ -91,8 +90,6 @@ const extensionMap: Record<string, FileIconType> = {
   '.mdx': 'markdown',
   '.mmd': 'mermaid',
   '.mermaid': 'mermaid',
-  '.drawio': 'drawio',
-  '.dio': 'drawio',
   '.txt': 'text',
   '.log': 'log',
   '.png': 'image',
@@ -205,8 +202,6 @@ export const getFileLanguage = (fileName: string): string => {
     '.mdx': 'MDX',
     '.mmd': 'Mermaid',
     '.mermaid': 'Mermaid',
-    '.drawio': 'Draw.io',
-    '.dio': 'Draw.io',
     '.txt': 'Plain Text',
     '.log': 'Log File',
     '.py': 'Python',
@@ -247,4 +242,3 @@ export const getFileLanguage = (fileName: string): string => {
 
 export const isMermaidFile = (fileName: string): boolean => ['.mmd', '.mermaid'].includes(getExtension(fileName));
 export const isMarkdownFile = (fileName: string): boolean => ['.md', '.mdx'].includes(getExtension(fileName));
-export const isDrawioFile = (fileName: string): boolean => ['.drawio', '.dio'].includes(getExtension(fileName));

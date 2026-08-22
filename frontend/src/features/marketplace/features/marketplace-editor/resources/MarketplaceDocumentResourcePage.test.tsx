@@ -60,7 +60,7 @@ const documentMutation = (
 const renderResourcePage = (ui: React.ReactElement) => renderWithQuery(ui);
 
 describe('MarketplaceDocumentResourcePage', () => {
-  it('keeps provider and package identity in the collection query key', () => {
+  it('keeps targetClient and package identity in the collection query key', () => {
     expect(marketplaceDocumentResourceQueryKey('codex', 'toolkit', 'commands'))
       .toEqual(['marketplace', 'codex', 'toolkit', 'commands']);
     expect(marketplaceDocumentResourceQueryKey('codex', 'other', 'commands'))
@@ -83,7 +83,7 @@ describe('MarketplaceDocumentResourcePage', () => {
 
     renderResourcePage(
       <MarketplaceDocumentResourcePage
-        provider="codex"
+        targetClient="codex"
         packageId="toolkit"
         resourceType={resourceType}
         initialRevision="rev1"
@@ -116,7 +116,7 @@ describe('MarketplaceDocumentResourcePage', () => {
 
     const { container } = renderResourcePage(
       <MarketplaceDocumentResourcePage
-        provider="codex"
+        targetClient="codex"
         packageId="toolkit"
         resourceType="commands"
         initialRevision="rev1"
@@ -149,7 +149,7 @@ describe('MarketplaceDocumentResourcePage', () => {
 
     renderResourcePage(
       <MarketplaceDocumentResourcePage
-        provider="codex"
+        targetClient="codex"
         packageId="toolkit"
         resourceType="commands"
         initialRevision="rev1"
@@ -184,7 +184,7 @@ describe('MarketplaceDocumentResourcePage', () => {
 
     renderResourcePage(
       <MarketplaceDocumentResourcePage
-        provider="codex"
+        targetClient="codex"
         packageId="toolkit"
         resourceType="commands"
         initialRevision="rev1"
@@ -220,7 +220,7 @@ describe('MarketplaceDocumentResourcePage', () => {
 
     renderResourcePage(
       <MarketplaceDocumentResourcePage
-        provider="codex"
+        targetClient="codex"
         packageId="toolkit"
         resourceType="commands"
         initialRevision="rev1"
@@ -260,7 +260,7 @@ describe('MarketplaceDocumentResourcePage', () => {
 
     renderResourcePage(
       <MarketplaceDocumentResourcePage
-        provider="codex"
+        targetClient="codex"
         packageId="toolkit"
         resourceType="commands"
         initialRevision="rev1"
@@ -295,7 +295,7 @@ describe('MarketplaceDocumentResourcePage', () => {
 
     renderResourcePage(
       <MarketplaceDocumentResourcePage
-        provider="codex"
+        targetClient="codex"
         packageId="toolkit"
         resourceType="commands"
         initialRevision="rev1"
@@ -339,7 +339,7 @@ describe('MarketplaceDocumentResourcePage', () => {
 
     renderResourcePage(
       <MarketplaceDocumentResourcePage
-        provider="codex"
+        targetClient="codex"
         packageId="toolkit"
         resourceType="commands"
         initialRevision="rev1"
@@ -381,7 +381,7 @@ describe('MarketplaceDocumentResourcePage', () => {
 
     renderResourcePage(
       <MarketplaceDocumentResourcePage
-        provider="codex"
+        targetClient="codex"
         packageId="toolkit"
         resourceType="commands"
         initialRevision="rev1"

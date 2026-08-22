@@ -1,8 +1,8 @@
 import type {
   MarketplaceDeliveryMethod,
-  MarketplacePackageSummary,
-  MarketplaceProvider,
+  MarketplaceTargetClient,
   MarketplaceResourceType,
+  MarketplaceUserCopyBlockingIssue,
   MarketplaceUserCopyPreflightResult,
 } from '../model/marketplaceTypes';
 
@@ -22,50 +22,50 @@ export const marketplaceResourceTypeCounts = (
     .sort(([left], [right]) => left.localeCompare(right));
 };
 
+export interface MarketplaceBlockingIssueGroup {
+  errorCode: MarketplaceUserCopyBlockingIssue['errorCode'];
+  count: number;
+}
+
+export const marketplaceBlockingIssueGroups = (
+  preflight: MarketplaceUserCopyPreflightResult | null,
+): MarketplaceBlockingIssueGroup[] => {
+  const groups = new Map<
+    MarketplaceUserCopyBlockingIssue['errorCode'],
+    MarketplaceBlockingIssueGroup
+  >();
+  for (const issue of preflight?.blockingIssues ?? []) {
+    const current = groups.get(issue.errorCode);
+    groups.set(issue.errorCode, {
+      errorCode: issue.errorCode,
+      count: (current?.count ?? 0) + 1,
+    });
+  }
+  return Array.from(groups.values());
+};
+
 export const getMarketplaceInstallResourceTypeLabelKey = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   resourceType: MarketplaceResourceType,
 ): string => (
-  provider === 'codex' && resourceType === 'prompt'
+  targetClient === 'codex' && resourceType === 'prompt'
     ? 'marketplace.install.resourceTypes.slashCommand'
     : `marketplace.install.resourceTypes.${resourceType}`
 );
 
-const PLUGIN_INDEX_CATEGORY_TYPES: Record<
-  MarketplaceProvider,
-  ReadonlyArray<readonly [string, MarketplaceResourceType]>
-> = {
-  'claude-code': [
-    ['skills', 'skill'],
-    ['commands', 'command'],
-    ['agents', 'agent'],
-    ['output-style', 'output-style'],
-    ['mcp', 'mcp'],
-    ['hooks', 'hook'],
-    ['lsp', 'lsp'],
-  ],
-  codex: [
-    ['skills', 'skill'],
-    ['apps', 'app'],
-    ['mcp', 'mcp'],
-    ['hooks', 'hook'],
-  ],
+const MARKETPLACE_SKIPPED_REASON_KEYS: Record<string, string> = {
+  'format-unsupported': 'marketplace.install.skipped.reasons.formatUnsupported',
+  'source-not-allowed': 'marketplace.install.skipped.reasons.sourceNotAllowed',
 };
 
-export const getMarketplacePluginIndexedResourceTypes = (
-  item: MarketplacePackageSummary,
-): MarketplaceResourceType[] => {
-  const indexedNames = new Set(item.indexedResourceNames);
-  return PLUGIN_INDEX_CATEGORY_TYPES[item.provider]
-    .filter(([category]) => indexedNames.has(category))
-    .map(([, resourceType]) => resourceType);
-};
+export const getMarketplaceSkippedReasonKey = (code: string): string => (
+  MARKETPLACE_SKIPPED_REASON_KEYS[code]
+  ?? 'marketplace.install.skipped.reasons.unsupported'
+);
 
 const MARKETPLACE_INSTALL_ERROR_KEYS: Record<string, string> = {
-  'marketplace.install.package_not_ready': 'marketplace.install.errors.packageNotReady',
-  'marketplace.install.package_not_published': 'marketplace.install.errors.packageNotPublished',
-  'marketplace.install.provider_invalid': 'marketplace.install.errors.providerInvalid',
-  'marketplace.install.provider_not_enabled': 'marketplace.install.errors.providerNotEnabled',
+  'marketplace.install.target_client_invalid': 'marketplace.install.errors.targetClientInvalid',
+  'marketplace.install.target_client_not_enabled': 'marketplace.install.errors.targetClientNotEnabled',
   'marketplace.install.runtime_contract_invalid': 'marketplace.install.errors.runtimeContractInvalid',
   'marketplace.install.runtime_delegation_unavailable': 'marketplace.install.errors.runtimeDelegationUnavailable',
   'marketplace.install.runtime_url_missing': 'marketplace.install.errors.runtimeUrlMissing',
@@ -78,8 +78,6 @@ const MARKETPLACE_INSTALL_ERROR_KEYS: Record<string, string> = {
     'marketplace.install.errors.packageNotFound',
   'marketplace.user_copy.revision_conflict':
     'marketplace.install.errors.packageRevisionConflict',
-  'marketplace.user_copy.package_not_ready':
-    'marketplace.install.errors.packageNotReady',
   'marketplace.user_copy.runtime_unavailable':
     'marketplace.install.errors.runtimeUnavailable',
   'marketplace.user_copy.runtime_contract_invalid':
@@ -126,7 +124,6 @@ const MARKETPLACE_INSTALL_ERROR_KEYS: Record<string, string> = {
   'marketplace.git.publish_branch_invalid': 'marketplace.install.errors.publishBranchInvalid',
   'marketplace.import.validation.ssh_key_required': 'marketplace.install.errors.sshKeyRequired',
   'marketplace.package.not_found': 'marketplace.install.errors.packageNotFound',
-  'marketplace.package.revision_conflict': 'marketplace.install.errors.packageRevisionConflict',
   'marketplace.install.package_revision_conflict_refreshed':
     'marketplace.install.errors.packageRevisionConflictRefreshed',
   'marketplace.install.runtime_unavailable': 'marketplace.install.errors.runtimeUnavailable',

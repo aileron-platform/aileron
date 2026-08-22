@@ -20,6 +20,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { useResolvedTheme } from '@/shared/contexts/ResolvedThemeContext';
 import { createLogger } from '@/shared/services/logger';
 import { cn } from '@/shared/utils/cn';
 import { useWorkspace } from '../../providers/WorkspaceProvider';
@@ -47,12 +48,8 @@ const logger = createLogger('WebCanvas');
 const CANVAS_REVIEW_SKILL_NAME = 'aileron-web-canvas-review';
 
 type BridgeMode = 'default' | 'select';
-type CanvasResolvedTheme = 'light' | 'dark';
 
 const getTargetRect = (target: CanvasReviewTarget | null | undefined) => target?.rect ?? null;
-const getResolvedCanvasTheme = (): CanvasResolvedTheme => (
-  typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light'
-);
 
 type ReviewPanelPosition = {
   x: number;
@@ -82,6 +79,7 @@ const normalizeBridgeRoutePath = (routePath: unknown): string | null => {
 
 export const WebCanvasPage: React.FC = () => {
   const { t, state } = useI18n();
+  const resolvedTheme = useResolvedTheme();
   const canvasUnavailableMessage = t('workspace.canvas.webCanvas.error.defaultMessage');
   const { toast } = useToast();
   const { workspaceRuntime } = useWorkspace();
@@ -98,9 +96,6 @@ export const WebCanvasPage: React.FC = () => {
   const [healthStatus, setHealthStatus] = useState<string>('checking');
   const [healthMessage, setHealthMessage] = useState('');
   const [manifestStatus, setManifestStatus] = useState<string>('missing');
-  const [runtimeStatus, setRuntimeStatus] = useState<string>('unhealthy');
-  const [canvasTitle, setCanvasTitle] = useState<string | null>(null);
-  const [canvasOwner, setCanvasOwner] = useState<{ skillName?: string | null } | null>(null);
   const [reviewMode, setReviewMode] = useState<BridgeMode>('default');
   const [bridgeReady, setBridgeReady] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<CanvasReviewTarget | null>(null);
@@ -144,8 +139,8 @@ export const WebCanvasPage: React.FC = () => {
   }, []);
 
   const postCanvasTheme = useCallback(() => {
-    postBridgeCommand('SET_THEME', { theme: getResolvedCanvasTheme() });
-  }, [postBridgeCommand]);
+    postBridgeCommand('SET_THEME', { theme: resolvedTheme });
+  }, [postBridgeCommand, resolvedTheme]);
 
   const clearTransientReviewState = () => {
     setBridgeReady(false);
@@ -327,9 +322,6 @@ export const WebCanvasPage: React.FC = () => {
       setRoutes(routesData.routes);
       setFilteredRoutes(routesData.routes);
       setManifestStatus(routesData.manifestStatus);
-      setRuntimeStatus(routesData.runtimeStatus ?? 'unhealthy');
-      setCanvasTitle(routesData.title ?? null);
-      setCanvasOwner(routesData.owner ?? null);
 
       const availablePaths = new Set(routesData.routes.map((route) => route.path));
       const defaultPath = routesData.defaultPath || routesData.routes[0]?.path || '/';
@@ -350,9 +342,6 @@ export const WebCanvasPage: React.FC = () => {
       setHealthMessage(health.message || '');
       if (health.manifestStatus) {
         setManifestStatus(health.manifestStatus);
-      }
-      if (health.runtimeStatus) {
-        setRuntimeStatus(health.runtimeStatus);
       }
       await loadReviewNotes(nextPath);
       return nextIframeSrc;
@@ -453,14 +442,7 @@ export const WebCanvasPage: React.FC = () => {
   ]);
 
   useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const root = document.documentElement;
-    const observer = new MutationObserver(() => {
-      postCanvasTheme();
-    });
-    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
     postCanvasTheme();
-    return () => observer.disconnect();
   }, [postCanvasTheme]);
 
   useEffect(() => {
@@ -539,9 +521,6 @@ export const WebCanvasPage: React.FC = () => {
         const loadedSrc = await loadCanvasData(currentPath);
         if (syncResult.manifestStatus) {
           setManifestStatus(syncResult.manifestStatus);
-        }
-        if (syncResult.runtimeStatus) {
-          setRuntimeStatus(syncResult.runtimeStatus);
         }
         setHealthStatus('healthy');
         setHealthMessage(syncResult.message || '');
@@ -735,26 +714,12 @@ export const WebCanvasPage: React.FC = () => {
     setReviewNotes((prev) => prev.filter((item) => item.id !== note.id));
   };
 
-  const statusNoticeTitleKey = manifestStatus === 'valid'
-    ? canvasOwner?.skillName
-      ? 'workspace.canvas.webCanvas.manifest.statusNotice.skill.title'
-      : 'workspace.canvas.webCanvas.manifest.statusNotice.user.title'
-    : manifestStatus === 'invalid'
-      ? 'workspace.canvas.webCanvas.manifest.errors.invalid.title'
-      : 'workspace.canvas.webCanvas.default.guidance.title';
-  const statusNoticeDescriptionKey = manifestStatus === 'valid'
-    ? canvasOwner?.skillName
-      ? 'workspace.canvas.webCanvas.manifest.statusNotice.skill.description'
-      : 'workspace.canvas.webCanvas.manifest.statusNotice.user.description'
-    : manifestStatus === 'invalid'
-      ? 'workspace.canvas.webCanvas.manifest.errors.invalid.description'
-      : 'workspace.canvas.webCanvas.default.guidance.description';
-  const showStatusNotice = (
+  const showManifestError = (
     !isLoading
     && healthStatus !== 'checking'
     && healthStatus !== 'starting'
     && healthStatus !== 'unhealthy'
-    && manifestStatus !== 'valid'
+    && manifestStatus === 'invalid'
   );
 
   return (
@@ -885,7 +850,7 @@ export const WebCanvasPage: React.FC = () => {
           </div>
         )}
 
-        {showStatusNotice && (
+        {showManifestError && (
           <div
             className="pointer-events-none absolute left-4 top-4 z-[5] max-w-md rounded-md border bg-background/95 p-3 text-sm shadow-sm backdrop-blur"
             role="status"
@@ -894,26 +859,10 @@ export const WebCanvasPage: React.FC = () => {
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 space-y-1">
                 <div className="font-medium text-foreground">
-                  {t(statusNoticeTitleKey, {
-                    title: canvasTitle ?? '',
-                    skillName: canvasOwner?.skillName ?? '',
-                  })}
+                  {t('workspace.canvas.webCanvas.manifest.errors.invalid.title')}
                 </div>
                 <div className="text-muted-foreground">
-                  {t(statusNoticeDescriptionKey, {
-                    title: canvasTitle ?? '',
-                    skillName: canvasOwner?.skillName ?? '',
-                  })}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {t('workspace.canvas.webCanvas.manifest.statusNotice.details', {
-                    manifest: t(`workspace.canvas.webCanvas.manifest.status.${manifestStatus}`),
-                    runtime: runtimeStatus === 'starting'
-                      ? t('workspace.canvas.webCanvas.runtime.starting')
-                      : runtimeStatus === 'unhealthy'
-                        ? t('workspace.canvas.webCanvas.runtime.errors.startupFailed')
-                        : t('workspace.canvas.webCanvas.runtime.healthy'),
-                  })}
+                  {t('workspace.canvas.webCanvas.manifest.errors.invalid.description')}
                 </div>
               </div>
             </div>

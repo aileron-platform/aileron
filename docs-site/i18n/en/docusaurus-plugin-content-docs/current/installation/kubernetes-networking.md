@@ -79,15 +79,13 @@ turn:
       requiredFrontendVantages: [internet]
 ```
 
-Production external vantages use `turnRest`. Its Secret contains `turn-rest-shared-secret`, and Gateway
-generates an expiring timestamp username and HMAC credential according to Coturn TURN REST. `staticSecret`
-is restricted to an explicitly classified development or single-site test profile and is not a credential
-for a production-required vantage.
+Every TURN profile uses `turnRest`. Its Secret contains `turn-rest-shared-secret`, and Gateway generates an
+expiring timestamp username and HMAC credential according to Coturn TURN REST.
 
 `turnRest` also covers the real Browser data path. The Browser Pod sidecar creates a fresh short-lived
 credential for every backend probe. The Manager Browser access response returns fresh frontend
 `iceServers`, and the frontend uses them for that `RTCPeerConnection` instead of a fixed TURN credential
-loaded when Neko started. Bundled Coturn uses `staticSecret`; external TURN uses `turnRest`.
+loaded when Neko started. Bundled and external Coturn use the same `turnRest` contract.
 
 `policyBackend` supports `cilium`, `kubernetes`, and explicit `unenforced`. Destinations must use a
 compatible `ciliumEntities`, `cidrs`, `namespacePods`, `fqdns`, or `unenforced` form. Relay destinations
@@ -97,8 +95,8 @@ a permissive world rule.
 
 ## Built-in Coturn
 
-With `coturn.enabled=true`, the Chart creates an isolated namespace, a `hostNetwork` Coturn DaemonSet,
-a public TURN Service, a Browser ICE Secret, and a probe identity separate from the Browser credential.
+With `coturn.enabled=true`, the Chart deploys a `hostNetwork` Coturn DaemonSet and a public TURN Service in
+the namespace prepared by the installer. The Chart does not create Namespaces or Secrets.
 
 ```yaml
 coturn:
@@ -110,9 +108,14 @@ coturn:
 ```
 
 `turn.{baseDomain}` may resolve only to nodes running Coturn. Each node and upstream device must allow
-the profile listener over TCP/UDP and its relay UDP range. Create the credential Secret selected by
-`coturn.auth.existingSecretName` before deployment. Increment `turn.credentialRevision` whenever Browser
-or probe credentials rotate.
+the profile listener over TCP/UDP and its relay UDP range. Create two Secrets in the Coturn namespace before
+deployment: `turn.existingSecretName` in the Runtime namespace provides `turn-rest-shared-secret`, while
+`coturn.auth.existingSecretName` in the Coturn namespace provides the same `turn-rest-shared-secret`.
+Coturn reads the shared secret from this namespace-local read-only Secret file and enables
+`use-auth-secret` plus `static-auth-secret`; the value is not placed in argv, environment values, or
+logs. The TURN acceptance attestor reads `probe-username` from the Runtime Secret as an audit identity
+and derives a short-lived HMAC credential; it never submits a fixed probe password. Increment
+`turn.credentialRevision` whenever the shared secret rotates.
 
 ## External TURN
 
@@ -145,7 +148,7 @@ stringData:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: aileron-aileron-connectivity-evidence
+  name: aileron-connectivity-evidence
   namespace: workspace-system
 type: Opaque
 stringData:

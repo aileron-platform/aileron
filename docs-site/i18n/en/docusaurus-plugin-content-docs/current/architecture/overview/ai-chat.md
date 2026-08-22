@@ -75,6 +75,19 @@ Workspace Manager does not own ordinary AI Chat message content. It manages the 
 5. The timeline preview for a tool result remains bounded. Complete bytes beyond the preview are stored in `thread_tool_result_contents`. The full content is fetched by result message ID only when the user selects Show all.
 6. Runtime schedules a coalesced WebSocket invalidation only after the event transaction commits. A rollback never sends phantom IDs or metadata. WebSocket is not a durable event log; after receiving an event, the frontend still retrieves authoritative state through REST.
 
+## Stop (stopping the current Turn)
+
+```http
+POST /api/v1/threads/{threadId}/stop
+```
+
+- Stop only stops the active Turn, not the whole Thread; the partial output already produced is kept, and that Turn/Turn Execution is marked canceled.
+- Runtime first marks the Thread `stopping` and broadcasts `status_updated`, then asks the provider runner to stop and **confirms the runner actually exited**, and only then marks that Turn canceled in one atomic step; if the FIFO queue has a next message, it is dequeued and started immediately as the next Turn on the same Thread, otherwise the Thread ends as `canceled`.
+- Whether the next queued message is started shares the same finish-and-handoff logic used when a Turn completes normally (the `complete` event dequeue path), so both behave identically.
+- If the runner fails to confirm it stopped, or times out while still alive, the Thread stays `stopping`, the queue is left untouched, no next Turn is started, and a stable, retryable error is returned. If the runner reports an error while stopping but is confirmed dead afterward, the stop is still treated as safe and the handoff proceeds.
+- Repeated Stop calls for the same active execution are idempotent: they never dequeue or start a Turn twice.
+- New messages arriving while a Thread is `stopping` behave like any other running status: they are appended to the end of the queue rather than started immediately.
+
 ## Persistence and Pairing Guarantees
 
 `thread_messages` is the single append-only source of truth for messages. Thread, Turn, and Turn Execution store lifecycle/grouping metadata; a provider's raw session ID is not used as a first-party primary key.

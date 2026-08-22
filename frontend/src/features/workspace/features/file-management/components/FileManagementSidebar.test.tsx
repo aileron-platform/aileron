@@ -357,6 +357,46 @@ describe('FileManagementSidebar', () => {
     });
   });
 
+  it('refreshes the local file tree manager when refreshSignal changes and reports refreshing state', async () => {
+    const onRefreshingChange = vi.fn();
+    const view = render(<FileManagementSidebar refreshSignal={0} onRefreshingChange={onRefreshingChange} />);
+
+    await waitFor(() => {
+      expect(loadTreeMock).toHaveBeenCalledTimes(1);
+    });
+    expect(onRefreshingChange).not.toHaveBeenCalled();
+
+    view.rerender(
+      <>
+        <FileManagementSidebar refreshSignal={1} onRefreshingChange={onRefreshingChange} />
+      </>,
+    );
+
+    await waitFor(() => {
+      expect(loadTreeMock).toHaveBeenCalledTimes(2);
+    });
+    expect(onRefreshingChange).toHaveBeenNthCalledWith(1, true);
+    expect(onRefreshingChange).toHaveBeenNthCalledWith(2, false);
+  });
+
+  it('ignores a stale refreshSignal that has not changed since the last render', async () => {
+    const onRefreshingChange = vi.fn();
+    const view = render(<FileManagementSidebar refreshSignal={2} onRefreshingChange={onRefreshingChange} />);
+
+    await waitFor(() => {
+      expect(loadTreeMock).toHaveBeenCalledTimes(1);
+    });
+
+    view.rerender(
+      <>
+        <FileManagementSidebar refreshSignal={2} onRefreshingChange={onRefreshingChange} />
+      </>,
+    );
+
+    expect(loadTreeMock).toHaveBeenCalledTimes(1);
+    expect(onRefreshingChange).not.toHaveBeenCalled();
+  });
+
   it('omits contextId when no git context is selected', () => {
     useWorkspaceMock.mockReturnValue({
       workspace: {

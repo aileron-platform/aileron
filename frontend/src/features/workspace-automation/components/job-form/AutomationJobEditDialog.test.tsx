@@ -4,7 +4,6 @@ import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AutomationJobEditDialog } from './AutomationJobEditDialog';
 import type { AutomationJob, JobUpdateInput } from '../../model/automationTypes';
-import type { SlashCommandItem } from '@/shared/types/slashCommands';
 
 const { tMock, toastMock } = vi.hoisted(() => ({
   toastMock: vi.fn(),
@@ -20,11 +19,15 @@ const { tMock, toastMock } = vi.hoisted(() => ({
       'automation.form.fields.workspace.placeholder': 'Select workspace',
       'automation.form.fields.workspace.accessSource.owned': 'Owned',
       'automation.form.fields.workspace.accessSource.shared': 'Shared',
+      'automation.form.fields.worktree.label': 'Worktree settings',
+      'automation.form.fields.worktree.dedicated.label': 'Automatically create a dedicated worktree',
+      'automation.form.fields.worktree.dedicated.description': 'The worktree is created on the first execution and reused by every later execution of this automation.',
       'automation.form.fields.description.label': 'Description',
       'automation.form.fields.description.placeholder': 'Description',
       'automation.form.fields.prompt.label': 'Prompt',
       'automation.form.fields.prompt.placeholder': 'Prompt',
-      'automation.form.fields.prompt.selectCommand': 'Choose command',
+      'automation.form.fields.prompt.selectInvocation': 'Choose Prompt Invocation',
+      'automation.form.fields.prompt.toolCompatibilityWarning': 'Invocation may be incompatible',
       'automation.form.fields.trigger.label': 'Trigger type',
       'automation.form.fields.status.label': 'Status',
       'automation.form.fields.schedule.label': 'Job configuration',
@@ -99,13 +102,11 @@ const { tMock, toastMock } = vi.hoisted(() => ({
       'automation.form.trigger.webhook': 'Webhook',
       'automation.form.status.active': 'Active',
       'automation.form.status.paused': 'Paused',
-      'automation.slashDialog.title': 'Select slash command',
-      'automation.slashDialog.description': 'Pick a command',
-      'automation.slashDialog.searchPlaceholder': 'Search commands',
-      'automation.slashDialog.empty': 'No commands',
-      'automation.slashDialog.scope.all': 'All',
-      'automation.slashDialog.scope.project': 'Project',
-      'automation.slashDialog.scope.user': 'User',
+      'automation.promptInvocationDialog.title': 'Select prompt invocation',
+      'automation.promptInvocationDialog.description': 'Pick an invocation',
+      'automation.promptInvocationDialog.searchPlaceholder': 'Search invocations',
+      'automation.promptInvocationDialog.empty': 'No invocations',
+      'aiChat.settings.tool': 'Agentic Tool',
       'common.cancel': 'Cancel',
     }[key] ?? key),
 }));
@@ -127,19 +128,41 @@ vi.mock('@/shared/api/apiClient', () => ({
   },
 }));
 
-vi.mock('@/shared/components/slash-command-picker', () => ({
-  SlashCommandPickerDialog: ({
+vi.mock('@/shared/components/prompt-invocation-picker', () => ({
+  PromptInvocationPickerDialog: ({
     open,
-    commands,
     onSelect,
   }: {
     open: boolean;
-    commands: SlashCommandItem[];
-    onSelect: (command: SlashCommandItem) => void;
+    onSelect: (item: {
+      id: string;
+      sourceKey: string;
+      fileName: string;
+      kind: 'slash-command';
+      scope: 'project';
+      namespace: string;
+      displayName: string;
+      category: string;
+      description: string;
+      invocation: string;
+      tags: string[];
+    }) => void;
   }) => (
     open ? (
-      <button type="button" onClick={() => onSelect(commands[0])}>
-        pick slash command
+      <button type="button" onClick={() => onSelect({
+        id: 'codex:slash-command:project:ops/deploy.md',
+        sourceKey: 'ops/deploy.md',
+        fileName: 'ops/deploy.md',
+        kind: 'slash-command',
+        scope: 'project',
+        namespace: 'ops',
+        displayName: 'ops/deploy',
+        category: 'ops',
+        description: 'Deploy service',
+        invocation: '/ops/deploy',
+        tags: [],
+      })}>
+        pick prompt invocation
       </button>
     ) : null
   ),
@@ -156,8 +179,16 @@ vi.mock('../../api/automationWorkspaceApi', () => ({
         modes: ['execute', 'plan'],
         defaultMode: 'execute',
         contextWindow: 200000,
+      }, {
+        id: 'codex',
+        models: ['gpt-5'],
+        defaultModel: 'gpt-5',
+        modes: ['execute'],
+        defaultMode: 'execute',
+        contextWindow: 200000,
       }],
     }),
+    listPromptInvocations: vi.fn(),
   },
 }));
 
@@ -188,18 +219,6 @@ const job: AutomationJob = {
   deletedAt: null,
 };
 
-const command: SlashCommandItem = {
-  id: 'project:ops:deploy.md',
-  fileName: 'deploy.md',
-  kind: 'slash-command',
-  scope: 'project',
-  namespace: 'ops',
-  displayName: 'ops/deploy',
-  category: 'ops',
-  description: 'Deploy service',
-  invocation: '/ops/deploy',
-};
-
 const renderDialog = (overrides: Partial<React.ComponentProps<typeof AutomationJobEditDialog>> = {}) => {
   const onSave = vi.fn<React.ComponentProps<typeof AutomationJobEditDialog>['onSave']>()
     .mockResolvedValue(undefined);
@@ -212,9 +231,12 @@ const renderDialog = (overrides: Partial<React.ComponentProps<typeof AutomationJ
       saving={false}
       onClose={vi.fn()}
       onSave={onSave}
-      workspaces={[{ id: 'ws-1', name: 'Primary workspace', accessSource: 'owned' }]}
-      commands={[command]}
-      commandsLoading={false}
+      workspaces={[{
+        id: 'ws-1',
+        name: 'Primary workspace',
+        accessSource: 'owned',
+        runtimeUrl: 'http://runtime.test',
+      }]}
       {...overrides}
     />,
   );
@@ -241,11 +263,18 @@ describe('AutomationJobEditDialog', () => {
     expect(screen.getAllByRole('combobox')[0]).toBeDisabled();
     expect(screen.getByRole('dialog')).toHaveClass('h-[min(880px,92vh)]');
     expect(screen.queryByText('Tags')).not.toBeInTheDocument();
-    expect(screen.getByText('automation.form.fields.worktree.dedicated.label')).toBeInTheDocument();
-    expect(screen.getByRole('radio')).toBeChecked();
+    expect(screen.getByText('Worktree settings')).toBeInTheDocument();
+    const worktreeSummary = screen.getByRole('group', {
+      name: 'Worktree settings Automatically create a dedicated worktree',
+    });
+    expect(worktreeSummary).toHaveTextContent('Automatically create a dedicated worktree');
+    expect(worktreeSummary).toHaveTextContent(
+      'The worktree is created on the first execution and reused by every later execution of this automation.',
+    );
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
-  it('submits the edited payload and supports slash command insertion', { timeout: 10000 }, async () => {
+  it('submits the edited payload and inserts the Runtime invocation', { timeout: 10000 }, async () => {
     const user = userEvent.setup();
     const { onSave } = renderDialog();
 
@@ -255,8 +284,8 @@ describe('AutomationJobEditDialog', () => {
     fireEvent.change(screen.getByPlaceholderText('Definition name'), {
       target: { value: 'Daily deploy' },
     });
-    await user.click(screen.getByRole('button', { name: 'Choose command' }));
-    await user.click(screen.getByRole('button', { name: 'pick slash command' }));
+    await user.click(screen.getByRole('button', { name: 'Choose Prompt Invocation' }));
+    await user.click(screen.getByRole('button', { name: 'pick prompt invocation' }));
     await user.click(screen.getByRole('button', { name: 'Save definition' }));
 
     await waitFor(() => {
@@ -275,6 +304,23 @@ describe('AutomationJobEditDialog', () => {
     expect(payload).not.toHaveProperty('notifications');
     expect(payload).not.toHaveProperty('metadata');
     expect(payload).not.toHaveProperty('workspaceId');
+  });
+
+  it('keeps the invocation, warns after switching tools, and clears the warning after editing', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.click(screen.getByRole('button', { name: 'Choose Prompt Invocation' }));
+    await user.click(screen.getByRole('button', { name: 'pick prompt invocation' }));
+    await user.click(screen.getByRole('button', { name: 'Agentic Tool' }));
+    await user.click(screen.getByRole('button', { name: 'codex' }));
+
+    const prompt = screen.getByPlaceholderText('Prompt');
+    expect(prompt).toHaveValue('/ops/deploy');
+    expect(screen.getByRole('alert')).toHaveTextContent('Invocation may be incompatible');
+
+    fireEvent.change(prompt, { target: { value: '/ops/deploy safely' } });
+    expect(screen.queryByText('Invocation may be incompatible')).not.toBeInTheDocument();
   });
 
   it('maps every schedules with exact enabled into editable fields', async () => {

@@ -20,8 +20,9 @@ import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import type {
   MarketplaceImportCandidate,
-  MarketplaceImportProvider,
+  MarketplaceImportTargetClient,
   MarketplaceImportResult,
+  MarketplaceImportSource,
 } from '@/features/marketplace/model/marketplaceTypes';
 import {
   importCandidates,
@@ -29,7 +30,7 @@ import {
   uploadImportSource,
 } from '../../../api/marketplaceApi';
 import {
-  IMPORT_PROVIDERS,
+  IMPORT_TARGET_CLIENTS,
   translateMarketplaceMessage,
 } from '../marketplaceCenterModel';
 import { getMarketplaceErrorCode } from '../../../model/marketplacePackageActionModel';
@@ -37,13 +38,15 @@ import {
   buildGitImportSource,
   buildImportResultSummary,
   buildUploadedLocalImportSource,
+  filterImportCandidates,
   getSelectableCandidateIds,
   getVisibleImportValidationResults,
+  initializeImportCandidates,
+  isImportCandidateReady,
   isImportScanBlocked,
-  resolveLocalUploadProvider,
+  resolveLocalUploadTargetClient,
   toggleImportCandidateSelection,
-  updateImportCandidateDuplicateAction,
-  updateImportCandidateNewPackageId,
+  updateImportCandidateMetadata,
 } from '../marketplaceImportDialogModel';
 
 interface MarketplaceImportDialogProps {
@@ -59,7 +62,7 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
 }) => {
   const { t } = useI18n();
   const { toast } = useToast();
-  const [provider, setProvider] = React.useState<MarketplaceImportProvider>('all');
+  const [targetClient, setTargetClient] = React.useState<MarketplaceImportTargetClient>('all');
   const [sourceKind, setSourceKind] = React.useState<'git' | 'local'>('git');
   const [source, setSource] = React.useState('');
   const [localFile, setLocalFile] = React.useState<File | null>(null);
@@ -68,7 +71,9 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
   const [isScanning, setIsScanning] = React.useState(false);
   const [isImporting, setIsImporting] = React.useState(false);
   const [candidates, setCandidates] = React.useState<MarketplaceImportCandidate[]>([]);
+  const [scannedSource, setScannedSource] = React.useState<MarketplaceImportSource | null>(null);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [candidateQuery, setCandidateQuery] = React.useState('');
   const [resultStatus, setResultStatus] = React.useState<'idle' | 'scanned'>('idle');
   const [scanErrorKey, setScanErrorKey] = React.useState<string | null>(null);
   const scanBlocked = isImportScanBlocked({
@@ -82,6 +87,7 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
     if (!open) {
       setCandidates([]);
       setSelectedIds(new Set());
+      setCandidateQuery('');
       setResultStatus('idle');
       setScanErrorKey(null);
       return;
@@ -90,7 +96,9 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
 
   const resetScanState = React.useCallback(() => {
     setCandidates([]);
+    setScannedSource(null);
     setSelectedIds(new Set());
+    setCandidateQuery('');
     setResultStatus('idle');
     setScanErrorKey(null);
   }, []);
@@ -101,15 +109,17 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
     try {
       const importSource = sourceKind === 'local'
         ? (localFile
-          ? (await uploadImportSource(resolveLocalUploadProvider(provider), localFile)).source
-          : buildUploadedLocalImportSource(provider, uploadedLocalSource))
-        : buildGitImportSource(provider, source);
+          ? (await uploadImportSource(resolveLocalUploadTargetClient(targetClient), localFile)).source
+          : buildUploadedLocalImportSource(targetClient, uploadedLocalSource))
+        : buildGitImportSource(targetClient, source);
       if (sourceKind === 'local') {
         setUploadedLocalSource(importSource.source);
       }
       const scanned = await scanImportSource(importSource);
-      setCandidates(scanned);
+      setScannedSource(importSource);
+      setCandidates(initializeImportCandidates(scanned));
       setSelectedIds(new Set());
+      setCandidateQuery('');
       setResultStatus('scanned');
     } catch (err) {
       setScanErrorKey(getMarketplaceErrorCode(err, 'marketplace.import.validation.cloneFailed'));
@@ -123,11 +133,14 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
     setScanErrorKey(null);
     try {
       const selected = candidates.filter(candidate => selectedIds.has(candidate.id));
-      const result = await importCandidates(selected);
+      if (!scannedSource) {
+        setScanErrorKey('marketplace.import.validation.sourceRequired');
+        return;
+      }
+      const result = await importCandidates(scannedSource, selected);
       const summary = buildImportResultSummary(result, selected);
       const summaryParams = {
         imported: summary.imported,
-        skipped: summary.skipped,
         failed: summary.failed,
         duplicates: summary.duplicates,
         warnings: summary.warnings,
@@ -154,6 +167,14 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
     }
   };
 
+  const selectedCandidatesReady = candidates
+    .filter(candidate => selectedIds.has(candidate.id))
+    .every(isImportCandidateReady);
+  const visibleCandidates = filterImportCandidates(candidates, candidateQuery);
+  const visibleCandidateIds = getSelectableCandidateIds(visibleCandidates);
+  const allVisibleCandidatesSelected = visibleCandidateIds.length > 0
+    && visibleCandidateIds.every(candidateId => selectedIds.has(candidateId));
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(90vh,760px)] max-w-3xl flex-col overflow-hidden">
@@ -166,18 +187,18 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>{t('marketplace.import.fields.provider')}</Label>
-              <Select value={provider} onValueChange={value => {
-                setProvider(value as MarketplaceImportProvider);
+              <Label>{t('marketplace.import.fields.targetClient')}</Label>
+              <Select value={targetClient} onValueChange={value => {
+                setTargetClient(value as MarketplaceImportTargetClient);
                 resetScanState();
               }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {IMPORT_PROVIDERS.map(value => (
+                  {IMPORT_TARGET_CLIENTS.map(value => (
                     <SelectItem key={value} value={value}>
                       {value === 'all'
-                        ? t('marketplace.import.providers.all')
-                        : t(`marketplace.providers.${value}`)}
+                        ? t('marketplace.import.targetClients.all')
+                        : t(`marketplace.targetClients.${value}`)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -271,10 +292,15 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
                       size="sm"
                       variant="ghost"
                       className="h-7 px-2 text-xs"
-                      onClick={() => setSelectedIds(new Set(getSelectableCandidateIds(candidates)))}
-                      disabled={selectedIds.size === candidates.length}
+                      onClick={() => setSelectedIds(current => new Set([
+                        ...current,
+                        ...visibleCandidateIds,
+                      ]))}
+                      disabled={allVisibleCandidatesSelected || visibleCandidateIds.length === 0}
                     >
-                      {t('marketplace.import.actions.selectAll')}
+                      {candidateQuery.trim()
+                        ? t('marketplace.import.actions.selectFiltered')
+                        : t('marketplace.import.actions.selectAll')}
                     </Button>
                     <Button
                       size="sm"
@@ -289,10 +315,27 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
                 ) : null}
               </div>
             </div>
+            {candidates.length > 0 ? (
+              <div className="relative">
+                <Label htmlFor="marketplace-import-candidate-search" className="sr-only">
+                  {t('marketplace.import.candidates.searchLabel')}
+                </Label>
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="marketplace-import-candidate-search"
+                  className="pl-9"
+                  value={candidateQuery}
+                  placeholder={t('marketplace.import.candidates.searchPlaceholder')}
+                  onChange={event => setCandidateQuery(event.target.value)}
+                />
+              </div>
+            ) : null}
             <div className="max-h-[min(34vh,320px)] space-y-2 overflow-y-auto rounded-md border border-border p-3">
               {candidates.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t('marketplace.import.candidates.empty')}</p>
-              ) : candidates.map(candidate => {
+              ) : visibleCandidates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t('marketplace.import.candidates.noMatches')}</p>
+              ) : visibleCandidates.map(candidate => {
                 const visibleValidationResults = getVisibleImportValidationResults(candidate);
                 return (
                   <div key={candidate.id} className="flex items-start gap-3 rounded-md border border-border px-3 py-2">
@@ -339,38 +382,34 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
                           ))}
                         </div>
                       ) : null}
-                    </div>
-                    {candidate.duplicate ? (
-                      <div className="w-48 space-y-2">
-                        <Select
-                          value={candidate.duplicateAction}
-                          onValueChange={value => setCandidates(items => updateImportCandidateDuplicateAction(
-                            items,
-                            candidate.id,
-                            value as MarketplaceImportCandidate['duplicateAction'],
-                          ))}
-                        >
-                          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="skip">{t('marketplace.import.duplicateActions.skip')}</SelectItem>
-                            <SelectItem value="overwrite">{t('marketplace.import.duplicateActions.overwrite')}</SelectItem>
-                            <SelectItem value="import-as-new">{t('marketplace.import.duplicateActions.importAsNew')}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {candidate.duplicateAction === 'import-as-new' ? (
+                      {selectedIds.has(candidate.id) && candidate.import ? (
+                        <div className="mt-3 grid gap-2 md:grid-cols-2">
                           <Input
-                            value={candidate.newPackageId ?? ''}
-                            aria-label={t('marketplace.import.fields.newPackageId')}
-                            placeholder={t('marketplace.import.fields.newPackageIdPlaceholder')}
-                            onChange={event => setCandidates(items => updateImportCandidateNewPackageId(
+                            value={candidate.import.version}
+                            aria-label={t('marketplace.import.fields.version')}
+                            placeholder={t('marketplace.import.fields.versionPlaceholder')}
+                            onChange={event => setCandidates(items => updateImportCandidateMetadata(
                               items,
                               candidate.id,
-                              event.target.value,
+                              { version: event.target.value },
                             ))}
                           />
-                        ) : null}
-                      </div>
-                    ) : null}
+                          {candidate.duplicate ? (
+                            <label className="flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={candidate.import.overwrite}
+                                onCheckedChange={checked => setCandidates(items => updateImportCandidateMetadata(
+                                  items,
+                                  candidate.id,
+                                  { overwrite: Boolean(checked) },
+                                ))}
+                              />
+                              {t('marketplace.import.actions.replaceExisting')}
+                            </label>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}
@@ -385,7 +424,15 @@ export const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = (
         ) : null}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('marketplace.common.actions.cancel')}</Button>
-          <Button onClick={runImport} disabled={selectedIds.size === 0 || isImporting || resultStatus === 'idle'}>
+          <Button
+            onClick={runImport}
+            disabled={
+              selectedIds.size === 0
+              || !selectedCandidatesReady
+              || isImporting
+              || resultStatus === 'idle'
+            }
+          >
             {isImporting ? <LoadingSpinner size="sm" className="mr-1.5" /> : null}
             {t('marketplace.import.actions.import')}
           </Button>

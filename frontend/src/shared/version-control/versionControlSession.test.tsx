@@ -44,7 +44,7 @@ const createHarness = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       mutations: { retry: false },
-      queries: { retry: false },
+      queries: { retry: false, retryDelay: 0 },
     },
   });
   const wrapper = ({ children }: { children: ReactNode }) => (
@@ -195,6 +195,55 @@ describe('versionControlSession queries and gating', () => {
     expect(result.result.current.commits.fetchStatus).toBe('idle');
     expect(getMock).toHaveBeenCalledTimes(1);
     expect(getMock).toHaveBeenCalledWith('/marketplace/version-control/repository');
+  });
+
+  it('retries a transient numstat collision without changing its request payload', async () => {
+    const retryableConflict = Object.assign(
+      new ApiError('Version control operation already in progress', 409),
+      {
+        operationStatus: {
+          isActive: true,
+          operation: 'changes.numstat',
+          actorDisplayName: null,
+          startedAt: '2026-08-12T08:15:30+00:00',
+          blockingScope: 'working_tree_target',
+          stale: false,
+          retryable: true,
+          progressCurrent: 0,
+          progressTotal: 0,
+          phase: '',
+          cancellable: false,
+          cancelRequested: false,
+        },
+      },
+    );
+    postMock
+      .mockRejectedValueOnce(retryableConflict)
+      .mockResolvedValueOnce({ stats: {} });
+    const session = createMarketplaceVersionControlSession({ isGitRepo: true });
+    const { wrapper } = createHarness();
+    const params = {
+      stagedPaths: ['staged.ts'],
+      unstagedPaths: ['unstaged.ts'],
+    };
+
+    const numstat = renderHook(
+      () => session.changes.useChangesNumstatQuery(params),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(numstat.result.current.isSuccess).toBe(true));
+    expect(postMock).toHaveBeenCalledTimes(2);
+    expect(postMock).toHaveBeenNthCalledWith(
+      1,
+      '/marketplace/version-control/changes/numstat',
+      params,
+    );
+    expect(postMock).toHaveBeenNthCalledWith(
+      2,
+      '/marketplace/version-control/changes/numstat',
+      params,
+    );
   });
 
   it('uses the direct marketplace history wire contract', async () => {

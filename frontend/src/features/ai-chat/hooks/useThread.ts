@@ -108,9 +108,10 @@ export const useThread = (
       onSuccess: applyMutation,
       onError: (_error, variables) => invalidateThread(variables.targetThreadId),
     }),
-    cancel: useMutation({
-      mutationFn: (targetThreadId: string) => requireThreadApi(api).cancel(targetThreadId),
+    stop: useMutation({
+      mutationFn: (targetThreadId: string) => requireThreadApi(api).stop(targetThreadId),
       onSuccess: (thread) => invalidateThread(thread.id),
+      onError: (_error, targetThreadId) => invalidateThread(targetThreadId),
     }),
     retry: useMutation({
       mutationFn: (targetThreadId: string) => requireThreadApi(api).retry(targetThreadId),

@@ -104,7 +104,6 @@ const mapColumn = (
   behavior: slot === 'navigation' ? NAVIGATION_BEHAVIOR : NAVIGATOR_BEHAVIOR,
   presentation: {
     accessibleLabel: surface.accessibleLabel,
-    chrome: slot === 'navigation' ? 'navigation' : 'navigator-muted',
     responsive: 'always',
     header: mapHeader(surface),
   },

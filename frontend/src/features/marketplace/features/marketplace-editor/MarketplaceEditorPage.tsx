@@ -22,7 +22,7 @@ import { MarketplaceEditorHeader } from './components/MarketplaceEditorHeader';
 import { getPackage } from '../../api/marketplaceApi';
 import {
   getMarketplaceEditorTabLabelKey,
-  providerEditorTabs,
+  visibleMarketplaceEditorTabs,
   type MarketplaceEditorTab,
 } from './marketplaceEditorTabsModel';
 import {
@@ -65,23 +65,32 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
   const { t } = useI18n();
   const navigate = useNavigate();
   const params = useParams();
-  const provider = params.provider === 'codex' || params.provider === 'claude-code'
-    ? params.provider
+  const targetClient = params.targetClient === 'codex' || params.targetClient === 'claude-code'
+    ? params.targetClient
     : null;
   const packageId = params.packageId ?? '';
-  const activeSection = provider ? resolveMarketplaceEditorSection(provider, params.section) : 'basic';
+  const rawPackageFormat = new URLSearchParams(window.location.search).get('packageFormat');
+  const routePackageFormat = rawPackageFormat === 'codex-native'
+    || rawPackageFormat === 'claude-native'
+    || rawPackageFormat === 'agent-plugin/1.0.0'
+    ? rawPackageFormat
+    : (targetClient === 'claude-code' ? 'claude-native' : 'codex-native');
   const [currentPackage, setCurrentPackage] = React.useState<MarketplacePackageDetail | null>(null);
+  const activeSection = resolveMarketplaceEditorSection(
+    currentPackage?.authoringCapabilities ?? null,
+    params.section,
+  );
   const [isLoading, setIsLoading] = React.useState(mode === 'edit');
   const [loadErrorKey, setLoadErrorKey] = React.useState<string | null>(null);
   const {
     identityGeneration: packageIdentityGeneration,
     session: packageSession,
   } = useMarketplaceResourceSession({
-    provider,
+    targetClient,
     packageId,
     resourceType: 'package',
   }, (
-    currentPackage?.provider === provider && currentPackage.packageId === packageId
+    currentPackage?.targetClient === targetClient && currentPackage.packageId === packageId
       ? currentPackage.revision
       : ''
   ));
@@ -93,22 +102,22 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
   }, [mode, packageIdentityGeneration]);
 
   const handleMutation = React.useCallback(async (result: MarketplacePackageMutationResult) => {
-    if (!provider) {
+    if (!targetClient) {
       return;
     }
     packageSession.acceptMutation(packageIdentityGeneration, result);
     setCurrentPackage((current) => (
-      current?.provider === provider && current.packageId === packageId
+      current?.targetClient === targetClient && current.packageId === packageId
         ? { ...current, revision: result.revision }
         : current
     ));
     const detail = await packageSession.run(
       packageIdentityGeneration,
       'package-detail',
-      () => getPackage(provider, packageId),
+      () => getPackage(targetClient, packageId),
     );
     setCurrentPackage((current) => (
-      current?.provider === provider && current.packageId === packageId
+      current?.targetClient === targetClient && current.packageId === packageId
         ? { ...detail, revision: result.revision }
         : current
     ));
@@ -116,11 +125,11 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
     packageId,
     packageIdentityGeneration,
     packageSession,
-    provider,
+    targetClient,
   ]);
 
   React.useEffect(() => {
-    if (mode !== 'edit' || !provider || !packageId) {
+    if (mode !== 'edit' || !targetClient || !packageId) {
       setIsLoading(false);
       return;
     }
@@ -129,7 +138,7 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
     void packageSession.query(
       packageIdentityGeneration,
       'package-detail',
-      () => getPackage(provider, packageId),
+      () => getPackage(targetClient, packageId),
       {
         onSuccess: (detail) => {
           setCurrentPackage(detail);
@@ -148,22 +157,27 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
     packageId,
     packageIdentityGeneration,
     packageSession,
-    provider,
+    targetClient,
   ]);
 
   React.useEffect(() => {
-    if (!provider || !packageId) return;
+    if (!targetClient || !packageId) return;
+    if (mode === 'edit' && (
+      currentPackage?.targetClient !== targetClient
+      || currentPackage.packageId !== packageId
+    )) return;
     const nextPath = buildMarketplaceEditorPath({
-      provider,
+      targetClient,
       packageId,
+      packageFormat: routePackageFormat,
       section: activeSection,
     });
     if (params.section !== activeSection) {
       navigate(nextPath, { replace: true });
     }
-  }, [activeSection, navigate, packageId, params.section, provider]);
+  }, [activeSection, currentPackage, mode, navigate, packageId, params.section, routePackageFormat, targetClient]);
 
-  if (!provider || !packageId) {
+  if (!targetClient || !packageId) {
     return null;
   }
 
@@ -189,7 +203,7 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
     );
   }
 
-  const currentPackageMatchesRoute = currentPackage?.provider === provider
+  const currentPackageMatchesRoute = currentPackage?.targetClient === targetClient
     && currentPackage.packageId === packageId;
 
   if (isLoading || !currentPackage || !currentPackageMatchesRoute) {
@@ -204,12 +218,12 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
     );
   }
 
-  const visibleEditorTabs = providerEditorTabs[provider];
+  const visibleEditorTabs = visibleMarketplaceEditorTabs(currentPackage.authoringCapabilities);
   const resolvedDisplayName = currentPackage.displayName || packageId || t('marketplace.editor.fields.displayNamePlaceholder');
   const navItems = visibleEditorTabs.map(tab => ({
     id: tab,
     icon: tabIcons[tab],
-    labelKey: getMarketplaceEditorTabLabelKey(provider, tab),
+    labelKey: getMarketplaceEditorTabLabelKey(targetClient, tab),
     count: null,
   }));
 
@@ -220,9 +234,13 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
         { label: t('marketplace.center.header.title'), to: ROUTES.marketplace.packages },
         {
           label: resolvedDisplayName,
-          to: ROUTES.marketplace.packageDetail(provider, packageId),
+          to: ROUTES.marketplace.packageDetail(
+            targetClient,
+            packageId,
+            currentPackage?.packageFormat ?? routePackageFormat,
+          ),
         },
-        { label: t(getMarketplaceEditorTabLabelKey(provider, activeSection)) },
+        { label: t(getMarketplaceEditorTabLabelKey(targetClient, activeSection)) },
       ]}
       onBack={() => navigate(ROUTES.marketplace.packages)}
     />
@@ -297,8 +315,9 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
 
   const navigateSection = (section: MarketplaceEditorTab) => {
     navigate(buildMarketplaceEditorPath({
-      provider,
+      targetClient,
       packageId,
+      packageFormat: currentPackage?.packageFormat ?? routePackageFormat,
       section,
     }));
   };
@@ -308,7 +327,7 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
       case 'basic':
         return (
           <MarketplaceBasicPage
-            key={`${currentPackage.provider}:${currentPackage.packageId}:basic`}
+            key={`${currentPackage.targetClient}:${currentPackage.packageId}:basic`}
             packageDetail={currentPackage}
             onMutation={handleMutation}
           />
@@ -316,7 +335,7 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
       case 'agentsMd':
         return (
           <MarketplaceRootDocumentPage
-            key={`${currentPackage.provider}:${currentPackage.packageId}:root-document`}
+            key={`${currentPackage.targetClient}:${currentPackage.packageId}:root-document`}
             packageDetail={currentPackage}
             onMutation={handleMutation}
           />
@@ -326,8 +345,8 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
       case 'outputStyle':
         return (
           <MarketplaceDocumentResourcePage
-            key={`${provider}:${packageId}:${MARKETPLACE_TAB_TO_DOCUMENT_RESOURCE[activeSection]}`}
-            provider={provider}
+            key={`${targetClient}:${packageId}:${MARKETPLACE_TAB_TO_DOCUMENT_RESOURCE[activeSection]}`}
+            targetClient={targetClient}
             packageId={packageId}
             resourceType={MARKETPLACE_TAB_TO_DOCUMENT_RESOURCE[activeSection]}
             initialRevision={currentPackage.revision}
@@ -338,7 +357,7 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
       case 'mcp':
         return (
           <MarketplaceMCPPage
-            key={`${currentPackage.provider}:${currentPackage.packageId}:mcp`}
+            key={`${currentPackage.targetClient}:${currentPackage.packageId}:mcp`}
             packageDetail={currentPackage}
             onMutation={handleMutation}
           />
@@ -346,7 +365,7 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
       case 'hooks':
         return (
           <MarketplaceHooksPage
-            key={`${currentPackage.provider}:${currentPackage.packageId}:hooks`}
+            key={`${currentPackage.targetClient}:${currentPackage.packageId}:hooks`}
             packageDetail={currentPackage}
             onMutation={handleMutation}
           />
@@ -354,7 +373,7 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
       case 'skills':
         return (
           <MarketplaceFileResourcePage
-            key={`${currentPackage.provider}:${currentPackage.packageId}:skills`}
+            key={`${currentPackage.targetClient}:${currentPackage.packageId}:skills`}
             title={t('marketplace.editor.fileManager.skills.title')}
             resourceType="skills"
             packageDetail={currentPackage}
@@ -365,7 +384,7 @@ export const MarketplaceEditorPage: React.FC<MarketplaceEditorPageProps> = ({ mo
       case 'files':
         return (
           <MarketplaceFileResourcePage
-            key={`${currentPackage.provider}:${currentPackage.packageId}:files`}
+            key={`${currentPackage.targetClient}:${currentPackage.packageId}:files`}
             title={t('marketplace.editor.fileManager.packageFiles.title')}
             resourceType="files"
             packageDetail={currentPackage}

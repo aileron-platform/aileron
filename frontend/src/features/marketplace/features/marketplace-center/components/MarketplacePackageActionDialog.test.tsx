@@ -34,7 +34,10 @@ vi.mock('@/features/workspace/public', async (importOriginal) => ({
 }));
 
 const mockPackage: MarketplacePackageSummary = {
-  provider: 'codex',
+  targetClient: 'codex',
+  packageFormat: 'codex-native',
+  catalogPluginId: 'aileron-internal/figma-context',
+  userCopyTargetClient: 'codex',
   packageType: 'plugin',
   packageId: 'figma-context',
   displayName: 'Figma Context',
@@ -42,10 +45,13 @@ const mockPackage: MarketplacePackageSummary = {
   description: 'Figma context plugin.',
   category: 'coding',
   tags: ['mcp'],
-  sourceType: 'created',
   indexedResourceNames: ['mcp'],
   validationSeverity: 'none',
-  lifecycleStatus: 'ready',
+  authoringCapabilities: {
+    basic: 'read-write', agentsMd: 'read-write', hooks: 'read-write',
+    mcp: 'read-write', agents: 'read-write', commands: 'read-write',
+    outputStyle: 'unsupported', skills: 'read-write', files: 'read-write',
+  },
   registryPath: 'codex/plugins/figma-context',
   revision: 'rev-1',
   updatedAt: '2026-05-07T00:00:00.000Z',
@@ -62,7 +68,7 @@ describe('MarketplacePackageActionDialog', () => {
     vi.mocked(deletePackage).mockResolvedValue({ deleted: true });
     vi.mocked(installMarketplacePlugin).mockResolvedValue({
       status: 'installed',
-      provider: 'codex',
+      targetClient: 'codex',
       packageId: 'figma-context',
       marketplaceId: 'team-tools',
       workspaceId: 'ws-1',
@@ -98,9 +104,9 @@ describe('MarketplacePackageActionDialog', () => {
 
     await waitFor(() => {
       expect(mockExportPackage).toHaveBeenCalledWith({
-        provider: 'codex',
+        targetClient: 'codex',
+        packageFormat: 'codex-native',
         packageId: 'figma-context',
-        revision: 'rev-1',
       });
     });
     expect(screen.getByText('marketplace.export.result.ready')).toBeInTheDocument();
@@ -165,7 +171,6 @@ describe('MarketplacePackageActionDialog', () => {
       />,
     );
 
-    await user.type(screen.getByLabelText('marketplace.delete.fields.confirm'), 'figma-context');
     await user.click(screen.getByRole('button', { name: 'marketplace.delete.actions.delete' }));
 
     expect(await screen.findByText('marketplace.delete.result.success')).toBeInTheDocument();

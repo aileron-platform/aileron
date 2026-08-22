@@ -125,11 +125,6 @@ export const FileEditor: React.FC = () => {
       return result.content;
     },
     saveFile: saveWorkspaceFile,
-    saveDrawio: async (path, content) => {
-      fileEditor.updateTabContent(path, content);
-      fileEditor.setOriginalContent(path, content);
-      fileEditor.setTabModified(path, false);
-    },
     copyPath: async (path) => {
       await navigator.clipboard.writeText(path);
       toast({
@@ -322,7 +317,6 @@ export const FileEditor: React.FC = () => {
         canEdit: permissions.canWrite,
         canSave: permissions.canWrite,
         canReadBlob: true,
-        canPreviewDrawio: true,
         canCopyPath: true,
         canRevealInTree: true,
         canCloseTabs: true,

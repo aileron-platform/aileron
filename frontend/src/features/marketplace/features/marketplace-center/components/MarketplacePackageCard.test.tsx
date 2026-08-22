@@ -11,7 +11,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 const packageItem: MarketplacePackageSummary = {
-  provider: 'claude-code',
+  targetClient: 'claude-code',
   packageType: 'plugin',
   packageId: 'workspace-tools',
   displayName: 'Workspace Tools',
@@ -19,21 +19,25 @@ const packageItem: MarketplacePackageSummary = {
   description: 'Workspace helpers.',
   category: 'productivity',
   tags: ['claude.md', 'slash command', 'skill'],
-  sourceType: 'created',
   indexedResourceNames: ['hooks/pre-submit.json', 'mcp/server.json', 'subagent.md', 'output-style.md'],
   validationSeverity: 'none',
-  lifecycleStatus: 'ready',
+  authoringCapabilities: {
+    basic: 'read-write', agentsMd: 'read-write', hooks: 'read-write', mcp: 'read-write',
+    agents: 'read-write', commands: 'read-write', outputStyle: 'read-write', skills: 'read-write', files: 'read-write',
+  },
   registryPath: 'claude-code/plugins/workspace-tools',
   revision: 'rev-1',
   updatedAt: '2026-05-07T00:00:00.000Z',
   variants: [{
-    provider: 'claude-code',
+    targetClient: 'claude-code',
+    packageFormat: 'claude-native',
     packageId: 'workspace-tools',
     displayName: 'Workspace Tools',
     registryPath: 'claude-code/plugins/workspace-tools',
     revision: 'rev-1',
   }, {
-    provider: 'codex',
+    targetClient: 'codex',
+    packageFormat: 'codex-native',
     packageId: 'workspace-tools',
     displayName: 'Workspace Tools',
     registryPath: 'codex/plugins/workspace-tools',
@@ -42,7 +46,7 @@ const packageItem: MarketplacePackageSummary = {
 };
 
 describe('MarketplacePackageCard', () => {
-  it('renders provider-specific feature badges and dispatches card actions', async () => {
+  it('renders targetClient-specific feature badges and dispatches card actions', async () => {
     const user = userEvent.setup();
     const onOpenDetail = vi.fn();
     const onInstall = vi.fn();
@@ -62,15 +66,15 @@ describe('MarketplacePackageCard', () => {
     );
 
     expect(screen.getByText('marketplace.features.claudeMd')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.providers.claude-code')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.providers.codex')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.targetClients.claude-code · claude-native')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.targetClients.codex · codex-native')).toBeInTheDocument();
     expect(screen.getByText('marketplace.features.hooks')).toBeInTheDocument();
     expect(screen.getByText('marketplace.features.mcp')).toBeInTheDocument();
     expect(screen.getByText('marketplace.features.subagents')).toBeInTheDocument();
     expect(screen.getByText('marketplace.features.slashCommands')).toBeInTheDocument();
     expect(screen.getByText('marketplace.features.outputStyle')).toBeInTheDocument();
     expect(screen.getByText('marketplace.features.skills')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.lifecycle.ready')).toBeInTheDocument();
+    expect(screen.queryByText('marketplace.lifecycle.ready')).not.toBeInTheDocument();
 
     await user.click(screen.getByText('Workspace Tools'));
     expect(onOpenDetail).toHaveBeenCalledWith(packageItem);
@@ -88,24 +92,20 @@ describe('MarketplacePackageCard', () => {
     expect(onDelete).toHaveBeenCalledWith(packageItem);
   });
 
-  it('renders draft lifecycle state and explains why install is disabled', () => {
+  it('keeps install available when validation reports an error', () => {
     render(
       <MarketplacePackageCard
-        item={{ ...packageItem, lifecycleStatus: 'draft' }}
+        item={{ ...packageItem, validationSeverity: 'error' }}
         onOpenDetail={vi.fn()}
         onInstall={vi.fn()}
       />,
     );
 
-    expect(screen.getByText('marketplace.lifecycle.draft')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.validation.severity.error')).toBeInTheDocument();
     const installButton = screen.getByRole('button', {
       name: 'marketplace.center.card.actions.install',
     });
-    expect(installButton).toBeDisabled();
-    expect(installButton).toHaveAttribute(
-      'title',
-      'marketplace.lifecycle.draftInstallDisabled',
-    );
+    expect(installButton).toBeEnabled();
   });
 
   it('does not render actions whose capability callback is unavailable', () => {

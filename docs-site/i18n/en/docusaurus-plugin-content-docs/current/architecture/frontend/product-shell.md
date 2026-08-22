@@ -33,9 +33,9 @@ Each column region provides `content`, `behavior`, and `presentation`:
 
 - `content` receives collapsed state and produces region content.
 - `behavior` declares `collapsible`, `resizable`, `defaultWidth`, `minWidth`, and `maxWidth`.
-- `presentation` provides the accessible label, chrome variant, responsive policy, and header slots.
+- `presentation` provides the accessible label, responsive policy, and header slots. Column background is not part of the product Adapter interface.
 
-A Companion additionally declares side and bottom size policies, `side | bottom` placement, collapsed content, collapse/expand/resize labels, and a reveal request id. The product supplies content and capability; the Shell executes placement, sizing, collapse, resize, and main-content coordination.
+A Companion additionally declares side and bottom size policies, `side | bottom` placement, a `standard | compact` rail, collapsed content, collapse/expand/resize labels, and a reveal request id. The product supplies content and capability; the Shell executes placement, sizing, collapse, resize, and main-content coordination.
 
 ## Shell implementation
 
@@ -45,10 +45,24 @@ The `ProductShell` implementation owns all shared geometry and interaction:
 - It clamps widths and heights from region behavior and preserves a usable minimum main-content width and height.
 - It manages column and Companion resize, collapse, responsive hiding, overflow, scrolling, focus cursor state, and fullscreen.
 - It exposes stable test surfaces through `data-shell-region`, `data-shell-body`, and `data-shell-state`.
+- `navigation`, `navigator`, `main`, side/bottom `companion`, state bodies, and Shell-owned header/content containers all use `bg-background`. Borders, geometry, and content hierarchy distinguish columns; product Adapters cannot select a column background.
 - `main-expanded` renders only the main content; `companion-fullscreen` renders only the Companion, with Escape handled by the display Adapter.
 - Main and content containers use `min-w-0`, `min-h-0`, and local overflow boundaries so content cannot move horizontal scrolling to the document.
 
 The Shell does not accept a product name, route, capability, resource role, API response, or feature-specific condition. Decisions requiring those facts belong in the product Adapter or product surface model.
+
+## Column sizing and spatial concession
+
+The production Shell presets for Workspace, Knowledge Base, and Marketplace share the same expanded-column sizing baseline:
+
+| Semantic region | Expanded minimum width | Expanded default width |
+|---|---:|---:|
+| `navigation` | 240px | 240px |
+| `navigator` | 270px | 270px |
+
+Collapsed `navigation` and `navigator` regions each use an independent 64px rail. A collapsed rail is not part of the expanded column's minimum width. Each preset still declares its maximum widths, collapse, resize, and responsive policy through its existing behavior contract.
+
+The Workspace side Companion has a minimum width of 408px, while `main` has a minimum usable width of 320px. When a side Companion cannot fit alongside the minimum supported geometry for `navigation`, `navigator`, and `main`, `ProductShell` temporarily renders it as a 48px compact rail. The Shell restores the Companion's pre-concession expanded state when horizontal space becomes available again; this responsive collapse is not persisted as a layout preference. The bottom Companion is not affected by this concession. The minimum supported viewport remains 1024x768; viewports below that boundary do not introduce automatic collapse rules for `navigation` or `navigator`.
 
 ## Layout preferences
 
@@ -63,6 +77,8 @@ interface ProductShellPreferencesAdapter {
 ```
 
 The Shell uses `identity` for the active scope, loads the initial value, and saves layout changes with debounce. `ProductShellPreferences` stores collapsed, width, height, and placement for `navigation`, `navigator`, and `companion`; every loaded value is clamped by region behavior.
+
+When Workspace loads layout preferences, saved `navigation` and `navigator` widths that remain within the current region behavior are preserved. Values below the production minimum are clamped by the Shell to 240px and 270px, respectively.
 
 The product Adapter owns identity and persistence policy:
 
@@ -120,7 +136,7 @@ A product Adapter must resolve route, resource role, platform operation, and Run
 
 | Module | May depend on | Must not own |
 |---|---|---|
-| `shared/components/shell` | Neutral region types, layout preferences, UI primitives, and i18n accessors | Product routes, feature names, resource roles, API queries, or product capabilities |
+| `shared/components/shell` | Neutral region types, the unified Shell surface, layout preferences, UI primitives, and i18n accessors | Product routes, feature names, resource roles, API queries, or product capabilities |
 | Workspace Adapter | Workspace Provider, surface model, Workspace content, and Workspace preferences | A second column geometry system or product-owned resize handle |
 | Knowledge Base Adapter | Knowledge Base route, permission, and content contracts | A Companion or another Shell implementation |
 | Marketplace Adapter | Marketplace surface, settings route/query, and content contracts | A nested Shell, second mode rail, or product-owned column sizing |
@@ -144,9 +160,8 @@ Cross-product imports still use each feature's root `public.ts`. The Shell is no
 
 The Shell test surface verifies both interface behavior and product Adapters:
 
-- Shared unit tests cover region behavior, clamping, preferences, resize, collapse, placement, and fullscreen.
+- Shared unit tests cover the unified background surface, region behavior, clamping, preferences, resize, collapse, placement, and fullscreen.
 - Workspace, Knowledge Base, and Marketplace tests cover surface models, state bodies, region presence, and capability mapping.
 - The Product Shell E2E fixture verifies region ownership, viewport boundaries, document overflow, dialog/menu boundaries, and shared product interaction.
 - The frontend architecture test verifies that shared does not depend on features, features use public entries, and `ProductShell` is the cross-product Shell seam.
 - All frontend tests, typecheck, lint, build, and E2E verification run in the project test container.
-

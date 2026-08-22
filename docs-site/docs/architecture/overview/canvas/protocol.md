@@ -189,6 +189,8 @@ Bridge source 為 `aileron-canvas-bridge`，version 為 `2`。Canvas 內可用�
 window.aileron.bridge.emit("STYLE_SELECTED", { direction: "B" });
 ```
 
+Bridge 回報的 `routePath` 一律是 Canvas 應用程式內的絕對路徑，例如根頁為 `/`；Workspace Gateway 的 `/workspaces/{workspaceId}/canvas` 公開前綴不屬於 Canvas route。Frontend 會透過 `SET_THEME` command 傳送目前解析後的 `light` 或 `dark` 主題。Bridge 將主題保存於 `window.aileron.theme` 並發送 `aileron:themechange` event，由 Canvas 應用程式在初始化後套用，避免干擾框架 hydration。
+
 ### 內建 review event family
 
 平台保留並處理這些 event：

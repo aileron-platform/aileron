@@ -389,7 +389,7 @@ features/knowledge-base/
 Shared adoption：
 
 - Top level 與 detail 由 `KnowledgeBaseShellAdapter` 映射到 ProductShell；Knowledge Base sidebar 是 `navigation` content，Files 與 Version Control 依 surface 提供 `navigator` content，main content 由 detail route 擁有。
-- Files 完整使用 `FileManagementShell`、`FileManagementSidebarWorkflow`、`FileTreePanel`、shared context menu／dialogs／archive overlays 及 `FileViewerWorkbench`。Markdown、圖片、Mermaid、Drawio 與 code 由 shared viewer 分派；Knowledge Base 只保留 API、revision、permission、archive polling、clipboard 及 feature error contract。file operation response 的 revision 解析統一由 shared `file-workbench` 的 `adapters/fileResponseAdapter.ts`（`getFileOperationResponseRevision`）提供，供 Knowledge Base Files 與 Shared `useFileTreeManager` 共用。
+- Files 完整使用 `FileManagementShell`、`FileManagementSidebarWorkflow`、`FileTreePanel`、shared context menu／dialogs／archive overlays 及 `FileViewerWorkbench`。Markdown、圖片、Mermaid 與 code 由 shared viewer 分派；Knowledge Base 只保留 API、revision、permission、archive polling、clipboard 及 feature error contract。file operation response 的 revision 解析統一由 shared `file-workbench` 的 `adapters/fileResponseAdapter.ts`（`getFileOperationResponseRevision`）提供，供 Knowledge Base Files 與 Shared `useFileTreeManager` 共用。
 - Knowledge Base 與 Workspace 的 dialog state 都由 `toFileManagementDialogState` 產生，該 function 由 Shared File Workbench workflow owner 輸出；兩個 consumer 傳給 `FileManagementDialogs` 的 state 逐欄一致。
 - Version Control 的 data query／type 來自 `@/shared/version-control`，React presentation 來自 `@/shared/components/version-control`；不在 feature 重做 query factory、changes sidebar、diff viewer 或 remote workflow。
 - Knowledge Base 不提供 ProductShell `companion` region；任意檔案樹、多 tabs、archive、raw blob 及多格式 viewer 由 Knowledge Base 與 File Workbench contract 組合，不引入 AI Chat quick chooser 或固定 document workflow 的額外 mode。
@@ -453,7 +453,7 @@ Shared adoption：
 - Detail 唯讀檔案區與 Editor Files 使用 Shared File Workbench 的 tree、sidebar workflow、viewer tabs、code／markdown／image viewer、context menu、dialog 及 resize mechanics。Marketplace 只保留 package API、revision、managed-root permission、path mapping 與 resource mutation。
 - Detail tabs、Center responsive filters 與 File Resource workflow 各自保留 product-owned contract；Marketplace 不提供 ProductShell `companion` region，也不在 feature 內建立第二套欄位幾何。
 - Detail 與 Center 的 install／export／delete dialogs 維持不同 owner 與 DOM。只有逐字相同的 command label 及 error mapping 提升為 Marketplace root pure model；不建立含大量 boolean variant 的 Universal Marketplace Dialog。
-- Marketplace Hook model 包含 resource item、Marketplace i18n 與 native package JSON 投影，不提升為 provider-neutral Shared Hook contract；Detail tabs、Settings Version Control 與 Action Dialog 也沒有等價 Shared DOM／state contract，因此不強制替換。
+- Marketplace Hook model 包含 resource item、Marketplace i18n 與 native package JSON 投影，不提升為 target-client-neutral Shared Hook contract；Detail tabs、Settings Version Control 與 Action Dialog 也沒有等價 Shared DOM／state contract，因此不強制替換。
 
 ## 複用規則
 
@@ -567,7 +567,7 @@ Shared root 的檔名遵循同一責任原則：單一 React owner 使用 Pascal
 | Workspace Files | sidebar workflow、manager、tree panel、viewer workbench、split view | runtime identity、clipboard、drag/drop、file mutations、version-control refresh | `loadEnabled=false`；runtime-ready effect 唯一呼叫 `loadTree()` |
 | Agent Settings | managed sidebar workflow、viewer workbench | runtime readiness 與設定頁 API | workflow 接收 refresh signal；manager `autoLoad=false` |
 | Knowledge Base Files | page shell、second column、sidebar workflow、viewer workbench | Knowledge Base API、permission、rename／delete contract | `loadEnabled=true`；workflow 唯一載入，manager `autoLoad=false` |
-| Marketplace files | second column／sidebar workflow／viewer workbench 或 read-only workbench | Marketplace provider API、唯讀或 editor mutation | controlled manager 直接符合 constrained generic；dialog-state generic narrowing 留在 render body 邊界 |
+| Marketplace files | second column／sidebar workflow／viewer workbench 或 read-only workbench | Marketplace target-client API、唯讀或 editor mutation | controlled manager 直接符合 constrained generic；dialog-state generic narrowing 留在 render body 邊界 |
 | Workspace File Chooser | file-tree primitives | modal preset filter、lazy expand、單檔立即選取 | 互動契約不同，不套完整 sidebar workflow |
 
 ProductShell 依實際提供的 `navigation`、`navigator`、`main` 與 `companion` regions 組合三／四欄 DOM；Workspace、Knowledge Base 與 Marketplace 都由各自 Adapter 提供 product mapping，不建立第二套 Shell implementation。Workspace local `FileEditor` 只保留 runtime、mutation 與 split-view adapter orchestration，未重複實作 workbench。

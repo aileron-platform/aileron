@@ -3,7 +3,7 @@ import { Search } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { useI18n } from '@/shared/hooks/useI18n';
-import type { MarketplaceFeatureKey, MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplaceFeatureKey, MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 import {
   MARKETPLACE_FEATURES,
   toggleMarketplaceFeature,
@@ -11,12 +11,12 @@ import {
 
 interface MarketplaceCenterFiltersProps {
   searchTerm: string;
-  provider: MarketplaceProvider | 'all';
+  targetClient: MarketplaceTargetClient | 'all';
   activeFeatures: Set<MarketplaceFeatureKey>;
   category: string;
   categories: string[];
   onSearchTermChange: (value: string) => void;
-  onProviderChange: (value: MarketplaceProvider | 'all') => void;
+  onTargetClientChange: (value: MarketplaceTargetClient | 'all') => void;
   onActiveFeaturesChange: (value: Set<MarketplaceFeatureKey>) => void;
   onCategoryChange: (value: string) => void;
   onResetFilters: () => void;
@@ -24,12 +24,12 @@ interface MarketplaceCenterFiltersProps {
 
 export const MarketplaceCenterFilters: React.FC<MarketplaceCenterFiltersProps> = ({
   searchTerm,
-  provider,
+  targetClient,
   activeFeatures,
   category,
   categories,
   onSearchTermChange,
-  onProviderChange,
+  onTargetClientChange,
   onActiveFeaturesChange,
   onCategoryChange,
   onResetFilters,
@@ -64,14 +64,14 @@ export const MarketplaceCenterFilters: React.FC<MarketplaceCenterFiltersProps> =
           {(['all', 'claude-code', 'codex'] as const).map(value => (
             <Button
               key={value}
-              variant={provider === value ? 'default' : 'outline'}
+              variant={targetClient === value ? 'default' : 'outline'}
               size="sm"
               className="h-7 px-2 text-xs"
-              onClick={() => onProviderChange(value)}
+              onClick={() => onTargetClientChange(value)}
             >
               {value === 'all'
-                ? t('marketplace.center.filters.allProviders')
-                : t(`marketplace.providers.${value}`)}
+                ? t('marketplace.center.filters.allTargetClients')
+                : t(`marketplace.targetClients.${value}`)}
             </Button>
           ))}
         </div>

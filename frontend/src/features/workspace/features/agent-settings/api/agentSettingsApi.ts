@@ -6,7 +6,6 @@ import {
   type ResourceError,
   type ResourceListResult,
 } from '@/shared/components/document-resource';
-import { buildSlashCommandDisplayName } from '@/shared/types/slashCommands';
 import type {
   AgentDocument,
   AgentScope,
@@ -110,6 +109,24 @@ const apiRequest = async <T>(
       default:
         throw new Error(`Unsupported HTTP method: ${method}`);
     }
+  } catch (err) {
+    const parsed = parseResourceError(err);
+    const error = new Error(parsed.message) as Error & ResourceError;
+    if (parsed.errorCode) error.errorCode = parsed.errorCode;
+    if (parsed.validationResults) error.validationResults = parsed.validationResults;
+    throw error;
+  }
+};
+
+const apiBlobRequest = async (
+  runtimeBaseUrl: string,
+  path: string,
+): Promise<Blob> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  const fullPath = `/api/v1/${path.startsWith('/') ? path.slice(1) : path}`;
+
+  try {
+    return await client.getBlob(fullPath);
   } catch (err) {
     const parsed = parseResourceError(err);
     const error = new Error(parsed.message) as Error & ResourceError;
@@ -274,7 +291,8 @@ const mapCliSlashCommandDocument = (
 ): AgentDocument => {
   const pluginName = detail.pluginName ?? undefined;
   const marketplaceName = detail.marketplaceName ?? undefined;
-  const title = buildSlashCommandDisplayName(detail.path, undefined, pluginName);
+  const commandName = detail.path.replace(/\.(md|toml)$/i, '');
+  const title = pluginName ? `${pluginName}:${commandName}` : commandName;
 
   return {
     id: buildCliDocumentId(scope, detail.path),
@@ -1290,6 +1308,24 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     );
   },
 
+  async getCodexFileBlob(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    resource: string,
+    scope: 'user' | 'project' | 'plugin',
+    path: string,
+    pluginId?: string,
+  ): Promise<Blob> {
+    const query = new URLSearchParams({ scope, path, raw: 'true' });
+    if (pluginId) {
+      query.set('pluginId', pluginId);
+    }
+    return apiBlobRequest(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/${resource}/file?${query.toString()}`,
+    );
+  },
+
   async updateCodexFile(
     runtimeBaseUrl: string,
     workspaceId: string,
@@ -1298,10 +1334,22 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     path: string,
     content: string,
   ): Promise<CodexTextFileResponse> {
+    let body: { path: string; content: string; revision?: string } = { path, content };
+    if (resource === 'skills') {
+      const query = new URLSearchParams({ scope, path });
+      const current = await apiRequest<CodexTextFileResponse>(
+        runtimeBaseUrl,
+        `workspaces/${workspaceId}/codex/${resource}/file?${query.toString()}`,
+      );
+      if (!current.revision) {
+        throw new Error('Codex Skills file revision is required before updating');
+      }
+      body = { ...body, revision: current.revision };
+    }
     return apiRequest<CodexTextFileResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/codex/${resource}/file?scope=${scope}`,
-      { method: 'PUT', body: { path, content } },
+      { method: 'PUT', body },
     );
   },
 
@@ -1641,6 +1689,19 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     return apiRequest<AgentFileResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/skills/content?path=${encodeURIComponent(filePath)}&scope=${scope}`,
+    );
+  },
+
+  async getSkillBlob(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    filePath: string,
+    scope: 'project' | 'user' | 'plugin' = 'project',
+  ): Promise<Blob> {
+    const query = new URLSearchParams({ path: filePath, scope, raw: 'true' });
+    return apiBlobRequest(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/${apiPrefix}/skills/content?${query.toString()}`,
     );
   },
 

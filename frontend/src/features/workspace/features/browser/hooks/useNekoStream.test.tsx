@@ -152,8 +152,12 @@ describe('useNekoStream', () => {
     });
     const video = document.createElement('video');
     const audio = document.createElement('audio');
+    const track = {
+      readyState: 'live',
+      addEventListener: vi.fn(),
+    } as unknown as MediaStreamTrack;
     const stream = {
-      getVideoTracks: () => [{}],
+      getVideoTracks: () => [track],
       getAudioTracks: () => [{}],
     } as unknown as MediaStream;
 
@@ -169,5 +173,45 @@ describe('useNekoStream', () => {
 
     expect(video.srcObject).toBeNull();
     expect(audio.srcObject).toBeNull();
+  });
+
+  it('reports transport and live-video readiness and clears it on track end', () => {
+    const { result } = renderHook(() =>
+      useNekoStream({ url: 'ws://browser.example/ws', password: 'derived-password', generation: 1 })
+    );
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+    let endTrack: (() => void) | undefined;
+    const track = {
+      readyState: 'live',
+      addEventListener: (_event: string, listener: () => void) => {
+        endTrack = listener;
+      },
+    } as unknown as MediaStreamTrack;
+    const stream = {
+      getVideoTracks: () => [track],
+      getAudioTracks: () => [],
+    } as unknown as MediaStream;
+
+    act(() => {
+      mocks.callbacks?.onWebSocketStateChange?.(true);
+      mocks.callbacks?.onConnectionStateChange?.('connected');
+      mocks.callbacks?.onDataChannelStateChange?.(true);
+      mocks.callbacks?.onTrack?.({ streams: [stream] } as RTCTrackEvent);
+    });
+
+    expect(result.current.websocketConnected).toBe(true);
+    expect(result.current.isConnected).toBe(true);
+    expect(result.current.dataChannelOpen).toBe(true);
+    expect(result.current.hasLiveVideoTrack).toBe(true);
+
+    act(() => endTrack?.());
+    expect(result.current.hasLiveVideoTrack).toBe(false);
+
+    act(() => result.current.disconnect());
+    expect(result.current.websocketConnected).toBe(false);
+    expect(result.current.dataChannelOpen).toBe(false);
+    expect(result.current.hasLiveVideoTrack).toBe(false);
   });
 });

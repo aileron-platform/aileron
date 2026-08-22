@@ -185,11 +185,12 @@ Response設定`Cache-Control: no-store`與`Pragma: no-cache`。assertion不得�
 | `GET`／`POST` | `/api/v1/workspaces/{workspace_id}/shares` | 列出或新增 user／group share；角色只接受 Reader／Manager |
 | `PATCH`／`DELETE` | `/api/v1/workspaces/{workspace_id}/shares/{share_id}` | 更新或移除單一分享 |
 
-Browser access 只接受 `status.browserConnectivity.state=ready`、未到期且 revision 相符的證據。
-`pending`、`degraded` 與 `not_ready` 對應 `409 BROWSER_CONNECTIVITY_NOT_READY`；
-`unavailable`，或 admission 當下發現最後一次 ready evidence 已到期，對應
-`503 BROWSER_CONNECTIVITY_UNAVAILABLE`。兩者都不會回傳 Browser credential，client 只能使用
-bounded retry，不得改呼叫未受 gate 保護的 endpoint。
+Browser access 以 `status.browserConnectivity.admission` 為權威；`ready`，或最後成功 evidence
+仍在 TTL 內且 projection 為 `allowed` 的 `degraded`，都可核發 access。`pending`／`not_ready`
+的 `denied` projection 對應 `409 BROWSER_CONNECTIVITY_NOT_READY`；admission 當下已到期而投影為
+`not_ready`／`denied` 的 evidence 也對應相同 409。只有 `unavailable`
+對應 `503 BROWSER_CONNECTIVITY_UNAVAILABLE`。拒絕回應不會包含 Browser credential，client
+只能使用 bounded retry，不得改呼叫未受 gate 保護的 endpoint。
 
 成功 response 包含 `browserUrl`、Neko `password`、`credentialRevision` 與 `iceServers`。
 `turnRest` profile 的 `iceServers` 具有本次 access 專用的短效 username/credential；前端必須用它
@@ -260,7 +261,7 @@ token exchange 與 validation；Browser 只持有 opaque HttpOnly session。
 | `GET` | `/api/v1/oauth/health` | OAuth 服務健康檢查 |
 | `GET` | `/api/v1/oauth2/login` | 建立 OIDC transaction 並 redirect provider |
 | `GET` | `/api/v1/oauth2/callback` | Manager 交換 code、驗證 provider response 並建立 opaque session |
-| `GET` | `/api/v1/oauth2/session` | 取得本地 user、`platformRole`、`allowedOperations`、expiry 與 memory-only CSRF token |
+| `GET` | `/api/v1/oauth2/session` | 取得本地 user、canonical OIDC `subject`、`platformRole`、`allowedOperations`、expiry 與 memory-only CSRF token |
 | `POST` | `/api/v1/oauth2/logout` | 驗證 session、Origin 與 CSRF 後撤銷本地 session |
 
 成功 callback 建立的 Manager Session 是延續認證證據。Session 有效期間的受保護 API 只
@@ -271,39 +272,38 @@ principal binding 不一致時回傳 `401 MANAGER_SESSION_REQUIRED`，Frontend �
 
 ## Marketplace
 
-Marketplace 管理套件（package）的匯入、編輯、安裝入口與 Registry 版本控制，功能細節請見 [Marketplace](/features/marketplace)。
+Marketplace 管理應用中心的 Managed Plugins、Plugin 安裝、User Copy 與 Registry 版本控制，功能細節請見 [應用中心](/features/marketplace)。
 
 | Method | 路徑 | 說明 |
 | --- | --- | --- |
 | `GET` | `/api/v1/marketplace/packages` | 列出套件 |
 | `POST` | `/api/v1/marketplace/packages` | 建立套件 |
-| `GET`／`PUT`／`DELETE` | `/api/v1/marketplace/packages/{provider}/{package_id}` | 取得、更新或刪除單一套件 |
-| `DELETE` | `/api/v1/marketplace/packages/{provider}/{package_id}/draft` | 捨棄套件草稿 |
-| `GET` | `/api/v1/marketplace/packages/{provider}/{package_id}/export` | 匯出套件 |
+| `GET` | `/api/v1/marketplace/package-formats` | 列出 package format、相容 Target Client 與 authoring capabilities |
+| `GET`／`PUT`／`DELETE` | `/api/v1/marketplace/packages/{target_client}/{package_id}` | 取得、更新或刪除單一套件 |
+| `GET` | `/api/v1/marketplace/packages/{target_client}/{package_id}/export` | 匯出套件 |
 | `POST` | `/api/v1/marketplace/packages/refresh` | 重新整理套件清單快取 |
-| `POST` | `/api/v1/marketplace/import/scan` | 掃描本機來源以匯入套件 |
-| `POST` | `/api/v1/marketplace/import/upload` | 上傳檔案匯入套件 |
-| `POST` | `/api/v1/marketplace/import` | 將已掃描或上傳的候選項目匯入 Registry |
-| `POST` | `/api/v1/marketplace/plugins/install` | 發佈套件到部署端設定的 Git origin（標準部署要求 private GitLab），再由目標 Workspace 的 provider CLI 執行標準 plugin 安裝 |
+| `POST` | `/api/v1/marketplace/imports/scan` | 掃描 Git 或已上傳來源的 Plugin 候選項目 |
+| `POST` | `/api/v1/marketplace/imports/upload` | 上傳 ZIP 作為暫時的 import source |
+| `POST` | `/api/v1/marketplace/imports` | 將選取項目匯入 Managed Registry；重複項目需明確 Replace |
+| `POST` | `/api/v1/marketplace/plugins/install` | 由目標 Workspace 的 Target Client CLI 從設定的 Registry Git repository 安裝並啟用 |
 | `POST` | `/api/v1/marketplace/user-copies/preflight` | 唯讀規劃一次性 user-scope merge，列出資源、重複項目與阻擋原因 |
 | `POST` | `/api/v1/marketplace/user-copies` | 依 preflight digest 與使用者核准的覆寫清單執行一次性 merge |
 | `GET`／`PUT` | `/api/v1/marketplace/settings` | 取得或更新 Marketplace 設定 |
-| `GET` | `/api/v1/marketplace/activities` | 依 `workspaceId`、`provider`、`packageId`、`action`、`status` 篩選並分頁取得 Marketplace 操作紀錄 |
+| `GET` | `/api/v1/marketplace/activities` | 依 `workspaceId`、`packageFormat`、`targetClient`、`packageId`、`action`、`status` 篩選並分頁取得 Marketplace 操作紀錄 |
+| `GET` | `/api/v1/marketplace/activities/{activity_id}` | 依權限取得單筆活動、User Copy proof 與完整 CLI 命令收據 |
 
 ### Plugin 安裝契約
 
-`POST /api/v1/marketplace/plugins/install` 接受 `provider`、`packageId`、套件
-`revision` 與 `workspaceId`。Manager 先把指定 revision 發佈到 provider 可辨識的 Git
-origin；標準部署要求該 origin 為 private GitLab repository，但服務本身不會向 GitLab
-查詢或驗證 repository visibility。Manager 的 registry SSH key 不會下發到 Runtime，
-因此目標 Runtime 必須自行具備讀取該 repository 的憑證。接著 Runtime 執行 Claude Code
-或 Codex 的標準 CLI 安裝流程。終端結果會回傳 `status`、`stage`、`exitCode`、`cliMessage`、`stdout`、
-`stderr` 與 `truncated`；安裝是否成功及其錯誤內容以 provider CLI 的 terminal result
-為準。
+`POST /api/v1/marketplace/plugins/install` 接受 `targetClient`、`packageFormat`、`packageId`、`version` 與 `workspaceId`。Manager 傳遞設定的 Registry Git URL 與目前 branch，不檢查 remote 是否已包含 working-tree 內容；目標 Runtime 必須自行具備 repository 讀取憑證。接著 Runtime 執行 Claude Code
+或 Codex 的標準 CLI 流程。Codex 的 `plugin add` 代表安裝並啟用；Claude Code 依序執行 marketplace add、plugin install 與明確的 plugin enable。每個命令結果分開保存 argv、stage、exit code、起訖時間、原始 byte 數與 stdout/stderr；輸出採 256 KiB head+tail 保留且不做內容遮罩。mutation 命令成功後，readback 失敗只回覆 `state-unconfirmed` warning。安裝及啟用是否成功以 target-client CLI 的 terminal result 為準；成功 mutation 若 audit 經三次寫入仍失敗，回覆 `audit-persistence-failed` warning 而不反轉成功結果。
 
-這個端點只負責完成當次發佈與 CLI 命令，不建立 Aileron installation、ownership、
+這個端點只負責驗證指定 release 並完成 CLI 命令，不建立 Aileron installation、ownership、
 drift、reconcile、uninstall 或 cleanup 狀態。後續 plugin 管理由使用者透過原生 CLI
 自行處理。
+
+### Import 契約
+
+Import source 為 `{ targetClient, sourceKind, source }`。Scan 回覆 server 端偵測的 package ID、version、format、Target Client、validation 與 duplicate 狀態。Import request 的每個 candidate 以 `import: { version, overwrite }` 表達使用者選擇；重複 package ID 只有在 `overwrite=true` 時可 Replace。來源不會註冊成持續追蹤的物件。失敗 candidate 包含 `errorCode`、`stage`、`source`、`destination` 與 `category`。
 
 ### Copy to user scope 契約
 
@@ -312,16 +312,15 @@ User-copy 是一次性的 user-scope merge。呼叫端必須先呼叫
 `confirmation-required` 或 `blocked`，並包含：
 
 - `resources`：預計建立、合併或保持不變的資源。
+- `skippedResources`：exact projection 無法表達的 component；存在任一項時必須確認 partial copy。
 - `conflicts`：需要使用者逐項確認覆寫的重複資源。
 - `blockingIssues`：使本次操作無法繼續的問題。
-- `sourceDigest`、`profileDigest`、`materializationDigest`：鎖定 preflight
-  時看到的套件內容、Runtime profile 與實體化結果。
+- `sourceDigest`、`profileDigest`、`projectionDigest`、`materializationDigest`：鎖定 preflight
+  時看到的套件內容、source profile、exact projection 與實體化結果。
 
-實際套用時，`POST /api/v1/marketplace/user-copies` 除原始套件與 Workspace 識別外，
-還要帶入 `expectedSourceDigest`、`expectedMaterializationDigest` 與使用者確認過的
-`overwriteApprovals`。若 preflight 後來源或目標狀態已變動，服務會拒絕套用，要求重新
-檢查；成功結果包含操作識別、狀態、Provider、package、Workspace，以及 created、
-merged、unchanged 與 overwritten 數量。
+實際套用時，`POST /api/v1/marketplace/user-copies` 帶入 `catalogPluginId`、`releaseRevision`、
+`packageFormat`、`targetClient`、`workspaceId`、三個 expected digests、`acceptPartialCopy`
+與使用者確認過的 `overwriteApprovals`。若來源、projection 或目標狀態改變，服務拒絕套用並要求重新 preflight；成功結果回覆 package format、target client，以及 created、merged、unchanged、overwritten、skipped 數量。
 
 成功後不會留下 installation row、來源追蹤、ownership、drift、reconcile、uninstall、
 cleanup 或背景生命週期。後續檔案與設定完全由使用者自行管理；Marketplace 也不會因為
@@ -329,7 +328,7 @@ cleanup 或背景生命週期。後續檔案與設定完全由使用者自行管
 
 Marketplace 另擁有一整組獨立的 Git 版本控制 API（`/api/v1/marketplace/version-control/*`：status、stage、unstage、commit、commits、diff、branches、remote、fetch、pull、push、clone、force-unlock、git-identity、ssh-key 等），管理套件倉庫本身的版本控制，語意與 Knowledge Base 的 Git 端點類似但服務不同資源。
 
-Member 可讀取 catalog、安裝及管理自己的 user-scope copy；canonical publish／manage／delete、Registry 與 Canvas publish 只允許 Platform Admin。完整規則請見 [Marketplace](/features/marketplace)。
+Member 可讀取 catalog、安裝及管理自己的 user-scope copy；建立、匯入、編輯、刪除與 Registry 管理只允許 Platform Admin。完整規則請見 [應用中心](/features/marketplace)。
 
 Activity response 使用 `{ items, total, page, pageSize, totalPages }`，依
 `createdAt DESC, id DESC` 穩定排序；狀態固定為

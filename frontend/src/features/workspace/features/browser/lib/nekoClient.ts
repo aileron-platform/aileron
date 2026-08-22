@@ -60,6 +60,7 @@ export class NekoClient {
       wsUrl.searchParams.set('password', password);
       wsUrl.searchParams.set('username', displayname);
       this.websocket = new WebSocket(wsUrl.toString());
+      this.websocket.addEventListener('open', this.handleOpen);
       this.websocket.addEventListener('message', this.handleMessage);
       this.websocket.addEventListener('error', this.handleSocketError);
       this.websocket.addEventListener('close', this.handleClose);
@@ -162,8 +163,13 @@ export class NekoClient {
     this.fail(new Error('workspace.browser.error.nekoWebsocketFailed'));
   };
 
+  private readonly handleOpen = (): void => {
+    this.callbacks.onWebSocketStateChange?.(true);
+  };
+
   private readonly handleClose = (): void => {
     this.stopHeartbeat();
+    this.callbacks.onWebSocketStateChange?.(false);
     if (this.connectionState !== 'failed') {
       this.fail(new Error('workspace.browser.error.nekoWebsocketFailed'));
     }
@@ -246,6 +252,7 @@ export class NekoClient {
     this.dataChannel = peerConnection.createDataChannel('data');
     this.dataChannel.onopen = () => {
       console.debug('[neko] data channel open, readyState=', this.dataChannel?.readyState);
+      this.callbacks.onDataChannelStateChange?.(true);
     };
     this.dataChannel.onerror = (e) => {
       console.error('[neko] data channel error', e);
@@ -253,6 +260,7 @@ export class NekoClient {
     };
     this.dataChannel.onclose = () => {
       console.debug('[neko] data channel closed');
+      this.callbacks.onDataChannelStateChange?.(false);
     };
 
     try {
@@ -466,6 +474,7 @@ export class NekoClient {
   private closeTransport(): void {
     this.stopHeartbeat();
     if (this.websocket) {
+      this.websocket.removeEventListener('open', this.handleOpen);
       this.websocket.removeEventListener('message', this.handleMessage);
       this.websocket.removeEventListener('error', this.handleSocketError);
       this.websocket.removeEventListener('close', this.handleClose);
@@ -473,6 +482,7 @@ export class NekoClient {
         this.websocket.close();
       }
       this.websocket = null;
+      this.callbacks.onWebSocketStateChange?.(false);
     }
     this.closePeerConnection();
     this.pendingCandidates = [];
@@ -485,6 +495,7 @@ export class NekoClient {
       this.dataChannel.onclose = null;
       this.dataChannel.close();
       this.dataChannel = null;
+      this.callbacks.onDataChannelStateChange?.(false);
     }
 
     if (this.peerConnection) {

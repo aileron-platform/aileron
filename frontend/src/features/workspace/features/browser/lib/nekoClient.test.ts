@@ -360,6 +360,55 @@ describe('NekoClient', () => {
     expect(states.filter((state) => state === 'failed')).toHaveLength(1);
     client.disconnect();
   });
+
+  it('reports WebSocket open and cleanup state without exposing the URL', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const states: boolean[] = [];
+    const client = new NekoClient({
+      onWebSocketStateChange: (open) => states.push(open),
+    });
+
+    client.connect('ws://browser.example/ws', 'derived-password');
+    FakeWebSocket.latest?.emit('open');
+    client.disconnect();
+
+    expect(states).toContain(true);
+    expect(states.at(-1)).toBe(false);
+  });
+
+  it('reports data-channel open, close, and disconnect cleanup', async () => {
+    const peerConnection = new FakePeerConnection();
+    vi.stubGlobal('MediaStream', FakeMediaStream);
+    vi.stubGlobal('RTCPeerConnection', function RTCPeerConnection() {
+      return peerConnection;
+    });
+    const states: boolean[] = [];
+    const client = new NekoClient({
+      onDataChannelStateChange: (open) => states.push(open),
+    });
+    const internals = client as unknown as {
+      handleSignalProvide(message: {
+        event: 'signal/provide';
+        id: string;
+        lite: boolean;
+        sdp: string;
+      }): Promise<void>;
+    };
+
+    await internals.handleSignalProvide({
+      event: 'signal/provide',
+      id: 'peer-1',
+      lite: true,
+      sdp: 'v=0',
+    });
+    peerConnection.dataChannel.onopen?.();
+    peerConnection.dataChannel.onclose?.();
+    client.disconnect();
+
+    expect(states[0]).toBe(true);
+    expect(states.at(-1)).toBe(false);
+  });
 });
 
 class FakePeerConnection {
@@ -432,11 +481,28 @@ class FakeWebSocket {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
 
+  static latest: FakeWebSocket | null = null;
+
   readonly readyState = FakeWebSocket.CONNECTING;
+  private readonly listeners = new Map<string, Set<EventListener>>();
 
-  addEventListener(): void {}
+  constructor() {
+    FakeWebSocket.latest = this;
+  }
 
-  removeEventListener(): void {}
+  addEventListener(type: string, listener: EventListener): void {
+    const listeners = this.listeners.get(type) ?? new Set<EventListener>();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type: string, listener: EventListener): void {
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  emit(type: string): void {
+    for (const listener of this.listeners.get(type) ?? []) listener(new Event(type));
+  }
 
   close(): void {}
 

@@ -34,7 +34,7 @@ Logout 與 operation policy 使用同一份 context，不再次解析 Cookie 或
 
 - `GET /api/v1/oauth2/login`：建立 state、nonce、PKCE verifier，並 redirect provider。
 - `GET /api/v1/oauth2/callback`：由 Manager 交換 code、驗證 provider 回應並建立 session。
-- `GET /api/v1/oauth2/session`：回傳本地 user、`allowedOperations`、absolute expiry 與 Session 綁定的 CSRF token。
+- `GET /api/v1/oauth2/session`：回傳本地 user、canonical OIDC `subject`、`allowedOperations`、absolute expiry 與 Session 綁定的 CSRF token。
 - `POST /api/v1/oauth2/logout`：要求 session、Origin 與 CSRF，先刪除本地 session。
 
 Cookie 只含 opaque handle；資料庫保存 SHA-256 hash、`user_id`、issuer、subject、

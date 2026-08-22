@@ -1,0 +1,9 @@
+FROM node:20.19.4-bookworm-slim@sha256:a25e59a5562406b0a4f34ce94ccad6c3902dcf3269b40e1fe12d881090c6f9be
+
+ARG SOURCE_REVISION=development
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
+
+WORKDIR /opt/docs-site
+
+COPY package.json package-lock.json ./
+RUN npm ci

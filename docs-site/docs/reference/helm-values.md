@@ -112,7 +112,7 @@ seed 只初始化新 Workspace，既有 Workspace 不會在 Helm upgrade 後被�
 | `turn.profile.policyBackend` | `cilium`、`kubernetes` 或 `unenforced` |
 | `turn.profile.backend` | Browser Pod 使用的 URL、control/relay destination 與 relay port range |
 | `turn.profile.frontend.urls` | required external vantage 使用的公開 TURN URL |
-| `turn.profile.credentialIssuer` | 外部 TURN 使用 `turnRest`，內建 Coturn 使用 `staticSecret`；定義 Secret ref 與 credential TTL |
+| `turn.profile.credentialIssuer` | 固定使用 `turnRest`；定義 Secret ref 與短效 credential TTL |
 | `turn.profile.evidence` | probe interval、evidence TTL 與 required frontend vantages |
 | `coturn.enabled` | 部署內建 Coturn；關閉時由外部 TURN 滿足同一 profile |
 | `coturn.frontendHost` | 內建模式的公開 TURN DNS template |
@@ -138,7 +138,10 @@ Workspace CR 以 bootstrap revision/status 與 Runtime、Browser、Canvas 各自
 desired/observed revision 表達狀態。Runtime bootstrap 順序固定為 Git、agent defaults、
 custom setup、supervisor；Browser/Canvas 只在首次 bootstrap 成功後解除 gate。
 
-agent defaults 由 Runtime image 的 `/opt/aileron/agent-defaults` 一次性植入，marker 位於
+agent defaults 由 Runtime image 的 `/opt/aileron/agent-defaults` 一次性植入 Codex、Claude
+與 OpenCode 各自的 Client User Scope（`${CODEX_HOME:-$HOME/.codex}/skills`、
+`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills`、`$HOME/.config/opencode/skills`），三個
+Target Client 各自持有獨立副本，不使用 symbolic link；marker 位於
 `${HOME}/.local/state/aileron/bootstrap`。Pod restart 或 image upgrade 不覆寫使用者修改，
 也不補回使用者刪除內容。
 custom setup 由 Runtime non-root UID 執行，有 timeout、輸出上限與穩定錯誤狀態。

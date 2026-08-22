@@ -15,22 +15,6 @@ const canvas = {
     iframeTitle: '工作區網頁畫布',
     loading: '畫布載入中...',
     manifest: {
-      status: {
-        missing: '無 manifest',
-        valid: 'manifest 正常',
-        invalid: 'manifest 錯誤',
-      },
-      statusNotice: {
-        skill: {
-          title: '{{title}}',
-          description: '目前顯示來自 {{skillName}} 的 skill 畫布。',
-        },
-        user: {
-          title: '{{title}}',
-          description: '目前顯示使用者啟用的畫布。',
-        },
-        details: 'Manifest：{{manifest}} · Runtime：{{runtime}}',
-      },
       errors: {
         invalid: {
           title: '畫布 manifest 錯誤',
@@ -39,27 +23,6 @@ const canvas = {
       },
       actions: {},
       warnings: {},
-    },
-    owner: {
-      skill: {
-        label: 'Skill 畫布',
-      },
-      user: {
-        label: '使用者畫布',
-      },
-    },
-    default: {
-      guidance: {
-        title: '預設畫布',
-        description: '目前沒有 active canvas manifest。建立 /workspace/.aileron/canvas.json 後即可啟用畫布。',
-      },
-    },
-    runtime: {
-      healthy: '正常',
-      starting: '啟動中',
-      errors: {
-        startupFailed: '啟動失敗',
-      },
     },
     error: {
       title: '畫布無法使用',

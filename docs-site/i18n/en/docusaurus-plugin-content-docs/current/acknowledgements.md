@@ -104,7 +104,6 @@ FastAPI services behind workspace-manager and workspace-runtime.
 | [Kubernetes](https://kubernetes.io/) | Production runtime | Apache-2.0 |
 | [Helm](https://helm.sh/) | K8s package management | Apache-2.0 |
 | [Cilium](https://cilium.io/) | Network policy for workspace and browser allowlists in Kubernetes mode | Apache-2.0 |
-| [drawio (jgraph/drawio)](https://github.com/jgraph/drawio) | Bundled diagramming service container | Apache-2.0 |
 | [mise](https://mise.jdx.dev/) | Multi-version toolchain manager inside workspace-runtime | MIT |
 
 ## 📚 Documentation Site (this site)

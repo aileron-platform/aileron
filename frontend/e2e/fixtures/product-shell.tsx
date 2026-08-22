@@ -240,7 +240,6 @@ const ProductPresentation: React.FC<ProductPresentationProps> = ({
               },
               presentation: {
                 accessibleLabel: t('workspace.versionControl.sidebar.title.changes'),
-                chrome: 'navigator-plain',
                 responsive: 'always',
               },
             },

@@ -16,7 +16,7 @@ export type {
   ProductShellBody,
   ProductShellColumnRegion,
   ProductShellColumnRenderState,
-  ProductShellCompanionChrome,
+  ProductShellCompanionRail,
   ProductShellCompanionRegion,
   ProductShellCompanionRenderState,
   ProductShellDisplay,
@@ -25,6 +25,5 @@ export type {
   ProductShellPreferencesAdapter,
   ProductShellProps,
   ProductShellRegionBehavior,
-  ProductShellRegionChrome,
   ProductShellRegionHeader,
 } from './productShellTypes';

@@ -704,11 +704,11 @@ function writeInvalidForwardedPrefix(res) {
   res.end(body);
 }
 
-function canvasUpstreamHeaders(requestHeaders, targetPort) {
+function canvasUpstreamHeaders(requestHeaders, targetPort, { websocket = false } = {}) {
   const headers = {
     ...requestHeaders,
     host: `127.0.0.1:${targetPort}`,
-    connection: "close",
+    connection: websocket ? "Upgrade" : "close",
   };
   for (const name of [
     "accept-encoding",
@@ -825,7 +825,7 @@ function createNextProxyServer(targetPort) {
     const upstream = net.connect(targetPort, "127.0.0.1", () => {
       upstream.write(
         `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
-        Object.entries(canvasUpstreamHeaders(req.headers, targetPort))
+        Object.entries(canvasUpstreamHeaders(req.headers, targetPort, { websocket: true }))
           .map(([key, value]) => `${key}: ${value}`)
           .join("\r\n") +
         "\r\n\r\n"

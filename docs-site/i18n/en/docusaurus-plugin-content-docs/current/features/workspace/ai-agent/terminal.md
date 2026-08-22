@@ -32,7 +32,7 @@ Only an invalid working directory falls back to the Workspace default. Disconnec
 
 - `frontend/src/features/workspace/features/container-management/`
 - `workspace-runtime/app/modules/internal/router.py`
-- `terminal-service/`
+- `workspace-terminal/`
 
 ## Related Architecture and APIs
 

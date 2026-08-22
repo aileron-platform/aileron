@@ -7,7 +7,6 @@ import { marketplaceMCPServerValueFromItem } from '../marketplaceMCPServerDialog
 import {
   createMCPServer,
   deleteMCPServer,
-  getMCPServer,
   listMCPServers,
   saveMCPServer,
 } from '../../../api/marketplaceApi';
@@ -65,7 +64,7 @@ export const MarketplaceMCPPage: React.FC<MarketplaceMCPPageProps> = ({
     identityGeneration,
     session,
   } = useMarketplaceResourceSession({
-    provider: packageDetail.provider,
+    targetClient: packageDetail.targetClient,
     packageId: packageDetail.packageId,
     resourceType: 'mcp',
   }, packageDetail.revision);
@@ -82,7 +81,7 @@ export const MarketplaceMCPPage: React.FC<MarketplaceMCPPageProps> = ({
     await session.query(
       identityGeneration,
       'mcp-list',
-      () => listMCPServers(packageDetail.provider, packageDetail.packageId),
+      () => listMCPServers(packageDetail.targetClient, packageDetail.packageId),
       {
         onSuccess: (summaries) => {
           setItems(summaries.map(summary => ({
@@ -90,7 +89,7 @@ export const MarketplaceMCPPage: React.FC<MarketplaceMCPPageProps> = ({
             name: summary.name,
             title: summary.name,
             path: summary.path,
-            content: '',
+            content: JSON.stringify(summary.server, null, 2),
             ownerFilePath: summary.ownerFilePath,
             baseEntryFingerprint: summary.baseEntryFingerprint,
           })));
@@ -106,39 +105,13 @@ export const MarketplaceMCPPage: React.FC<MarketplaceMCPPageProps> = ({
   }, [
     identityGeneration,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     session,
   ]);
 
   React.useEffect(() => {
     void loadItems();
   }, [loadItems]);
-
-  const loadItem = React.useCallback(async (item: MarketplaceEditorResourceItem) => {
-    if (item.content) return item;
-    const sourceToken = itemSourceToken(item);
-    const detail = await session.run(
-      identityGeneration,
-      `mcp-content:${item.id}`,
-      () => getMCPServer(
-        packageDetail.provider,
-        packageDetail.packageId,
-        item.name ?? item.id,
-        sourceToken.ownerFilePath,
-      ),
-    );
-    return {
-      ...item,
-      content: JSON.stringify(detail.server, null, 2),
-      ownerFilePath: detail.ownerFilePath,
-      baseEntryFingerprint: detail.baseEntryFingerprint,
-    };
-  }, [
-    identityGeneration,
-    packageDetail.packageId,
-    packageDetail.provider,
-    session,
-  ]);
 
   const handleItemsChange = async (nextItems: MarketplaceEditorResourceItem[]) => {
     const originalItems = items;
@@ -157,7 +130,7 @@ export const MarketplaceMCPPage: React.FC<MarketplaceMCPPageProps> = ({
         identityGeneration,
         'mcp-mutation',
         () => deleteMCPServer(
-          packageDetail.provider,
+          packageDetail.targetClient,
           packageDetail.packageId,
           name,
           {
@@ -183,12 +156,12 @@ export const MarketplaceMCPPage: React.FC<MarketplaceMCPPageProps> = ({
         'mcp-mutation',
         () => (
           original
-            ? saveMCPServer(packageDetail.provider, packageDetail.packageId, value.name, {
+            ? saveMCPServer(packageDetail.targetClient, packageDetail.packageId, value.name, {
                 revision: session.revision,
                 server,
                 ...itemSourceToken(original),
               })
-            : createMCPServer(packageDetail.provider, packageDetail.packageId, {
+            : createMCPServer(packageDetail.targetClient, packageDetail.packageId, {
                 revision: session.revision,
                 name: value.name,
                 server,
@@ -228,7 +201,6 @@ export const MarketplaceMCPPage: React.FC<MarketplaceMCPPageProps> = ({
           items={items}
           onItemsChange={handleItemsChange}
           onRefresh={() => { void loadItems(); }}
-          onLoadItem={loadItem}
         />
       </div>
     </div>

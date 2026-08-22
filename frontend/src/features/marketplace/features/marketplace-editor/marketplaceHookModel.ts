@@ -6,13 +6,13 @@ import {
   getHookDefaults,
   getHookDialogScopeValues,
   getHookFieldSupport,
-  isValidEventForProvider,
+  isValidEventForProvider as isValidEventForTargetClient,
   type HookActionConfig,
   type HookDialogLabels,
   type HookDialogOptions,
   type HookMatcher,
 } from '@/shared/components/hook-workflow';
-import type { MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 
 import {
   marketplaceEditorItemTitle,
@@ -34,15 +34,15 @@ export const MARKETPLACE_HOOK_SOURCE_EVENT = '__marketplaceSourceEvent';
 
 export const createMarketplaceHookDialogLabels = (
   t: HookDialogTranslator,
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   mode: 'create' | 'edit',
 ): HookDialogLabels => {
-  const fieldSupport = getHookFieldSupport(provider);
-  const defaults = getHookDefaults(provider);
+  const fieldSupport = getHookFieldSupport(targetClient);
+  const defaults = getHookDefaults(targetClient);
 
   return {
     title: t(`marketplace.editor.hooks.dialog.${mode === 'edit' ? 'title' : 'titleCreate'}`),
-    description: t(`marketplace.editor.hooks.dialog.description.${provider}`),
+    description: t(`marketplace.editor.hooks.dialog.description.${targetClient}`),
     cancel: t('marketplace.common.actions.cancel'),
     submit: t('marketplace.editor.hooks.dialog.actions.save'),
     name: {
@@ -90,12 +90,12 @@ export const createMarketplaceHookDialogLabels = (
         executionDescriptionPlaceholder: t('marketplace.editor.hooks.dialog.executions.descriptionPlaceholder'),
         executionDescriptionHelp: t('marketplace.editor.hooks.dialog.executions.descriptionHelp'),
       } : {}),
-      executionTimeoutLabel: t(`marketplace.editor.hooks.dialog.executions.timeoutLabel.${provider}`),
+      executionTimeoutLabel: t(`marketplace.editor.hooks.dialog.executions.timeoutLabel.${targetClient}`),
       executionTimeoutPlaceholder: String(defaults.timeout),
-      executionTimeoutHelp: t(`marketplace.editor.hooks.dialog.executions.timeoutHelp.${provider}`),
-      executionCommandLabel: t(`marketplace.editor.hooks.dialog.executions.commandLabel.${provider}`),
-      executionCommandPlaceholder: t(`marketplace.editor.hooks.dialog.executions.commandPlaceholder.${provider}`),
-      executionCommandHelp: t(`marketplace.editor.hooks.dialog.executions.commandHelp.${provider}`),
+      executionTimeoutHelp: t(`marketplace.editor.hooks.dialog.executions.timeoutHelp.${targetClient}`),
+      executionCommandLabel: t(`marketplace.editor.hooks.dialog.executions.commandLabel.${targetClient}`),
+      executionCommandPlaceholder: t(`marketplace.editor.hooks.dialog.executions.commandPlaceholder.${targetClient}`),
+      executionCommandHelp: t(`marketplace.editor.hooks.dialog.executions.commandHelp.${targetClient}`),
       executionAdditionalContextLimitLabel: fieldSupport.additionalContextLimit
         ? t('marketplace.editor.hooks.dialog.executions.additionalContextLimit.label')
         : undefined,
@@ -179,10 +179,10 @@ export const createMarketplaceHookDialogLabels = (
 
 export const createMarketplaceHookDialogOptions = (
   t: HookDialogTranslator,
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   events: HookDialogOptions['events'],
 ): HookDialogOptions => {
-  const fieldSupport = getHookFieldSupport(provider);
+  const fieldSupport = getHookFieldSupport(targetClient);
 
   return {
     events,
@@ -190,7 +190,7 @@ export const createMarketplaceHookDialogOptions = (
       value: scope,
       label: t(`marketplace.editor.hooks.dialog.scope.options.${scope}`),
     })),
-    executionTypes: HOOK_TYPES[provider].map((hookType) => ({
+    executionTypes: HOOK_TYPES[targetClient].map((hookType) => ({
       value: hookType,
       label: t(`marketplace.editor.hooks.dialog.executions.types.${hookType}.label`),
       description: t(`marketplace.editor.hooks.dialog.executions.types.${hookType}.description`),
@@ -209,10 +209,10 @@ export const createMarketplaceHookDialogOptions = (
   };
 };
 
-export const formatMarketplaceHookTimeout = (provider: MarketplaceProvider, timeout?: number): string => (
-  getHookDefaults(provider).timeoutUnit === 'ms'
-    ? `${timeout ?? getHookDefaults(provider).timeout}ms`
-    : `${timeout ?? getHookDefaults(provider).timeout}s`
+export const formatMarketplaceHookTimeout = (targetClient: MarketplaceTargetClient, timeout?: number): string => (
+  getHookDefaults(targetClient).timeoutUnit === 'ms'
+    ? `${timeout ?? getHookDefaults(targetClient).timeout}ms`
+    : `${timeout ?? getHookDefaults(targetClient).timeout}s`
 );
 
 export const marketplaceHookDataFromValue = (
@@ -235,17 +235,17 @@ export const marketplaceHookNativeContent = (value: MarketplaceHookDialogValue):
 
 export const marketplaceHookDialogValueFromItem = (
   item: MarketplaceEditorResourceItem,
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   t: (key: string) => string,
 ): MarketplaceHookDialogValue => {
   const data = item.data;
-  const nativeContent = marketplaceHookDialogValueFromNativeContent(item.content, provider);
-  const event = typeof data?.event === 'string' && isValidEventForProvider(provider, data.event)
+  const nativeContent = marketplaceHookDialogValueFromNativeContent(item.content, targetClient);
+  const event = typeof data?.event === 'string' && isValidEventForTargetClient(targetClient, data.event)
     ? data.event
-    : nativeContent?.event ?? HOOK_EVENTS[provider][0];
+    : nativeContent?.event ?? HOOK_EVENTS[targetClient][0];
   const matchers = Array.isArray(data?.matchers)
     ? data.matchers as HookMatcher[]
-    : nativeContent?.matchers ?? [createEmptyMatcher(provider)];
+    : nativeContent?.matchers ?? [createEmptyMatcher(targetClient)];
 
   return {
     name: typeof data?.name === 'string' ? data.name : marketplaceEditorItemTitle(item, t),
@@ -256,24 +256,24 @@ export const marketplaceHookDialogValueFromItem = (
 
 const marketplaceHookDialogValueFromNativeContent = (
   content: string,
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
 ): Pick<MarketplaceHookDialogValue, 'event' | 'matchers'> | null => {
   try {
     const parsed = JSON.parse(content) as unknown;
     if (!isMarketplaceRecord(parsed) || !isMarketplaceRecord(parsed.hooks)) return null;
 
     const hookEntry = Object.entries(parsed.hooks)
-      .find(([event, value]) => isValidEventForProvider(provider, event) && Array.isArray(value));
+      .find(([event, value]) => isValidEventForTargetClient(targetClient, event) && Array.isArray(value));
     if (!hookEntry) return null;
 
     const [event, rawMatchers] = hookEntry;
     const matchers = (rawMatchers as unknown[])
-      .map(rawMatcher => marketplaceHookMatcherFromNativeValue(rawMatcher, provider))
+      .map(rawMatcher => marketplaceHookMatcherFromNativeValue(rawMatcher, targetClient))
       .filter((matcher): matcher is HookMatcher => Boolean(matcher));
 
     return {
       event,
-      matchers: matchers.length > 0 ? matchers : [createEmptyMatcher(provider)],
+      matchers: matchers.length > 0 ? matchers : [createEmptyMatcher(targetClient)],
     };
   } catch {
     return null;
@@ -282,12 +282,12 @@ const marketplaceHookDialogValueFromNativeContent = (
 
 const marketplaceHookMatcherFromNativeValue = (
   rawMatcher: unknown,
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
 ): HookMatcher | null => {
   if (!isMarketplaceRecord(rawMatcher) || !Array.isArray(rawMatcher.hooks)) return null;
 
   const hooks = rawMatcher.hooks
-    .map(rawAction => marketplaceHookActionFromNativeValue(rawAction, provider))
+    .map(rawAction => marketplaceHookActionFromNativeValue(rawAction, targetClient))
     .filter((action): action is HookActionConfig => Boolean(action));
   if (hooks.length === 0) return null;
 
@@ -300,11 +300,11 @@ const marketplaceHookMatcherFromNativeValue = (
 
 const marketplaceHookActionFromNativeValue = (
   rawAction: unknown,
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
 ): HookActionConfig | null => {
   if (!isMarketplaceRecord(rawAction)) return null;
 
-  const actionType = typeof rawAction.type === 'string' && HOOK_TYPES[provider].includes(rawAction.type as HookActionConfig['type'])
+  const actionType = typeof rawAction.type === 'string' && HOOK_TYPES[targetClient].includes(rawAction.type as HookActionConfig['type'])
     ? rawAction.type as HookActionConfig['type']
     : 'command';
   const timeout = typeof rawAction.timeout === 'number' ? rawAction.timeout : undefined;
@@ -368,7 +368,7 @@ const marketplaceStringRecordFromValue = (value: unknown): Record<string, string
 
 export const marketplaceHookResourceItemFromValue = (
   item: MarketplaceEditorResourceItem,
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   value: MarketplaceHookDialogValue,
   t: (key: string) => string,
 ): MarketplaceEditorResourceItem => {
@@ -392,7 +392,7 @@ export const marketplaceHookResourceItemFromValue = (
     meta: [
       { labelKey: 'marketplace.editor.featureMeta.labels.type', value: firstAction?.type ?? 'command' },
       { labelKey: 'marketplace.editor.featureMeta.labels.matcher', value: firstMatcher?.matcher ?? '*' },
-      { labelKey: 'marketplace.editor.featureMeta.labels.timeout', value: formatMarketplaceHookTimeout(provider, firstAction?.timeout) },
+      { labelKey: 'marketplace.editor.featureMeta.labels.timeout', value: formatMarketplaceHookTimeout(targetClient, firstAction?.timeout) },
       ...(firstMatcher?.sequential ? [{ labelKey: 'marketplace.editor.featureMeta.labels.sequential', value: t('marketplace.common.labels.enabled') }] : []),
     ],
   };

@@ -81,6 +81,8 @@ interface WorkspaceFeatureContentProps {
   onDocumentSelect: (id: string | null) => void;
   onDocumentDirtyChange: (dirty: boolean) => void;
   documentSelectionBlocked: boolean;
+  fileTreeRefreshSignal: number;
+  onFileTreeRefreshingChange: (isRefreshing: boolean) => void;
 }
 
 export const WorkspaceFeatureContent: React.FC<WorkspaceFeatureContentProps> = ({
@@ -95,6 +97,8 @@ export const WorkspaceFeatureContent: React.FC<WorkspaceFeatureContentProps> = (
   onDocumentSelect,
   onDocumentDirtyChange,
   documentSelectionBlocked,
+  fileTreeRefreshSignal,
+  onFileTreeRefreshingChange,
 }) => {
   const { state, workspaceRuntime, permissions } = useWorkspace();
   const { t } = useI18n();
@@ -121,7 +125,12 @@ export const WorkspaceFeatureContent: React.FC<WorkspaceFeatureContentProps> = (
         <React.Suspense
           fallback={<WorkspaceFeatureLoading labelKey="workspace.layout.loading.fileTree" className="p-3" />}
         >
-          <FileManagementSidebar collapsed={columnCollapsed} showHeader={false} />
+          <FileManagementSidebar
+            collapsed={columnCollapsed}
+            showHeader={false}
+            refreshSignal={fileTreeRefreshSignal}
+            onRefreshingChange={onFileTreeRefreshingChange}
+          />
         </React.Suspense>
       );
     }

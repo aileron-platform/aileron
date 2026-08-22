@@ -1,14 +1,82 @@
 ---
-title: External OIDC Installation
+title: OIDC and Identity Plane Installation
 ---
 
-# External OIDC Installation
+# OIDC and Identity Plane Installation
 
-Aileron requires an external OpenID Connect identity provider. The core Helm Chart does not deploy
-Keycloak, LDAP, a realm, a provider database, or any IdP administration component. Development and
-CI may install a separate IdP, but it cannot be an Aileron subchart.
+Aileron Core depends only on standard OpenID Connect. An installation must select exactly one
+Identity adapter:
 
-## Provider configuration
+- `bundledKeycloak`: the product-provided default Keycloak Identity Plane.
+- `externalOidc`: an OIDC provider supplied by the installer.
+
+Both modes project only an issuer, client ID, client Secret reference, and CA reference to Workspace
+Manager. Frontend, Runtime, Terminal, and Operator never receive provider tokens, Keycloak
+administration interfaces, or LDAP configuration.
+
+## Bundled Keycloak
+
+Kubernetes uses the independent `helm/aileron-identity` chart. The Identity Plane has its own Helm
+release, namespace, PostgreSQL database, PVCs, Secrets, Ingress, and backup lifecycle. It is not a
+`helm/aileron` subchart and does not share the platform PostgreSQL database. The installer creates
+and validates the namespace and existing Secrets first, installs the Identity Plane, and installs
+the Aileron release only after Discovery and JWKS are ready.
+
+The Identity chart's own `postgres.enabled` value selects its PostgreSQL source independently from
+the `bundledKeycloak`/`externalOidc` adapter choice. With an external Identity database, Keycloak,
+preflight, backup, and restore use the same connection and TLS contract described in
+[External Data Services](./external-data-services.md).
+
+The Identity chart creates neither Namespaces nor Secrets and accepts no plaintext credentials.
+Every workload mounts existing Secret files, and Keycloak and PostgreSQL images use immutable
+digests. `identity-installation/generate_secrets.py` creates or validates the required artifacts in
+an external mode-`0700` directory. Artifact files are mode `0600`, and Secret values are never
+printed.
+
+The Keycloak Admin Console administrator, Keycloak native break-glass principal, and Aileron
+bootstrap admin principal have separate responsibilities. The Admin Console manages the realm and
+native users. The native break-glass principal still signs in through standard OIDC. Aileron grants
+platform roles only from `(issuer, subject)`. Self-registration is disabled by default.
+
+### Bundled Accounts and Passwords
+
+Bundled Keycloak creates three accounts with separate responsibilities. An account name containing
+`admin` does not grant the Aileron platform-admin role. Use each account only for the purpose below:
+
+| Account | Default username | Password | Purpose and Aileron role |
+| --- | --- | --- | --- |
+| Aileron platform administrator | `admin` | General Kubernetes installations generate a strong random password; only the HomeLab/test deployment explicitly uses `admin123` | Signs in to Aileron through normal OIDC with `platform_role=admin` to manage users, platform resources, and Marketplace content |
+| Keycloak bootstrap administrator | `keycloak-admin` | Strong random password generated during installation; no fixed default | Signs in only to the Keycloak Admin Console to manage the realm and native users; it is not an Aileron platform administrator |
+| Break-glass | `local-emergency-admin` | Strong random password generated during installation; no fixed default | Emergency OIDC sign-in; it defaults to Aileron `member` unless a platform administrator explicitly promotes it |
+
+:::danger Never reuse the HomeLab password in a shared environment
+`admin123` exists only for convenient sign-in to an isolated HomeLab or local test deployment. Replace
+it with a unique strong password before allowing access from other users, networks, or the Internet.
+General Kubernetes and bundled installations must not reuse this value.
+:::
+
+The installer never writes random passwords to Git, documentation, logs, or acceptance reports. The
+installation-owned HomeLab artifacts are kept in the following mode-`0700` private tree, with
+mode-`0600` credential files:
+
+```text
+<private-root>/install-secrets/homelab/identity-artifacts/keycloak-platform-admin/{subject,username,email,password,import.json}
+<private-root>/install-secrets/homelab/identity-artifacts/keycloak-bootstrap-admin/{username,password}
+<private-root>/install-secrets/homelab/identity-artifacts/keycloak-break-glass/{username,email,password}
+```
+
+The default `<private-root>` is `/root/aileron-private`. In Kubernetes, the corresponding data is in
+the `keycloak-platform-admin`, `keycloak-bootstrap-admin`, and `keycloak-break-glass` Secrets in the
+`aileron-identity-system` Namespace. Only an authorized cluster administrator may read them. Never
+paste `kubectl get secret ... -o yaml` output into tickets, chat, or shell history. For a general
+installation, use its actual private root and installer-generated artifact inventory.
+
+Docker's `local-oidc` profile also runs Keycloak only; it does not deploy OpenLDAP or a test
+directory. A future LDAP integration belongs inside Keycloak User Federation and does not change
+Aileron's OIDC, JIT, or authorization contracts. This release provides no LDAP workload, seed,
+Secret, or federation setting.
+
+## External OIDC provider
 
 Create a confidential client, enable Authorization Code flow, and register:
 
@@ -18,6 +86,15 @@ Create a confidential client, enable Authorization Code flow, and register:
 
 Manager Pods must reach the issuer, issuer-derived Discovery, and JWKS. User browsers must reach the authorization
 endpoint. Aileron does not call a provider-specific administration API.
+
+In `externalOidc` mode, the installer does not render or install the Identity Plane. The external
+provider must pass the same standard OIDC conformance as Bundled Keycloak and is not a fallback for
+a failed bundled provider.
+The HomeLab acceptance bundle's `offlineOidcConformance` report validates only the provider-neutral
+adapter and product data contract and is explicitly marked with `mode: offline`. It does not deploy,
+connect to, or claim certification of an external provider. Before production use of `externalOidc`,
+the installer must separately exercise Authorization Code with PKCE, JIT, and failed-login scenarios
+against the selected provider.
 
 ## Helm values
 

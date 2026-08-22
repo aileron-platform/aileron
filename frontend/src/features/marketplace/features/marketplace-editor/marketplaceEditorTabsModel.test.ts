@@ -3,18 +3,28 @@ import {
   countMarketplaceFileNodes,
   getMarketplaceEditorTabLabelKey,
   getMarketplacePackageRoot,
-  providerEditorTabs,
+  visibleMarketplaceEditorTabs,
 } from './marketplaceEditorTabsModel';
 import type { FileTreeNode } from '@/shared/components/file-workbench';
 
 describe('marketplaceEditorTabsModel', () => {
-  it('keeps provider-specific editor tabs explicit', () => {
-    expect(Object.keys(providerEditorTabs)).toEqual(['claude-code', 'codex']);
-    expect(providerEditorTabs['claude-code']).toContain('outputStyle');
-    expect(providerEditorTabs.codex).not.toContain('outputStyle');
+  it('derives visible editor tabs from package-format capabilities', () => {
+    const capabilities = {
+      basic: 'read-write',
+      agentsMd: 'unsupported',
+      hooks: 'unsupported',
+      mcp: 'read-write',
+      agents: 'unsupported',
+      commands: 'unsupported',
+      outputStyle: 'unsupported',
+      skills: 'read-write',
+      files: 'read-write',
+    } as const;
+
+    expect(visibleMarketplaceEditorTabs(capabilities)).toEqual(['basic', 'mcp', 'skills', 'files']);
   });
 
-  it('resolves provider-specific tab label keys through i18n keys', () => {
+  it('resolves targetClient-specific tab label keys through i18n keys', () => {
     expect(getMarketplaceEditorTabLabelKey('claude-code', 'agentsMd')).toBe('marketplace.editor.tabs.claudeMd');
     expect(getMarketplaceEditorTabLabelKey('codex', 'commands')).toBe('marketplace.editor.tabs.slashCommand');
     expect(getMarketplaceEditorTabLabelKey('codex', 'skills')).toBe('marketplace.editor.tabs.skills');

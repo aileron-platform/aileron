@@ -52,9 +52,6 @@ export default defineConfig(({ mode }) => {
   const backendTarget = process.env.DOCKER_ENV === 'true'
     ? 'http://workspace-manager:3001'
     : 'http://localhost:3001';
-  const drawioTarget = process.env.DOCKER_ENV === 'true'
-    ? 'http://drawio:8080'
-    : 'http://localhost:8083';
   type WorkspaceGatewayProxy = Parameters<NonNullable<ProxyOptions['configure']>>[0];
   let workspaceGatewayProxy: WorkspaceGatewayProxy | null = null;
   const workspaceGatewayAuthorization = createWorkspaceGatewayAuthorizationGate({
@@ -112,12 +109,6 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
           ws: true,
-          xfwd: true,
-        },
-        '/draw': {
-          target: drawioTarget,
-          changeOrigin: true,
-          secure: false,
           xfwd: true,
         },
         [WORKSPACE_GATEWAY_PROXY_PATTERN]: {

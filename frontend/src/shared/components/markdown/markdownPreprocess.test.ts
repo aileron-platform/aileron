@@ -41,10 +41,10 @@ describe('preprocessLatex', () => {
 describe('parseFrontmatterSegments', () => {
   it('\u89e3\u6790\u6587\u4ef6\u958b\u982d\u7684 YAML frontmatter \u5340\u584a', () => {
     const input = `---
-name: openspec-ff-change
+name: sample-skill-update
 description: Fast-forward through artifact creation
 metadata:
-  author: openspec
+  author: example
 ---
 
 # Title`;
@@ -54,9 +54,9 @@ metadata:
     expect(result[0]).toMatchObject({
       type: 'frontmatter',
       data: {
-        name: 'openspec-ff-change',
+        name: 'sample-skill-update',
         description: 'Fast-forward through artifact creation',
-        metadata: { author: 'openspec' },
+        metadata: { author: 'example' },
       },
     });
     expect(result[1]).toMatchObject({
@@ -67,10 +67,10 @@ metadata:
 
   it('\u89e3\u6790\u6587\u4ef6\u4e2d\u6bb5\u7684 YAML frontmatter \u5340\u584a', () => {
     const input = `<skill>
-<name>openspec-ff-change</name>
+<name>sample-skill-update</name>
 ---
-name: openspec-ff-change
-compatibility: Requires openspec CLI.
+name: sample-skill-update
+compatibility: Requires the example CLI.
 metadata:
   version: "1.0"
 ---
@@ -80,13 +80,13 @@ metadata:
     expect(result).toHaveLength(3);
     expect(result[0]).toMatchObject({
       type: 'markdown',
-      content: '<skill>\n<name>openspec-ff-change</name>\n',
+      content: '<skill>\n<name>sample-skill-update</name>\n',
     });
     expect(result[1]).toMatchObject({
       type: 'frontmatter',
       data: {
-        name: 'openspec-ff-change',
-        compatibility: 'Requires openspec CLI.',
+        name: 'sample-skill-update',
+        compatibility: 'Requires the example CLI.',
         metadata: { version: '1.0' },
       },
     });
@@ -117,5 +117,37 @@ E=mc^2
     const result = preprocessMarkdown(input);
 
     expect(result).toBe(input);
+  });
+
+  it('\u4e0d\u91cd\u5beb\u91d1\u984d dollar signs，\u4ea4\u7d66 remark parser \u5206\u985e', () => {
+    const input = '**\u672c\u5b63\u71df\u6536**\u70ba US$1.25 \u5104，*\u53bb\u5e74*\u70ba US$0.98 \u5104。';
+
+    expect(preprocessMarkdown(input)).toBe(input);
+  });
+
+  it('\u4fdd\u7559\u6709\u6548 inline/display math \u8207\u6578\u5b57\u958b\u982d\u7684 inline math', () => {
+    const input = [
+      'Formulas: $E=mc^2$, $1 + 2 = 3$, and $100 million$.',
+      '',
+      '$$',
+      '\\sum_{i=1}^{n} i',
+      '$$',
+    ].join('\n');
+
+    expect(preprocessMarkdown(input)).toBe(input);
+  });
+
+  it('\u4fdd\u7559 escaped dollar signs \u8207 code spans/fences \u7684\u539f\u59cb\u5167\u5bb9', () => {
+    const input = [
+      'Escaped \\$100 and \\$80.',
+      '',
+      '`$100 and $80`',
+      '',
+      '```text',
+      '$100 and $80',
+      '```',
+    ].join('\n');
+
+    expect(preprocessMarkdown(input)).toBe(input);
   });
 });

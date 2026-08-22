@@ -36,7 +36,7 @@ describe('ProductShell preference contracts', () => {
       bottom: { defaultHeight: 240, minHeight: 160, maxHeight: 520, mainMinHeight: 320 },
       presentation: {
         accessibleLabel: 'companion',
-        chrome: 'muted-rail',
+        rail: 'standard',
         collapseLabel: 'collapse',
         expandLabel: 'expand',
         resizeLabel: 'resize',
@@ -87,7 +87,7 @@ describe('ProductShell preference contracts', () => {
       bottom: { defaultHeight: 100, minHeight: 160, maxHeight: 520, mainMinHeight: 320 },
       presentation: {
         accessibleLabel: 'companion',
-        chrome: 'muted-rail',
+        rail: 'standard',
         collapseLabel: 'collapse',
         expandLabel: 'expand',
         resizeLabel: 'resize',

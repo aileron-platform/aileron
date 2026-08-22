@@ -114,8 +114,10 @@ export WORKSPACE_ID=<workspace-id>
 export WORKSPACE_RESOURCE=workspace-${WORKSPACE_ID}
 ```
 
-`AILERON_FULLNAME` is the Helm chart fullname. It defaults to `${RELEASE_NAME}-aileron`; use the actual
-rendered name when `fullnameOverride` or `nameOverride` is configured.
+`AILERON_FULLNAME` must be the fullname rendered by the Helm chart. `fullnameOverride` takes precedence.
+Otherwise, `nameOverride` (or the chart name when it is unset) supplies the name segment: when the release
+name already contains that segment, the fullname is the release name; in all other cases it is
+`<release-name>-<effective-chart-name>`. Do not append `-aileron` unconditionally.
 
 Check these four layers in order. Do not use retries in a later layer to hide a failure in an earlier one.
 
@@ -125,16 +127,18 @@ Check these four layers in order. Do not use retries in a later layer to hide a 
 kubectl get workspace -n "${RELEASE_NAMESPACE}" "${WORKSPACE_RESOURCE}" \
   -o jsonpath='{.status.browserConnectivity}{"\n"}'
 kubectl logs -n "${RELEASE_NAMESPACE}" \
-  deployment/${RELEASE_NAME}-aileron-workspace-operator \
+  deployment/${AILERON_FULLNAME}-workspace-operator \
   --tail=200
 kubectl logs -n "${RELEASE_NAMESPACE}" \
-  deployment/${RELEASE_NAME}-aileron-workspace-manager \
+  deployment/${AILERON_FULLNAME}-workspace-manager \
   --tail=200
 ```
 
 Using the same authenticated actor, call `/api/v1/workspaces/${WORKSPACE_ID}/availability` and
-`POST /api/v1/workspaces/${WORKSPACE_ID}/browser/access`. `pending`, `degraded`, and `not_ready` map to
-`409 BROWSER_CONNECTIVITY_NOT_READY`. `unavailable`, or evidence found expired at admission time, maps to
+`POST /api/v1/workspaces/${WORKSPACE_ID}/browser/access`. `ready`, or `degraded` with a TTL-valid
+`allowed` admission projection, can issue access. `pending` and `not_ready` map to
+`409 BROWSER_CONNECTIVITY_NOT_READY`. Evidence found expired at admission time is also projected as
+`not_ready` / `denied` and returns the same 409. Only `unavailable` maps to
 `503 BROWSER_CONNECTIVITY_UNAVAILABLE`.
 
 ### 2. Browser Pod Backend Probe
@@ -216,4 +220,40 @@ docker compose logs --tail=200 workspace-manager
 docker logs --tail=200 workspace-runtime-<workspace-id>
 ```
 
-Runtime tests must use the test service in `workspace-runtime/docker-compose.test.yml`. Docker volumes and Kubernetes PVCs have different responsibilities, but both modes use the same bootstrap order and one-time defaults contract.
+Check Docker Compose Browser TURN readiness in this order:
+
+```bash
+docker compose ps turn-readiness-preflight coturn \
+  connectivity-evidence-gateway connectivity-external-agent workspace-manager
+docker compose logs --tail=200 turn-readiness-preflight
+docker compose logs --tail=200 coturn connectivity-evidence-gateway connectivity-external-agent
+docker compose logs --tail=200 workspace-manager
+docker logs --tail=200 workspace-browser-connectivity-probe-<workspace-id>
+```
+
+`turn-readiness-preflight` must be `exited (0)`. Otherwise, first verify
+`${HOST_TURN_CONFIG_DIR}/turn-reachability-profile.json`, the complete Secret bundle in
+`${HOST_TURN_SECRETS_DIR}`, `WORKSPACE_OPERATOR_IMAGE`, `COTURN_IMAGE`, and the profile relay port
+range. Do not copy a Secret or token into logs; share only file names, permissions, and redacted
+error codes.
+
+Next, verify that the host agent can reach the local Gateway's
+`${TURN_CONNECTIVITY_GATEWAY_EXTERNAL_PORT:-18083}` over the host network, that the Gateway reads
+the same TURN REST Secret as Coturn, and that the Browser probe uses the same
+`TURN_CREDENTIAL_REVISION`. If only Browser access fails, inspect the Workspace's
+`browser_connectivity_state`, `browser_connectivity_reason`, `browser_connectivity_backend_*`, and
+`browser_connectivity_frontend_*` typed fields. Do not replace evidence diagnosis by rebuilding the
+Browser.
+
+Docker admission uses the same projection contract:
+
+| State | Browser access behavior |
+| --- | --- |
+| `ready` with an `allowed` admission projection | Issue Browser access and a short-lived TURN credential |
+| `degraded` with an `allowed` admission projection and unexpired `expiresAt` | Continue to issue access; investigate the frontend failure across the host agent, Gateway, and TURN path |
+| `pending` / `not_ready`, or expired `expiresAt` | `409 BROWSER_CONNECTIVITY_NOT_READY` |
+| `unavailable` | `503 BROWSER_CONNECTIVITY_UNAVAILABLE` |
+
+Runtime tests must use the test service in `workspace-runtime/docker-compose.test.yml`. Docker
+volumes and Kubernetes PVCs have different responsibilities, but both modes use the same bootstrap
+order, TURN readiness preflight, and one-time defaults contract.

@@ -3,8 +3,9 @@ ARG NGINX_IMAGE
 
 FROM ${NODE_IMAGE} AS builder
 
-ARG NPM_VERSION
-RUN npm install -g "npm@${NPM_VERSION}"
+ARG NPM_VERSION=12.0.1
+RUN npm install -g "npm@${NPM_VERSION}" \
+    && test "$(npm --version)" = "${NPM_VERSION}"
 
 ARG TZ=Asia/Taipei
 # Build capability flags with placeholder values replaced at container start.
@@ -16,8 +17,9 @@ RUN apk add --no-cache tzdata && \
     echo $TZ > /etc/timezone
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --no-audit --no-fund
+COPY package*.json .npmrc ./
+RUN test "$(node -p "require('./package.json').packageManager")" = "npm@${NPM_VERSION}" \
+    && npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 

@@ -1,6 +1,5 @@
 import { isImageFile } from '../../model/fileTypeUtils';
 import {
-  isDrawioFile,
   isMarkdownFile,
   isMermaidFile,
 } from '../../model/fileIconUtils';
@@ -19,7 +18,6 @@ export const getStats = (content: string) => ({
 export const getViewerOwnerKey = (tab: FileViewerWorkbenchTab | null): string | null => {
   if (!tab) return null;
   if (isImageFile(tab.name)) return `image:${tab.path}`;
-  if (isDrawioFile(tab.name)) return `drawio:${tab.path}`;
   if (isMarkdownFile(tab.name)) return `markdown:${tab.path}`;
   if (isMermaidFile(tab.name)) return `mermaid:${tab.path}`;
   return null;

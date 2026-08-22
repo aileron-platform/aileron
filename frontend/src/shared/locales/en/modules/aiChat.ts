@@ -128,7 +128,7 @@ const aiChat = {
   workbench: {
     header: "Chat",
     newTaskTitle: "Start a new task",
-    cancel: "Cancel",
+    stop: "Stop",
     retry: "Retry",
   },
   newTask: {

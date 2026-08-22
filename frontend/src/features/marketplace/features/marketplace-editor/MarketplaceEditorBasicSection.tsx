@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { useI18n } from '@/shared/hooks/useI18n';
-import type { MarketplacePackageDetail, MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplacePackageDetail, MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 import {
   createMarketplaceRequiredDraftFromDetail,
   getStringField,
@@ -28,7 +28,7 @@ type MarketplaceRequiredEditorTab = 'form' | 'json';
 
 export interface MarketplaceEditorBasicSectionProps {
   mode: 'create' | 'edit';
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   packageId: string;
   displayName: string;
   description: string;
@@ -44,7 +44,7 @@ export interface MarketplaceEditorBasicSectionProps {
 
 export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSectionProps> = ({
   mode,
-  provider,
+  targetClient,
   packageId,
   displayName,
   description,
@@ -66,10 +66,10 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
     description: t('marketplace.editor.defaults.description'),
   }), [t]);
   const [draft, setDraft] = React.useState<MarketplaceRequiredDraft>(() => (
-    createMarketplaceRequiredDraftFromDetail(provider, detail, packageId, displayName, description, requiredDraftFallbacks)
+    createMarketplaceRequiredDraftFromDetail(targetClient, detail, packageId, displayName, description, requiredDraftFallbacks)
   ));
   const [readmeDraft, setReadmeDraft] = React.useState('');
-  const detailDraftIdentity = detail ? `${provider}:${detail.revision ?? ''}` : null;
+  const detailDraftIdentity = detail ? `${targetClient}:${detail.revision ?? ''}` : null;
   const initializedDetailDraftIdentityRef = React.useRef(detailDraftIdentity);
 
   React.useEffect(() => {
@@ -77,8 +77,8 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
     if (initializedDetailDraftIdentityRef.current === detailDraftIdentity) return;
 
     initializedDetailDraftIdentityRef.current = detailDraftIdentity;
-    setDraft(createMarketplaceRequiredDraftFromDetail(provider, detail, packageId, displayName, description, requiredDraftFallbacks));
-  }, [description, detail, detailDraftIdentity, displayName, packageId, provider, requiredDraftFallbacks]);
+    setDraft(createMarketplaceRequiredDraftFromDetail(targetClient, detail, packageId, displayName, description, requiredDraftFallbacks));
+  }, [description, detail, detailDraftIdentity, displayName, packageId, targetClient, requiredDraftFallbacks]);
 
   React.useEffect(() => {
     onRequiredDraftChange(draft);
@@ -88,16 +88,16 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
   const manifestFile = {
     'claude-code': '.claude-plugin/plugin.json',
     codex: '.codex-plugin/plugin.json',
-  }[provider];
-  const registryPath = `${provider}/plugins/${resolvedPackageId}`;
+  }[targetClient];
+  const registryPath = `${targetClient}/plugins/${resolvedPackageId}`;
 
   const updateRequiredDraft = (updates: Partial<MarketplaceRequiredDraft>) => {
     setDraft(prev => {
       const next = { ...prev, ...updates };
       return {
         ...next,
-        listingJson: mergeMarketplaceListingJson(provider, prev.listingJson, next),
-        manifestJson: mergeMarketplaceManifestJson(provider, prev.manifestJson, next),
+        listingJson: mergeMarketplaceListingJson(targetClient, prev.listingJson, next),
+        manifestJson: mergeMarketplaceManifestJson(targetClient, prev.manifestJson, next),
         listingJsonError: null,
         manifestJsonError: null,
       };
@@ -163,7 +163,7 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
 
         return {
           ...next,
-          listingJson: mergeMarketplaceListingJson(provider, stringifyMarketplaceJson(parsed), next),
+          listingJson: mergeMarketplaceListingJson(targetClient, stringifyMarketplaceJson(parsed), next),
         };
       }
 
@@ -173,7 +173,7 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
         onPackageIdChange(manifestName);
         onDisplayNameChange(manifestName);
       }
-      if (provider === 'codex' && manifestDescription !== prev.manifestDescription) {
+      if (targetClient === 'codex' && manifestDescription !== prev.manifestDescription) {
         onDescriptionChange(manifestDescription);
       }
 
@@ -196,19 +196,19 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <label className="text-sm font-semibold text-foreground">
-              {t('marketplace.editor.fields.provider')}
+              {t('marketplace.editor.fields.targetClient')}
             </label>
-            <Select value={provider} disabled>
+            <Select value={targetClient} disabled>
               <SelectTrigger className="cursor-not-allowed bg-muted">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="claude-code">{t('marketplace.providers.claude-code')}</SelectItem>
-                <SelectItem value="codex">{t('marketplace.providers.codex')}</SelectItem>
+                <SelectItem value="claude-code">{t('marketplace.targetClients.claude-code')}</SelectItem>
+                <SelectItem value="codex">{t('marketplace.targetClients.codex')}</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              {t('marketplace.editor.fields.providerHint')}
+              {t('marketplace.editor.fields.targetClientHint')}
             </p>
           </div>
 
@@ -266,7 +266,7 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
                   value={draft.marketplaceName}
                   hint={t('marketplace.editor.packageSections.fields.rootMetadataHint')}
                 />
-                {provider === 'claude-code' ? (
+                {targetClient === 'claude-code' ? (
                   <MarketplaceEditorReadonlyField
                     label={t('marketplace.editor.packageSections.fields.ownerName')}
                     value={draft.ownerName}
@@ -283,7 +283,7 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
                   value={draft.sourcePath}
                   onChange={value => updateRequiredDraft({ sourcePath: value })}
                 />
-                {provider === 'codex' ? (
+                {targetClient === 'codex' ? (
                   <>
                     <MarketplaceEditorEditableField
                       label={t('marketplace.editor.packageSections.fields.policyInstallation')}
@@ -302,14 +302,14 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
                     />
                   </>
                 ) : null}
-                {provider !== 'claude-code' ? (
+                {targetClient !== 'claude-code' ? (
                   <>
                     <MarketplaceEditorEditableField
                       label={t('marketplace.editor.packageSections.fields.version')}
                       value={draft.manifestVersion}
                       onChange={value => updateRequiredDraft({ manifestVersion: value })}
                     />
-                    {provider === 'codex' ? (
+                    {targetClient === 'codex' ? (
                       <div className="md:col-span-2">
                         <MarketplaceEditorTextAreaField
                           label={t('marketplace.editor.packageSections.fields.description')}
@@ -325,7 +325,7 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
             )}
             json={(
               <MarketplaceRequiredJsonDocuments
-                marketplaceFilePath={provider === 'codex' ? 'codex/.agents/plugins/marketplace.json' : 'claude-code/.claude-plugin/marketplace.json'}
+                marketplaceFilePath={targetClient === 'codex' ? 'codex/.agents/plugins/marketplace.json' : 'claude-code/.claude-plugin/marketplace.json'}
                 manifestFilePath={`${registryPath}/${manifestFile}`}
                 listingJson={draft.listingJson}
                 listingJsonError={draft.listingJsonError}

@@ -87,8 +87,8 @@ describe('MarketplaceModule', () => {
     expect(await screen.findByText('marketplace-center')).toBeInTheDocument();
   });
 
-  it('guards invalid provider package routes', async () => {
-    renderMarketplaceRoute('/marketplace/packages/unknown-provider/package-a/edit');
+  it('guards invalid targetClient package routes', async () => {
+    renderMarketplaceRoute('/marketplace/packages/unknown-targetClient/package-a/edit');
 
     expect(await screen.findByText('marketplace-center')).toBeInTheDocument();
     expect(screen.queryByText('marketplace-editor-edit')).not.toBeInTheDocument();

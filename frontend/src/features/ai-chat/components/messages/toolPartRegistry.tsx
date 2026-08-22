@@ -296,7 +296,7 @@ const BashToolPart: FC<ToolPartProps> = ({ parameters, status, result }) => {
       <Dialog open={viewerOpen} onOpenChange={(open) => open ? setViewerOpen(true) : closeViewer()}>
         <DialogContent
           aria-describedby={undefined}
-          className="h-dvh max-h-dvh w-screen max-w-none rounded-none sm:h-[80vh] sm:max-h-[80vh] sm:w-[min(64rem,90vw)] sm:max-w-[64rem] sm:rounded-lg"
+          className="flex h-dvh max-h-dvh w-screen max-w-none flex-col rounded-none sm:h-[80vh] sm:max-h-[80vh] sm:w-[min(64rem,90vw)] sm:max-w-[64rem] sm:rounded-lg"
         >
           <DialogHeader>
             <DialogHeading icon={Sparkles}>{t("aiChat.tool.preview.showAll")}</DialogHeading>

@@ -113,7 +113,7 @@ const deferred = <T,>() => {
 const buildPackageDetail = (
   overrides: Partial<MarketplacePackageDetail> = {},
 ): MarketplacePackageDetail => ({
-  provider: 'codex',
+  targetClient: 'codex',
   packageType: 'plugin',
   packageId: 'codex-toolkit',
   displayName: 'Codex Toolkit',
@@ -121,10 +121,8 @@ const buildPackageDetail = (
   description: 'Package description',
   category: 'coding',
   tags: [],
-  sourceType: 'created',
   indexedResourceNames: [],
   validationSeverity: 'none',
-  lifecycleStatus: 'draft',
   registryPath: 'codex/plugins/codex-toolkit',
   revision: 'rev1',
   updatedAt: '2026-06-26T00:00:00.000Z',
@@ -293,7 +291,7 @@ describe('MarketplaceFileResourcePage', () => {
             title="Files"
             resourceType="files"
             packageDetail={buildPackageDetail({
-              provider: 'claude-code',
+              targetClient: 'claude-code',
               packageId: 'claude-toolkit',
             })}
             onMutation={vi.fn()}

@@ -328,7 +328,7 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     identityGeneration,
     session,
   } = useMarketplaceResourceSession({
-    provider: packageDetail.provider,
+    targetClient: packageDetail.targetClient,
     packageId: packageDetail.packageId,
     resourceType,
   }, packageDetail.revision);
@@ -347,10 +347,10 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
 
   const listEntries = React.useCallback(async () => {
     const result = resourceType === 'skills'
-      ? await listSkillTree(packageDetail.provider, packageDetail.packageId)
-      : await listPackageFilesTree(packageDetail.provider, packageDetail.packageId);
+      ? await listSkillTree(packageDetail.targetClient, packageDetail.packageId)
+      : await listPackageFilesTree(packageDetail.targetClient, packageDetail.packageId);
     return sortEntries(toResourceEntries(resourceType, parseFileTree(result)));
-  }, [packageDetail.packageId, packageDetail.provider, resourceType]);
+  }, [packageDetail.packageId, packageDetail.targetClient, resourceType]);
 
   const loadEntries = React.useCallback(async (preferredPath?: string | null) => {
     setIsLoading(true);
@@ -398,7 +398,7 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     preferredPath: string | null | undefined,
   ) => {
     try {
-      const refreshedPackage = await getPackage(packageDetail.provider, packageDetail.packageId);
+      const refreshedPackage = await getPackage(packageDetail.targetClient, packageDetail.packageId);
       await onMutation({
         success: true,
         path: preferredPath ?? selectedPath ?? '',
@@ -418,7 +418,7 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     loadEntries,
     onMutation,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     queryClient,
     resourceType,
     selectedPath,
@@ -435,8 +435,8 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
           `file-content-reload:${path}`,
           () => (
             resourceType === 'skills'
-              ? loadSkillFile(packageDetail.provider, packageDetail.packageId, path)
-              : loadPackageFile(packageDetail.provider, packageDetail.packageId, path)
+              ? loadSkillFile(packageDetail.targetClient, packageDetail.packageId, path)
+              : loadPackageFile(packageDetail.targetClient, packageDetail.packageId, path)
           ),
         );
         setContentByPath((current) => ({ ...current, [path]: loaded.content }));
@@ -452,7 +452,7 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     fileTabs.tabs,
     identityGeneration,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     resourceType,
     session,
   ]);
@@ -479,13 +479,13 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     refreshTree: () => loadEntries(selectedPath),
     createEntry: (path: string, entryType: 'file' | 'directory', content: string) => runDestinationMutation(
       () => resourceType === 'skills'
-        ? createSkillEntry(packageDetail.provider, packageDetail.packageId, {
+        ? createSkillEntry(packageDetail.targetClient, packageDetail.packageId, {
             revision: session.revision,
             path,
             type: entryType,
             content: entryType === 'file' ? content : undefined,
           })
-        : createPackageFileEntry(packageDetail.provider, packageDetail.packageId, {
+        : createPackageFileEntry(packageDetail.targetClient, packageDetail.packageId, {
             revision: session.revision,
             path,
             type: entryType,
@@ -494,12 +494,12 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     ),
     moveEntry: (sourcePath: string, targetPath: string) => runDestinationMutation(
       () => resourceType === 'skills'
-        ? moveSkillEntry(packageDetail.provider, packageDetail.packageId, {
+        ? moveSkillEntry(packageDetail.targetClient, packageDetail.packageId, {
             revision: session.revision,
             previousPath: sourcePath,
             nextPath: targetPath,
           })
-        : movePackageFileEntry(packageDetail.provider, packageDetail.packageId, {
+        : movePackageFileEntry(packageDetail.targetClient, packageDetail.packageId, {
             revision: session.revision,
             previousPath: sourcePath,
             nextPath: targetPath,
@@ -507,14 +507,14 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     ),
     deleteEntry: (path: string, _recursive: boolean) => runDestinationMutation(
       () => resourceType === 'skills'
-        ? deleteSkillEntry(packageDetail.provider, packageDetail.packageId, path, session.revision)
-        : deletePackageFileEntry(packageDetail.provider, packageDetail.packageId, path, session.revision),
+        ? deleteSkillEntry(packageDetail.targetClient, packageDetail.packageId, path, session.revision)
+        : deletePackageFileEntry(packageDetail.targetClient, packageDetail.packageId, path, session.revision),
     ),
   }), [
     entries,
     loadEntries,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     resourceType,
     runDestinationMutation,
     selectedPath,
@@ -536,17 +536,17 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     () => resourceType === 'skills'
       ? composeFileConflictTransports(
           createMarketplaceSkillFileConflictTransport(
-            packageDetail.provider,
+            packageDetail.targetClient,
             packageDetail.packageId,
             session.revision,
           ),
           localFileConflictTransport,
         )
       : composeFileConflictTransports(
-          createMarketplaceFileConflictTransport(packageDetail.provider, packageDetail.packageId),
+          createMarketplaceFileConflictTransport(packageDetail.targetClient, packageDetail.packageId),
           localFileConflictTransport,
         ),
-    [localFileConflictTransport, packageDetail.packageId, packageDetail.provider, resourceType, session.revision],
+    [localFileConflictTransport, packageDetail.packageId, packageDetail.targetClient, resourceType, session.revision],
   );
   const destinationConflictRef = React.useRef<{ operation: 'create' | 'move'; sourcePath?: string } | null>(null);
   const fileConflictController = useFileConflictController({
@@ -627,8 +627,8 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
       `file-content:${path}`,
       () => (
         resourceType === 'skills'
-          ? loadSkillFile(packageDetail.provider, packageDetail.packageId, path)
-          : loadPackageFile(packageDetail.provider, packageDetail.packageId, path)
+          ? loadSkillFile(packageDetail.targetClient, packageDetail.packageId, path)
+          : loadPackageFile(packageDetail.targetClient, packageDetail.packageId, path)
       ),
     );
     setContentByPath((current) => ({
@@ -639,7 +639,7 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
   }, [
     identityGeneration,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     resourceType,
     session,
   ]);
@@ -724,13 +724,13 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
       () => (
         resourceType === 'skills'
           ? deleteSkillEntry(
-              packageDetail.provider,
+              packageDetail.targetClient,
               packageDetail.packageId,
               path,
               session.revision,
             )
           : deletePackageFileEntry(
-              packageDetail.provider,
+              packageDetail.targetClient,
               packageDetail.packageId,
               path,
               session.revision,
@@ -757,7 +757,7 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     applyMutation,
     fileTabs,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     resourceType,
     session,
   ]);
@@ -772,13 +772,13 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
           () => (
             resourceType === 'skills'
               ? deleteSkillEntry(
-                  packageDetail.provider,
+                  packageDetail.targetClient,
                   packageDetail.packageId,
                   path,
                   session.revision,
                 )
               : deletePackageFileEntry(
-                  packageDetail.provider,
+                  packageDetail.targetClient,
                   packageDetail.packageId,
                   path,
                   session.revision,
@@ -829,7 +829,7 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     loadEntries,
     onMutation,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     queryClient,
     resourceType,
     selectedPath,
@@ -885,11 +885,11 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     await applyMutation(
       () => (
         resourceType === 'skills'
-          ? saveSkillFile(packageDetail.provider, packageDetail.packageId, path, {
+          ? saveSkillFile(packageDetail.targetClient, packageDetail.packageId, path, {
               revision: session.revision,
               content,
             })
-          : savePackageFile(packageDetail.provider, packageDetail.packageId, path, {
+          : savePackageFile(packageDetail.targetClient, packageDetail.packageId, path, {
               revision: session.revision,
               content,
             })
@@ -908,7 +908,7 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
     applyMutation,
     entries,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     resourceType,
     session,
   ]);
@@ -926,7 +926,7 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
   }, [
     applyMutation,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     resourceType,
     session,
     fileConflictController,
@@ -943,7 +943,7 @@ export const MarketplaceFileResourcePage: React.FC<MarketplaceFileResourcePagePr
   }, [
     applyMutation,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     resourceType,
     session,
     fileConflictController,

@@ -124,8 +124,9 @@ export WORKSPACE_ID=<workspace-id>
 export WORKSPACE_RESOURCE=workspace-${WORKSPACE_ID}
 ```
 
-`AILERON_FULLNAME` 是 Helm chart fullname；預設為 `${RELEASE_NAME}-aileron`，若設定
-`fullnameOverride` 或 `nameOverride` 則使用實際渲染名稱。
+`AILERON_FULLNAME` 必須填入 Helm chart 實際渲染的 fullname。若有設定 `fullnameOverride`，該值優先；
+否則先以 `nameOverride`（未設定時為 chart name）決定名稱片段：當 release name 已包含該片段時，fullname
+就是 release name，其餘情況才是 `<release-name>-<effective-chart-name>`。不要固定附加 `-aileron`。
 
 依序檢查四層；上一層未通過時不要用下一層的重試掩蓋問題。
 
@@ -135,17 +136,18 @@ export WORKSPACE_RESOURCE=workspace-${WORKSPACE_ID}
 kubectl get workspace -n "${RELEASE_NAMESPACE}" "${WORKSPACE_RESOURCE}" \
   -o jsonpath='{.status.browserConnectivity}{"\n"}'
 kubectl logs -n "${RELEASE_NAMESPACE}" \
-  deployment/${RELEASE_NAME}-aileron-workspace-operator \
+  deployment/${AILERON_FULLNAME}-workspace-operator \
   --tail=200
 kubectl logs -n "${RELEASE_NAMESPACE}" \
-  deployment/${RELEASE_NAME}-aileron-workspace-manager \
+  deployment/${AILERON_FULLNAME}-workspace-manager \
   --tail=200
 ```
 
 以已登入的相同 actor 呼叫 `/api/v1/workspaces/${WORKSPACE_ID}/availability` 與
-`POST /api/v1/workspaces/${WORKSPACE_ID}/browser/access`。`pending`、`not_ready` 對應
-`409 BROWSER_CONNECTIVITY_NOT_READY`；具有有效 TTL 的 `degraded` 仍可核發 access；
-`unavailable` 或 admission 當下 evidence 已到期對應 `503 BROWSER_CONNECTIVITY_UNAVAILABLE`。
+`POST /api/v1/workspaces/${WORKSPACE_ID}/browser/access`。`ready`，或仍在有效 TTL 內且 admission
+projection 為 `allowed` 的 `degraded`，可核發 access；`pending`、`not_ready` 對應
+`409 BROWSER_CONNECTIVITY_NOT_READY`，admission 當下 evidence 已到期也會投影為 `not_ready`／
+`denied` 並回傳相同 409；只有 `unavailable` 對應 `503 BROWSER_CONNECTIVITY_UNAVAILABLE`。
 
 ### 2. Browser Pod backend probe
 
@@ -253,10 +255,10 @@ Docker admission 對應如下：
 
 | 狀態 | Browser access 行為 |
 | --- | --- |
-| `ready` | 核發 Browser access 與短效 TURN credential |
-| `degraded` 且 `expiresAt` 尚未到期 | 仍核發 access；依 frontend failure 追查 host agent／Gateway／TURN path |
-| `pending`／`not_ready` | `409 BROWSER_CONNECTIVITY_NOT_READY` |
-| `unavailable` 或 `expiresAt` 已到期 | `503 BROWSER_CONNECTIVITY_UNAVAILABLE` |
+| `ready` 且 admission projection 為 `allowed` | 核發 Browser access 與短效 TURN credential |
+| `degraded`、admission projection 為 `allowed` 且 `expiresAt` 尚未到期 | 仍核發 access；依 frontend failure 追查 host agent／Gateway／TURN path |
+| `pending`／`not_ready`，或 `expiresAt` 已到期 | `409 BROWSER_CONNECTIVITY_NOT_READY` |
+| `unavailable` | `503 BROWSER_CONNECTIVITY_UNAVAILABLE` |
 
 Runtime 測試應使用 `workspace-runtime/docker-compose.test.yml` 的 test service。Docker 模式的
 volume 與 Kubernetes PVC 職責不同，但 bootstrap 順序、TURN readiness preflight 與一次性

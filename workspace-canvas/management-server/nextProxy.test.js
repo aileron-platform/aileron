@@ -200,6 +200,8 @@ test("Next proxy preserves the stripped request path and forwarded prefix on Web
     const rawUpgrade = await upgradeObserved;
     assert.match(rawUpgrade, /^GET \/_next\/webpack-hmr\?page=%2F HTTP\/1\.1/m);
     assert.match(rawUpgrade.toLowerCase(), new RegExp(`x-forwarded-prefix: ${PREFIX}`));
+    assert.match(rawUpgrade.toLowerCase(), /\r\nconnection: upgrade\r\n/);
+    assert.match(rawUpgrade.toLowerCase(), /\r\nupgrade: websocket\r\n/);
     assert.doesNotMatch(rawUpgrade.toLowerCase(), /authorization:|cookie:|x-csrf-token:/);
   } finally {
     client.destroy();

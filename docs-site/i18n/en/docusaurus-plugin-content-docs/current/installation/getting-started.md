@@ -17,10 +17,12 @@ Local builds and startup use standard Docker interfaces. You do not need to go t
 
 ```bash
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 ```
 
-- `docker compose up` and `docker compose down` manage only the control-plane services in the root
+- The local workflow always merges `docker-compose.yml` with
+  `docker-compose.bundled-data-services.yml`. `docker compose up` and `docker compose down` manage only the control-plane services in the root
   Compose project. Manager controls Runtime, Browser, and Canvas dynamically for each Workspace.
 - `docker-bake.hcl` is the single source of truth for image build parameters and toolchain versions.
 - Dockerfiles declare only required build arguments and provide no numeric version defaults.
@@ -44,7 +46,7 @@ make start
 git clone <your-repo-url>
 cd aileron
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml up --remove-orphans --no-build -d
 ```
 
 ### macOS / Linux
@@ -53,7 +55,8 @@ docker compose up --remove-orphans --no-build -d
 git clone <your-repo-url>
 cd aileron
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 ```
 
 :::info Build time
@@ -63,7 +66,7 @@ The first startup builds every image and takes approximately 5–10 minutes.
 ## Check Control-Plane Service Status
 
 ```bash
-docker compose ps
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml ps
 ```
 
 Wait until all of these services are `healthy` before opening the Frontend:
@@ -84,13 +87,13 @@ authentication failure. Verify that Manager can reach external-provider Discover
 ### Windows PowerShell
 
 ```powershell
-docker compose down --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml down --remove-orphans
 ```
 
 ### macOS / Linux
 
 ```bash
-docker compose down --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml down --remove-orphans
 ```
 
 This stops only the control-plane services managed by the root Compose project and preserves volumes
@@ -104,9 +107,9 @@ The commands most often used by new contributors are:
 | Operation | Command |
 |------|------|
 | Build all local images | `docker buildx bake --load local` |
-| Start control-plane services | `docker compose up --remove-orphans --no-build -d` |
+| Start control-plane services | `make start` |
 | Stop non-destructively and preserve data | `make down` |
-| Follow all control-plane logs | `docker compose logs -f` |
+| Follow all control-plane logs | `docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml logs -f` |
 
 For the complete command set, including local builds, full reset, test reuse, and individual service logs, see [Docker Deployment → Common Commands](./docker.md#common-commands).
 
@@ -136,14 +139,15 @@ After a full reset, rebuild and start with the same standard Docker commands.
 
 ```powershell
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml up --remove-orphans --no-build -d
 ```
 
 ### macOS / Linux
 
 ```bash
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 ```
 
 ## Local Module Development
@@ -152,7 +156,8 @@ Docker Compose is Aileron's default local development environment. Start the con
 
 ```bash
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 ```
 
 Platform modules and dynamic Runtimes mount their corresponding development directories, so built-in reload mechanisms usually reflect changes:
@@ -167,9 +172,9 @@ Run `docker buildx bake --load local` again only after changing a Dockerfile, `d
 To inspect individual service status or follow whether changes take effect:
 
 ```bash
-docker compose ps
-docker compose logs -f workspace-manager
-docker compose logs -f frontend
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml ps
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml logs -f workspace-manager
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml logs -f frontend
 docker logs -f workspace-runtime-<workspace-id>
 ```
 

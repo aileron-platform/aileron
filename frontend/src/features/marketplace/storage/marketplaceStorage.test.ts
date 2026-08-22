@@ -17,39 +17,39 @@ describe('marketplaceStorage', () => {
 
   it('sanitizes persisted center filters and restores valid view mode', () => {
     window.localStorage.setItem('marketplace.center.filters.v1:local-user', JSON.stringify({
-      provider: 'unknown-provider',
+      targetClient: 'unknown-targetClient',
       category: '',
       features: ['mcp', 'unknown-feature', 'skills'],
     }));
     window.localStorage.setItem('marketplace.center.viewMode.v1:local-user', 'list');
 
     expect(loadMarketplaceCenterFilters('local-user')).toEqual({
-      provider: 'all',
+      targetClient: 'all',
       category: 'all',
       features: ['mcp', 'skills'],
     });
     expect(loadMarketplaceCenterViewMode('local-user')).toBe('list');
 
     saveMarketplaceCenterFilters('local-user', {
-      provider: 'codex',
+      targetClient: 'codex',
       category: 'productivity',
       features: ['hooks'],
     });
     saveMarketplaceCenterViewMode('local-user', 'grid');
 
     expect(loadMarketplaceCenterFilters('local-user')).toEqual({
-      provider: 'codex',
+      targetClient: 'codex',
       category: 'productivity',
       features: ['hooks'],
     });
     expect(loadMarketplaceCenterViewMode('local-user')).toBe('grid');
 
     window.localStorage.setItem('marketplace.center.filters.v1:local-user', JSON.stringify({
-      provider: 'gemini',
+      targetClient: 'gemini',
       category: 'productivity',
       features: ['hooks'],
     }));
-    expect(loadMarketplaceCenterFilters('local-user').provider).toBe('all');
+    expect(loadMarketplaceCenterFilters('local-user').targetClient).toBe('all');
   });
 
   it('resolves install workspace by current workspace, remembered workspace, then fallback', () => {

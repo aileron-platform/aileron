@@ -122,9 +122,10 @@ export const ChatWorkbench = ({
         if (!selectedThreadId) return;
         thread.removeQueuedMessage.mutate({ targetThreadId: selectedThreadId, queuedMessageId });
       }}
-      onCancel={() => {
-        if (selectedThreadId) thread.cancel.mutate(selectedThreadId);
+      onStop={() => {
+        if (selectedThreadId) thread.stop.mutate(selectedThreadId);
       }}
+      isStopping={thread.stop.isPending}
       onRetry={() => {
         if (selectedThreadId) thread.retry.mutate(selectedThreadId);
       }}

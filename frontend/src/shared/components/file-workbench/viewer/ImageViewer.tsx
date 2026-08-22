@@ -9,6 +9,8 @@ import type { FileViewerWorkbenchAdapter } from './types';
 
 const logger = createLogger('ImageViewer');
 
+type ImageLoadError = 'unavailable' | 'error' | null;
+
 interface ImageViewerProps {
   filePath: string;
   fileName: string;
@@ -31,34 +33,39 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const currentBlobUrlRef = useRef<string | null>(null);
+  const readBlobRef = useRef(adapter.readBlob);
+  readBlobRef.current = adapter.readBlob;
+  const canReadBlob = Boolean(adapter.readBlob);
   const [imageUrl, setImageUrl] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<ImageLoadError>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
 
   useEffect(() => {
-    let isMounted = true;
+    let isCurrentLoad = true;
+
+    if (currentBlobUrlRef.current) {
+      URL.revokeObjectURL(currentBlobUrlRef.current);
+      currentBlobUrlRef.current = null;
+    }
+    setImageUrl('');
+    setError(null);
 
     const loadImage = async () => {
-      if (!adapter.readBlob) {
-        setError(t(`${i18nBase}.unavailable`));
+      const readBlob = readBlobRef.current;
+      if (!canReadBlob || !readBlob) {
+        setError('unavailable');
         setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
-      setError('');
-
-      if (currentBlobUrlRef.current) {
-        URL.revokeObjectURL(currentBlobUrlRef.current);
-        currentBlobUrlRef.current = null;
-      }
 
       try {
-        const blob = await adapter.readBlob(filePath);
+        const blob = await readBlob(filePath);
         const blobUrl = URL.createObjectURL(blob);
-        if (isMounted) {
+        if (isCurrentLoad) {
           currentBlobUrlRef.current = blobUrl;
           setImageUrl(blobUrl);
           setIsLoading(false);
@@ -67,8 +74,8 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         }
       } catch (loadError) {
         logger.error('Failed to load image', { error: loadError });
-        if (isMounted) {
-          setError(t(`${i18nBase}.error`));
+        if (isCurrentLoad) {
+          setError('error');
           setIsLoading(false);
         }
       }
@@ -77,9 +84,9 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
     void loadImage();
 
     return () => {
-      isMounted = false;
+      isCurrentLoad = false;
     };
-  }, [adapter, filePath, i18nBase, t]);
+  }, [canReadBlob, filePath]);
 
   useEffect(() => () => {
     if (currentBlobUrlRef.current) {
@@ -88,14 +95,14 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
     }
   }, []);
 
-  const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
+  const handleImageLoad = () => {
     setIsLoading(false);
-    setError('');
+    setError(null);
   };
 
   const handleImageError = (event: React.SyntheticEvent<HTMLImageElement>) => {
     logger.error('Image failed to load', { src: event.currentTarget.src });
-    setError(t(`${i18nBase}.error`));
+    setError('error');
     setIsLoading(false);
   };
 
@@ -204,7 +211,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
           <div className="flex h-full items-center justify-center">
             <div className="text-center">
               <AlertCircle className="mx-auto mb-4 h-12 w-12 text-destructive opacity-50" />
-              <p className="text-sm text-muted-foreground">{error}</p>
+              <p className="text-sm text-muted-foreground">{t(`${i18nBase}.${error}`)}</p>
             </div>
           </div>
         ) : isLoading ? (

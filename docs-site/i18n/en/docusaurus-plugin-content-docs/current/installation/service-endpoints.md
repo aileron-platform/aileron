@@ -24,13 +24,12 @@ Frontend's gateway accepts only a canonical Workspace UUID and the fixed `runtim
 | Service | URL | Description |
 | --- | --- | --- |
 | Aileron | `http://localhost:8082` | Sole browser entry point |
-| Draw.io | `http://localhost:8082/draw/` | Local diagramming tool served through the Aileron same-origin gateway |
 | Connectivity Gateway | `http://localhost:18083` | Evidence endpoint for the host frontend vantage, not a public Manager API |
 | Coturn | `turn:localhost:3478` | TURN control listener; the profile owns the relay range |
 
 ## Sign-in
 
-The external OIDC Provider owns sign-in credentials. Docker and Kubernetes configure the canonical issuer and Manager confidential client. Bootstrap administration creates only a local role snapshot and never creates a Provider password.
+The selected Identity adapter owns sign-in credentials. Docker and Kubernetes configure the canonical issuer and Manager confidential client. Bundled Keycloak native users are managed through the Keycloak Admin Console. Aileron bootstrap administration creates only a local role snapshot and never creates a Provider password.
 
 ## Workspace health
 

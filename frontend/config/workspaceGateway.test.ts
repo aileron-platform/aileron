@@ -28,6 +28,7 @@ describe('resolveWorkspaceGatewayRequest', () => {
     [`/workspaces/${WORKSPACE_ID}/runtime/api/v1/health`, `http://workspace-runtime-${WORKSPACE_ID}:3002`, '/api/v1/health'],
     [`/workspaces/${WORKSPACE_ID}/runtime/ws/terminal`, `http://workspace-runtime-${WORKSPACE_ID}:3004`, '/ws/terminal'],
     [`/workspaces/${WORKSPACE_ID}/browser/ws`, `http://workspace-browser-${WORKSPACE_ID}:6080`, '/ws'],
+    [`/workspaces/${WORKSPACE_ID}/canvas/?lang=zh-TW`, `http://workspace-canvas-${WORKSPACE_ID}:3003`, '/?lang=zh-TW'],
     [`/workspaces/${WORKSPACE_ID}/canvas/slides/1`, `http://workspace-canvas-${WORKSPACE_ID}:3003`, '/slides/1'],
   ])('maps %s to a fixed internal target', (path, target, rewrittenPath) => {
     const component = path.split('/')[3];
@@ -55,7 +56,10 @@ describe('resolveWorkspaceGatewayRequest', () => {
     `/workspaces/workspace-1/runtime/api/v1/health`,
     `/workspaces/${WORKSPACE_ID}/unknown/api/v1/health`,
     `/workspaces/${WORKSPACE_ID}/runtime`,
+    `/workspaces/${WORKSPACE_ID}/runtime/`,
     `/workspaces/${WORKSPACE_ID}/browser`,
+    `/workspaces/${WORKSPACE_ID}/browser/`,
+    `/workspaces/${WORKSPACE_ID}/canvas`,
   ])('does not proxy invalid or SPA-only paths: %s', (path) => {
     expect(resolveWorkspaceGatewayRequest(path)).toBeNull();
   });
@@ -73,7 +77,7 @@ describe('resolveWorkspaceGatewayRequest', () => {
 
   it.each(['browser', 'canvas'])('removes every platform credential from %s', (target) => {
     expect(workspaceGatewayCredentialHeaders(
-      `/workspaces/${WORKSPACE_ID}/${target}/`,
+      `/workspaces/${WORKSPACE_ID}/${target}/health`,
     )).toEqual([
       'authorization',
       'cookie',
@@ -110,7 +114,7 @@ describe('resolveWorkspaceGatewayRequest', () => {
     });
 
     const browserRequest = createRequest(
-      `/workspaces/${WORKSPACE_ID}/browser/`,
+      `/workspaces/${WORKSPACE_ID}/browser/ws`,
       'aileron_workspace_gateway_session=gateway-handle',
     );
     removeWorkspaceGatewayCredentials(browserRequest);
@@ -124,7 +128,7 @@ describe('authorizeWorkspaceGatewayRequest', () => {
 
     const authorized = await authorizeWorkspaceGatewayRequest(
       createRequest(
-        `/workspaces/${WORKSPACE_ID}/canvas/`,
+        `/workspaces/${WORKSPACE_ID}/canvas/health`,
         'theme=dark; aileron_workspace_gateway_session=gateway-handle; aileron_session=attacker-session',
       ),
       {
@@ -172,7 +176,7 @@ describe('authorizeWorkspaceGatewayRequest', () => {
 
     await expect(authorizeWorkspaceGatewayRequest(
       createRequest(
-        `/workspaces/${WORKSPACE_ID}/browser/`,
+        `/workspaces/${WORKSPACE_ID}/browser/health`,
         'aileron_workspace_gateway_session=gateway-handle',
       ),
       { fetchImpl, managerTarget: 'http://workspace-manager:3001' },
@@ -184,7 +188,7 @@ describe('authorizeWorkspaceGatewayRequest', () => {
 
     await expect(authorizeWorkspaceGatewayRequest(
       createRequest(
-        `/workspaces/${WORKSPACE_ID}/canvas/`,
+        `/workspaces/${WORKSPACE_ID}/canvas/health`,
         'aileron_workspace_gateway_session=gateway-handle',
       ),
       { fetchImpl, managerTarget: 'http://workspace-manager:3001' },

@@ -99,9 +99,18 @@ These APIs manage agent settings inside a Workspace, including rules, hooks, MCP
 | `PUT` | `/api/v1/workspaces/{workspace_id}/{tool}/mcp-servers/{scope}/{server_name}` | Update an MCP server |
 | `GET` | `/api/v1/workspaces/{workspace_id}/{tool}/skills/tree` | Get the skills file tree |
 | `GET` | `/api/v1/workspaces/{workspace_id}/{tool}/slash-commands` | List slash commands |
+| `GET` | `/api/v1/workspaces/{workspace_id}/cli-settings/{tool}/prompt-invocations` | Get an invocation-ready Commands and Skills catalog |
 
 `tool` is `claude-code`, `codex`, or `opencode`. Supported scopes and writable resources vary
 by provider; use the current Runtime OpenAPI document for complete request and response schemas.
+
+The prompt invocation catalog is the shared read contract for AI Chat and Automation. Runtime
+aggregates Commands and Skills for the selected tool and returns formatted `invocation` values,
+stable item IDs, available scopes, a content revision, and source errors. A partial source failure
+returns `200` with `completeness: degraded`; a failure of every source returns `503`. Runtime
+revalidates sources for every request instead of reusing a cached source inventory. Prompt
+Invocation Pickers reload the catalog whenever they open, and Picker consumers use the
+Runtime-owned `invocation` without formatting it themselves.
 
 Raw settings, MCP environment variables, HTTP headers, API keys, and tokens are sensitive settings. Their reads and writes always use the `workspace_settings` action; general `runtime_read` or `agent` authorization cannot expose those values.
 
@@ -121,7 +130,7 @@ Thread metadata and history are separate. History uses only the Message Item tim
 | `POST` | `/api/v1/threads/{thread_id}/timeline/items/batch-get` | Refresh up to 200 known timeline items |
 | `GET` | `/api/v1/threads/{thread_id}/messages/{message_id}/tool-result` | Load a complete tool result on demand |
 | `POST` | `/api/v1/threads/{thread_id}/questions/{message_id}/answer` | Answer an interactive question |
-| `POST` | `/api/v1/threads/{thread_id}/cancel` | Cancel execution |
+| `POST` | `/api/v1/threads/{thread_id}/stop` | Stop the current Turn; starts the next queued message if one is waiting, otherwise the thread ends as canceled |
 | `POST` | `/api/v1/threads/{thread_id}/retry` | Retry a thread |
 | `POST` | `/api/v1/threads/{thread_id}/archive` | Archive a thread |
 | `GET` | `/api/v1/threads/{thread_id}/attachments` | List attachments |
@@ -205,9 +214,6 @@ Canvas endpoints are scoped to a Workspace under `/api/v1/workspaces/{workspace_
 
 | Method | Path | Description |
 |--------|------|------|
-| `GET` | `/api/v1/drawio/viewer` | Read draw.io file content for viewing |
-| `POST` | `/api/v1/drawio/save` | Save a draw.io file |
-| `GET` | `/api/v1/drawio/availability` | Get Draw.io integration availability |
 | `POST` | `/api/v1/audio/transcriptions` | Transcribe audio to text |
 
 ## Client Browser Relay
@@ -265,19 +271,22 @@ The Client Browser Relay proxies CDP (Chrome DevTools Protocol) connections betw
 | `/api/v1/threads/{thread_id}/messages` | `POST` | `agent` | `3020` | No | `POST` `/api/v1/threads/{thread_id}/messages` maps to `agent`; sensitive: No. |
 | `/api/v1/threads/{thread_id}/timeline` | `GET` | `agent` | `3020` | No | `GET` `/api/v1/threads/{thread_id}/timeline` maps to `agent`; sensitive: No. |
 | `/api/v1/threads/{thread_id}/archive` | `POST` | `agent` | `3019` | No | `POST` `/api/v1/threads/{thread_id}/archive` maps to `agent`; sensitive: No. |
-| `/api/v1/threads/{thread_id}/cancel` | `POST` | `agent` | `3018` | No | `POST` `/api/v1/threads/{thread_id}/cancel` maps to `agent`; sensitive: No. |
 | `/api/v1/threads/{thread_id}/submit` | `POST` | `agent` | `3018` | No | `POST` `/api/v1/threads/{thread_id}/submit` maps to `agent`; sensitive: No. |
 | `/api/v1/threads/draft` | `POST` | `agent` | `3017` | No | `POST` `/api/v1/threads/draft` maps to `agent`; sensitive: No. |
 | `/api/v1/threads/{thread_id}/draft` | `PATCH` | `agent` | `3017` | No | `PATCH` `/api/v1/threads/{thread_id}/draft` maps to `agent`; sensitive: No. |
 | `/api/v1/threads/{thread_id}/retry` | `POST` | `agent` | `3017` | No | `POST` `/api/v1/threads/{thread_id}/retry` maps to `agent`; sensitive: No. |
+| `/api/v1/threads/{thread_id}/stop` | `POST` | `agent` | `3016` | No | `POST` `/api/v1/threads/{thread_id}/stop` maps to `agent`; sensitive: No. |
 | `/api/v1/threads` | `GET` | `agent` | `3012` | No | `GET` `/api/v1/threads` maps to `agent`; sensitive: No. |
 | `/api/v1/threads/{thread_id}` | `DELETE`, `GET` | `agent` | `3012` | No | `DELETE`, `GET` `/api/v1/threads/{thread_id}` maps to `agent`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/version-control/conflicts/mark-resolved` | `POST` | `runtime_write` | `2052` | No | `POST` `/api/v1/workspaces/{workspace_id}/version-control/conflicts/mark-resolved` maps to `runtime_write`; sensitive: No. |
+| `/api/v1/workspaces/{workspace_id}/claude-code/skills/conflicts/preflight` | `POST` | `runtime_write` | `2050` | No | `POST` `/api/v1/workspaces/{workspace_id}/claude-code/skills/conflicts/preflight` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}/content` | `DELETE`, `PUT` | `runtime_write` | `2047` | No | `DELETE`, `PUT` `/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}/content` maps to `runtime_write`; sensitive: No. |
+| `/api/v1/workspaces/{workspace_id}/opencode/skills/conflicts/preflight` | `POST` | `runtime_write` | `2047` | No | `POST` `/api/v1/workspaces/{workspace_id}/opencode/skills/conflicts/preflight` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/version-control/branches/publish` | `POST` | `runtime_write` | `2045` | No | `POST` `/api/v1/workspaces/{workspace_id}/version-control/branches/publish` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/version-control/operation/cancel` | `POST` | `runtime_write` | `2045` | No | `POST` `/api/v1/workspaces/{workspace_id}/version-control/operation/cancel` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/version-control/remote-branches` | `POST` | `runtime_write` | `2045` | No | `POST` `/api/v1/workspaces/{workspace_id}/version-control/remote-branches` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/claude-code/skills/batch-delete` | `POST` | `runtime_write` | `2044` | No | `POST` `/api/v1/workspaces/{workspace_id}/claude-code/skills/batch-delete` maps to `runtime_write`; sensitive: No. |
+| `/api/v1/workspaces/{workspace_id}/codex/skills/conflicts/preflight` | `POST` | `runtime_write` | `2044` | No | `POST` `/api/v1/workspaces/{workspace_id}/codex/skills/conflicts/preflight` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/opencode/slash-commands/{scope}/content` | `DELETE`, `PUT` | `runtime_write` | `2044` | No | `DELETE`, `PUT` `/api/v1/workspaces/{workspace_id}/opencode/slash-commands/{scope}/content` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/version-control/branches/create` | `POST` | `runtime_write` | `2044` | No | `POST` `/api/v1/workspaces/{workspace_id}/version-control/branches/create` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/version-control/branches/delete` | `POST` | `runtime_write` | `2044` | No | `POST` `/api/v1/workspaces/{workspace_id}/version-control/branches/delete` maps to `runtime_write`; sensitive: No. |
@@ -361,10 +370,12 @@ The Client Browser Relay proxies CDP (Chrome DevTools Protocol) connections betw
 | `/api/v1/files/content` | `PUT` | `runtime_write` | `2017` | No | `PUT` `/api/v1/files/content` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/files/extract` | `POST` | `runtime_write` | `2017` | No | `POST` `/api/v1/files/extract` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/files/upload` | `POST` | `runtime_write` | `2016` | No | `POST` `/api/v1/files/upload` maps to `runtime_write`; sensitive: No. |
-| `/api/v1/drawio/save` | `POST` | `runtime_write` | `2015` | No | `POST` `/api/v1/drawio/save` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/files/paste` | `POST` | `runtime_write` | `2015` | No | `POST` `/api/v1/files/paste` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/files/move` | `POST` | `runtime_write` | `2014` | No | `POST` `/api/v1/files/move` maps to `runtime_write`; sensitive: No. |
 | `/api/v1/files` | `DELETE`, `POST` | `runtime_write` | `2010` | No | `DELETE`, `POST` `/api/v1/files` maps to `runtime_write`; sensitive: No. |
+| `/api/v1/workspaces/{workspace_id}/cli-settings/claude-code/prompt-invocations` | `GET` | `runtime_read` | `1056` | No | `GET` `/api/v1/workspaces/{workspace_id}/cli-settings/claude-code/prompt-invocations` maps to `runtime_read`; sensitive: No. |
+| `/api/v1/workspaces/{workspace_id}/cli-settings/opencode/prompt-invocations` | `GET` | `runtime_read` | `1053` | No | `GET` `/api/v1/workspaces/{workspace_id}/cli-settings/opencode/prompt-invocations` maps to `runtime_read`; sensitive: No. |
+| `/api/v1/workspaces/{workspace_id}/cli-settings/codex/prompt-invocations` | `GET` | `runtime_read` | `1050` | No | `GET` `/api/v1/workspaces/{workspace_id}/cli-settings/codex/prompt-invocations` maps to `runtime_read`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}/content` | `GET` | `runtime_read` | `1047` | No | `GET` `/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}/content` maps to `runtime_read`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/version-control/operation-status` | `GET` | `runtime_read` | `1046` | No | `GET` `/api/v1/workspaces/{workspace_id}/version-control/operation-status` maps to `runtime_read`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/claude-code/skills/tree/children` | `GET` | `runtime_read` | `1044` | No | `GET` `/api/v1/workspaces/{workspace_id}/claude-code/skills/tree/children` maps to `runtime_read`; sensitive: No. |
@@ -436,12 +447,10 @@ The Client Browser Relay proxies CDP (Chrome DevTools Protocol) connections betw
 | `/api/v1/workspaces/{workspace_id}/codex/apps` | `GET` | `runtime_read` | `1024` | No | `GET` `/api/v1/workspaces/{workspace_id}/codex/apps` maps to `runtime_read`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/codex/apps/{app_name:path}` | `GET` | `runtime_read` | `1024` | No | `GET` `/api/v1/workspaces/{workspace_id}/codex/apps/{app_name:path}` maps to `runtime_read`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/codex/{resource}/file` | `GET` | `runtime_read` | `1024` | No | `GET` `/api/v1/workspaces/{workspace_id}/codex/{resource}/file` maps to `runtime_read`; sensitive: No. |
-| `/api/v1/drawio/availability` | `GET` | `runtime_read` | `1023` | No | `GET` `/api/v1/drawio/availability` maps to `runtime_read`; sensitive: No. |
 | `/api/v1/files/tree/children` | `GET` | `runtime_read` | `1022` | No | `GET` `/api/v1/files/tree/children` maps to `runtime_read`; sensitive: No. |
 | `/api/v1/workspaces/{workspace_id}/codex` | `GET` | `runtime_read` | `1020` | No | `GET` `/api/v1/workspaces/{workspace_id}/codex` maps to `runtime_read`; sensitive: No. |
 | `/docs/oauth2-redirect` | `GET`, `HEAD` | `runtime_read` | `1019` | No | `GET`, `HEAD` `/docs/oauth2-redirect` maps to `runtime_read`; sensitive: No. |
 | `/api/v1/files/download` | `GET` | `runtime_read` | `1018` | No | `GET` `/api/v1/files/download` maps to `runtime_read`; sensitive: No. |
-| `/api/v1/drawio/viewer` | `GET` | `runtime_read` | `1017` | No | `GET` `/api/v1/drawio/viewer` maps to `runtime_read`; sensitive: No. |
 | `/api/v1/files/archive/{operation_id}` | `GET` | `runtime_read` | `1017` | No | `GET` `/api/v1/files/archive/{operation_id}` maps to `runtime_read`; sensitive: No. |
 | `/api/v1/files/content` | `GET` | `runtime_read` | `1017` | No | `GET` `/api/v1/files/content` maps to `runtime_read`; sensitive: No. |
 | `/api/v1/files/history` | `GET` | `runtime_read` | `1017` | No | `GET` `/api/v1/files/history` maps to `runtime_read`; sensitive: No. |

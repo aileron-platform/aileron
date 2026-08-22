@@ -36,21 +36,15 @@ export const getMarketplaceActionTextKeys = (
 export const buildMarketplaceExportRequest = (
   item: MarketplacePackageSummary,
 ): MarketplaceExportRequest => ({
-  provider: item.provider,
+  targetClient: item.targetClient,
+  packageFormat: item.packageFormat,
   packageId: item.packageId,
-  revision: item.revision,
 });
 
 export const buildMarketplaceDeleteRequest = (
   item: MarketplacePackageSummary,
 ): MarketplaceDeleteRequest => ({
-  provider: item.provider,
+  targetClient: item.targetClient,
+  packageFormat: item.packageFormat,
   packageId: item.packageId,
-  revision: item.revision,
 });
-
-export const isMarketplaceDeleteBlocked = (
-  actionType: MarketplacePackageActionType,
-  confirmText: string,
-  packageId: string,
-) => actionType === 'delete' && confirmText !== packageId;

@@ -97,9 +97,17 @@ GET /health
 | `PUT` | `/api/v1/workspaces/{workspace_id}/{tool}/mcp-servers/{scope}/{server_name}` | 更新 MCP server |
 | `GET` | `/api/v1/workspaces/{workspace_id}/{tool}/skills/tree` | 取得 skills 檔案樹 |
 | `GET` | `/api/v1/workspaces/{workspace_id}/{tool}/slash-commands` | 列出 slash commands |
+| `GET` | `/api/v1/workspaces/{workspace_id}/cli-settings/{tool}/prompt-invocations` | 取得可直接送出的 Commands 與 Skills invocation catalog |
 
 `tool` 使用 `claude-code`、`codex` 或 `opencode`；各 provider 支援的 scope 與可寫資源
 不同，完整 request／response schema 以目前 Runtime OpenAPI 為準。
+
+Prompt invocation catalog 是 AI Chat 與 Automation 共用的唯讀契約。Runtime 會依指定工具
+聚合 Commands 與 Skills，並回傳已格式化的 `invocation`、穩定項目 ID、可用 scope、內容
+revision 與來源錯誤。部分來源失敗時回傳 `200` 與 `completeness: degraded`；所有來源都
+無法讀取時回傳 `503`。Runtime 每次請求都重新驗證來源，不沿用來源清單快取；Prompt
+Invocation Picker 每次開啟都重新載入 catalog，且 Picker 消費端原樣使用 Runtime 回傳的
+`invocation`，不自行拼接命令格式。
 
 Raw settings、MCP environment variables、HTTP headers、API key 與 token 都屬敏感設定，讀寫一律使用 `workspace_settings` action；一般 `runtime_read` 或 `agent` action 不能讀取這些值。
 
@@ -119,7 +127,7 @@ Thread metadata 與 history 分離；history 只使用 Message Item timeline。�
 | `POST` | `/api/v1/threads/{thread_id}/timeline/items/batch-get` | 批次刷新最多 200 個已知 timeline items |
 | `GET` | `/api/v1/threads/{thread_id}/messages/{message_id}/tool-result` | 依需要讀取完整 tool result |
 | `POST` | `/api/v1/threads/{thread_id}/questions/{message_id}/answer` | 回答互動式問題 |
-| `POST` | `/api/v1/threads/{thread_id}/cancel` | 取消執行 |
+| `POST` | `/api/v1/threads/{thread_id}/stop` | 停止目前 Turn；有排隊訊息時接續下一則，否則 thread 結束為 canceled |
 | `POST` | `/api/v1/threads/{thread_id}/retry` | 重試 thread |
 | `POST` | `/api/v1/threads/{thread_id}/archive` | 封存 thread |
 | `GET` | `/api/v1/threads/{thread_id}/attachments` | 列出附件 |
@@ -208,9 +216,6 @@ Canvas 端點皆掛在 Workspace 底下（`/api/v1/workspaces/{workspace_id}/can
 
 | Method | 路徑 | 說明 |
 |--------|------|------|
-| `GET` | `/api/v1/drawio/viewer` | 讀取 draw.io 檔案內容供檢視 |
-| `POST` | `/api/v1/drawio/save` | 儲存 draw.io 檔案 |
-| `GET` | `/api/v1/drawio/availability` | 取得 Draw.io 整合可用狀態 |
 | `POST` | `/api/v1/audio/transcriptions` | 語音轉文字 |
 
 ## Client Browser Relay
@@ -268,19 +273,22 @@ Canvas 端點皆掛在 Workspace 底下（`/api/v1/workspaces/{workspace_id}/can
 | `/api/v1/threads/{thread_id}/messages` | `POST` | `agent` | `3020` | 否 | `POST` `/api/v1/threads/{thread_id}/messages` 對應 `agent`；敏感路由：否。 |
 | `/api/v1/threads/{thread_id}/timeline` | `GET` | `agent` | `3020` | 否 | `GET` `/api/v1/threads/{thread_id}/timeline` 對應 `agent`；敏感路由：否。 |
 | `/api/v1/threads/{thread_id}/archive` | `POST` | `agent` | `3019` | 否 | `POST` `/api/v1/threads/{thread_id}/archive` 對應 `agent`；敏感路由：否。 |
-| `/api/v1/threads/{thread_id}/cancel` | `POST` | `agent` | `3018` | 否 | `POST` `/api/v1/threads/{thread_id}/cancel` 對應 `agent`；敏感路由：否。 |
 | `/api/v1/threads/{thread_id}/submit` | `POST` | `agent` | `3018` | 否 | `POST` `/api/v1/threads/{thread_id}/submit` 對應 `agent`；敏感路由：否。 |
 | `/api/v1/threads/draft` | `POST` | `agent` | `3017` | 否 | `POST` `/api/v1/threads/draft` 對應 `agent`；敏感路由：否。 |
 | `/api/v1/threads/{thread_id}/draft` | `PATCH` | `agent` | `3017` | 否 | `PATCH` `/api/v1/threads/{thread_id}/draft` 對應 `agent`；敏感路由：否。 |
 | `/api/v1/threads/{thread_id}/retry` | `POST` | `agent` | `3017` | 否 | `POST` `/api/v1/threads/{thread_id}/retry` 對應 `agent`；敏感路由：否。 |
+| `/api/v1/threads/{thread_id}/stop` | `POST` | `agent` | `3016` | 否 | `POST` `/api/v1/threads/{thread_id}/stop` 對應 `agent`；敏感路由：否。 |
 | `/api/v1/threads` | `GET` | `agent` | `3012` | 否 | `GET` `/api/v1/threads` 對應 `agent`；敏感路由：否。 |
 | `/api/v1/threads/{thread_id}` | `DELETE`, `GET` | `agent` | `3012` | 否 | `DELETE`, `GET` `/api/v1/threads/{thread_id}` 對應 `agent`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/version-control/conflicts/mark-resolved` | `POST` | `runtime_write` | `2052` | 否 | `POST` `/api/v1/workspaces/{workspace_id}/version-control/conflicts/mark-resolved` 對應 `runtime_write`；敏感路由：否。 |
+| `/api/v1/workspaces/{workspace_id}/claude-code/skills/conflicts/preflight` | `POST` | `runtime_write` | `2050` | 否 | `POST` `/api/v1/workspaces/{workspace_id}/claude-code/skills/conflicts/preflight` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}/content` | `DELETE`, `PUT` | `runtime_write` | `2047` | 否 | `DELETE`, `PUT` `/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}/content` 對應 `runtime_write`；敏感路由：否。 |
+| `/api/v1/workspaces/{workspace_id}/opencode/skills/conflicts/preflight` | `POST` | `runtime_write` | `2047` | 否 | `POST` `/api/v1/workspaces/{workspace_id}/opencode/skills/conflicts/preflight` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/version-control/branches/publish` | `POST` | `runtime_write` | `2045` | 否 | `POST` `/api/v1/workspaces/{workspace_id}/version-control/branches/publish` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/version-control/operation/cancel` | `POST` | `runtime_write` | `2045` | 否 | `POST` `/api/v1/workspaces/{workspace_id}/version-control/operation/cancel` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/version-control/remote-branches` | `POST` | `runtime_write` | `2045` | 否 | `POST` `/api/v1/workspaces/{workspace_id}/version-control/remote-branches` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/claude-code/skills/batch-delete` | `POST` | `runtime_write` | `2044` | 否 | `POST` `/api/v1/workspaces/{workspace_id}/claude-code/skills/batch-delete` 對應 `runtime_write`；敏感路由：否。 |
+| `/api/v1/workspaces/{workspace_id}/codex/skills/conflicts/preflight` | `POST` | `runtime_write` | `2044` | 否 | `POST` `/api/v1/workspaces/{workspace_id}/codex/skills/conflicts/preflight` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/opencode/slash-commands/{scope}/content` | `DELETE`, `PUT` | `runtime_write` | `2044` | 否 | `DELETE`, `PUT` `/api/v1/workspaces/{workspace_id}/opencode/slash-commands/{scope}/content` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/version-control/branches/create` | `POST` | `runtime_write` | `2044` | 否 | `POST` `/api/v1/workspaces/{workspace_id}/version-control/branches/create` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/version-control/branches/delete` | `POST` | `runtime_write` | `2044` | 否 | `POST` `/api/v1/workspaces/{workspace_id}/version-control/branches/delete` 對應 `runtime_write`；敏感路由：否。 |
@@ -364,10 +372,12 @@ Canvas 端點皆掛在 Workspace 底下（`/api/v1/workspaces/{workspace_id}/can
 | `/api/v1/files/content` | `PUT` | `runtime_write` | `2017` | 否 | `PUT` `/api/v1/files/content` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/files/extract` | `POST` | `runtime_write` | `2017` | 否 | `POST` `/api/v1/files/extract` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/files/upload` | `POST` | `runtime_write` | `2016` | 否 | `POST` `/api/v1/files/upload` 對應 `runtime_write`；敏感路由：否。 |
-| `/api/v1/drawio/save` | `POST` | `runtime_write` | `2015` | 否 | `POST` `/api/v1/drawio/save` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/files/paste` | `POST` | `runtime_write` | `2015` | 否 | `POST` `/api/v1/files/paste` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/files/move` | `POST` | `runtime_write` | `2014` | 否 | `POST` `/api/v1/files/move` 對應 `runtime_write`；敏感路由：否。 |
 | `/api/v1/files` | `DELETE`, `POST` | `runtime_write` | `2010` | 否 | `DELETE`, `POST` `/api/v1/files` 對應 `runtime_write`；敏感路由：否。 |
+| `/api/v1/workspaces/{workspace_id}/cli-settings/claude-code/prompt-invocations` | `GET` | `runtime_read` | `1056` | 否 | `GET` `/api/v1/workspaces/{workspace_id}/cli-settings/claude-code/prompt-invocations` 對應 `runtime_read`；敏感路由：否。 |
+| `/api/v1/workspaces/{workspace_id}/cli-settings/opencode/prompt-invocations` | `GET` | `runtime_read` | `1053` | 否 | `GET` `/api/v1/workspaces/{workspace_id}/cli-settings/opencode/prompt-invocations` 對應 `runtime_read`；敏感路由：否。 |
+| `/api/v1/workspaces/{workspace_id}/cli-settings/codex/prompt-invocations` | `GET` | `runtime_read` | `1050` | 否 | `GET` `/api/v1/workspaces/{workspace_id}/cli-settings/codex/prompt-invocations` 對應 `runtime_read`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}/content` | `GET` | `runtime_read` | `1047` | 否 | `GET` `/api/v1/workspaces/{workspace_id}/claude-code/slash-commands/{scope}/content` 對應 `runtime_read`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/version-control/operation-status` | `GET` | `runtime_read` | `1046` | 否 | `GET` `/api/v1/workspaces/{workspace_id}/version-control/operation-status` 對應 `runtime_read`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/claude-code/skills/tree/children` | `GET` | `runtime_read` | `1044` | 否 | `GET` `/api/v1/workspaces/{workspace_id}/claude-code/skills/tree/children` 對應 `runtime_read`；敏感路由：否。 |
@@ -439,12 +449,10 @@ Canvas 端點皆掛在 Workspace 底下（`/api/v1/workspaces/{workspace_id}/can
 | `/api/v1/workspaces/{workspace_id}/codex/apps` | `GET` | `runtime_read` | `1024` | 否 | `GET` `/api/v1/workspaces/{workspace_id}/codex/apps` 對應 `runtime_read`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/codex/apps/{app_name:path}` | `GET` | `runtime_read` | `1024` | 否 | `GET` `/api/v1/workspaces/{workspace_id}/codex/apps/{app_name:path}` 對應 `runtime_read`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/codex/{resource}/file` | `GET` | `runtime_read` | `1024` | 否 | `GET` `/api/v1/workspaces/{workspace_id}/codex/{resource}/file` 對應 `runtime_read`；敏感路由：否。 |
-| `/api/v1/drawio/availability` | `GET` | `runtime_read` | `1023` | 否 | `GET` `/api/v1/drawio/availability` 對應 `runtime_read`；敏感路由：否。 |
 | `/api/v1/files/tree/children` | `GET` | `runtime_read` | `1022` | 否 | `GET` `/api/v1/files/tree/children` 對應 `runtime_read`；敏感路由：否。 |
 | `/api/v1/workspaces/{workspace_id}/codex` | `GET` | `runtime_read` | `1020` | 否 | `GET` `/api/v1/workspaces/{workspace_id}/codex` 對應 `runtime_read`；敏感路由：否。 |
 | `/docs/oauth2-redirect` | `GET`, `HEAD` | `runtime_read` | `1019` | 否 | `GET`, `HEAD` `/docs/oauth2-redirect` 對應 `runtime_read`；敏感路由：否。 |
 | `/api/v1/files/download` | `GET` | `runtime_read` | `1018` | 否 | `GET` `/api/v1/files/download` 對應 `runtime_read`；敏感路由：否。 |
-| `/api/v1/drawio/viewer` | `GET` | `runtime_read` | `1017` | 否 | `GET` `/api/v1/drawio/viewer` 對應 `runtime_read`；敏感路由：否。 |
 | `/api/v1/files/archive/{operation_id}` | `GET` | `runtime_read` | `1017` | 否 | `GET` `/api/v1/files/archive/{operation_id}` 對應 `runtime_read`；敏感路由：否。 |
 | `/api/v1/files/content` | `GET` | `runtime_read` | `1017` | 否 | `GET` `/api/v1/files/content` 對應 `runtime_read`；敏感路由：否。 |
 | `/api/v1/files/history` | `GET` | `runtime_read` | `1017` | 否 | `GET` `/api/v1/files/history` 對應 `runtime_read`；敏感路由：否。 |

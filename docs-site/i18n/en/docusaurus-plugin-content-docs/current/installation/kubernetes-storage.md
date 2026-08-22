@@ -18,6 +18,14 @@ description: RWX, RWO, Delete, Retain, and POSIX contracts for Aileron data
 
 Browser and Canvas must not mount Runtime HOME. Operator creates `workspace-runtime-home-pvc-<workspace-id>` for each Workspace and mounts it directly at `/home/developer`. It preserves CLI logins and settings, XDG data/state, Maven state, the bootstrap journal, and one-time agent-default markers. The working tree stores user repositories and files.
 
+The three Target Clients — Codex, Claude, and OpenCode — each own an independent
+Client User Scope path under Runtime HOME: `${CODEX_HOME:-$HOME/.codex}/skills`,
+`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills`, and `$HOME/.config/opencode/skills`.
+All three are directories under the same Runtime HOME PVC, mounted and reclaimed
+together with it — they are not separate Volumes, and none of them is an
+isolated personal space per human user; all users and sessions of that
+Workspace share them.
+
 `/home/developer/.codex/tmp` is the only intentionally overlaid temporary
 subpath and uses a 16 MiB memory-backed `emptyDir`. Codex creates `tmp/arg0` and
 sets it to mode `0700` for the current Runtime UID. Do not mount the volume root

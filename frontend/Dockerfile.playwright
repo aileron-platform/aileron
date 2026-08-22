@@ -1,13 +1,23 @@
-ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.61.1-noble
+ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright@sha256:5b8f294aff9041b7191c34a4bab3ac270157a28774d4b0660e9743297b697e48
 FROM ${PLAYWRIGHT_IMAGE}
+
+ARG NPM_VERSION=12.0.1
 
 WORKDIR /app
 
 ENV CI=1
 ENV PLAYWRIGHT_HTML_OPEN=never
 
-COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN apt-get update \
+  && apt-get install --no-install-recommends --yes libnss3-tools \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g "npm@${NPM_VERSION}" \
+  && test "$(npm --version)" = "${NPM_VERSION}"
+
+COPY package.json package-lock.json .npmrc ./
+RUN test "$(node -p "require('./package.json').packageManager")" = "npm@${NPM_VERSION}" \
+  && npm ci --no-audit --no-fund
 
 COPY . .
 

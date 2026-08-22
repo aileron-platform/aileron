@@ -21,16 +21,37 @@ export interface SkillsPageProps {
   onSelect?: (file: AgentSelectedFile | null) => void;
 }
 
+interface SkillsWorkbenchState {
+  documents: AgentSelectedFile[];
+  activeTabId: string | null;
+  contents: Record<string, string>;
+  originalContents: Record<string, string>;
+}
+
+type SkillsWorkbenchProps = Omit<SkillsPageProps, 'apiPrefix' | 'i18nNamespace'> & {
+  apiPrefix: string;
+  i18nNamespace: string;
+  initialState?: SkillsWorkbenchState;
+  onStateChange?: (state: SkillsWorkbenchState) => void;
+};
+
+type ProviderScopedSkillsWorkbenchProps = Omit<
+  SkillsWorkbenchProps,
+  'initialState' | 'onStateChange'
+>;
+
 const buildTabKey = (file: AgentSelectedFile): string => (
   `${file.scope}|${file.pluginId ?? ''}|${file.path}`
 );
 
 const fileBasename = (path: string): string => path.split('/').pop() || path;
 
-const SkillsPage: React.FC<SkillsPageProps> = ({
+const SkillsWorkbench: React.FC<SkillsWorkbenchProps> = ({
   selectedFile,
-  apiPrefix = 'claude-code',
-  i18nNamespace = 'workspace.agentSettings.common',
+  apiPrefix,
+  i18nNamespace,
+  initialState,
+  onStateChange,
   onSelect,
 }) => {
   const { t } = useI18n();
@@ -64,6 +85,25 @@ const SkillsPage: React.FC<SkillsPageProps> = ({
     }
   }, [api, apiPrefix, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
 
+  const loadFileBlob = useCallback((file: AgentSelectedFile) => {
+    if (apiPrefix === 'codex' && file.scope === 'plugin') {
+      return api.getCodexFileBlob(
+        workspaceRuntime.runtimeBaseUrl,
+        workspaceRuntime.workspaceId,
+        'skills',
+        'plugin',
+        file.path,
+        file.pluginId,
+      );
+    }
+    return api.getSkillBlob(
+      workspaceRuntime.runtimeBaseUrl,
+      workspaceRuntime.workspaceId,
+      file.path,
+      file.scope,
+    );
+  }, [api, apiPrefix, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
+
   const saveFile = useCallback(async (file: AgentSelectedFile, content: string) => {
     if (readOnly) {
       throw new Error(t('common.authorization.readOnlyDescription'));
@@ -89,10 +129,13 @@ const SkillsPage: React.FC<SkillsPageProps> = ({
   }, [api, apiPrefix, readOnly, t, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
 
   const workbench = useManagedDocumentWorkbenchTabs<AgentSelectedFile>({
+    initialState,
+    onStateChange,
     adapter: {
       getKey: buildTabKey,
       getName: file => fileBasename(file.path),
       readFile: loadFileContent,
+      readBlob: loadFileBlob,
       saveFile: async (file, content) => {
         if (readOnly || isReadOnlyAgentScope(file.scope)) {
           return;
@@ -159,6 +202,44 @@ const SkillsPage: React.FC<SkillsPageProps> = ({
         )}
       </div>
     </div>
+  );
+};
+
+const ProviderScopedSkillsWorkbench: React.FC<ProviderScopedSkillsWorkbenchProps> = (props) => {
+  const { apiPrefix } = props;
+  const statesByProvider = React.useRef(new Map<string, SkillsWorkbenchState>());
+  const handleStateChange = useCallback((state: SkillsWorkbenchState) => {
+    statesByProvider.current.set(apiPrefix, state);
+  }, [apiPrefix]);
+
+  return (
+    <SkillsWorkbench
+      key={apiPrefix}
+      {...props}
+      initialState={statesByProvider.current.get(apiPrefix)}
+      onStateChange={handleStateChange}
+    />
+  );
+};
+
+const SkillsPage: React.FC<SkillsPageProps> = ({
+  apiPrefix = 'claude-code',
+  i18nNamespace = 'workspace.agentSettings.common',
+  ...props
+}) => {
+  const { workspaceRuntime } = useWorkspace();
+  const workspaceScopeKey = JSON.stringify([
+    workspaceRuntime.workspaceId,
+    workspaceRuntime.runtimeBaseUrl,
+  ]);
+
+  return (
+    <ProviderScopedSkillsWorkbench
+      key={workspaceScopeKey}
+      {...props}
+      apiPrefix={apiPrefix}
+      i18nNamespace={i18nNamespace}
+    />
   );
 };
 

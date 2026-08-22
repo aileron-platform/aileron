@@ -2,8 +2,11 @@
 ARG NODE_IMAGE
 FROM ${NODE_IMAGE}
 
-ARG NPM_VERSION
-RUN npm install -g "npm@${NPM_VERSION}"
+ARG SOURCE_REVISION=development
+ARG NPM_VERSION=12.0.1
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
+RUN npm install -g "npm@${NPM_VERSION}" \
+    && test "$(npm --version)" = "${NPM_VERSION}"
 
 # Configure timezone.
 ARG TZ=Asia/Taipei
@@ -13,8 +16,9 @@ ENV TZ=${TZ}
 WORKDIR /app
 
 # Install locked dependencies once in the image.
-COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+COPY package.json package-lock.json .npmrc ./
+RUN test "$(node -p "require('./package.json').packageManager")" = "npm@${NPM_VERSION}" \
+    && npm ci --no-audit --no-fund
 
 # Copy source for an immediately runnable local image.
 COPY . .

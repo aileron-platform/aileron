@@ -261,30 +261,6 @@ const fileManagement = {
     loading: '載入圖片中...',
     error: '無法載入圖片',
   },
-  drawio: {
-    title: 'Draw.io 圖表',
-    edit: '編輯',
-    cancel: '取消',
-    saving: '儲存中...',
-    loading: '載入圖表中...',
-    retry: '重試',
-    retrying: '重試中... ({{count}}/{{max}})',
-    download: '下載',
-    expand: '放大檢視',
-    exitExpanded: '退出放大',
-    empty: '沒有圖表內容',
-    error: {
-      title: '圖表載入錯誤',
-      description: '無法載入 Draw.io 圖表,請檢查檔案格式是否正確。',
-    },
-    serviceUnavailable: {
-      title: 'Draw.io 預覽無法使用',
-      description: 'Draw.io 預覽服務目前不可用，檔案會以唯讀 XML 顯示。',
-      disabled: '此工作區未啟用 Draw.io 預覽服務，檔案會以唯讀 XML 顯示。',
-      unreachable: '目前無法連線至 Draw.io 預覽服務，檔案會以唯讀 XML 顯示。',
-      retry: '重試',
-    },
-  },
 };
 
 export default fileManagement;

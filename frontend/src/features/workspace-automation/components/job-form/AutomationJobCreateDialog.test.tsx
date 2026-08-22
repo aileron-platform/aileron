@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   closeCreateDialog: vi.fn(),
   createTask: vi.fn(),
   listWorkspaces: vi.fn(),
-  listSlashCommands: vi.fn(),
+  listPromptInvocations: vi.fn(),
   getCapabilities: vi.fn(),
   t: vi.fn((key: string, params?: Record<string, string | number>) => {
     const translations: Record<string, string> = {
@@ -26,15 +26,17 @@ const mocks = vi.hoisted(() => ({
       'automation.form.fields.workspace.error': 'Workspace error',
       'automation.form.fields.workspace.accessSource.owned': 'Owned',
       'automation.form.fields.workspace.accessSource.shared': 'Shared',
+      'automation.form.fields.worktree.label': 'Worktree settings',
+      'automation.form.fields.worktree.dedicated.label': 'Automatically create a dedicated worktree',
+      'automation.form.fields.worktree.dedicated.description': 'The worktree is created on the first execution and reused by every later execution of this automation.',
       'automation.form.fields.description.label': 'Description',
       'automation.form.fields.description.placeholder': 'Description',
       'automation.form.fields.prompt.label': 'Prompt',
       'automation.form.fields.prompt.placeholder': 'Prompt',
       'automation.form.fields.prompt.helper': 'Prompt helper',
-      'automation.form.fields.prompt.selectCommand': 'Choose command',
-      'automation.form.fields.prompt.commandsLoading': 'Loading commands',
-      'automation.form.fields.prompt.commandsEmpty': 'No commands',
-      'automation.form.fields.prompt.commandsError': 'Command error',
+      'automation.form.fields.prompt.selectInvocation': 'Choose Prompt Invocation',
+      'automation.form.fields.prompt.agenticToolRequired': 'Select an Agentic Tool first',
+      'automation.form.fields.prompt.toolCompatibilityWarning': 'Invocation may be incompatible',
       'automation.form.fields.trigger.label': 'Trigger type',
       'automation.form.fields.trigger.placeholder': 'Trigger type',
       'automation.form.fields.status.label': 'Status',
@@ -100,13 +102,11 @@ const mocks = vi.hoisted(() => ({
       'automation.form.scheduleBuilder.summary.advanced': `Runs using cron expression ${params?.cron ?? ''}.`,
       'automation.form.scheduleBuilder.validation.weekdayRequired': 'Select at least one weekday.',
       'automation.form.scheduleBuilder.validation.invalidCron': 'Enter a valid five-field cron expression.',
-      'automation.slashDialog.title': 'Select slash command',
-      'automation.slashDialog.description': 'Pick command',
-      'automation.slashDialog.searchPlaceholder': 'Search',
-      'automation.slashDialog.empty': 'No commands',
-      'automation.slashDialog.scope.all': 'All',
-      'automation.slashDialog.scope.project': 'Project',
-      'automation.slashDialog.scope.user': 'User',
+      'automation.promptInvocationDialog.title': 'Select prompt invocation',
+      'automation.promptInvocationDialog.description': 'Pick an invocation',
+      'automation.promptInvocationDialog.searchPlaceholder': 'Search',
+      'automation.promptInvocationDialog.empty': 'No invocations',
+      'aiChat.settings.tool': 'Agentic Tool',
       'common.cancel': 'Cancel',
     };
     return translations[key] ?? key;
@@ -132,13 +132,45 @@ vi.mock('../../providers/AutomationProvider', () => ({
 vi.mock('../../api/automationWorkspaceApi', () => ({
   automationWorkspaceApi: {
     list: mocks.listWorkspaces,
-    listSlashCommands: mocks.listSlashCommands,
+    listPromptInvocations: mocks.listPromptInvocations,
     getCapabilities: mocks.getCapabilities,
   },
 }));
 
-vi.mock('@/shared/components/slash-command-picker', () => ({
-  SlashCommandPickerDialog: () => null,
+vi.mock('@/shared/components/prompt-invocation-picker', () => ({
+  PromptInvocationPickerDialog: ({
+    open,
+    onSelect,
+  }: {
+    open: boolean;
+    onSelect: (item: {
+      id: string;
+      sourceKey: string;
+      fileName: string;
+      kind: 'skill';
+      scope: 'project';
+      displayName: string;
+      category: string;
+      description: string;
+      invocation: string;
+      tags: string[];
+    }) => void;
+  }) => open ? (
+    <button type="button" onClick={() => onSelect({
+      id: 'codex:skill:project:review/SKILL.md',
+      sourceKey: 'review/SKILL.md',
+      fileName: 'SKILL.md',
+      kind: 'skill',
+      scope: 'project',
+      displayName: 'review',
+      category: 'project',
+      description: 'Review changes',
+      invocation: '$review',
+      tags: [],
+    })}>
+      select-$review
+    </button>
+  ) : null,
 }));
 
 describe('AutomationJobCreateDialog', () => {
@@ -152,12 +184,17 @@ describe('AutomationJobCreateDialog', () => {
     mocks.createTask.mockReset();
     mocks.closeCreateDialog.mockReset();
     mocks.listWorkspaces.mockReset();
-    mocks.listSlashCommands.mockReset();
+    mocks.listPromptInvocations.mockReset();
     mocks.getCapabilities.mockReset();
     mocks.t.mockClear();
     mocks.createTask.mockResolvedValue(undefined);
-    mocks.listWorkspaces.mockResolvedValue([{ id: 'ws-1', name: 'Primary workspace', accessSource: 'owned' }]);
-    mocks.listSlashCommands.mockResolvedValue([]);
+    mocks.listWorkspaces.mockResolvedValue([{
+      id: 'ws-1',
+      name: 'Primary workspace',
+      accessSource: 'owned',
+      runtimeUrl: 'http://runtime.test',
+    }]);
+    mocks.listPromptInvocations.mockResolvedValue({ items: [] });
     mocks.getCapabilities.mockResolvedValue({
       defaultTool: 'claude',
       tools: [{
@@ -167,8 +204,46 @@ describe('AutomationJobCreateDialog', () => {
         modes: ['execute', 'plan'],
         defaultMode: 'execute',
         contextWindow: 200000,
+      }, {
+        id: 'codex',
+        models: ['gpt-5'],
+        defaultModel: 'gpt-5',
+        modes: ['execute'],
+        defaultMode: 'execute',
+        contextWindow: 200000,
       }],
     });
+  });
+
+  it('writes the Runtime-provided invocation into the Prompt field', async () => {
+    render(<AutomationJobCreateDialog />);
+
+    await screen.findByText('Create scheduled task definition');
+    const pickerButton = await screen.findByRole('button', {
+      name: 'Choose Prompt Invocation',
+    });
+    await waitFor(() => expect(pickerButton).toBeEnabled());
+    await userEvent.click(pickerButton);
+    await userEvent.click(screen.getByRole('button', { name: 'select-$review' }));
+
+    expect(screen.getByPlaceholderText('Prompt')).toHaveValue('$review');
+  });
+
+  it('keeps the invocation, warns after switching tools, and clears the warning after editing', async () => {
+    const user = userEvent.setup();
+    render(<AutomationJobCreateDialog />);
+
+    await user.click(await screen.findByRole('button', { name: 'Choose Prompt Invocation' }));
+    await user.click(screen.getByRole('button', { name: 'select-$review' }));
+    await user.click(screen.getByRole('button', { name: 'Agentic Tool' }));
+    await user.click(screen.getByRole('button', { name: 'codex' }));
+
+    const prompt = screen.getByPlaceholderText('Prompt');
+    expect(prompt).toHaveValue('$review');
+    expect(screen.getByRole('alert')).toHaveTextContent('Invocation may be incompatible');
+
+    fireEvent.change(prompt, { target: { value: '$review with context' } });
+    expect(screen.queryByText('Invocation may be incompatible')).not.toBeInTheDocument();
   });
 
   it('uses structured schedule controls and submits the generated cron string', { timeout: 20000 }, async () => {
@@ -177,8 +252,15 @@ describe('AutomationJobCreateDialog', () => {
     expect(await screen.findByText('Create scheduled task definition')).toBeInTheDocument();
     expect(screen.getByRole('dialog')).toHaveClass('h-[min(880px,92vh)]');
     expect(screen.queryByText('Tags')).not.toBeInTheDocument();
-    expect(screen.getByText('automation.form.fields.worktree.dedicated.label')).toBeInTheDocument();
-    expect(screen.getByRole('radio')).toBeChecked();
+    expect(screen.getByText('Worktree settings')).toBeInTheDocument();
+    const worktreeSummary = screen.getByRole('group', {
+      name: 'Worktree settings Automatically create a dedicated worktree',
+    });
+    expect(worktreeSummary).toHaveTextContent('Automatically create a dedicated worktree');
+    expect(worktreeSummary).toHaveTextContent(
+      'The worktree is created on the first execution and reused by every later execution of this automation.',
+    );
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     expect(await screen.findByText('Runs every day at 09:00.')).toBeInTheDocument();
     expect(screen.getByText('0 9 * * *')).toBeInTheDocument();
     await waitFor(() => {

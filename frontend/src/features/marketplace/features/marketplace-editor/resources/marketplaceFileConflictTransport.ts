@@ -1,5 +1,5 @@
 import type { FileConflictWorkflowTransport } from '@/shared/components/file-workbench';
-import type { MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 import {
   executeMarketplaceFileConflictOperation,
   executeMarketplaceSkillFileConflictOperation,
@@ -10,17 +10,17 @@ import {
 } from '../../../api/marketplaceApi';
 
 export const createMarketplaceFileConflictTransport = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   packageId: string,
 ): FileConflictWorkflowTransport<MarketplaceFileConflictPayload> => ({
   preflight: (request, options) => preflightMarketplaceFileConflicts(
-    provider,
+    targetClient,
     packageId,
     request,
     options,
   ),
   execute: (request, options) => executeMarketplaceFileConflictOperation(
-    provider,
+    targetClient,
     packageId,
     request,
     options,
@@ -28,19 +28,19 @@ export const createMarketplaceFileConflictTransport = (
 });
 
 export const createMarketplaceSkillFileConflictTransport = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   packageId: string,
   revision: string,
 ): FileConflictWorkflowTransport<MarketplaceSkillFileConflictPayload> => ({
   preflight: (request, options) => preflightMarketplaceSkillFileConflicts(
-    provider,
+    targetClient,
     packageId,
     revision,
     request,
     options,
   ),
   execute: (request, options) => executeMarketplaceSkillFileConflictOperation(
-    provider,
+    targetClient,
     packageId,
     {
       ...request,

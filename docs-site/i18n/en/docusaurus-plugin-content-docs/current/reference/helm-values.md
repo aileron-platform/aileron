@@ -112,7 +112,7 @@ Seeds initialize only new Workspaces. A Helm upgrade does not overwrite existing
 | `turn.profile.policyBackend` | `cilium`, `kubernetes`, or `unenforced` |
 | `turn.profile.backend` | Browser Pod URLs, control/relay destinations, and relay port range |
 | `turn.profile.frontend.urls` | Public TURN URLs used by required external vantages |
-| `turn.profile.credentialIssuer` | `turnRest` for external TURN or `staticSecret` for bundled Coturn; defines Secret ref and credential TTL |
+| `turn.profile.credentialIssuer` | Always `turnRest`; defines the Secret ref and short-lived credential TTL |
 | `turn.profile.evidence` | Probe interval, evidence TTL, and required frontend vantages |
 | `coturn.enabled` | Deploy built-in Coturn; when false, external TURN satisfies the same profile |
 | `coturn.frontendHost` | Public TURN DNS template in built-in mode |
@@ -137,7 +137,7 @@ Project path, credentials, OCI repositories and immutable base image references.
 
 The Workspace CR represents state through its bootstrap revision/status and the separate desired/observed revisions for Runtime, Browser, and Canvas. Runtime bootstrap always runs Git, agent defaults, custom setup, and supervisor in that order. Browser and Canvas are released from their gates only after the initial bootstrap succeeds.
 
-Agent defaults are seeded once from `/opt/aileron/agent-defaults` in the Runtime image. The marker is stored at `${HOME}/.local/state/aileron/bootstrap`. Pod restarts and image upgrades do not overwrite user changes or restore content that a user deleted.
+Agent defaults are seeded once from `/opt/aileron/agent-defaults` in the Runtime image into each of Codex's, Claude's, and OpenCode's own Client User Scope (`${CODEX_HOME:-$HOME/.codex}/skills`, `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills`, and `$HOME/.config/opencode/skills`); each Target Client keeps an independent copy, with no symbolic links. The marker is stored at `${HOME}/.local/state/aileron/bootstrap`. Pod restarts and image upgrades do not overwrite user changes or restore content that a user deleted.
 
 Custom setup runs as the Runtime's non-root UID with a timeout, output limits, and stable error states.
 

@@ -75,6 +75,19 @@ Workspace Manager 不負責一般 AI Chat 的訊息內容。它管理 workspace 
 5. Tool result 的 timeline preview 保持 bounded；超出 preview 的完整 bytes 存在 `thread_tool_result_contents`。使用者按下 Show all 時，才以 result message id 讀取完整內容。
 6. Runtime 只在 event transaction commit 後排程 coalesced WebSocket invalidation；rollback 不會送出 phantom ids 或 metadata。WebSocket 不是 durable event log，前端收到後仍透過 REST 取得 authoritative state。
 
+## Stop（停止目前 Turn）
+
+```http
+POST /api/v1/threads/{threadId}/stop
+```
+
+- Stop 只停止目前 active Turn，不是取消整個 Thread；已產生的 partial output 保留，該 Turn／Turn Execution 標記為 canceled。
+- Runtime 先將 Thread 標為 `stopping` 並廣播 `status_updated`，接著要求 provider runner 停止並**確認 runner 已結束**，最後才在同一原子步驟內把該 Turn 標為 canceled，並在 FIFO queue 有下一則訊息時直接接續啟動為新 Turn；queue 為空則 Thread 結束為 `canceled`。
+- 是否接續下一則訊息與正常完成（`complete` event）時的 dequeue 共用同一段 finish-and-handoff 邏輯，兩者行為一致。
+- Runner 停止失敗或逾時、且 runner 仍存活時，Thread 維持 `stopping`、queue 原封不動、不啟動下一 Turn，回傳可重試的錯誤；runner 回報停止時丟錯但已確認不存活，仍視為安全並完成 handoff。
+- 對同一個 active execution 重複呼叫 Stop 是冪等的，不會重複 dequeue 或建立 Turn。
+- Thread 在 `stopping` 期間收到的新訊息，行為與其他 running 狀態相同：加入 queue 尾端，不會被立即執行。
+
 ## 持久化與配對保證
 
 `thread_messages` 是唯一 append-only 訊息事實來源。Thread、Turn 與 Turn Execution 保存 lifecycle／grouping metadata，不把 provider 原始 session id 當成第一方主鍵。

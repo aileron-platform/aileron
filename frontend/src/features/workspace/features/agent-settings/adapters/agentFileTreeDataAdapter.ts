@@ -193,10 +193,21 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
     if (apiPrefix === 'codex') {
       assertWritableAgentFileScope(scope);
       const codexScope = toCodexFileScope(scope);
-      await this.client.put(`/workspaces/${workspaceId}/codex/${collection}/file?scope=${codexScope}`, {
-        path: request.path.replace(/^\/+/, ''),
-        content: request.content ?? '',
-      });
+      const normalizedPath = request.path.replace(/^\/+/, '');
+      if (collection === 'skills') {
+        const type = request.isDirectory ? 'directory' : 'file';
+        const url = `/workspaces/${workspaceId}/codex/skills?scope=${encodeURIComponent(codexScope)}&path=${encodeURIComponent(normalizedPath)}&type=${type}`;
+        if (request.isDirectory) {
+          await this.client.post(url);
+        } else {
+          await this.client.post(url, { content: request.content ?? '' });
+        }
+      } else {
+        await this.client.put(`/workspaces/${workspaceId}/codex/${collection}/file?scope=${codexScope}`, {
+          path: normalizedPath,
+          content: request.content ?? '',
+        });
+      }
       await this.invalidateCollection();
       return { success: true };
     }

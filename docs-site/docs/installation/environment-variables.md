@@ -58,7 +58,7 @@ Manager Provisioner 與 Workspace Operator 注入相同的 `AILERON_*` key set�
 | `AILERON_WORKTREE_SUBDIR` | 受管理的 Git worktree 子目錄 |
 | `AILERON_MANAGER_INTERNAL_URL` | Manager 內部 Service URL |
 | `AILERON_PLATFORM_PUBLIC_ORIGIN` | 唯一精確平台 Origin |
-| `AILERON_RUNTIME_STATE_DATABASE_URL_FILE` | Workspace-scoped database URL Secret file |
+| `AILERON_RUNTIME_DATABASE_CONNECTION_FILE` | generation-scoped Runtime database connection Secret file |
 | `AILERON_RUNTIME_CONTROL_TOKEN_FILE` | generation-scoped control token Secret file |
 | `AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE` | Manager assertion public JWKS file |
 | `AILERON_RUNTIME_ASSERTION_ISSUER` | Manager assertion issuer |
@@ -74,7 +74,7 @@ Workspace 使用者環境不得使用 `AILERON_*` 前綴。
 ## Secret 交付
 
 - Docker：root `.env` 只保存 host Secret 目錄或檔案路徑；Compose 以唯讀 mount 交付，服務只讀 `*_FILE` 或固定 mounted path。
-- 本機 OpenLDAP adapter 使用第三方 image 原生的 `LDAP_ADMIN_PASSWORD_FILE` 與 `LDAP_CONFIG_PASSWORD_FILE`；只允許首次初始化階段讀取，完成後長期 `slapd` 的 argv 與 environment 不得含 Secret value。
+- 本機 Keycloak adapter 只從唯讀 mounted Secret files 建立 realm、client、Keycloak 管理員與 native break-glass principal；長期 Keycloak process 不保留 bootstrap、client 或使用者密碼環境變數。
 - Kubernetes：values 只保存 existing Secret name/key；Application Pod 只能透過唯讀 Secret volume 取得 Secret，並以 `*_FILE` 或契約定義的固定 mounted path 讀取。
 - Application Secret 不得透過 `SecretKeyRef` 或 `envFrom.secretRef` 實體化為 process environment。`SecretKeyRef` 也不屬於合法的 Secret 交付介面。
 - Secret value 不可放進一般環境變數、ConfigMap、Frontend build environment、文件範例或版本控制。

@@ -1,4 +1,4 @@
 /**
- * Workspace 架構統一導出
- * 獨立的新架構入口點
+ * Unified exports for the Workspace architecture.
+ * Standalone entry point for the current architecture.
  */

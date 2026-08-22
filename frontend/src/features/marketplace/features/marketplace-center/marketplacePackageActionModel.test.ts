@@ -4,11 +4,13 @@ import {
   buildMarketplaceDeleteRequest,
   buildMarketplaceExportRequest,
   getMarketplaceActionTextKeys,
-  isMarketplaceDeleteBlocked,
 } from './marketplacePackageActionModel';
 
 const packageSummary: MarketplacePackageSummary = {
-  provider: 'codex',
+  targetClient: 'codex',
+  packageFormat: 'codex-native',
+  catalogPluginId: 'figma-context',
+  userCopyTargetClient: 'codex',
   packageType: 'plugin',
   packageId: 'figma-context',
   displayName: 'Figma Context',
@@ -16,10 +18,13 @@ const packageSummary: MarketplacePackageSummary = {
   description: 'Figma context plugin.',
   category: 'coding',
   tags: ['mcp'],
-  sourceType: 'created',
   indexedResourceNames: ['mcp'],
   validationSeverity: 'none',
-  lifecycleStatus: 'ready',
+  authoringCapabilities: {
+    basic: 'read-write', agentsMd: 'read-write', hooks: 'read-write',
+    mcp: 'read-write', agents: 'read-write', commands: 'read-write',
+    outputStyle: 'unsupported', skills: 'read-write', files: 'read-write',
+  },
   registryPath: 'codex/plugins/figma-context',
   revision: 'rev-1',
   updatedAt: '2026-05-07T00:00:00.000Z',
@@ -29,22 +34,15 @@ const packageSummary: MarketplacePackageSummary = {
 describe('marketplacePackageActionModel', () => {
   it('builds export and delete requests from package action context', () => {
     expect(buildMarketplaceExportRequest(packageSummary)).toEqual({
-      provider: 'codex',
+      targetClient: 'codex',
+      packageFormat: 'codex-native',
       packageId: 'figma-context',
-      revision: 'rev-1',
     });
     expect(buildMarketplaceDeleteRequest(packageSummary)).toEqual({
-      provider: 'codex',
+      targetClient: 'codex',
+      packageFormat: 'codex-native',
       packageId: 'figma-context',
-      revision: 'rev-1',
     });
-  });
-
-  it('blocks delete actions until the package id is typed exactly', () => {
-    expect(isMarketplaceDeleteBlocked('export', '', packageSummary.packageId)).toBe(false);
-    expect(isMarketplaceDeleteBlocked('delete', '', packageSummary.packageId)).toBe(true);
-    expect(isMarketplaceDeleteBlocked('delete', 'Figma-Context', packageSummary.packageId)).toBe(true);
-    expect(isMarketplaceDeleteBlocked('delete', packageSummary.packageId, packageSummary.packageId)).toBe(false);
   });
 
   it('resolves localized action text keys by action type', () => {

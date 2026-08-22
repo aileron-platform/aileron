@@ -30,6 +30,12 @@ export interface UseNekoStreamReturn {
   connectionState: NekoConnectionState;
   /** Whether the stream is connected */
   isConnected: boolean;
+  /** Whether the Neko signaling WebSocket is open */
+  websocketConnected: boolean;
+  /** Whether the Neko input data channel is open */
+  dataChannelOpen: boolean;
+  /** Whether the received stream contains a live video track */
+  hasLiveVideoTrack: boolean;
   /** Last error message */
   error: string | null;
   /** Ref to attach to the <video> element */
@@ -48,6 +54,9 @@ export function useNekoStream({
   generation,
 }: UseNekoStreamOptions): UseNekoStreamReturn {
   const [connectionState, setConnectionState] = useState<NekoConnectionState>('disconnected');
+  const [websocketConnected, setWebsocketConnected] = useState(false);
+  const [dataChannelOpen, setDataChannelOpen] = useState(false);
+  const [hasLiveVideoTrack, setHasLiveVideoTrack] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -76,6 +85,9 @@ export function useNekoStream({
     if (audioRef.current) {
       audioRef.current.srcObject = null;
     }
+    setWebsocketConnected(false);
+    setDataChannelOpen(false);
+    setHasLiveVideoTrack(false);
   }, []);
 
   const connect = useCallback(() => {
@@ -103,6 +115,12 @@ export function useNekoStream({
         }
 
       },
+      onWebSocketStateChange: (open) => {
+        if (clientRef.current === client) setWebsocketConnected(open);
+      },
+      onDataChannelStateChange: (open) => {
+        if (clientRef.current === client) setDataChannelOpen(open);
+      },
       onTrack: (event) => {
         if (clientRef.current !== client) {
           return;
@@ -115,6 +133,15 @@ export function useNekoStream({
 
         if (hasVideo && videoRef.current) {
           videoRef.current.srcObject = stream;
+        }
+        if (hasVideo) {
+          const videoTracks = stream.getVideoTracks();
+          setHasLiveVideoTrack(videoTracks.some((track) => track.readyState === 'live'));
+          for (const track of videoTracks) {
+            track.addEventListener('ended', () => {
+              if (clientRef.current === client) setHasLiveVideoTrack(false);
+            }, { once: true });
+          }
         }
         if (hasAudio && audioRef.current) {
           audioRef.current.srcObject = stream;
@@ -161,6 +188,9 @@ export function useNekoStream({
   return {
     connectionState,
     isConnected: connectionState === 'connected',
+    websocketConnected,
+    dataChannelOpen,
+    hasLiveVideoTrack,
     error,
     videoRef,
     audioRef,

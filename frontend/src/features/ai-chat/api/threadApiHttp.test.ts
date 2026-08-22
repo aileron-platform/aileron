@@ -139,7 +139,7 @@ describe('createThreadApiHttp', () => {
       answers: { 'Favorite color': 'red' },
       text: '[form answers — color]\nFavorite color: red',
     });
-    await api.cancel('thread-1');
+    await api.stop('thread-1');
     await api.retry('thread-1');
     await api.archive('thread-1');
     await api.deleteThread('thread-1');
@@ -171,7 +171,7 @@ describe('createThreadApiHttp', () => {
         answers: { 'Favorite color': 'red' },
         text: '[form answers — color]\nFavorite color: red',
       })],
-      ['http://runtime.test/api/v1/threads/thread-1/cancel', 'POST', undefined],
+      ['http://runtime.test/api/v1/threads/thread-1/stop', 'POST', undefined],
       ['http://runtime.test/api/v1/threads/thread-1/retry', 'POST', undefined],
       ['http://runtime.test/api/v1/threads/thread-1/archive', 'POST', undefined],
       ['http://runtime.test/api/v1/threads/thread-1', 'DELETE', undefined],

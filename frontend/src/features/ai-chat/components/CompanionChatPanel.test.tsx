@@ -18,17 +18,17 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock('@/shared/components/slash-command-picker', () => ({
-  SlashCommandPickerDialog: () => null,
+vi.mock('@/shared/components/prompt-invocation-picker', () => ({
+  PromptInvocationPickerDialog: () => null,
 }));
 
 vi.mock('./messages/ThreadTimeline', () => ({
   ThreadTimeline: () => <div data-testid="thread-timeline" />,
 }));
 
-vi.mock('@/shared/api/slashCommandApi', () => ({
-  slashCommandApi: {
-    listPickerItems: vi.fn(async () => []),
+vi.mock('@/shared/api/promptInvocationApi', () => ({
+  promptInvocationApi: {
+    list: vi.fn(),
   },
 }));
 
@@ -44,7 +44,7 @@ const postMessageMock = vi.fn();
 const removeQueuedMessageMock = vi.fn();
 const answerQuestionMock = vi.fn();
 const patchDraftMock = vi.fn();
-const cancelMock = vi.fn();
+const stopMock = vi.fn();
 const retryMock = vi.fn();
 const archiveMock = vi.fn();
 const deleteThreadMock = vi.fn();
@@ -138,8 +138,9 @@ vi.mock('../hooks/useThread', () => ({
       isPending: false,
       error: null,
     },
-    cancel: {
-      mutate: cancelMock,
+    stop: {
+      mutate: stopMock,
+      isPending: false,
     },
     retry: {
       mutate: retryMock,
@@ -185,7 +186,7 @@ beforeEach(() => {
   postMessageMock.mockReset();
   postMessageMock.mockResolvedValue(undefined);
   patchDraftMock.mockReset();
-  cancelMock.mockReset();
+  stopMock.mockReset();
   retryMock.mockReset();
   archiveMock.mockReset();
   deleteThreadMock.mockReset();

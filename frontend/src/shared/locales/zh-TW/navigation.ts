@@ -1,6 +1,6 @@
 const navigation = {
   workspace: '工作區',
-  marketplace: '應用市集',
+  marketplace: '應用中心',
   automation: '自動化中心',
   knowledgeBaseCenter: '知識庫中心',
   userManagement: '使用者管理',
@@ -52,7 +52,7 @@ const navigation = {
     modules: {
       workspace: '工作區',
       automation: '自動化中心',
-      marketplace: '應用市集',
+      marketplace: '應用中心',
       knowledgeBase: '知識庫中心',
       userManagement: '使用者管理',
     },

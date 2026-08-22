@@ -19,7 +19,7 @@ vi.mock('../../../api/marketplaceApi', () => ({
 }));
 
 const packageDetail = (): MarketplacePackageDetail => ({
-  provider: 'codex',
+  targetClient: 'codex',
   packageType: 'plugin',
   packageId: 'codex-toolkit',
   displayName: 'Codex Toolkit',
@@ -27,14 +27,13 @@ const packageDetail = (): MarketplacePackageDetail => ({
   description: 'Initial description',
   category: 'coding',
   tags: [],
-  sourceType: 'created',
   indexedResourceNames: [],
   validationSeverity: 'none',
-  lifecycleStatus: 'draft',
   registryPath: 'codex/plugins/codex-toolkit',
   revision: 'rev1',
   variants: [{
-    provider: 'codex',
+    targetClient: 'codex',
+    packageFormat: 'codex-native',
     packageId: 'codex-toolkit',
     displayName: 'Codex Toolkit',
   }],
@@ -73,7 +72,7 @@ describe('MarketplaceBasicPage', () => {
     expect(screen.getByRole('heading', { name: 'marketplace.editor.tabs.basic' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'marketplace.common.actions.save' })).toHaveLength(1);
     expect(screen.getAllByDisplayValue('codex-toolkit')[0]).toHaveAttribute('readonly');
-    expect(screen.getByText('marketplace.editor.fields.provider')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.editor.fields.targetClient')).toBeInTheDocument();
     expect(screen.getByText('marketplace.editor.fields.registryPath')).toBeInTheDocument();
     expect(screen.getByDisplayValue('codex/plugins/codex-toolkit')).toBeInTheDocument();
     expect(screen.getByText('marketplace.editor.requiredFields.title')).toBeInTheDocument();

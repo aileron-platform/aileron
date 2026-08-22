@@ -169,6 +169,7 @@ const sidebars: SidebarsConfig = {
         'installation/canvas-publishing-user',
         'installation/environment-variables',
         'installation/oidc',
+        'installation/external-data-services',
         'installation/production',
         'installation/troubleshooting',
         'installation/automation-runner-recovery',

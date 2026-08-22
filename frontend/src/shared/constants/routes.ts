@@ -53,8 +53,10 @@ export const ROUTES = {
     root: '/marketplace',
     packages: '/marketplace/packages',
     settings: '/marketplace/packages/settings',
-    packageDetail: (provider: string, id: string) => `/marketplace/packages/${provider}/${id}`,
-    packageEdit: (provider: string, id: string) => `/marketplace/packages/${provider}/${id}/edit`,
+    packageDetail: (targetClient: string, id: string, packageFormat: string) =>
+      `/marketplace/packages/${targetClient}/${id}?packageFormat=${encodeURIComponent(packageFormat)}`,
+    packageEdit: (targetClient: string, id: string, packageFormat: string, section?: string) =>
+      `/marketplace/packages/${targetClient}/${id}/edit${section ? `/${section}` : ''}?packageFormat=${encodeURIComponent(packageFormat)}`,
   },
   knowledgeBase: {
     root: '/knowledge-bases',

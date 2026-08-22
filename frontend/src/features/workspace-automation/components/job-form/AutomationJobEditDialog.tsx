@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -22,8 +22,9 @@ import {
 import { Badge } from '@/shared/components/ui/badge';
 import { LoadingSpinner } from '@/shared/components/ui/loading-spinner';
 import type { AutomationJob, JobStatus, JobTrigger, JobUpdateInput } from '../../model/automationTypes';
-import type { SlashCommandItem } from '@/shared/types/slashCommands';
-import { SlashCommandPickerDialog } from '@/shared/components/slash-command-picker';
+import type { PromptInvocationItem } from '@/shared/types/promptInvocations';
+import { toPromptInvocationTool } from '@/shared/types/promptInvocations';
+import { PromptInvocationPickerDialog } from '@/shared/components/prompt-invocation-picker';
 import { Bot, CalendarClock, Clock, Copy, FileText, Send, Slash } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useToast } from '@/shared/components/ui/use-toast';
@@ -39,6 +40,7 @@ import {
 } from './AutomationFormSection';
 import { AutomationWorktreeSetting } from './AutomationWorktreeSetting';
 import type { AutomationWorkspaceSummary } from '../../model/automationTypes';
+import { automationWorkspaceApi } from '../../api/automationWorkspaceApi';
 
 const logger = createLogger('AutomationJobEditDialog');
 
@@ -50,8 +52,6 @@ interface AutomationJobEditDialogProps {
   onClose: () => void;
   onSave: (payload: JobUpdateInput) => Promise<void>;
   workspaces: AutomationWorkspaceSummary[];
-  commands: SlashCommandItem[];
-  commandsLoading: boolean;
 }
 
 const isJobTrigger = (value: string): value is JobTrigger =>
@@ -91,12 +91,15 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
   onClose,
   onSave,
   workspaces,
-  commands,
-  commandsLoading,
 }) => {
   const [form, setForm] = useState<JobUpdateForm | null>(null);
-  const [slashDialogOpen, setSlashDialogOpen] = useState(false);
+  const [promptInvocationDialogOpen, setPromptInvocationDialogOpen] = useState(false);
   const [scheduleValidation, setScheduleValidation] = useState<ScheduleBuilderValidation>({ isValid: true });
+  const [promptInvocationProvenance, setPromptInvocationProvenance] = useState<{
+    agenticTool: string;
+    item: PromptInvocationItem;
+  } | null>(null);
+  const [promptCompatibilityWarning, setPromptCompatibilityWarning] = useState(false);
   const { t } = useI18n();
   const { toast } = useToast();
 
@@ -128,10 +131,14 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
     if (isOpen && task) {
       setForm(mapTaskToForm(task));
       setScheduleValidation({ isValid: true });
+      setPromptInvocationProvenance(null);
+      setPromptCompatibilityWarning(false);
     }
     if (!isOpen) {
       setForm(null);
       setScheduleValidation({ isValid: true });
+      setPromptInvocationProvenance(null);
+      setPromptCompatibilityWarning(false);
     }
   }, [isOpen, task]);
 
@@ -161,7 +168,18 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
     (form.trigger === 'cron' && !scheduleValidation.isValid) ||
     !form.prompt.trim();
 
-  const slashCommandButtonDisabled = !form || commandsLoading || commands.length === 0;
+  const selectedWorkspace = workspaces.find(item => item.id === form?.workspaceId);
+  const promptInvocationButtonDisabled = !selectedWorkspace?.runtimeUrl || !form?.agenticTool;
+  const loadPromptInvocationCatalog = useCallback(() => {
+    if (!selectedWorkspace?.runtimeUrl || !form?.workspaceId || !form.agenticTool) {
+      throw new Error('Workspace Runtime and Agentic Tool are required');
+    }
+    return automationWorkspaceApi.listPromptInvocations(
+      selectedWorkspace.runtimeUrl,
+      form.workspaceId,
+      toPromptInvocationTool(form.agenticTool),
+    );
+  }, [form?.agenticTool, form?.workspaceId, selectedWorkspace?.runtimeUrl]);
 
   const renderContent = () => {
     if (loading || !form) {
@@ -261,12 +279,28 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
                 model: form.model,
                 mode: form.agentConfig?.mode,
               }}
-              onChange={(selection) => setForm(prev => prev ? {
-                ...prev,
-                agenticTool: selection.agenticTool,
-                model: selection.model,
-                agentConfig: { mode: selection.mode },
-              } : prev)}
+              onChange={(selection) => setForm(prev => {
+                if (!prev) return prev;
+                const toolChanged = Boolean(
+                  prev.agenticTool
+                  && selection.agenticTool
+                  && prev.agenticTool !== selection.agenticTool,
+                );
+                if (toolChanged) {
+                  setPromptCompatibilityWarning(Boolean(
+                    promptInvocationProvenance
+                    && promptInvocationProvenance.agenticTool !== selection.agenticTool
+                    && prev.prompt === promptInvocationProvenance.item.invocation,
+                  ));
+                  setPromptInvocationProvenance(null);
+                }
+                return {
+                  ...prev,
+                  agenticTool: selection.agenticTool,
+                  model: selection.model,
+                  agentConfig: { mode: selection.mode },
+                };
+              })}
             />
           </section>
 
@@ -284,7 +318,11 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
               <div className="flex gap-2">
                 <Textarea
                   value={form.prompt}
-                  onChange={(event) => setForm(prev => prev ? { ...prev, prompt: event.target.value } : prev)}
+                  onChange={(event) => {
+                    setForm(prev => prev ? { ...prev, prompt: event.target.value } : prev);
+                    setPromptInvocationProvenance(null);
+                    setPromptCompatibilityWarning(false);
+                  }}
                   placeholder={t('automation.form.fields.prompt.placeholder')}
                   rows={3}
                   required
@@ -294,14 +332,19 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
                   type="button"
                   variant="outline"
                   size="icon"
-                  onClick={() => setSlashDialogOpen(true)}
-                  disabled={slashCommandButtonDisabled}
-                  aria-label={t('automation.form.fields.prompt.selectCommand')}
+                  onClick={() => setPromptInvocationDialogOpen(true)}
+                  disabled={promptInvocationButtonDisabled}
+                  aria-label={t('automation.form.fields.prompt.selectInvocation')}
                   className="flex-shrink-0"
                 >
                   <Slash className="h-4 w-4" />
                 </Button>
               </div>
+              {promptCompatibilityWarning && (
+                <p role="alert" className="text-xs text-warning-foreground">
+                  {t('automation.form.fields.prompt.toolCompatibilityWarning')}
+                </p>
+              )}
             </div>
           </section>
 
@@ -563,23 +606,24 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
       <DialogContent className="flex h-[min(880px,92vh)] w-[min(960px,calc(100vw-2rem))] max-w-none flex-col overflow-hidden border-border/60 p-0">
         {renderContent()}
 
-        <SlashCommandPickerDialog
-          open={slashDialogOpen}
-          onOpenChange={setSlashDialogOpen}
-          commands={commands}
-          onSelect={(command: SlashCommandItem) => {
-            setForm(prev => prev ? { ...prev, prompt: `/${command.displayName}` } : prev);
+        <PromptInvocationPickerDialog
+          open={promptInvocationDialogOpen}
+          onOpenChange={setPromptInvocationDialogOpen}
+          catalogKey={`${form?.workspaceId ?? ''}:${form?.agenticTool ?? ''}`}
+          loadCatalog={loadPromptInvocationCatalog}
+          onSelect={(item) => {
+            setForm(prev => prev ? { ...prev, prompt: item.invocation } : prev);
+            setPromptInvocationProvenance({
+              agenticTool: form?.agenticTool ?? '',
+              item,
+            });
+            setPromptCompatibilityWarning(false);
           }}
           labels={{
-            title: t('automation.slashDialog.title'),
-            description: t('automation.slashDialog.description'),
-            searchPlaceholder: t('automation.slashDialog.searchPlaceholder'),
-            empty: t('automation.slashDialog.empty'),
-            scope: {
-              all: t('automation.slashDialog.scope.all'),
-              project: t('automation.slashDialog.scope.project'),
-              user: t('automation.slashDialog.scope.user'),
-            },
+            title: t('automation.promptInvocationDialog.title'),
+            description: t('automation.promptInvocationDialog.description'),
+            searchPlaceholder: t('automation.promptInvocationDialog.searchPlaceholder'),
+            empty: t('automation.promptInvocationDialog.empty'),
           }}
         />
       </DialogContent>

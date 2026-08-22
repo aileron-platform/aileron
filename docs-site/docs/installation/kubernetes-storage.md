@@ -21,6 +21,13 @@ Browser 與 Canvas 不得掛載 Runtime HOME。Operator 為每個 Workspace 建�
 登入與設定、XDG data/state、Maven state、bootstrap journal 與一次性 agent defaults
 marker；working tree 則保存使用者 repository 與檔案。
 
+Codex、Claude 與 OpenCode 三個 Target Client 各自在 Runtime HOME 下擁有獨立的
+Client User Scope 路徑：`${CODEX_HOME:-$HOME/.codex}/skills`、
+`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills` 與 `$HOME/.config/opencode/skills`。
+三者都是同一顆 Runtime HOME PVC 底下的目錄，隨 Runtime HOME 一起掛載、一起回收；
+不是獨立的 Volume，也不對應單一 human user 的個人空間，而是由該 Workspace 的所有
+使用者與 sessions 共用。
+
 `/home/developer/.codex/tmp` 是唯一刻意覆蓋的暫存子路徑，使用 16 MiB memory
 `emptyDir`。Codex 會自行建立並將 `tmp/arg0` 設成目前 Runtime UID 擁有的 `0700`
 目錄；不得把 volume root 直接掛到 `tmp/arg0`，否則非 root Runtime 無法調整權限。

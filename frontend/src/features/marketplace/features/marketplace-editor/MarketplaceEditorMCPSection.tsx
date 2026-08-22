@@ -10,8 +10,6 @@ import {
 } from './marketplaceMCPServerDialogSchema';
 import { MarketplaceMCPServerDialog } from './dialogs/MarketplaceMCPServerDialog';
 import type { MarketplaceEditorResourceItem } from './marketplaceEditorResourceItems';
-import { MarketplaceResourceLoadError } from '../../components/MarketplaceResourceLoadError';
-import { LoadingSpinner } from '@/shared/components/ui/loading-spinner';
 
 export interface MarketplaceEditorMCPSectionProps {
   icon: LucideIcon;
@@ -19,7 +17,6 @@ export interface MarketplaceEditorMCPSectionProps {
   onDirty?: () => void;
   onItemsChange?: (items: MarketplaceEditorResourceItem[]) => Promise<void>;
   onRefresh?: () => void;
-  onLoadItem?: (item: MarketplaceEditorResourceItem) => Promise<MarketplaceEditorResourceItem>;
 }
 
 interface MarketplaceEditorMCPCardServer extends MCPServerCardData {
@@ -66,43 +63,17 @@ const MarketplaceEditorMCPCard: React.FC<{
   onDirty?: () => void;
   onChange: (item: MarketplaceEditorResourceItem) => Promise<void>;
   onDelete: (itemId: string) => Promise<void>;
-  onLoadItem?: (item: MarketplaceEditorResourceItem) => Promise<MarketplaceEditorResourceItem>;
-}> = ({ item, onDirty, onChange, onDelete, onLoadItem }) => {
+}> = ({ item, onDirty, onChange, onDelete }) => {
   const { t } = useI18n();
   const labels = React.useMemo(() => buildEditorMCPCardLabels(t), [t]);
   const server = React.useMemo(() => buildEditorMCPCardProps(item, t), [item, t]);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [dialogItem, setDialogItem] = React.useState(item);
   const [envVisible, setEnvVisible] = React.useState(false);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [loadError, setLoadError] = React.useState(false);
-
-  const handleEdit = React.useCallback(async () => {
-    setIsLoading(true);
-    setLoadError(false);
-    try {
-      const loadedItem = onLoadItem ? await onLoadItem(item) : item;
-      setDialogItem(loadedItem);
-      setDialogOpen(true);
-    } catch {
-      setLoadError(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [item, onLoadItem]);
-
-  if (loadError) {
-    return (
-      <MarketplaceResourceLoadError
-        className="min-h-36 rounded-md border border-border"
-        onRetry={() => { void handleEdit(); }}
-      />
-    );
-  }
-
-  if (isLoading) {
-    return <LoadingSpinner className="min-h-36 rounded-md border border-border" />;
-  }
+  const handleEdit = React.useCallback(() => {
+    setDialogItem(item);
+    setDialogOpen(true);
+  }, [item]);
 
   return (
     <>
@@ -112,7 +83,7 @@ const MarketplaceEditorMCPCard: React.FC<{
         labels={labels}
         supportsToggle={false}
         envVisible={envVisible}
-        onEdit={() => { void handleEdit(); }}
+        onEdit={handleEdit}
         onDelete={() => {
           void onDelete(item.id).then(() => onDirty?.()).catch(() => undefined);
         }}
@@ -138,7 +109,6 @@ export const MarketplaceEditorMCPSection: React.FC<MarketplaceEditorMCPSectionPr
   onDirty,
   onItemsChange,
   onRefresh,
-  onLoadItem,
 }) => {
   const { t } = useI18n();
   const [items, setItems] = React.useState(initialItems);
@@ -191,7 +161,6 @@ export const MarketplaceEditorMCPSection: React.FC<MarketplaceEditorMCPSectionPr
             <MarketplaceEditorMCPCard
               item={item}
               onDirty={onDirty}
-              onLoadItem={onLoadItem}
               onDelete={handleDelete}
               onChange={async (nextItem) => {
                 await handleItemsChange(items.map(current => (current.id === nextItem.id ? nextItem : current)));

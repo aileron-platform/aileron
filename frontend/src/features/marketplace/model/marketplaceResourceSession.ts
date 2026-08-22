@@ -1,5 +1,5 @@
 import React from 'react';
-import type { MarketplaceProvider } from './marketplaceTypes';
+import type { MarketplaceTargetClient } from './marketplaceTypes';
 import {
   createFileTreeResourceIdentity,
   FileTreeAsyncCoordinator,
@@ -10,7 +10,7 @@ import {
 import type { MarketplacePackageMutationResult } from './marketplaceMutation';
 
 export interface MarketplaceResourceIdentity {
-  provider: MarketplaceProvider | null;
+  targetClient: MarketplaceTargetClient | null;
   packageId: string;
   resourceType: string;
 }
@@ -23,7 +23,7 @@ export interface MarketplaceResourceQueryLifecycle<T> {
 
 const toFileTreeIdentity = (identity: MarketplaceResourceIdentity) => (
   createFileTreeResourceIdentity('marketplace-resource', {
-    provider: identity.provider ?? 'unresolved',
+    targetClient: identity.targetClient ?? 'unresolved',
     packageId: identity.packageId,
     resourceType: identity.resourceType,
   })

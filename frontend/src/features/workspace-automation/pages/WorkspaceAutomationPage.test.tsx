@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   detailProps: vi.fn(),
   getJob: vi.fn(),
   getMetrics: vi.fn(),
-  listSlashCommands: vi.fn(),
   listJobs: vi.fn(),
   listWorkspaces: vi.fn(),
   executeJob: vi.fn(),
@@ -85,7 +84,6 @@ vi.mock('../components/job-form/AutomationJobEditDialog', () => ({
 vi.mock('../api/automationWorkspaceApi', () => ({
   automationWorkspaceApi: {
     list: mocks.listWorkspaces,
-    listSlashCommands: mocks.listSlashCommands,
   },
 }));
 
@@ -116,7 +114,6 @@ describe('WorkspaceAutomationPage', () => {
     mocks.deleteJob.mockResolvedValue(undefined);
     mocks.getJob.mockResolvedValue(job);
     mocks.listJobs.mockResolvedValue([job]);
-    mocks.listSlashCommands.mockResolvedValue([]);
     mocks.listWorkspaces.mockResolvedValue([]);
     mocks.getMetrics.mockResolvedValue({
       activeCount: 1, pausedCount: 0, failedCount: 0, draftCount: 0,

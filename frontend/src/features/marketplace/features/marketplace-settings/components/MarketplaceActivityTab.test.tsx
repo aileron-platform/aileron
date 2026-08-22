@@ -3,7 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MarketplaceActivityRecord } from '@/features/marketplace/model/marketplaceTypes';
-import { listMarketplaceActivity } from '../../../api/marketplaceApi';
+import {
+  getMarketplaceActivityDetail,
+  listMarketplaceActivity,
+} from '../../../api/marketplaceApi';
 import { MarketplaceActivityTab } from './MarketplaceActivityTab';
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -13,6 +16,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 vi.mock('../../../api/marketplaceApi', () => ({
+  getMarketplaceActivityDetail: vi.fn(),
   listMarketplaceActivity: vi.fn(),
 }));
 
@@ -20,7 +24,8 @@ const activity: MarketplaceActivityRecord = {
   id: 'activity-1',
   action: 'copy',
   status: 'failed',
-  provider: 'codex',
+  packageFormat: 'agent-plugin/1.0.0',
+  targetClient: 'codex',
   packageId: 'review-tools',
   workspaceId: 'workspace-1',
   operationId: 'operation-1',
@@ -30,6 +35,26 @@ const activity: MarketplaceActivityRecord = {
 
 describe('MarketplaceActivityTab', () => {
   beforeEach(() => {
+    vi.mocked(getMarketplaceActivityDetail).mockReset();
+    vi.mocked(getMarketplaceActivityDetail).mockResolvedValue({
+      ...activity,
+      workspaceIdSnapshot: 'workspace-1',
+      targetLocators: [],
+      diagnosticCodes: [],
+      commands: [{
+        sequence: 1,
+        stage: 'plugin-install',
+        argvDisplay: 'codex plugin add review-tools',
+        exitCode: 0,
+        startedAt: '2026-07-25T00:00:00Z',
+        endedAt: '2026-07-25T00:00:01Z',
+        stdout: 'installed review-tools',
+        stderr: null,
+        stdoutOriginalByteCount: 22,
+        stderrOriginalByteCount: 0,
+        truncated: false,
+      }],
+    });
     vi.mocked(listMarketplaceActivity).mockReset();
     vi.mocked(listMarketplaceActivity).mockResolvedValue({
       items: [activity],
@@ -38,6 +63,26 @@ describe('MarketplaceActivityTab', () => {
       pageSize: 50,
       totalPages: 2,
     });
+  });
+
+  it('loads raw per-command CLI output only when details are requested', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <MarketplaceActivityTab />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('marketplace.activity.actions.copy');
+    expect(getMarketplaceActivityDetail).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', {
+      name: 'marketplace.settings.activity.showDetails',
+    }));
+
+    expect(await screen.findByText('installed review-tools')).toBeVisible();
+    expect(screen.getByText('codex plugin add review-tools')).toBeVisible();
+    expect(getMarketplaceActivityDetail).toHaveBeenCalledWith('activity-1');
   });
 
   it('renders a one-shot copy activity and keeps raw error codes in diagnostics', async () => {
@@ -87,7 +132,8 @@ describe('MarketplaceActivityTab', () => {
         page: 2,
         pageSize: 50,
         workspaceId: undefined,
-        provider: undefined,
+        packageFormat: undefined,
+        targetClient: undefined,
         packageId: undefined,
         action: undefined,
         status: undefined,
@@ -99,7 +145,7 @@ describe('MarketplaceActivityTab', () => {
     render(
       <MemoryRouter
         initialEntries={[
-          '/?workspaceId=workspace-2&provider=codex&packageId=tools&action=install&status=failed&page=2',
+          '/?workspaceId=workspace-2&packageFormat=agent-plugin%2F1.0.0&targetClient=codex&packageId=tools&action=install&status=failed&page=2',
         ]}
       >
         <MarketplaceActivityTab />
@@ -111,7 +157,8 @@ describe('MarketplaceActivityTab', () => {
         page: 2,
         pageSize: 50,
         workspaceId: 'workspace-2',
-        provider: 'codex',
+        packageFormat: 'agent-plugin/1.0.0',
+        targetClient: 'codex',
         packageId: 'tools',
         action: 'install',
         status: 'failed',

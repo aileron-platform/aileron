@@ -33,9 +33,9 @@ title: ProductShell 與語意產品區域
 
 - `content` 接收 collapsed state，負責產生區域內容。
 - `behavior` 宣告 `collapsible`、`resizable`、`defaultWidth`、`minWidth` 與 `maxWidth`。
-- `presentation` 提供 accessible label、chrome variant、responsive policy 與 header slots。
+- `presentation` 提供 accessible label、responsive policy 與 header slots；欄位背景不屬於產品 Adapter interface。
 
-Companion 另外宣告 `side` 與 `bottom` 兩組尺寸政策、`side | bottom` placement、collapsed content、收合／展開／Resize 文案與 reveal request id。產品只提供內容和能力；placement、尺寸、收合、Resize 與主內容空間由 Shell 執行。
+Companion 另外宣告 `side` 與 `bottom` 兩組尺寸政策、`side | bottom` placement、`standard | compact` rail、collapsed content、收合／展開／Resize 文案與 reveal request id。產品只提供內容和能力；placement、尺寸、收合、Resize 與主內容空間由 Shell 執行。
 
 ## Shell implementation
 
@@ -45,6 +45,7 @@ Companion 另外宣告 `side` 與 `bottom` 兩組尺寸政策、`side | bottom` 
 - 以 region behavior clamp 寬度與高度，並保留主內容的最小可用寬度與高度。
 - 管理 column 與 Companion 的 Resize、收合、responsive 隱藏、overflow、scroll、focus cursor 與 fullscreen。
 - 以 `data-shell-region`、`data-shell-body` 與 `data-shell-state` 提供穩定的測試 surface。
+- `navigation`、`navigator`、`main`、side／bottom `companion`、state body，以及 Shell-owned header／content wrapper 統一使用 `bg-background`；欄位只以 border、尺寸與內容層級區隔。產品 Adapter 不得選擇欄位背景。
 - `main-expanded` 只呈現主內容；`companion-fullscreen` 只呈現 Companion，Escape 由 display adapter 處理。
 - `main` 與各內容容器使用 `min-w-0`、`min-h-0` 與自身 overflow 邊界，避免內容把水平捲動推到 document 層。
 
@@ -135,7 +136,7 @@ Version Control 子選單以 `section=versionControl&submenu=changes|history` �
 
 | Module | 可以依賴 | 不可以擁有 |
 |---|---|---|
-| `shared/components/shell` | neutral region types、layout preferences、UI primitives、i18n accessor | 產品 route、功能名稱、resource role、API query、產品 capability |
+| `shared/components/shell` | neutral region types、統一 Shell surface、layout preferences、UI primitives、i18n accessor | 產品 route、功能名稱、resource role、API query、產品 capability |
 | Workspace Adapter | Workspace Provider、surface model、Workspace content、Workspace preferences | 第二套 column geometry、產品自有 Resize handle |
 | Knowledge Base Adapter | Knowledge Base route／permission／content contract | Companion 或另一個 Shell implementation |
 | Marketplace Adapter | Marketplace surface、settings route／query／content contract | 巢狀 Shell、第二組 mode rail、產品自有欄寬計算 |
@@ -159,7 +160,7 @@ Version Control 子選單以 `section=versionControl&submenu=changes|history` �
 
 Shell 的 test surface 必須同時驗證 interface 行為與產品 Adapter：
 
-- Shared unit tests 驗證 region behavior、clamp、preferences、Resize、collapse、placement 與 fullscreen。
+- Shared unit tests 驗證統一背景 surface、region behavior、clamp、preferences、Resize、collapse、placement 與 fullscreen。
 - Workspace、Knowledge Base、Marketplace tests 驗證 surface model、state body、region presence 與 capability mapping。
 - Product Shell E2E fixture 驗證欄位 owner、viewport 邊界、document overflow、dialog／menu 邊界與三產品共同互動。
 - 前端 architecture test 驗證 shared 不依賴 feature、feature 只使用公開入口，以及 `ProductShell` 是跨產品的 Shell seam。

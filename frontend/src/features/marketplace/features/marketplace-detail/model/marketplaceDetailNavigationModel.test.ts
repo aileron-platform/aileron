@@ -6,7 +6,7 @@ import { getMarketplaceDetailFeatureItems } from './marketplaceDetailNavigationM
 describe('getMarketplaceDetailFeatureItems', () => {
   it('builds navigation without reading resource content from the overview', () => {
     const detail = {
-      provider: 'codex',
+      targetClient: 'codex',
     } as MarketplacePackageDetail;
 
     const items = getMarketplaceDetailFeatureItems(detail, key => key);

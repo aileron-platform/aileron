@@ -44,14 +44,14 @@ const renderBasicSection = () => {
     onDescriptionChange: vi.fn(),
     onRequiredDraftChange: vi.fn(),
     onReadmeChange: vi.fn(),
-    onProviderGuidanceChange: vi.fn(),
+    onTargetClientGuidanceChange: vi.fn(),
     onDirty: vi.fn(),
   };
 
   render(
     <MarketplaceEditorBasicSection
       mode="create"
-      provider="codex"
+      targetClient="codex"
       packageId="review-bot"
       displayName="Review Bot"
       description="Reviews code"

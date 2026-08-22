@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "packageManager": "npm@12.0.1",
   "scripts": {
     "dev": "vite --port 8082 --host 0.0.0.0",
     "build": "vite build",
@@ -13,7 +14,9 @@
     "preview": "vite preview --port 8082 --host 0.0.0.0",
     "test": "vitest --config vite.config.test.ts",
     "test:ui": "vitest --ui --config vite.config.test.ts",
-    "test:run": "vitest run --config vite.config.test.ts",
+    "test:run": "vitest run --config vite.config.test.ts --pool=forks --maxWorkers=4",
+    "test:acceptance-script": "node --test e2e/homelab-acceptance.unit.test.mjs",
+    "test:install-script-policy": "node --test scripts/check-install-script-policy.mjs",
     "test:gateway": "vitest run --config vite.config.gateway-test.ts",
     "test:coverage": "vitest run --coverage --config vite.config.test.ts",
     "test:e2e": "playwright test",
@@ -67,7 +70,7 @@
     "date-fns": "^3.6.0",
     "diff": "^8.0.2",
     "embla-carousel-react": "^8.3.0",
-    "esbuild": "^0.21.5",
+    "esbuild": "0.25.0",
     "fflate": "^0.8.2",
     "framer-motion": "^11.11.1",
     "graphology": "^0.26.0",
@@ -130,7 +133,11 @@
     "tailwindcss": "^3.4.11",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
-    "vite": "^5.4.1",
+    "vite": "6.4.3",
     "vitest": "^3.2.4"
+  },
+  "allowScripts": {
+    "@swc/core@1.15.2": true,
+    "esbuild@0.25.0": true
   }
 }

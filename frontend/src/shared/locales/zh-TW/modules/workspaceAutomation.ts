@@ -68,13 +68,12 @@ const workspaceAutomationTranslations = {
         placeholder: '說明任務要在工作區內執行的內容',
       },
       prompt: {
-        label: 'Prompt / 指令',
-        placeholder: '輸入要在任務中執行的 Prompt 或 Slash Command',
-        helper: '可直接輸入自訂 Prompt，或透過指令選擇器快速插入標準化 Slash Command。',
-        selectCommand: '選擇指令',
-        commandsLoading: '正在載入 Slash Command…',
-        commandsEmpty: '此工作區沒有可用的 Slash Command。',
-        commandsError: '無法載入 Slash Command，請稍後再試。',
+        label: 'Prompt / Invocation',
+        placeholder: '輸入要在任務中執行的 Prompt 或 Prompt Invocation',
+        helper: '可直接輸入自訂 Prompt，或透過選擇器插入指令或 Skill。',
+        selectInvocation: '選擇 Prompt Invocation',
+        agenticToolRequired: '請先選擇 Agentic Tool。',
+        toolCompatibilityWarning: '這個 Invocation 來自先前選擇的 Agentic Tool，可能不相容；請重新選取或編輯 Prompt。',
       },
       trigger: {
         label: '觸發類型',
@@ -213,16 +212,11 @@ const workspaceAutomationTranslations = {
       },
     },
   },
-  slashDialog: {
-    title: '選擇 Slash Command',
-    description: '從指令庫挑選常用指令，將結果填入 Prompt 欄位。',
-    searchPlaceholder: '輸入指令名稱、描述或標籤搜尋…',
-    empty: '目前沒有符合條件的指令',
-    scope: {
-      all: '全部',
-      project: '專案',
-      user: '個人',
-    },
+  promptInvocationDialog: {
+    title: '選擇 Prompt Invocation',
+    description: '瀏覽指令與 Skill，並將選取項目填入 Prompt 欄位。',
+    searchPlaceholder: '輸入名稱、描述或標籤搜尋…',
+    empty: '目前沒有符合條件的 Prompt Invocation',
   },
   sidebar: {
     title: '任務篩選',

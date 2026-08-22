@@ -79,6 +79,7 @@ export interface AutomationWorkspaceSummary {
   id: string;
   name: string;
   accessSource?: 'owned' | 'shared';
+  runtimeUrl?: string;
 }
 
 export type JobExecutionStatus =

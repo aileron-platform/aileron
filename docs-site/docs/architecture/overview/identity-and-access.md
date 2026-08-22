@@ -27,7 +27,7 @@ sequenceDiagram
   M->>M: validate issuer, signature, nonce, state and claims
   M-->>B: Secure HttpOnly opaque session cookie
   B->>M: GET /api/v1/oauth2/session
-  M-->>B: local user, allowedOperations, memory-only CSRF token
+  M-->>B: local user, canonical OIDC subject, allowedOperations, memory-only CSRF token
 ```
 
 Session handle 是 256-bit 隨機值；PostgreSQL 只保存雜湊。Manager API Cookie 使用

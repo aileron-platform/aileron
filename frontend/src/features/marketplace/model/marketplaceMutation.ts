@@ -1,7 +1,4 @@
-import type {
-  MarketplaceLifecycleStatus,
-  MarketplaceValidationResult,
-} from './marketplaceTypes';
+import type { MarketplaceValidationResult } from './marketplaceTypes';
 
 export type MarketplaceDocumentResourceType =
   | 'commands'
@@ -56,7 +53,6 @@ export interface MarketplaceBasicResource {
   description?: string;
   catalogMetadata: Record<string, unknown>;
   manifestMetadata: Record<string, unknown>;
-  lifecycleStatus: MarketplaceLifecycleStatus;
   validationResults: MarketplaceValidationResult[];
 }
 

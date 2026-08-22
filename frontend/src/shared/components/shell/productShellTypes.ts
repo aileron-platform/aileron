@@ -12,11 +12,6 @@ export interface ProductShellRegionBehavior {
   maxWidth: number;
 }
 
-export type ProductShellRegionChrome =
-  | 'navigation'
-  | 'navigator-muted'
-  | 'navigator-plain';
-
 export interface ProductShellColumnRenderState {
   collapsed: boolean;
 }
@@ -33,7 +28,6 @@ export interface ProductShellColumnRegion {
   behavior: ProductShellRegionBehavior;
   presentation: {
     accessibleLabel: string;
-    chrome: ProductShellRegionChrome;
     responsive: 'always' | 'desktop-up';
     header?: ProductShellRegionHeader;
   };
@@ -48,9 +42,7 @@ export type ProductShellCompanionRenderState =
   | { placement: 'side'; collapsed: boolean; fullscreen: boolean }
   | { placement: 'bottom'; collapsed: false; fullscreen: boolean };
 
-export type ProductShellCompanionChrome =
-  | 'muted-rail'
-  | 'plain-compact-rail';
+export type ProductShellCompanionRail = 'standard' | 'compact';
 
 export interface ProductShellCompanionRegion {
   content: (state: ProductShellCompanionRenderState) => React.ReactNode;
@@ -64,7 +56,7 @@ export interface ProductShellCompanionRegion {
   };
   presentation: {
     accessibleLabel: string;
-    chrome: ProductShellCompanionChrome;
+    rail: ProductShellCompanionRail;
     header?: ProductShellRegionHeader;
     collapsedContent?: React.ReactNode;
     collapseLabel: string;

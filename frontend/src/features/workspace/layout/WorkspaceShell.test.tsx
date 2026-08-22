@@ -115,6 +115,13 @@ vi.mock('../providers/WorkspaceProvider', () => ({
     return {
       state: mocks.workspaceState,
       dispatch: mocks.dispatchMock,
+      workspace: {
+        openTabs: [],
+        activeTabId: null,
+        versionControl: mocks.workspaceState.versionControl,
+        workspaceSettings: mocks.workspaceState.workspaceSettings,
+        containerManagement: mocks.workspaceState.containerManagement,
+      },
       permissions: {
         accessRole: hasOperation('workspace.detail.read') ? 'owner' : null,
         canRead: hasOperation('workspace.detail.read'),
@@ -135,9 +142,12 @@ vi.mock('../providers/WorkspaceProvider', () => ({
         hasOperation,
       },
       workspaceRuntime: mocks.workspaceRuntime,
+      fileEditor: { modifiedTabs: [] },
       fileTreeActions: {
         uploadFiles: mocks.uploadFilesMock,
       },
+      openFileInTab: vi.fn(),
+      closeTab: vi.fn(),
     };
   },
 }));
@@ -179,7 +189,7 @@ vi.mock('../features/agent-settings/AgentSettingsPage', () => ({
 
 vi.mock('../features/agent-settings/components/CodexDocumentSidebar', () => ({
   default: ({ onSelect }: { onSelect: (id: string | null) => void }) => (
-    <button type="button" data-testid="codex-document-sidebar" onClick={() => onSelect('user:opsx-apply.md')}>
+    <button type="button" data-testid="codex-document-sidebar" onClick={() => onSelect('user:sample-command.md')}>
       codex-document-sidebar
     </button>
   ),
@@ -625,7 +635,7 @@ describe('WorkspaceShell', () => {
     fireEvent.click(await screen.findByTestId('codex-document-sidebar'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('agent-settings-feature')).toHaveTextContent('user:opsx-apply.md');
+      expect(screen.getByTestId('agent-settings-feature')).toHaveTextContent('user:sample-command.md');
     });
   });
 

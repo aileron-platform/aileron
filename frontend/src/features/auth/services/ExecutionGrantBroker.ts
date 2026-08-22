@@ -3,6 +3,7 @@ import {
   registerExecutionGrantProvider,
   registerExecutionGrantRejectionHandler,
 } from '@/shared/api/apiClient';
+import { AUTHORIZATION_ERROR_CODES } from '@/shared/authorization/authorizationErrorCodes';
 import { managerSessionService } from './ManagerSessionService';
 
 export type RuntimeAction =
@@ -35,6 +36,13 @@ const targetKey = (value: string): string => {
   return gateway ? `${url.origin}${gateway[0].replace(/\/$/, '')}` : url.origin;
 };
 
+const isManagerSessionCsrfInvalid = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const apiError = error as Error & { status?: unknown; errorCode?: unknown };
+  return apiError.status === 403
+    && apiError.errorCode === AUTHORIZATION_ERROR_CODES.managerSessionCsrfInvalid;
+};
+
 const classifyRuntimeAction = (method: string, rawPath: string): RuntimeAction => {
   const path = rawPath.split('?', 1)[0];
   if (path.startsWith('/api/v1/threads') || path.startsWith('/api/v1/audio/')) {
@@ -57,6 +65,7 @@ class ExecutionGrantBroker {
   private readonly targets = new Map<string, RuntimeTarget>();
   private readonly cache = new Map<string, CachedGrant>();
   private readonly pending = new Map<string, Promise<string>>();
+  private pendingSessionBootstrap: Promise<void> | null = null;
 
   constructor() {
     registerExecutionGrantProvider(({ targetUrl, method, path }) => this.getGrant(
@@ -122,24 +131,54 @@ class ExecutionGrantBroker {
     audience: 'workspace-runtime' | 'workspace-terminal',
     actions: RuntimeAction[],
   ): Promise<string> {
-    let csrfToken = managerSessionService.getCsrfToken();
-    if (!csrfToken) {
-      await managerSessionService.bootstrap();
-      csrfToken = managerSessionService.getCsrfToken();
-    }
-    if (!csrfToken) throw new Error('MANAGER_SESSION_REQUIRED');
-    const payload = await apiClient.post<{ grant?: string; expiresIn?: number }>(
+    const csrfToken = await this.requireManagerSessionCsrfToken();
+    const requestGrant = () => apiClient.post<{ grant?: string; expiresIn?: number }>(
       `/workspaces/${encodeURIComponent(workspaceId)}/execution-grants`,
-      {
-        runtimeInstanceId: generation.runtimeInstanceId,
-        audience,
-        actions,
-      },
+      { runtimeInstanceId: generation.runtimeInstanceId, audience, actions },
     );
+    let payload: { grant?: string; expiresIn?: number };
+    try {
+      payload = await requestGrant();
+    } catch (error) {
+      if (!isManagerSessionCsrfInvalid(error)) throw error;
+      await this.refreshManagerSessionCsrfToken(csrfToken);
+      payload = await requestGrant();
+    }
     if (!payload.grant || payload.expiresIn !== 60) {
       throw new Error('EXECUTION_GRANT_RESPONSE_INVALID');
     }
     return payload.grant;
+  }
+
+  private async requireManagerSessionCsrfToken(): Promise<string> {
+    const csrfToken = managerSessionService.getCsrfToken();
+    if (csrfToken) return csrfToken;
+    await this.bootstrapManagerSession();
+    const bootstrappedToken = managerSessionService.getCsrfToken();
+    if (!bootstrappedToken) throw new Error('MANAGER_SESSION_REQUIRED');
+    return bootstrappedToken;
+  }
+
+  private async refreshManagerSessionCsrfToken(rejectedToken: string): Promise<void> {
+    const currentToken = managerSessionService.getCsrfToken();
+    if (currentToken && currentToken !== rejectedToken) return;
+    await this.bootstrapManagerSession();
+    if (!managerSessionService.getCsrfToken()) throw new Error('MANAGER_SESSION_REQUIRED');
+  }
+
+  private async bootstrapManagerSession(): Promise<void> {
+    const activeRequest = this.pendingSessionBootstrap;
+    if (activeRequest) {
+      await activeRequest;
+      return;
+    }
+    const request = managerSessionService.bootstrap().then(() => undefined);
+    this.pendingSessionBootstrap = request;
+    try {
+      await request;
+    } finally {
+      if (this.pendingSessionBootstrap === request) this.pendingSessionBootstrap = null;
+    }
   }
 
   private async resolveRuntimeGeneration(workspaceId: string): Promise<RuntimeGeneration> {

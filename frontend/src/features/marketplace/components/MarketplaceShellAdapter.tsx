@@ -5,7 +5,6 @@ import {
   type ProductShellBody,
   type ProductShellColumnRegion,
   type ProductShellRegionBehavior,
-  type ProductShellRegionChrome,
 } from '@/shared/components/shell';
 
 export type MarketplaceShellColumnRenderState = { collapsed: boolean };
@@ -71,7 +70,6 @@ export interface MarketplaceShellAdapterProps {
 
 const REGION_PRESETS: Record<MarketplaceShellRegionPreset, {
   behavior: ProductShellRegionBehavior;
-  chrome: ProductShellRegionChrome;
   responsive: 'always' | 'desktop-up';
 }> = {
   navigation: {
@@ -82,7 +80,6 @@ const REGION_PRESETS: Record<MarketplaceShellRegionPreset, {
       minWidth: 240,
       maxWidth: 520,
     },
-    chrome: 'navigation',
     responsive: 'always',
   },
   'settings-navigation': {
@@ -93,7 +90,6 @@ const REGION_PRESETS: Record<MarketplaceShellRegionPreset, {
       minWidth: 240,
       maxWidth: 360,
     },
-    chrome: 'navigation',
     responsive: 'always',
   },
   navigator: {
@@ -104,7 +100,6 @@ const REGION_PRESETS: Record<MarketplaceShellRegionPreset, {
       minWidth: 270,
       maxWidth: 520,
     },
-    chrome: 'navigator-muted',
     responsive: 'always',
   },
   'settings-navigator': {
@@ -115,7 +110,6 @@ const REGION_PRESETS: Record<MarketplaceShellRegionPreset, {
       minWidth: 270,
       maxWidth: 352,
     },
-    chrome: 'navigator-plain',
     responsive: 'always',
   },
   'detail-navigation': {
@@ -126,7 +120,6 @@ const REGION_PRESETS: Record<MarketplaceShellRegionPreset, {
       minWidth: 240,
       maxWidth: 520,
     },
-    chrome: 'navigator-plain',
     responsive: 'always',
   },
   'editor-navigation': {
@@ -137,7 +130,6 @@ const REGION_PRESETS: Record<MarketplaceShellRegionPreset, {
       minWidth: 240,
       maxWidth: 520,
     },
-    chrome: 'navigation',
     responsive: 'always',
   },
   'center-filters': {
@@ -148,7 +140,6 @@ const REGION_PRESETS: Record<MarketplaceShellRegionPreset, {
       minWidth: 270,
       maxWidth: 420,
     },
-    chrome: 'navigator-muted',
     responsive: 'desktop-up',
   },
 };
@@ -188,7 +179,6 @@ const mapColumn = (
     behavior: configuration.behavior,
     presentation: {
       accessibleLabel: surface.accessibleLabel,
-      chrome: configuration.chrome,
       responsive: configuration.responsive,
       header: mapHeader(surface),
     },

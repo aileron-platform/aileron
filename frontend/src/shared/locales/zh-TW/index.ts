@@ -1,5 +1,5 @@
 /**
- * 繁體中文翻譯資源
+ * Traditional Chinese translation resources.
  */
 
 import common from './common';

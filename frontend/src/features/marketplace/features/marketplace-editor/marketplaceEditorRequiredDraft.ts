@@ -1,4 +1,4 @@
-import type { MarketplacePackageDetail, MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplacePackageDetail, MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 
 export interface MarketplaceRequiredDraft {
   marketplaceName: string;
@@ -48,22 +48,22 @@ export const parseMarketplaceJsonObject = (value: string): Record<string, unknow
   }
 };
 
-const createMarketplaceSourceValue = (provider: MarketplaceProvider, sourcePath: string): string | Record<string, string> => (
-  provider === 'codex'
+const createMarketplaceSourceValue = (targetClient: MarketplaceTargetClient, sourcePath: string): string | Record<string, string> => (
+  targetClient === 'codex'
     ? { source: 'local', path: sourcePath }
     : sourcePath
 );
 
 const createMarketplaceListingJson = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   draft: Pick<MarketplaceRequiredDraft, 'packageName' | 'sourcePath' | 'codexInstallationPolicy' | 'codexAuthenticationPolicy' | 'category'>,
 ): Record<string, unknown> => {
   const entry: Record<string, unknown> = {
     name: draft.packageName,
-    source: createMarketplaceSourceValue(provider, draft.sourcePath),
+    source: createMarketplaceSourceValue(targetClient, draft.sourcePath),
   };
 
-  if (provider === 'codex') {
+  if (targetClient === 'codex') {
     entry.policy = {
       installation: draft.codexInstallationPolicy,
       authentication: draft.codexAuthenticationPolicy,
@@ -75,16 +75,16 @@ const createMarketplaceListingJson = (
 };
 
 const createMarketplaceManifestJson = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   draft: Pick<MarketplaceRequiredDraft, 'manifestName' | 'manifestVersion' | 'manifestDescription'>,
 ): Record<string, unknown> => ({
   name: draft.manifestName,
-  ...(provider === 'claude-code' ? {} : { version: draft.manifestVersion }),
-  ...(provider === 'codex' ? { description: draft.manifestDescription } : {}),
+  ...(targetClient === 'claude-code' ? {} : { version: draft.manifestVersion }),
+  ...(targetClient === 'codex' ? { description: draft.manifestDescription } : {}),
 });
 
 export const createInitialMarketplaceRequiredDraft = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   packageId: string,
   displayName: string,
   description: string,
@@ -93,7 +93,7 @@ export const createInitialMarketplaceRequiredDraft = (
   const fallbackPackageName = packageId || displayName;
   const fallbackDescription = description || fallbacks.description;
   const draft = {
-    marketplaceName: provider === 'codex' ? fallbacks.codexMarketplaceName : fallbacks.claudeMarketplaceName,
+    marketplaceName: targetClient === 'codex' ? fallbacks.codexMarketplaceName : fallbacks.claudeMarketplaceName,
     ownerName: fallbacks.ownerName,
     packageName: fallbackPackageName,
     sourcePath: `./plugins/${fallbackPackageName}`,
@@ -111,20 +111,20 @@ export const createInitialMarketplaceRequiredDraft = (
 
   return {
     ...draft,
-    listingJson: stringifyMarketplaceJson(createMarketplaceListingJson(provider, draft)),
-    manifestJson: stringifyMarketplaceJson(createMarketplaceManifestJson(provider, draft)),
+    listingJson: stringifyMarketplaceJson(createMarketplaceListingJson(targetClient, draft)),
+    manifestJson: stringifyMarketplaceJson(createMarketplaceManifestJson(targetClient, draft)),
   };
 };
 
 export const createMarketplaceRequiredDraftFromDetail = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   detail: MarketplacePackageDetail | null,
   packageId: string,
   displayName: string,
   description: string,
   fallbacks: MarketplaceRequiredDraftFallbacks,
 ): MarketplaceRequiredDraft => {
-  const draft = createInitialMarketplaceRequiredDraft(provider, packageId, displayName, description, fallbacks);
+  const draft = createInitialMarketplaceRequiredDraft(targetClient, packageId, displayName, description, fallbacks);
   if (!detail) return draft;
   const manifest = isJsonObject(detail.manifestMetadata) ? detail.manifestMetadata : {};
   const manifestName = getStringField(manifest.name, detail.packageId);
@@ -138,18 +138,18 @@ export const createMarketplaceRequiredDraftFromDetail = (
     manifestJson: stringifyMarketplaceJson({
       ...manifest,
       name: manifestName,
-      ...(provider !== 'claude-code' ? { version: getStringField(manifest.version, detail.version ?? draft.manifestVersion) } : {}),
-      ...(provider === 'codex' ? { description: manifestDescription } : {}),
+      ...(targetClient !== 'claude-code' ? { version: getStringField(manifest.version, detail.version ?? draft.manifestVersion) } : {}),
+      ...(targetClient === 'codex' ? { description: manifestDescription } : {}),
     }),
   };
   return {
     ...next,
-    listingJson: mergeMarketplaceListingJson(provider, draft.listingJson, next),
+    listingJson: mergeMarketplaceListingJson(targetClient, draft.listingJson, next),
   };
 };
 
 export const mergeMarketplaceListingJson = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   currentJson: string,
   draft: MarketplaceRequiredDraft,
 ): string => {
@@ -158,10 +158,10 @@ export const mergeMarketplaceListingJson = (
   const nextEntry: Record<string, unknown> = {
     ...current,
     name: draft.packageName,
-    source: createMarketplaceSourceValue(provider, draft.sourcePath),
+    source: createMarketplaceSourceValue(targetClient, draft.sourcePath),
   };
 
-  if (provider === 'codex') {
+  if (targetClient === 'codex') {
     const policy = isJsonObject(current.policy) ? current.policy : {};
     nextEntry.policy = {
       ...policy,
@@ -175,7 +175,7 @@ export const mergeMarketplaceListingJson = (
 };
 
 export const mergeMarketplaceManifestJson = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   currentJson: string,
   draft: MarketplaceRequiredDraft,
 ): string => {
@@ -185,10 +185,10 @@ export const mergeMarketplaceManifestJson = (
     name: draft.manifestName,
   };
 
-  if (provider !== 'claude-code') {
+  if (targetClient !== 'claude-code') {
     next.version = draft.manifestVersion;
   }
-  if (provider === 'codex') {
+  if (targetClient === 'codex') {
     next.description = draft.manifestDescription;
   }
 

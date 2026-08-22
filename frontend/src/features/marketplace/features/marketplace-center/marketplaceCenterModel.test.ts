@@ -8,10 +8,10 @@ import {
 } from './marketplaceCenterModel';
 
 const createPackage = (
-  provider: MarketplacePackageSummary['provider'],
+  targetClient: MarketplacePackageSummary['targetClient'],
   packageId: string,
 ): MarketplacePackageSummary => ({
-  provider,
+  targetClient,
   packageType: 'plugin',
   packageId,
   displayName: packageId,
@@ -19,11 +19,9 @@ const createPackage = (
   description: `${packageId} description`,
   category: 'coding',
   tags: [],
-  sourceType: 'created',
   indexedResourceNames: [],
   validationSeverity: 'none',
-  lifecycleStatus: 'ready',
-  registryPath: `${provider}/plugins/${packageId}`,
+  registryPath: `${targetClient}/plugins/${packageId}`,
   revision: 'rev-1',
   updatedAt: '2026-05-07T00:00:00.000Z',
   variants: [],
@@ -34,7 +32,7 @@ describe('marketplaceCenterModel', () => {
     const query = buildMarketplaceListQuery(
       {
         searchTerm: 'figma',
-        provider: 'codex',
+        targetClient: 'codex',
         category: 'coding',
         activeFeatures: new Set(['mcp', 'skills']),
         page: 3,
@@ -42,7 +40,7 @@ describe('marketplaceCenterModel', () => {
       },
       {
         q: '',
-        provider: 'all',
+        targetClient: 'all',
         features: [],
         page: 1,
       },
@@ -50,7 +48,7 @@ describe('marketplaceCenterModel', () => {
 
     expect(query).toEqual({
       q: '',
-      provider: 'all',
+      targetClient: 'all',
       category: 'coding',
       features: [],
       sort: 'updatedAt',
@@ -71,33 +69,31 @@ describe('marketplaceCenterModel', () => {
     expect(Array.from(added)).toEqual(['mcp', 'skills']);
   });
 
-  it('reveals imported packages by selecting a single imported provider', () => {
+  it('reveals imported packages by selecting a single imported targetClient', () => {
     expect(resolveImportedPackageRevealFilters({
       imported: [createPackage('claude-code', 'review-assistant')],
-      skipped: [],
       failed: [],
       warnings: [],
     })).toEqual({
       q: '',
-      provider: 'claude-code',
+      targetClient: 'claude-code',
       category: 'all',
       features: [],
       page: 1,
     });
   });
 
-  it('reveals mixed-provider imports with the all-provider filter', () => {
+  it('reveals mixed-targetClient imports with the all-targetClient filter', () => {
     expect(resolveImportedPackageRevealFilters({
       imported: [
         createPackage('claude-code', 'review-assistant'),
         createPackage('codex', 'figma-context'),
       ],
-      skipped: [],
       failed: [],
       warnings: [],
     })).toEqual({
       q: '',
-      provider: 'all',
+      targetClient: 'all',
       category: 'all',
       features: [],
       page: 1,

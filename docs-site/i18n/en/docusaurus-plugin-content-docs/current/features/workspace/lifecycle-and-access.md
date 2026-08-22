@@ -73,6 +73,8 @@ A timeout, stale generation, or temporarily unobservable provider remains uncert
 | `WORKSPACE_AVAILABILITY_ACTION_ACCEPTED` | `transitioning` | `workspace` | `202` | No | `return` |
 | `WORKSPACE_RUNTIME_INSTANCE_MISMATCH` | `transitioning` | `workspace` | `423` | No | `return` |
 | `WORKSPACE_BROWSER_WORKLOAD_NOT_READY` | `ready` | `browser` | `423` | No | — |
+| `WORKSPACE_EXECUTION_PLANE_DRIFT` | `blocked` | `workspace` | `409` | No | — |
+| `WORKSPACE_EXECUTION_PLANE_OBSERVATION_UNAVAILABLE` | `transitioning` | `workspace` | `503` | No | — |
 | `WORKSPACE_KB_MOUNT_SYNC_IN_PROGRESS` | `ready` | `knowledge_mount` | `409` | No | — |
 
 ### Workspace permanent-deletion projection

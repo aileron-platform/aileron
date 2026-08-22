@@ -45,11 +45,13 @@ export const MarketplacePackageDetailHeader: React.FC<MarketplacePackageDetailHe
       info={(
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>{t('marketplace.detail.header.version', { version: detail.version ?? t('marketplace.common.noVersion') })}</span>
-          <span>{t('marketplace.detail.header.provider', { provider: t(`marketplace.providers.${detail.provider}`) })}</span>
+          <span>{t('marketplace.detail.header.targetClient', { targetClient: t(`marketplace.targetClients.${detail.targetClient}`) })}</span>
           <span>{t('marketplace.detail.header.category', { category: detail.category || t('marketplace.common.uncategorized') })}</span>
-          <Badge variant={detail.lifecycleStatus === 'draft' ? 'outline' : 'secondary'}>
-            {t(`marketplace.lifecycle.${detail.lifecycleStatus}`)}
-          </Badge>
+          {detail.validationSeverity !== 'none' ? (
+            <Badge variant={detail.validationSeverity === 'error' ? 'destructive' : 'outline'}>
+              {t(`marketplace.validation.severity.${detail.validationSeverity}`)}
+            </Badge>
+          ) : null}
         </div>
       )}
       actions={(
@@ -77,12 +79,6 @@ export const MarketplacePackageDetailHeader: React.FC<MarketplacePackageDetailHe
               size="sm"
               className="h-7 px-2 text-xs"
               onClick={onInstall}
-              disabled={detail.lifecycleStatus !== 'ready'}
-              title={
-                detail.lifecycleStatus === 'draft'
-                  ? t('marketplace.lifecycle.draftInstallDisabled')
-                  : undefined
-              }
             >
               <Play className="mr-1.5 h-3.5 w-3.5" /> {t('marketplace.detail.actions.install')}
             </Button>

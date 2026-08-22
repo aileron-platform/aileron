@@ -12,7 +12,6 @@ const apiMock = vi.hoisted(() => ({
   getRootDocument: vi.fn(),
   getHooks: vi.fn(),
   listMCPServers: vi.fn(),
-  getMCPServer: vi.fn(),
   listDocuments: vi.fn(),
   loadDocument: vi.fn(),
 }));
@@ -79,7 +78,7 @@ vi.mock('./components/MarketplaceDetailFilesSection', () => ({
 }));
 
 const detail: MarketplacePackageDetail = {
-  provider: 'codex',
+  targetClient: 'codex',
   packageType: 'plugin',
   packageId: 'review-tools',
   displayName: 'Review Tools',
@@ -87,10 +86,8 @@ const detail: MarketplacePackageDetail = {
   description: 'Review package',
   category: 'coding',
   tags: [],
-  sourceType: 'created',
   indexedResourceNames: [],
   validationSeverity: 'none',
-  lifecycleStatus: 'ready',
   registryPath: 'codex/plugins/review-tools',
   revision: 'rev-1',
   updatedAt: '2026-07-27T00:00:00Z',
@@ -100,10 +97,10 @@ const detail: MarketplacePackageDetail = {
   validationResults: [],
 };
 
-const renderPage = (provider: MarketplacePackageDetail['provider'] = 'codex') => render(
-  <MemoryRouter initialEntries={[`/marketplace/packages/${provider}/review-tools`]}>
+const renderPage = (targetClient: MarketplacePackageDetail['targetClient'] = 'codex') => render(
+  <MemoryRouter initialEntries={[`/marketplace/packages/${targetClient}/review-tools`]}>
     <Routes>
-      <Route path="/marketplace/packages/:provider/:packageId" element={<MarketplaceDetailPage />} />
+      <Route path="/marketplace/packages/:targetClient/:packageId" element={<MarketplaceDetailPage />} />
     </Routes>
   </MemoryRouter>,
 );
@@ -133,7 +130,6 @@ describe('MarketplaceDetailPage lazy resource loading', () => {
         canEdit: false,
         canDelete: false,
         canExport: true,
-        canImport: false,
         canInstall: true,
         canManageRegistry: false,
       },
@@ -158,7 +154,7 @@ describe('MarketplaceDetailPage lazy resource loading', () => {
       <MemoryRouter initialEntries={['/marketplace/packages/codex/review-tools']}>
         <Routes>
           <Route
-            path="/marketplace/packages/:provider/:packageId"
+            path="/marketplace/packages/:targetClient/:packageId"
             element={<MarketplaceDetailPage />}
           />
         </Routes>
@@ -261,7 +257,7 @@ describe('MarketplaceDetailPage lazy resource loading', () => {
     const user = userEvent.setup();
     apiMock.getPackage.mockResolvedValueOnce({
       ...detail,
-      provider: 'claude-code',
+      targetClient: 'claude-code',
     });
     apiMock.listDocuments.mockResolvedValue([]);
     renderPage('claude-code');
@@ -296,7 +292,6 @@ describe('MarketplaceDetailPage lazy resource loading', () => {
       expect(screen.getByText(resource.description)).toBeInTheDocument();
     }
 
-    expect(apiMock.getMCPServer).not.toHaveBeenCalled();
   });
 
   it('renders every MCP server in the single content column without a server selector', async () => {
@@ -307,26 +302,16 @@ describe('MarketplaceDetailPage lazy resource loading', () => {
         path: '.mcp.json',
         ownerFilePath: '.mcp.json',
         baseEntryFingerprint: 'first-fp',
+        server: { command: 'first' },
       },
       {
         name: 'second',
         path: '.mcp.json',
         ownerFilePath: '.mcp.json',
         baseEntryFingerprint: 'second-fp',
+        server: { command: 'second' },
       },
     ]);
-    apiMock.getMCPServer.mockImplementation((
-      _provider: string,
-      _packageId: string,
-      name: string,
-      ownerFilePath: string,
-    ) => Promise.resolve({
-      name,
-      path: ownerFilePath,
-      server: { command: name },
-      ownerFilePath,
-      baseEntryFingerprint: `${name}-fp`,
-    }));
     renderPage();
     await screen.findByText('basic-overview');
     await user.click(screen.getByRole('tab', { name: 'marketplace.features.mcp' }));
@@ -334,30 +319,19 @@ describe('MarketplaceDetailPage lazy resource loading', () => {
     expect(await screen.findByText('mcp-workflow:first,second')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'first' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'second' })).not.toBeInTheDocument();
-    expect(apiMock.getMCPServer).toHaveBeenCalledTimes(2);
-    expect(apiMock.getMCPServer).toHaveBeenCalledWith('codex', 'review-tools', 'first', '.mcp.json');
-    expect(apiMock.getMCPServer).toHaveBeenCalledWith('codex', 'review-tools', 'second', '.mcp.json');
   });
 
-  it('retries the complete MCP tab load when a server detail fails', async () => {
+  it('retries the complete MCP tab load when the server inventory fails', async () => {
     const user = userEvent.setup();
-    apiMock.listMCPServers.mockResolvedValue([
-      {
-        name: 'retry-server',
-        path: '.mcp.json',
-        ownerFilePath: '.mcp.json',
-        baseEntryFingerprint: 'retry-fp',
-      },
-    ]);
-    apiMock.getMCPServer
+    apiMock.listMCPServers
       .mockRejectedValueOnce(new Error('network unavailable'))
-      .mockResolvedValueOnce({
+      .mockResolvedValueOnce([{
         name: 'retry-server',
         path: '.mcp.json',
         server: { command: 'retry' },
         ownerFilePath: '.mcp.json',
         baseEntryFingerprint: 'retry-fp',
-      });
+      }]);
     renderPage();
     await screen.findByText('basic-overview');
     await user.click(screen.getByRole('tab', { name: 'marketplace.features.mcp' }));
@@ -367,6 +341,5 @@ describe('MarketplaceDetailPage lazy resource loading', () => {
 
     expect(await screen.findByText('mcp-workflow:retry-server')).toBeInTheDocument();
     expect(apiMock.listMCPServers).toHaveBeenCalledTimes(2);
-    expect(apiMock.getMCPServer).toHaveBeenCalledTimes(2);
   });
 });

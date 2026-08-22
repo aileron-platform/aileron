@@ -13,7 +13,7 @@ import type {
   MarketplaceDocumentResourceType,
   MarketplacePackageMutationResult,
 } from '../../../model/marketplaceMutation';
-import type { MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 import {
   createMarketplaceDocumentSource,
   marketplaceDocumentResourcePath,
@@ -22,7 +22,7 @@ import {
 import { useMarketplaceResourceSession } from '../../../model/marketplaceResourceSession';
 
 export interface MarketplaceDocumentResourcePageProps {
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   packageId: string;
   resourceType: MarketplaceDocumentResourceType;
   initialRevision: string;
@@ -68,13 +68,13 @@ const pathOf = (
 );
 
 export const marketplaceDocumentResourceQueryKey = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   packageId: string,
   resourceType: MarketplaceDocumentResourceType,
-) => ['marketplace', provider, packageId, resourceType] as const;
+) => ['marketplace', targetClient, packageId, resourceType] as const;
 
 export const MarketplaceDocumentResourcePage: React.FC<MarketplaceDocumentResourcePageProps> = ({
-  provider,
+  targetClient,
   packageId,
   resourceType,
   initialRevision,
@@ -87,19 +87,19 @@ export const MarketplaceDocumentResourcePage: React.FC<MarketplaceDocumentResour
     identityGeneration,
     session,
   } = useMarketplaceResourceSession({
-    provider,
+    targetClient,
     packageId,
     resourceType,
   }, initialRevision);
   const defaultSource: MarketplaceDocumentSource = React.useMemo(
     () => createMarketplaceDocumentSource(
-      provider,
+      targetClient,
       packageId,
       resourceType,
       session,
       identityGeneration,
     ),
-    [identityGeneration, packageId, provider, resourceType, session],
+    [identityGeneration, packageId, targetClient, resourceType, session],
   );
   const source = sourceAdapter ?? defaultSource;
   const config = configByResourceType[resourceType];
@@ -110,7 +110,7 @@ export const MarketplaceDocumentResourcePage: React.FC<MarketplaceDocumentResour
           const canonicalizeDocumentPath = (document: DocumentResourceItem): DocumentResourceItem => {
             const nextPath = marketplaceDocumentResourcePath(
               pathOf(document),
-              provider,
+              targetClient,
               resourceType,
             );
             return {
@@ -133,11 +133,11 @@ export const MarketplaceDocumentResourcePage: React.FC<MarketplaceDocumentResour
           };
         })()
       : undefined
-  ), [config.templateResourceType, provider, resourceType]);
+  ), [config.templateResourceType, targetClient, resourceType]);
 
   const queryKey = React.useMemo(
-    () => marketplaceDocumentResourceQueryKey(provider, packageId, resourceType),
-    [packageId, provider, resourceType],
+    () => marketplaceDocumentResourceQueryKey(targetClient, packageId, resourceType),
+    [packageId, targetClient, resourceType],
   );
   const refresh = React.useCallback(async () => {
     await queryClient.invalidateQueries({

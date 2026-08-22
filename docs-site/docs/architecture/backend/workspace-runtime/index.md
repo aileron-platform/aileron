@@ -178,14 +178,14 @@ Repository Setup interface 請見[共用版本控制與 Repository Setup](/archi
 |--------|--------|------|
 | `AILERON_WORKSPACE_ID` | 必填 | 工作區識別碼 |
 | `AILERON_WORKSPACE_PATH` | 必填 | 工作區路徑 |
-| `AILERON_RUNTIME_STATE_DATABASE_URL_FILE` | 必填 | current Runtime instance 的 Workspace-scoped PostgreSQL URL 唯讀 Secret 檔案 |
+| `AILERON_RUNTIME_DATABASE_CONNECTION_FILE` | 必填 | current Workspace generation 的 Runtime database connection 唯讀 Secret 檔案 |
 | `AILERON_RUNTIME_CONTROL_TOKEN_FILE` | 必填 | current Runtime instance 呼叫 Manager control API 的 token 唯讀 Secret 檔案 |
 | `HOME` | `/home/developer` | Docker 與 Kubernetes 直接掛載並完整持久化的標準使用者 HOME |
 | `CODEX_HOME` | `${HOME}/.codex` | Codex 設定、登入與 session 目錄 |
 | `XDG_CONFIG_HOME` | `${HOME}/.config` | OpenCode 等工具的標準設定目錄 |
 | `XDG_DATA_HOME` | `${HOME}/.local/share` | OpenCode 等工具的標準資料目錄 |
 | `XDG_STATE_HOME` | `${HOME}/.local/state` | Runtime bootstrap 與應用程式狀態根目錄 |
-| `MARKETPLACE_OPERATION_JOURNAL_DIR` | `${XDG_STATE_HOME}/aileron/marketplace-operations` | Marketplace operation journal、provider mutation gate 與 user-copy transactional recovery 目錄 |
+| `MARKETPLACE_OPERATION_JOURNAL_DIR` | `${XDG_STATE_HOME}/aileron/marketplace-operations` | Marketplace operation journal、target-client mutation gate 與 user-copy transactional recovery 目錄 |
 | `AILERON_MANAGER_INTERNAL_URL` | 必填 | Workspace Manager 內部 Service URL |
 | `AILERON_PLATFORM_PUBLIC_ORIGIN` | 必填 | 唯一精確平台公開 Origin |
 | `AILERON_RUNTIME_INSTANCE_ID` | — | current execution-plane generation UUID |
@@ -197,7 +197,7 @@ Repository Setup interface 請見[共用版本控制與 Repository Setup](/archi
 
 Browser、Canvas 與 worktree 的平台欄位同樣使用 `AILERON_*`。所有 Secret 只透過絕對路徑的唯讀檔案交付；Workspace 使用者環境不得使用 `AILERON_*` 前綴。
 
-此目錄只保存 provider mutation 的 operation journal 與 user-copy 交易復原資料，不是安裝狀態。操作成功後，Runtime 不保留 installation、ownership、provenance、baseline、drift、reconcile、uninstall 或 cleanup lifecycle。
+此目錄只保存 target-client mutation 的 operation journal 與 user-copy 交易復原資料，不是安裝狀態。操作成功後，Runtime 不保留 installation、ownership、provenance、baseline、drift、reconcile、uninstall 或 cleanup lifecycle。
 
 :::note Agent Credentials
 Claude Code、Codex、OpenCode 所需的 API key、token 與登入狀態應透過前端設定頁面動態注入，不應寫死在容器環境變數中。

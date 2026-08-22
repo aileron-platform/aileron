@@ -151,29 +151,6 @@ const shared = {
       rotate: '旋轉',
       download: '下載圖片',
     },
-    drawio: {
-      title: 'Draw.io 圖表',
-      edit: '編輯',
-      cancel: '取消',
-      download: '下載',
-      loading: 'Draw.io 預覽載入中...',
-      unavailable: '此檢視器無法使用 Draw.io 預覽。',
-      retry: '重試',
-      retrying: '重試中... ({{count}}/{{max}})',
-      empty: '沒有圖表內容',
-      fallbackTitle: 'Draw.io 預覽無法使用',
-      fallback: 'Draw.io 預覽無法使用，改以 XML 內容顯示。',
-      error: {
-        title: '圖表載入錯誤',
-      },
-      serviceUnavailable: {
-        title: 'Draw.io 預覽無法使用',
-        description: 'Draw.io 預覽服務目前不可用，檔案會以唯讀 XML 顯示。',
-        disabled: '此檢視器未啟用 Draw.io 預覽服務，檔案會以唯讀 XML 顯示。',
-        unreachable: '目前無法連線至 Draw.io 預覽服務，檔案會以唯讀 XML 顯示。',
-        retry: '重試',
-      },
-    },
   },
   documentWorkflow: {
     metadata: {

@@ -37,7 +37,7 @@ context without parsing the Cookie or querying Session/User again.
 
 - `GET /api/v1/oauth2/login` creates state, nonce, and a PKCE verifier, then redirects to the provider.
 - `GET /api/v1/oauth2/callback` exchanges the code, validates the provider response, and creates a session.
-- `GET /api/v1/oauth2/session` returns the local user, `allowedOperations`, absolute expiry, and the Session-bound CSRF token.
+- `GET /api/v1/oauth2/session` returns the local user, canonical OIDC `subject`, `allowedOperations`, absolute expiry, and the Session-bound CSRF token.
 - `POST /api/v1/oauth2/logout` requires session, Origin, and CSRF, then deletes the local session first.
 
 The cookie contains only an opaque handle. The database stores its SHA-256 hash, `user_id`, issuer,

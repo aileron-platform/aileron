@@ -116,7 +116,6 @@ const UserManagementShellContent: React.FC<UserManagementShellProps> = ({
       },
       presentation: {
         accessibleLabel: t('userManagement.navigation.title'),
-        chrome: 'navigation',
         responsive: 'always',
         header: {
           leading: <UsersRound className="h-4 w-4 shrink-0 text-sidebar-primary" aria-hidden="true" />,
@@ -147,7 +146,7 @@ const UserManagementShellContent: React.FC<UserManagementShellProps> = ({
         },
         presentation: {
           accessibleLabel: detailTitle,
-          chrome: 'muted-rail' as const,
+          rail: 'standard' as const,
           header: {
             leading: <DetailIcon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />,
             title: <span className="truncate text-sm font-medium">{detailTitle}</span>,

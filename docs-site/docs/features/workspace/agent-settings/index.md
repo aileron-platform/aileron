@@ -18,7 +18,7 @@ project、local、user scope 與 provider 是獨立維度；路徑解析由 Runt
 
 ## 主要流程
 
-先選 provider 與設定類型，再選 scope、讀取並以 revision 儲存；user scope 內容需維持每位使用者隔離。
+先選 provider 與設定類型，再選 scope、讀取並以 revision 儲存；user scope 內容對應該 Workspace 專屬且持久化的 Runtime HOME，由同一 Workspace 的所有使用者與 sessions 共用，不對應單一 human user 的個人隔離空間。
 
 ## 畫面狀態與唯讀行為
 

@@ -185,11 +185,12 @@ The response sets `Cache-Control: no-store` and `Pragma: no-cache`. Never place 
 | `GET` / `POST` | `/api/v1/workspaces/{workspace_id}/shares` | List or add user or group shares; accepts only Reader or Manager |
 | `PATCH` / `DELETE` | `/api/v1/workspaces/{workspace_id}/shares/{share_id}` | Update or remove one share |
 
-Browser access accepts only evidence with `status.browserConnectivity.state=ready`, a valid expiry,
-and matching revisions. `pending`, `degraded`, and `not_ready` map to
-`409 BROWSER_CONNECTIVITY_NOT_READY`. `unavailable`, or ready evidence found expired at admission time,
-maps to `503 BROWSER_CONNECTIVITY_UNAVAILABLE`. Neither response includes a Browser credential. Clients
-use bounded retries and never bypass the gate through another endpoint.
+Browser access treats `status.browserConnectivity.admission` as authoritative. `ready`, or `degraded`
+whose last successful evidence remains within TTL and whose projection is `allowed`, can issue access.
+A `denied` projection in `pending` or `not_ready` maps to `409 BROWSER_CONNECTIVITY_NOT_READY`.
+Evidence expired at admission time is also projected as `not_ready` / `denied` and maps to the same 409.
+Only `unavailable` maps to `503 BROWSER_CONNECTIVITY_UNAVAILABLE`. A denied response never includes a
+Browser credential. Clients use bounded retries and never bypass the gate through another endpoint.
 
 A successful response contains `browserUrl`, the Neko `password`, `credentialRevision`, and `iceServers`.
 For a `turnRest` profile, `iceServers` contains a short-lived username and credential scoped to that
@@ -262,7 +263,7 @@ provider token exchange, and validation. The Browser holds only an opaque HttpOn
 | `GET` | `/api/v1/oauth/health` | Check OAuth service health |
 | `GET` | `/api/v1/oauth2/login` | Create an OIDC transaction and redirect to the provider |
 | `GET` | `/api/v1/oauth2/callback` | Exchange the code, validate the provider response, and create an opaque session |
-| `GET` | `/api/v1/oauth2/session` | Get local user, `platformRole`, `allowedOperations`, expiry, and a memory-only CSRF token |
+| `GET` | `/api/v1/oauth2/session` | Get local user, canonical OIDC `subject`, `platformRole`, `allowedOperations`, expiry, and a memory-only CSRF token |
 | `POST` | `/api/v1/oauth2/logout` | Validate session, Origin, and CSRF, then revoke the local session |
 
 The Manager Session created by a successful callback is continuing authentication evidence. During
@@ -274,47 +275,53 @@ not trigger reauthentication.
 
 ## Marketplace
 
-Marketplace manages package import, editing, installation entry points, and Registry version control. See [Marketplace](/features/marketplace) for the full workflow.
+Marketplace manages Application Center Managed Plugins, Plugin installation, User Copy, and Registry version control. See [Application Center](/features/marketplace) for the full workflow.
 
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/api/v1/marketplace/packages` | List packages |
 | `POST` | `/api/v1/marketplace/packages` | Create a package |
-| `GET` / `PUT` / `DELETE` | `/api/v1/marketplace/packages/{provider}/{package_id}` | Get, update, or delete one package |
-| `DELETE` | `/api/v1/marketplace/packages/{provider}/{package_id}/draft` | Discard a package draft |
-| `GET` | `/api/v1/marketplace/packages/{provider}/{package_id}/export` | Export a package |
+| `GET` | `/api/v1/marketplace/package-formats` | List formats, compatible Target Clients, and authoring capabilities |
+| `GET` / `PUT` / `DELETE` | `/api/v1/marketplace/packages/{target_client}/{package_id}` | Get, update, or delete one package |
+| `GET` | `/api/v1/marketplace/packages/{target_client}/{package_id}/export` | Export a package |
 | `POST` | `/api/v1/marketplace/packages/refresh` | Refresh the package-list cache |
-| `POST` | `/api/v1/marketplace/import/scan` | Scan a local source for import candidates |
-| `POST` | `/api/v1/marketplace/import/upload` | Upload files for package import |
-| `POST` | `/api/v1/marketplace/import` | Import scanned or uploaded candidates into the Registry |
-| `POST` | `/api/v1/marketplace/plugins/install` | Publish a package to the deployment's configured Git origin (private GitLab is required by the standard deployment), then run the provider's standard plugin installation CLI in the target Workspace |
+| `POST` | `/api/v1/marketplace/imports/scan` | Scan Git or an uploaded source for Plugin candidates |
+| `POST` | `/api/v1/marketplace/imports/upload` | Upload a ZIP as a temporary import source |
+| `POST` | `/api/v1/marketplace/imports` | Import selected candidates; duplicates require explicit Replace |
+| `POST` | `/api/v1/marketplace/plugins/install` | Let the Target Client CLI install and enable from the configured Registry Git repository |
 | `POST` | `/api/v1/marketplace/user-copies/preflight` | Read-only planning for a one-shot user-scope merge, including resources, duplicates, and blockers |
 | `POST` | `/api/v1/marketplace/user-copies` | Apply a one-shot merge with the preflight digests and user-approved overwrites |
 | `GET` / `PUT` | `/api/v1/marketplace/settings` | Get or update Marketplace settings |
-| `GET` | `/api/v1/marketplace/activities` | Filter and paginate Marketplace activity by `workspaceId`, `provider`, `packageId`, `action`, and `status` |
+| `GET` | `/api/v1/marketplace/activities` | Filter and paginate Marketplace activity by `workspaceId`, `packageFormat`, `targetClient`, `packageId`, `action`, and `status` |
+| `GET` | `/api/v1/marketplace/activities/{activity_id}` | Read authorized User Copy proofs and raw CLI command receipts |
 
 ### Plugin Installation Contract
 
-`POST /api/v1/marketplace/plugins/install` accepts `provider`, `packageId`, the package `revision`, and `workspaceId`. Manager publishes that revision to a provider-compatible Git origin. The standard deployment requires that origin to be a private GitLab repository, but the service does not query GitLab or validate repository visibility. Manager's registry SSH key is not passed to Runtime, so the target Runtime must have its own credentials for reading the repository. Runtime then executes the standard Claude Code or Codex CLI installation flow. The terminal result contains `status`, `stage`, `exitCode`, `cliMessage`, `stdout`, `stderr`, and `truncated`. Provider CLI terminal output is authoritative for success and error details.
+`POST /api/v1/marketplace/plugins/install` accepts `targetClient`, `packageFormat`, `packageId`, `version`, and `workspaceId`. Manager passes the configured Registry Git URL and current branch without checking whether remote contains working-tree changes. Runtime executes client-owned install-and-enable commands: Codex `plugin add`, or Claude Code marketplace add, plugin install, and explicit plugin enable. Every command is retained separately with argv, stage, exit code, timestamps, original byte counts, and stdout/stderr. Output uses a 256-KiB head+tail bound and is not content-masked. Readback failure after successful mutation is a `state-unconfirmed` warning. Three failed audit writes produce `audit-persistence-failed` without reversing CLI success.
 
-The endpoint only completes that publication and CLI command. It does not create Aileron installation, ownership, drift, reconciliation, uninstallation, or cleanup state. Users manage the plugin afterward through the native provider CLI.
+The endpoint only verifies the selected release and completes the CLI command. It does not create Aileron installation, ownership, drift, reconciliation, uninstallation, or cleanup state. Users manage the plugin afterward through the native target-client CLI.
+
+### Import Contract
+
+An import source is `{ targetClient, sourceKind, source }`. Scan returns the server-detected package ID, version, format, Target Client, validation, and duplicate state. Each selected candidate sends `import: { version, overwrite }`; a duplicate package ID can be replaced only with `overwrite=true`. The source does not become a persistent tracked object. Failed candidates contain `errorCode`, `stage`, `source`, `destination`, and `category`.
 
 ### Copy to User Scope Contract
 
 User-copy is a one-shot merge into user scope. The caller must first invoke `POST /api/v1/marketplace/user-copies/preflight`. Its status is `ready`, `confirmation-required`, or `blocked`, and it includes:
 
 - `resources`: resources that would be created, merged, or left unchanged.
+- `skippedResources`: components that the exact projection cannot represent; any item requires partial-copy confirmation.
 - `conflicts`: duplicate resources that require explicit overwrite confirmation.
 - `blockingIssues`: problems that prevent the operation from proceeding.
-- `sourceDigest`, `profileDigest`, and `materializationDigest`: digests that bind the package content, Runtime profile, and materialized result observed during preflight.
+- `sourceDigest`, `profileDigest`, `projectionDigest`, and `materializationDigest`: digests that bind the package content, source profile, exact projection, and materialized result observed during preflight.
 
-To apply the merge, `POST /api/v1/marketplace/user-copies` requires the package and Workspace identity plus `expectedSourceDigest`, `expectedMaterializationDigest`, and the user's `overwriteApprovals`. If the source or target state changed after preflight, the service rejects the apply and requires a new preflight. A successful response includes the operation identity, status, Provider, package, Workspace, and the created, merged, unchanged, and overwritten counts.
+To apply the merge, `POST /api/v1/marketplace/user-copies` sends `catalogPluginId`, `releaseRevision`, `packageFormat`, `targetClient`, `workspaceId`, all expected digests, `acceptPartialCopy`, and the user's `overwriteApprovals`. If the source, projection, or target state changes after preflight, the service rejects the apply and requires a new preflight. A successful response includes package format, target client, and created, merged, unchanged, overwritten, and skipped counts.
 
 Success leaves no installation row, source tracking, ownership, drift, reconciliation, uninstallation, cleanup, or background lifecycle. Files and settings become ordinary user-managed resources. Marketplace will not reclaim user-copy content when the source package is edited or deleted.
 
 Marketplace also has a separate Git version-control API under `/api/v1/marketplace/version-control/*`, including status, stage, unstage, commit, commits, diff, branches, remote, fetch, pull, push, clone, force-unlock, Git identity, and SSH keys. It manages the package Registry itself. Its semantics resemble the Knowledge Base Git endpoints but operate on a different resource.
 
-Members can read the catalog, install, and manage their own user-scope copy. Canonical publishing, management, deletion, Registry, and Canvas publishing require Platform Admin. See [Marketplace](/features/marketplace) for the complete contract.
+Members can read the catalog, install, and manage their own user-scope copy. Creating, importing, editing, deleting, and Registry management require Platform Admin. See [Application Center](/features/marketplace) for the complete contract.
 
 Activity responses use `{ items, total, page, pageSize, totalPages }`, ordered stably by `createdAt DESC, id DESC`. Status is either `succeeded` or `failed`. Activity is an audit trail, not authoritative installation or lifecycle state.
 

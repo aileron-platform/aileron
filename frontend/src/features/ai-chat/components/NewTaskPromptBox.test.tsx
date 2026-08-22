@@ -34,13 +34,13 @@ vi.mock('../contexts/AiChatIntegrationContext', () => ({
   }),
 }));
 
-vi.mock('@/shared/components/slash-command-picker', () => ({
-  SlashCommandPickerDialog: () => null,
+vi.mock('@/shared/components/prompt-invocation-picker', () => ({
+  PromptInvocationPickerDialog: () => null,
 }));
 
-vi.mock('@/shared/api/slashCommandApi', () => ({
-  slashCommandApi: {
-    listPickerItems: vi.fn(async () => []),
+vi.mock('@/shared/api/promptInvocationApi', () => ({
+  promptInvocationApi: {
+    list: vi.fn(),
   },
 }));
 

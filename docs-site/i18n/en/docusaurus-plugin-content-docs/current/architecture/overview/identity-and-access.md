@@ -29,7 +29,7 @@ sequenceDiagram
   M->>M: validate issuer, signature, nonce, state and claims
   M-->>B: Secure HttpOnly opaque session cookie
   B->>M: GET /api/v1/oauth2/session
-  M-->>B: local user, allowedOperations, memory-only CSRF token
+  M-->>B: local user, canonical OIDC subject, allowedOperations, memory-only CSRF token
 ```
 
 The session handle is a 256-bit random value and PostgreSQL stores only its hash. The Manager API

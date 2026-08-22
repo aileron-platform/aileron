@@ -74,12 +74,11 @@ describe('marketplaceApi backend boundary', () => {
 
     await listPackages({
       q: 'figma',
-      provider: 'codex',
+      targetClient: 'codex',
       packageType: 'plugin',
       category: 'design',
       features: ['mcp', 'skills'],
       validationSeverity: 'warning',
-      sourceType: 'imported',
       updatedFrom: '2026-05-01T00:00:00.000Z',
       updatedTo: '2026-05-07T00:00:00.000Z',
       sort: 'displayName',
@@ -89,41 +88,56 @@ describe('marketplaceApi backend boundary', () => {
     });
 
     expect(apiClientMock.get).toHaveBeenCalledWith(
-      '/marketplace/packages?q=figma&provider=codex&packageType=plugin&category=design&features=mcp&features=skills&validationSeverity=warning&sourceType=imported&updatedFrom=2026-05-01T00%3A00%3A00.000Z&updatedTo=2026-05-07T00%3A00%3A00.000Z&sort=displayName&direction=asc&page=2&pageSize=20',
+      '/marketplace/packages?q=figma&targetClient=codex&packageType=plugin&category=design&features=mcp&features=skills&validationSeverity=warning&updatedFrom=2026-05-01T00%3A00%3A00.000Z&updatedTo=2026-05-07T00%3A00%3A00.000Z&sort=displayName&direction=asc&page=2&pageSize=20',
     );
   });
 
-  it('uses provider-native package endpoints', async () => {
+  it('uses targetClient-native package endpoints', async () => {
     apiClientMock.get.mockResolvedValueOnce({ packageId: 'review-assistant' });
     apiClientMock.post.mockResolvedValueOnce({ packageId: 'new-plugin' });
     apiClientMock.delete.mockResolvedValueOnce({ deleted: true });
     apiClientMock.getBlob.mockResolvedValueOnce(new Blob(['zip'], { type: 'application/zip' }));
 
     await getPackage('claude-code', 'review-assistant');
+    await getPackage('codex', 'portable-tools', 'agent-plugin/1.0.0');
     await createPackage({
-      provider: 'codex',
+      packageFormat: 'codex-native',
+      targetClients: ['codex'],
       packageId: 'new-plugin',
       displayName: 'New Plugin',
+      version: '1.0.0',
       description: 'New package',
     });
-    await deletePackage({ provider: 'codex', packageId: 'new-plugin', revision: 'rev-1' });
-    await exportPackage({ provider: 'claude-code', packageId: 'workspace-tools', revision: 'rev-2' });
+    await deletePackage({
+      targetClient: 'codex',
+      packageFormat: 'codex-native',
+      packageId: 'new-plugin',
+    });
+    await exportPackage({
+      targetClient: 'claude-code',
+      packageFormat: 'claude-native',
+      packageId: 'workspace-tools',
+      revision: 'rev-2',
+    });
 
-    expect(apiClientMock.get).toHaveBeenCalledWith('/marketplace/packages/claude-code/review-assistant');
+    expect(apiClientMock.get).toHaveBeenCalledWith('/marketplace/packages/claude-code/review-assistant?packageFormat=claude-native');
+    expect(apiClientMock.get).toHaveBeenCalledWith('/marketplace/packages/codex/portable-tools?packageFormat=agent-plugin%2F1.0.0');
     expect(apiClientMock.post).toHaveBeenCalledWith('/marketplace/packages', {
-      provider: 'codex',
+      packageFormat: 'codex-native',
+      targetClients: ['codex'],
       packageId: 'new-plugin',
       displayName: 'New Plugin',
+      version: '1.0.0',
       description: 'New package',
     });
-    expect(apiClientMock.delete).toHaveBeenCalledWith('/marketplace/packages/codex/new-plugin?revision=rev-1');
-    expect(apiClientMock.getBlob).toHaveBeenCalledWith('/marketplace/packages/claude-code/workspace-tools/export?revision=rev-2');
+    expect(apiClientMock.delete).toHaveBeenCalledWith('/marketplace/packages/codex/new-plugin?packageFormat=codex-native');
+    expect(apiClientMock.getBlob).toHaveBeenCalledWith('/marketplace/packages/claude-code/workspace-tools/export?revision=rev-2&packageFormat=claude-native');
   });
 
   it('uses one-shot plugin install, user-copy, activity, and settings endpoints', async () => {
     const installResponse: MarketplacePluginCommandResult = {
       status: 'installed',
-      provider: 'codex',
+      targetClient: 'codex',
       packageId: 'figma-context',
       marketplaceId: 'team-tools',
       workspaceId: 'workspace-1',
@@ -137,7 +151,7 @@ describe('marketplaceApi backend boundary', () => {
     };
     const userCopyPreflightResponse: MarketplaceUserCopyPreflightResult = {
       status: 'confirmation-required',
-      provider: 'codex',
+      targetClient: 'codex',
       packageId: 'figma-context',
       workspaceId: 'workspace-1',
       sourceDigest: 'source',
@@ -150,7 +164,7 @@ describe('marketplaceApi backend boundary', () => {
     const userCopyResponse: MarketplaceUserCopyApplyResult = {
       status: 'completed',
       operationId: 'copy-1',
-      provider: 'codex',
+      targetClient: 'codex',
       packageId: 'figma-context',
       workspaceId: 'workspace-1',
       createdCount: 1,
@@ -168,7 +182,7 @@ describe('marketplaceApi backend boundary', () => {
     apiClientMock.put.mockResolvedValueOnce({ settings: { displayName: 'Registry' } });
 
     const installRequest = {
-      provider: 'codex' as const,
+      targetClient: 'codex' as const,
       packageId: 'figma-context',
       revision: 'rev',
       workspaceId: 'workspace-1',
@@ -177,8 +191,11 @@ describe('marketplaceApi backend boundary', () => {
     const userCopyPreflight = await preflightMarketplaceUserCopy(installRequest);
     const userCopyResult = await createMarketplaceUserCopy({
       ...installRequest,
+      expectedProfileDigest: 'profile',
       expectedSourceDigest: 'source',
+      expectedProjectionDigest: 'projection',
       expectedMaterializationDigest: 'materialization',
+      acceptPartialCopy: false,
       overwriteApprovals: [{
         targetIdentity: 'skill:figma',
         expectedRevision: 'target-r1',
@@ -188,7 +205,8 @@ describe('marketplaceApi backend boundary', () => {
       page: 2,
       pageSize: 25,
       workspaceId: 'workspace-1',
-      provider: 'codex',
+      packageFormat: 'agent-plugin/1.0.0',
+      targetClient: 'codex',
       packageId: 'figma-context',
       action: 'install',
       status: 'succeeded',
@@ -215,8 +233,11 @@ describe('marketplaceApi backend boundary', () => {
       '/marketplace/user-copies',
       {
         ...installRequest,
+        expectedProfileDigest: 'profile',
         expectedSourceDigest: 'source',
+        expectedProjectionDigest: 'projection',
         expectedMaterializationDigest: 'materialization',
+        acceptPartialCopy: false,
         overwriteApprovals: [{
           targetIdentity: 'skill:figma',
           expectedRevision: 'target-r1',
@@ -224,7 +245,7 @@ describe('marketplaceApi backend boundary', () => {
       },
     );
     expect(apiClientMock.get).toHaveBeenCalledWith(
-      '/marketplace/activities?page=2&pageSize=25&workspaceId=workspace-1&provider=codex&packageId=figma-context&action=install&status=succeeded',
+      '/marketplace/activities?page=2&pageSize=25&workspaceId=workspace-1&packageFormat=agent-plugin%2F1.0.0&targetClient=codex&packageId=figma-context&action=install&status=succeeded',
     );
     expect(apiClientMock.get).toHaveBeenCalledWith('/marketplace/settings');
     expect(apiClientMock.put).toHaveBeenCalledWith('/marketplace/settings', {
@@ -234,43 +255,42 @@ describe('marketplaceApi backend boundary', () => {
     });
   });
 
-  it('sends scanned import source with selected candidates', async () => {
-    const source = { provider: 'codex' as const, sourceKind: 'git' as const, source: 'git@example.com:org/repo.git' };
+  it('sends the explicit scanned importing source with selected candidates', async () => {
+    const source = { targetClient: 'codex' as const, sourceKind: 'git' as const, source: 'git@example.com:org/repo.git' };
     const candidates = [{
       id: 'codex:figma',
-      provider: 'codex' as const,
+      targetClient: 'codex' as const,
       packageId: 'figma-context',
       displayName: 'Figma Context',
       sourcePath: '/tmp/source/figma-context',
       duplicate: false,
-      duplicateAction: 'skip' as const,
       variantStatus: 'new-family' as const,
       variants: [],
       validationSeverity: 'none' as const,
       validationResults: [],
     }];
     apiClientMock.post.mockResolvedValueOnce(candidates);
-    apiClientMock.post.mockResolvedValueOnce({ imported: [], skipped: [], failed: [], warnings: [] });
+    apiClientMock.post.mockResolvedValueOnce({ imported: [], failed: [], warnings: [] });
 
     await scanImportSource(source);
-    await importCandidates(candidates);
+    await importCandidates(source, candidates);
 
-    expect(apiClientMock.post).toHaveBeenNthCalledWith(1, '/marketplace/import/scan', source);
-    expect(apiClientMock.post).toHaveBeenNthCalledWith(2, '/marketplace/import', { source, candidates });
+    expect(apiClientMock.post).toHaveBeenNthCalledWith(1, '/marketplace/imports/scan', source);
+    expect(apiClientMock.post).toHaveBeenNthCalledWith(2, '/marketplace/imports', { source, candidates });
   });
 
   it('uploads a local import archive as form data', async () => {
     apiClientMock.post.mockResolvedValueOnce({
-      source: { provider: 'codex', sourceKind: 'local', source: '/managed/import-source' },
+      source: { targetClient: 'codex', sourceKind: 'local', source: '/managed/import-source' },
       fileName: 'marketplace.zip',
     });
     const file = new File(['zip'], 'marketplace.zip', { type: 'application/zip' });
 
     await uploadImportSource('codex', file);
 
-    expect(apiClientMock.post).toHaveBeenCalledWith('/marketplace/import/upload', expect.any(FormData));
+    expect(apiClientMock.post).toHaveBeenCalledWith('/marketplace/imports/upload', expect.any(FormData));
     const formData = apiClientMock.post.mock.calls[0][1] as FormData;
-    expect(formData.get('provider')).toBe('codex');
+    expect(formData.get('targetClient')).toBe('codex');
     expect(formData.get('file')).toBe(file);
   });
 
@@ -280,7 +300,7 @@ describe('marketplaceApi backend boundary', () => {
     apiClientMock.post.mockResolvedValueOnce({ conflicts: [], total: 1 });
     await preflightMarketplaceSkillFileConflicts('codex', 'toolkit', 'rev-1', request, { signal });
     expect(apiClientMock.post).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/toolkit/skills/conflicts/preflight',
+      '/marketplace/packages/codex/toolkit/skills/conflicts/preflight?packageFormat=codex-native',
       { ...request, revision: 'rev-1' },
       { signal },
     );
@@ -293,7 +313,7 @@ describe('marketplaceApi backend boundary', () => {
       payload: { revision: 'rev-1', files: [new File(['skill'], 'SKILL.md')] },
     }, { signal });
     const [path, formData, options] = apiClientMock.post.mock.calls[1] as [string, FormData, { signal: AbortSignal }];
-    expect(path).toBe('/marketplace/packages/codex/toolkit/skills/upload');
+    expect(path).toBe('/marketplace/packages/codex/toolkit/skills/upload?packageFormat=codex-native');
     expect(formData.get('revision')).toBe('rev-1');
     expect(formData.get('defaultStrategy')).toBe('cancel');
     expect(formData.get('resolutions')).toBe('[]');
@@ -306,7 +326,7 @@ describe('marketplaceApi backend boundary', () => {
     await saveRootDocument('codex', 'demo', { revision: 'rev1', content: '# Rules' });
 
     expect(apiClientMock.put).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/demo/root-document',
+      '/marketplace/packages/codex/demo/root-document?packageFormat=codex-native',
       { revision: 'rev1', content: '# Rules' },
     );
   });
@@ -330,10 +350,10 @@ describe('marketplaceApi backend boundary', () => {
     });
 
     expect(apiClientMock.get).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/demo/mcp-servers/team%2Fserver%20one?ownerFilePath=.mcp.json',
+      '/marketplace/packages/codex/demo/mcp-servers/team%2Fserver%20one?ownerFilePath=.mcp.json&packageFormat=codex-native',
     );
     expect(apiClientMock.put).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/demo/mcp-servers/team%2Fserver%20one',
+      '/marketplace/packages/codex/demo/mcp-servers/team%2Fserver%20one?packageFormat=codex-native',
       {
         revision: 'rev1',
         server: { command: 'node' },
@@ -363,11 +383,11 @@ describe('marketplaceApi backend boundary', () => {
     });
 
     expect(apiClientMock.post).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/demo/mcp-servers',
+      '/marketplace/packages/codex/demo/mcp-servers?packageFormat=codex-native',
       { revision: 'rev1', name: 'local', server: { command: 'node' } },
     );
     expect(apiClientMock.delete).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/demo/mcp-servers/local%20server',
+      '/marketplace/packages/codex/demo/mcp-servers/local%20server?packageFormat=codex-native',
       undefined,
       {
         revision: 'rev2',
@@ -421,50 +441,50 @@ describe('marketplaceApi backend boundary', () => {
     });
     await deletePackageFileEntry('codex', 'demo', 'docs/guide.md', 'rev4');
 
-    expect(apiClientMock.get).toHaveBeenCalledWith('/marketplace/packages/codex/demo/skills/tree');
+    expect(apiClientMock.get).toHaveBeenCalledWith('/marketplace/packages/codex/demo/skills/tree?packageFormat=codex-native');
     expect(apiClientMock.get).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/demo/skills/content?path=skills%2Fexample%2FSKILL.md',
+      '/marketplace/packages/codex/demo/skills/content?path=skills%2Fexample%2FSKILL.md&packageFormat=codex-native',
     );
     expect(apiClientMock.put).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/demo/skills/content?path=skills%2Fexample%2FSKILL.md',
+      '/marketplace/packages/codex/demo/skills/content?path=skills%2Fexample%2FSKILL.md&packageFormat=codex-native',
       { revision: 'rev1', content: '# Skill' },
     );
-    expect(apiClientMock.post).toHaveBeenCalledWith('/marketplace/packages/codex/demo/skills', {
+    expect(apiClientMock.post).toHaveBeenCalledWith('/marketplace/packages/codex/demo/skills?packageFormat=codex-native', {
       revision: 'rev1',
       path: 'skills/example/notes.md',
       type: 'file',
       content: 'note',
     });
-    expect(apiClientMock.post).toHaveBeenCalledWith('/marketplace/packages/codex/demo/skills/move', {
+    expect(apiClientMock.post).toHaveBeenCalledWith('/marketplace/packages/codex/demo/skills/move?packageFormat=codex-native', {
       revision: 'rev1',
       previousPath: 'skills/example/notes.md',
       nextPath: 'skills/example/renamed.md',
     });
     expect(apiClientMock.delete).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/demo/skills?path=skills%2Fexample%2Fnotes.md&revision=rev2',
+      '/marketplace/packages/codex/demo/skills?path=skills%2Fexample%2Fnotes.md&revision=rev2&packageFormat=codex-native',
     );
 
-    expect(apiClientMock.get).toHaveBeenCalledWith('/marketplace/packages/codex/demo/files/tree');
+    expect(apiClientMock.get).toHaveBeenCalledWith('/marketplace/packages/codex/demo/files/tree?packageFormat=codex-native');
     expect(apiClientMock.get).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/demo/files/content?path=docs%2Freadme.md',
+      '/marketplace/packages/codex/demo/files/content?path=docs%2Freadme.md&packageFormat=codex-native',
     );
     expect(apiClientMock.put).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/demo/files/content?path=docs%2Freadme.md',
+      '/marketplace/packages/codex/demo/files/content?path=docs%2Freadme.md&packageFormat=codex-native',
       { revision: 'rev3', content: '# Readme' },
     );
-    expect(apiClientMock.post).toHaveBeenCalledWith('/marketplace/packages/codex/demo/files', {
+    expect(apiClientMock.post).toHaveBeenCalledWith('/marketplace/packages/codex/demo/files?packageFormat=codex-native', {
       revision: 'rev3',
       path: 'docs/guide.md',
       type: 'file',
       content: 'guide',
     });
-    expect(apiClientMock.post).toHaveBeenCalledWith('/marketplace/packages/codex/demo/files/move', {
+    expect(apiClientMock.post).toHaveBeenCalledWith('/marketplace/packages/codex/demo/files/move?packageFormat=codex-native', {
       revision: 'rev3',
       previousPath: 'docs/guide.md',
       nextPath: 'docs/archive.md',
     });
     expect(apiClientMock.delete).toHaveBeenCalledWith(
-      '/marketplace/packages/codex/demo/files?path=docs%2Fguide.md&revision=rev4',
+      '/marketplace/packages/codex/demo/files?path=docs%2Fguide.md&revision=rev4&packageFormat=codex-native',
     );
   });
 });

@@ -37,7 +37,7 @@ export const getMarketplaceDetailFeatureItems = (
 ): MarketplaceDetailFeatureItem[] => {
   const items: MarketplaceDetailFeatureItem[] = [
     { id: 'readme', name: t('marketplace.detail.readme.title'), icon: FileText, count: 0 },
-    { id: 'agents-md', name: t(getMarketplaceFeatureLabelKey(detail.provider, 'agentsMd')), icon: FileText, count: 0 },
+    { id: 'agents-md', name: t(getMarketplaceFeatureLabelKey(detail.targetClient, 'agentsMd')), icon: FileText, count: 0 },
     { id: 'hooks', name: t('marketplace.features.hooks'), icon: Zap, count: 0 },
     { id: 'mcp', name: t('marketplace.features.mcp'), icon: Network, count: 0 },
     { id: 'agent', name: t('marketplace.features.subagents'), icon: Bot, count: 0 },
@@ -48,7 +48,7 @@ export const getMarketplaceDetailFeatureItems = (
   ];
 
   return items.filter(item => {
-    if (item.id === 'output-style') return detail.provider === 'claude-code';
+    if (item.id === 'output-style') return detail.targetClient === 'claude-code';
     return true;
   });
 };

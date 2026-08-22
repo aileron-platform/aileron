@@ -4,6 +4,7 @@ import { AUTHORIZATION_ERROR_CODES } from '@/shared/authorization/authorizationE
 
 export interface ManagerSessionUser {
   id: string;
+  subject: string;
   username: string;
   email: string | null;
   display_name: string | null;

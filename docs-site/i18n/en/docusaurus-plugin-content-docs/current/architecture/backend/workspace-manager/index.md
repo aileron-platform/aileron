@@ -15,7 +15,7 @@ Workspace Manager is Aileron's core service. It manages the complete lifecycle o
 - **CRUD**: create, read, update, and delete Workspaces
 - **Lifecycle**: use PostgreSQL durable jobs to manage Docker/Kubernetes create, start, stop, component restart, delete, and crash recovery
 - **Component revision fence**: Runtime, Browser, and Canvas each retain desired/observed revision, phase, and workload identity. Only the component targeted by the job is replaced. For the complete convergence flow, see [Execution-Plane Lifecycle and Safety](/architecture/overview/execution-plane)
-- **Marketplace support**: manage agent packages and provider settings
+- **Marketplace support**: manage agent packages, package formats, and target-client settings
 - **Network configuration**: manage firewall rules and port mappings
 
 ### User and Workspace Collaboration

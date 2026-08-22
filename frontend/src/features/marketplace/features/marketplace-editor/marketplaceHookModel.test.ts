@@ -8,7 +8,7 @@ import {
 } from './marketplaceHookModel';
 
 describe('marketplaceHookModel', () => {
-  it('formats provider-specific hook timeout units', () => {
+  it('formats targetClient-specific hook timeout units', () => {
     expect(formatMarketplaceHookTimeout('codex', 180)).toBe('180s');
     expect(formatMarketplaceHookTimeout('claude-code')).toBe('600s');
   });

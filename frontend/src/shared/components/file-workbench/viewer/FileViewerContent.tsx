@@ -4,12 +4,10 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { EmptyState } from '@/shared/components/ui/empty-state';
 import { isImageFile } from '../model/fileTypeUtils';
 import {
-  isDrawioFile,
   isMarkdownFile,
   isMermaidFile,
 } from '../model/fileIconUtils';
 import { CodeTextEditor, type CodeTextEditorRef } from './CodeTextEditor';
-import { DrawioViewer } from './DrawioViewer';
 import { ImageViewer } from './ImageViewer';
 import { MarkdownViewer } from './MarkdownViewer';
 import { MermaidViewer } from './MermaidViewer';
@@ -123,23 +121,6 @@ export const FileViewerContent: React.FC<FileViewerContentProps> = ({
           }
           : undefined}
         onOpenPath={onOpenPath}
-        toolbarOwnerKey={activeViewerOwnerKey ?? undefined}
-      />
-    );
-  }
-
-  if (isDrawioFile(activeTab.name)) {
-    return (
-      <DrawioViewer
-        filePath={activeTab.path}
-        fileName={activeTab.name}
-        content={activeTab.content}
-        originalContent={activeTab.originalContent}
-        readOnly={!canMutate}
-        adapter={adapter}
-        canPreview={capabilities.canPreviewDrawio !== false}
-        onContentChange={onActiveContentChange}
-        onModifiedChange={(isModified) => onTabChange(activeTab.id, { isModified })}
         toolbarOwnerKey={activeViewerOwnerKey ?? undefined}
       />
     );

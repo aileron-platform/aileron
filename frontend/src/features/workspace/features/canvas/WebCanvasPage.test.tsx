@@ -6,6 +6,7 @@ import {
   AILERON_CANVAS_BRIDGE_SOURCE,
   AILERON_CANVAS_BRIDGE_VERSION,
 } from './lib/aileronCanvasBridgeClient';
+import { ResolvedThemeProvider } from '@/shared/contexts/ResolvedThemeContext';
 
 const mocks = vi.hoisted(() => ({
   fetchCanvasRoutes: vi.fn(),
@@ -168,13 +169,11 @@ describe('WebCanvasPage review mode', () => {
     });
   });
 
-  it('does not overlay a status notice for a healthy skill-owned active canvas', async () => {
+  it('does not overlay a manifest error for a healthy active canvas', async () => {
     mocks.fetchCanvasRoutes.mockResolvedValue({
       workspaceId: 'ws-1',
       type: 'active',
       kind: 'static',
-      title: 'PPT Preview',
-      owner: { skillName: 'ppt-image-first' },
       manifestStatus: 'valid',
       runtimeStatus: 'healthy',
       defaultPath: '/',
@@ -186,9 +185,40 @@ describe('WebCanvasPage review mode', () => {
     render(<WebCanvasPage />);
 
     await waitFor(() => {
-      expect(screen.queryByText('workspace.canvas.webCanvas.manifest.statusNotice.skill.title')).not.toBeInTheDocument();
+      expect(screen.queryByText('workspace.canvas.webCanvas.manifest.errors.invalid.title')).not.toBeInTheDocument();
     });
-    expect(screen.queryByText('workspace.canvas.webCanvas.manifest.statusNotice.skill.description')).not.toBeInTheDocument();
+    expect(screen.queryByText('workspace.canvas.webCanvas.manifest.errors.invalid.description')).not.toBeInTheDocument();
+  });
+
+  it('leaves missing-manifest guidance to the default Canvas document', async () => {
+    mocks.fetchCanvasRoutes.mockResolvedValue({
+      workspaceId: 'ws-1',
+      type: 'default',
+      manifestStatus: 'missing',
+      runtimeStatus: 'healthy',
+      defaultPath: '/',
+      routes: [{ path: '/' }],
+      total: 1,
+      scannedAt: '2026-04-28T00:00:00Z',
+    });
+    mocks.checkCanvasHealth.mockResolvedValue({
+      workspaceId: 'ws-1',
+      status: 'healthy',
+      type: 'default',
+      manifestStatus: 'missing',
+      rendererRunning: true,
+      portAvailable: true,
+      message: 'OK',
+    });
+
+    render(<WebCanvasPage />);
+
+    const iframe = await screen.findByTitle('workspace.canvas.webCanvas.iframeTitle');
+    await waitFor(() => {
+      expect(iframe).toHaveAttribute('src', '/workspaces/ws-1/canvas/?lang=en');
+    });
+    expect(screen.queryByText('workspace.canvas.webCanvas.default.guidance.title')).not.toBeInTheDocument();
+    expect(screen.queryByText('workspace.canvas.webCanvas.default.guidance.description')).not.toBeInTheDocument();
   });
 
   it('does not combine script and same-origin iframe sandbox permissions', async () => {
@@ -479,7 +509,11 @@ describe('WebCanvasPage review mode', () => {
   });
 
   it('syncs the resolved app theme to the canvas iframe', async () => {
-    render(<WebCanvasPage />);
+    const { rerender } = render(
+      <ResolvedThemeProvider value="dark">
+        <WebCanvasPage />
+      </ResolvedThemeProvider>,
+    );
 
     const iframe = await screen.findByTitle('workspace.canvas.webCanvas.iframeTitle') as HTMLIFrameElement;
     const contentWindow = { postMessage: vi.fn() } as unknown as Window;
@@ -487,8 +521,6 @@ describe('WebCanvasPage review mode', () => {
       configurable: true,
       value: contentWindow,
     });
-    document.documentElement.classList.add('dark');
-
     window.dispatchEvent(new MessageEvent('message', {
       source: contentWindow,
       data: {
@@ -509,7 +541,11 @@ describe('WebCanvasPage review mode', () => {
     });
 
     vi.mocked(contentWindow.postMessage).mockClear();
-    document.documentElement.classList.remove('dark');
+    rerender(
+      <ResolvedThemeProvider value="light">
+        <WebCanvasPage />
+      </ResolvedThemeProvider>,
+    );
 
     await waitFor(() => {
       expect(contentWindow.postMessage).toHaveBeenCalledWith(expect.objectContaining({

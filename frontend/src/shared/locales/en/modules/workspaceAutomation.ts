@@ -68,13 +68,12 @@ const workspaceAutomationTranslations = {
         placeholder: 'Describe what this scheduled task definition should run',
       },
       prompt: {
-        label: 'Prompt / command',
-        placeholder: 'Enter the prompt or slash command to execute in this schedule',
-        helper: 'Provide a custom prompt or quickly insert a standard slash command from the picker.',
-        selectCommand: 'Choose command',
-        commandsLoading: 'Loading slash commands…',
-        commandsEmpty: 'No slash commands are available for this workspace.',
-        commandsError: 'Unable to load slash commands. Please try again later.',
+        label: 'Prompt / invocation',
+        placeholder: 'Enter a prompt or Prompt Invocation to execute in this schedule',
+        helper: 'Enter a custom prompt or insert a command or Skill from the picker.',
+        selectInvocation: 'Choose Prompt Invocation',
+        agenticToolRequired: 'Select an Agentic Tool first.',
+        toolCompatibilityWarning: 'This invocation came from the previously selected Agentic Tool and may be incompatible. Reselect it or edit the prompt.',
       },
       trigger: {
         label: 'Trigger type',
@@ -213,16 +212,11 @@ const workspaceAutomationTranslations = {
       },
     },
   },
-  slashDialog: {
-    title: 'Select slash command',
-    description: 'Browse frequently used commands and insert them into the prompt field.',
-    searchPlaceholder: 'Search commands by name, description, or tags…',
-    empty: 'No commands match the current filters',
-    scope: {
-      all: 'All',
-      project: 'Project',
-      user: 'User',
-    },
+  promptInvocationDialog: {
+    title: 'Select prompt invocation',
+    description: 'Browse commands and Skills and insert one into the prompt field.',
+    searchPlaceholder: 'Search by name, description, or tags…',
+    empty: 'No prompt invocations match the current filters',
   },
   sidebar: {
     title: 'Jobd task filters',

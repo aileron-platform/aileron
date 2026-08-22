@@ -12,7 +12,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 const detail = {
-  provider: 'codex',
+  targetClient: 'codex',
   category: 'tools',
   version: '1.2.3',
 } as MarketplacePackageDetail;
@@ -38,7 +38,7 @@ describe('MarketplaceDetailTopTabs', () => {
     expect(screen.getByText('marketplace.detail.sidebar.info.title')).toBeInTheDocument();
     expect(screen.getByText('tools')).toBeInTheDocument();
     expect(screen.getByText('1.2.3')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.providers.codex')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.targetClients.codex')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Basic/ })).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
 

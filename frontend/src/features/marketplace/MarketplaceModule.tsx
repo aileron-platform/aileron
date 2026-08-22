@@ -5,7 +5,7 @@ import { LoadingSpinner } from '@/shared/components/ui/loading-spinner';
 import { EntryFrame } from '@/shared/components/entry/EntryFrame';
 import { projectPlatformIdentityEntry } from '@/shared/components/entry/platformIdentityEntryProjection';
 import { useI18n } from '@/shared/hooks/useI18n';
-import type { MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 import { ROUTES } from '@/shared/constants/routes';
 import { MarketplaceCenterPage } from './features/marketplace-center/MarketplaceCenterPage';
 import { MarketplaceDetailPage } from './features/marketplace-detail/MarketplaceDetailPage';
@@ -14,7 +14,7 @@ import { MarketplaceSettingsPage } from './features/marketplace-settings/Marketp
 import { MarketplaceShellAdapter } from './components/MarketplaceShellAdapter';
 import { AuthorizationDeniedState, useAuth } from '@/features/auth/public';
 
-const isMarketplaceProvider = (value: string | undefined): value is MarketplaceProvider =>
+const isMarketplaceTargetClient = (value: string | undefined): value is MarketplaceTargetClient =>
   value === 'claude-code' || value === 'codex';
 
 const MarketplaceRedirectSurface: React.FC<{
@@ -33,9 +33,9 @@ const MarketplaceRedirectSurface: React.FC<{
 const MarketplacePackageRouteGuard: React.FC<{
   navigationSlot: React.ReactNode;
 }> = ({ navigationSlot }) => {
-  const { provider, packageId } = useParams();
+  const { targetClient, packageId } = useParams();
 
-  if (!isMarketplaceProvider(provider) || !packageId) {
+  if (!isMarketplaceTargetClient(targetClient) || !packageId) {
     return <MarketplaceRedirectSurface navigationSlot={navigationSlot} to={ROUTES.marketplace.packages} />;
   }
 
@@ -166,7 +166,7 @@ export const MarketplaceModule: React.FC<MarketplaceModuleProps> = ({ navigation
                 path="new/:section"
                 element={<MarketplaceRedirectSurface navigationSlot={navigationSlot} to={ROUTES.marketplace.packages} />}
               />
-              <Route path=":provider/:packageId" element={<MarketplacePackageRouteGuard navigationSlot={navigationSlot} />}>
+              <Route path=":targetClient/:packageId" element={<MarketplacePackageRouteGuard navigationSlot={navigationSlot} />}>
                 <Route
                   index
                   element={<MarketplaceDetailPage navigationSlot={navigationSlot} />}

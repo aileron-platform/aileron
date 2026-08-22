@@ -22,12 +22,12 @@ vi.mock('./messages/ThreadTimeline', () => ({
   },
 }));
 
-vi.mock('@/shared/components/slash-command-picker', () => ({
-  SlashCommandPickerDialog: () => null,
+vi.mock('@/shared/components/prompt-invocation-picker', () => ({
+  PromptInvocationPickerDialog: () => null,
 }));
 
-vi.mock('@/shared/api/slashCommandApi', () => ({
-  slashCommandApi: { listPickerItems: vi.fn(async () => []) },
+vi.mock('@/shared/api/promptInvocationApi', () => ({
+  promptInvocationApi: { list: vi.fn() },
 }));
 
 const capabilities: WorkspaceCapabilities = {
@@ -78,7 +78,7 @@ const renderView = (thread: Thread, overrides: Partial<Parameters<typeof ChatVie
     onSubmitDraft: vi.fn(),
     onPostMessage: vi.fn(),
     onPatchDraft: vi.fn(),
-    onCancel: vi.fn(),
+    onStop: vi.fn(),
     onRetry: vi.fn(),
     onRemoveQueuedMessage: vi.fn(),
     ...overrides,
@@ -113,12 +113,12 @@ describe('ChatView', () => {
     expect(screen.queryByTestId('thread-timeline')).not.toBeInTheDocument();
   });
 
-  it('keeps working and cancel controls driven by metadata status', () => {
+  it('keeps working and stop controls driven by metadata status', () => {
     const props = renderView(buildThread({ status: 'working', activeTurnId: 'turn-1' }));
 
     expect(screen.getByText('aiChat.working.working')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'aiChat.workbench.cancel' }));
-    expect(props.onCancel).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'aiChat.workbench.stop' }));
+    expect(props.onStop).toHaveBeenCalledOnce();
   });
 
   it('renders and removes queued messages without loading history', () => {

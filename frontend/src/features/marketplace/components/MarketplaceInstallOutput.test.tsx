@@ -10,10 +10,10 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 describe('MarketplaceInstallOutput', () => {
-  it('renders provider CLI terminal output without lifecycle projections', () => {
+  it('renders targetClient CLI terminal output without lifecycle projections', () => {
     const result: MarketplacePluginCommandResult = {
       status: 'failed',
-      provider: 'codex',
+      targetClient: 'codex',
       packageId: 'demo-plugin',
       marketplaceId: 'team-tools',
       workspaceId: 'workspace-1',
@@ -29,7 +29,7 @@ describe('MarketplaceInstallOutput', () => {
     render(<MarketplaceInstallOutput result={result} />);
 
     expect(screen.getByText('marketplace.install.output.title')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.providers.codex')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.targetClients.codex')).toBeInTheDocument();
     expect(screen.getByText('marketplace.install.stages.plugin-install')).toBeInTheDocument();
     expect(screen.getByText('Plugin install failed')).toBeInTheDocument();
     expect(screen.getByText('Preparing plugin')).toBeInTheDocument();

@@ -5,6 +5,7 @@ const apiPostMock = vi.hoisted(() => vi.fn());
 const apiPutMock = vi.hoisted(() => vi.fn());
 const apiPatchMock = vi.hoisted(() => vi.fn());
 const apiDeleteMock = vi.hoisted(() => vi.fn());
+const apiGetBlobMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/shared/api/apiClient', () => ({
   ApiClient: class MockApiClient {
@@ -13,6 +14,7 @@ vi.mock('@/shared/api/apiClient', () => ({
     put = apiPutMock;
     patch = apiPatchMock;
     delete = apiDeleteMock;
+    getBlob = apiGetBlobMock;
   },
 }));
 
@@ -28,6 +30,7 @@ beforeEach(() => {
   apiPutMock.mockReset();
   apiPatchMock.mockReset();
   apiDeleteMock.mockReset();
+  apiGetBlobMock.mockReset();
 });
 
 describe('agentSettingsApi plugin resources', () => {
@@ -99,6 +102,103 @@ describe('agentSettingsApi plugin resources', () => {
         trusted: false,
         revision: 'trust-r1',
       },
+      undefined,
+    );
+  });
+});
+
+describe('agentSettingsApi Codex file updates', () => {
+  it('fetches and forwards the current revision when updating a Codex Skill', async () => {
+    apiGetMock.mockResolvedValueOnce({
+      workspaceId: 'ws-1',
+      layer: 'project',
+      path: 'review tools/SKILL.md',
+      content: '# Existing',
+      exists: true,
+      revision: 'skill-r1',
+    });
+    apiPutMock.mockResolvedValueOnce({
+      workspaceId: 'ws-1',
+      layer: 'project',
+      path: 'review tools/SKILL.md',
+      content: '# Updated',
+      exists: true,
+      revision: 'skill-r2',
+    });
+    const api = createAgentSettingsApi('codex');
+
+    await api.updateCodexFile(
+      'http://runtime.test',
+      'ws-1',
+      'skills',
+      'project',
+      'review tools/SKILL.md',
+      '# Updated',
+    );
+
+    expect(apiGetMock).toHaveBeenCalledWith(
+      '/api/v1/workspaces/ws-1/codex/skills/file?scope=project&path=review+tools%2FSKILL.md',
+      undefined,
+    );
+    expect(apiPutMock).toHaveBeenCalledWith(
+      '/api/v1/workspaces/ws-1/codex/skills/file?scope=project',
+      {
+        path: 'review tools/SKILL.md',
+        content: '# Updated',
+        revision: 'skill-r1',
+      },
+      undefined,
+    );
+    expect(apiGetMock.mock.invocationCallOrder[0]).toBeLessThan(
+      apiPutMock.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('does not send a Codex Skills update when the current revision is missing', async () => {
+    apiGetMock.mockResolvedValueOnce({
+      workspaceId: 'ws-1',
+      layer: 'project',
+      path: 'review/SKILL.md',
+      content: '# Existing',
+      exists: true,
+    });
+    const api = createAgentSettingsApi('codex');
+
+    await expect(api.updateCodexFile(
+      'http://runtime.test',
+      'ws-1',
+      'skills',
+      'project',
+      'review/SKILL.md',
+      '# Updated',
+    )).rejects.toThrow('Codex Skills file revision is required before updating');
+
+    expect(apiPutMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps non-Skills Codex updates on the existing direct PUT contract', async () => {
+    apiPutMock.mockResolvedValueOnce({
+      workspaceId: 'ws-1',
+      layer: 'user',
+      path: 'release.md',
+      content: '# Updated',
+      exists: true,
+    });
+    const api = createAgentSettingsApi('codex');
+
+    await api.updateCodexFile(
+      'http://runtime.test',
+      'ws-1',
+      'prompts',
+      'user',
+      'release.md',
+      '# Updated',
+    );
+
+    expect(apiGetMock).not.toHaveBeenCalled();
+    expect(apiPutMock).toHaveBeenCalledWith(
+      '/api/v1/workspaces/ws-1/codex/prompts/file?scope=user',
+      { path: 'release.md', content: '# Updated' },
       undefined,
     );
   });

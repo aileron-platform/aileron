@@ -4,7 +4,6 @@ export interface MarketplaceActionPermissions {
   canEdit: boolean;
   canDelete: boolean;
   canExport: boolean;
-  canImport: boolean;
   canInstall: boolean;
   canManageRegistry: boolean;
 }
@@ -29,7 +28,6 @@ export const resolveMarketplacePermissions = (
     canEdit: isAdmin,
     canDelete: isAdmin,
     canExport: isMember,
-    canImport: isAdmin,
     canInstall: isMember,
     canManageRegistry: isAdmin,
   };

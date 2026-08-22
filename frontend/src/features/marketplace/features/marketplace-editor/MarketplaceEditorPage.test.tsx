@@ -40,7 +40,10 @@ vi.mock('@/shared/components/markdown/MarkdownEditor', () => ({
 }));
 
 const packageDetail = (): MarketplacePackageDetail => ({
-  provider: 'codex',
+  targetClient: 'codex',
+  packageFormat: 'codex-native',
+  catalogPluginId: 'codex-toolkit',
+  userCopyTargetClient: 'codex',
   packageType: 'plugin',
   packageId: 'codex-toolkit',
   displayName: 'Codex Toolkit',
@@ -48,15 +51,25 @@ const packageDetail = (): MarketplacePackageDetail => ({
   description: 'Package description',
   category: 'coding',
   tags: [],
-  sourceType: 'created',
   indexedResourceNames: [],
   validationSeverity: 'none',
-  lifecycleStatus: 'draft',
+  authoringCapabilities: {
+    basic: 'read-write',
+    agentsMd: 'read-write',
+    hooks: 'read-write',
+    mcp: 'read-write',
+    agents: 'read-write',
+    commands: 'read-write',
+    outputStyle: 'unsupported',
+    skills: 'read-write',
+    files: 'read-write',
+  },
   registryPath: 'codex/plugins/codex-toolkit',
   revision: 'rev1',
   updatedAt: '2026-06-26T00:00:00.000Z',
   variants: [{
-    provider: 'codex',
+    targetClient: 'codex',
+    packageFormat: 'codex-native',
     packageId: 'codex-toolkit',
     displayName: 'Codex Toolkit',
   }],
@@ -68,7 +81,7 @@ const packageDetail = (): MarketplacePackageDetail => ({
 const renderEditor = (initialEntry = '/marketplace/packages/codex/codex-toolkit/edit/basic') => render(
   <MemoryRouter initialEntries={[initialEntry]}>
     <Routes>
-      <Route path="/marketplace/packages/:provider/:packageId/edit/:section?" element={<MarketplaceEditorPage mode="edit" />} />
+      <Route path="/marketplace/packages/:targetClient/:packageId/edit/:section?" element={<MarketplaceEditorPage mode="edit" />} />
       <Route path="/marketplace/packages" element={<div>marketplace-center-route</div>} />
     </Routes>
   </MemoryRouter>,

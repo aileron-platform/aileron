@@ -47,7 +47,7 @@ vi.mock('./components/ChatWorkbench', () => ({
 }));
 
 const useThreadsMock = vi.hoisted(() => vi.fn());
-const cancelThreadMock = vi.hoisted(() => vi.fn());
+const stopThreadMock = vi.hoisted(() => vi.fn());
 const retryThreadMock = vi.hoisted(() => vi.fn());
 const archiveThreadMock = vi.hoisted(() => vi.fn());
 const deleteThreadMock = vi.hoisted(() => vi.fn());
@@ -64,8 +64,8 @@ vi.mock('./hooks/useThread', () => ({
         ? buildSummary('archived-thread', '2026-07-08T01:00:00.000Z', { archived: true })
         : activeThreads.find((thread) => thread.id === threadId) ?? null,
     },
-    cancel: {
-      mutate: cancelThreadMock,
+    stop: {
+      mutate: stopThreadMock,
     },
     retry: {
       mutate: retryThreadMock,
@@ -164,7 +164,7 @@ const renderHome = (initialPath = '/workspaces/workspace-home/home') => {
 
 beforeEach(() => {
   localStorage.clear();
-  cancelThreadMock.mockReset();
+  stopThreadMock.mockReset();
   retryThreadMock.mockReset();
   archiveThreadMock.mockReset();
   deleteThreadMock.mockReset();

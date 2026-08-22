@@ -28,7 +28,6 @@ import { AutomationJobEditDialog } from '../components/job-form/AutomationJobEdi
 import { useI18n } from '@/shared/hooks/useI18n';
 import { automationApi } from '../api/automationApi';
 import { automationWorkspaceApi } from '../api/automationWorkspaceApi';
-import type { SlashCommandItem } from '@/shared/types/slashCommands';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { getAutomationRunErrorKey } from '../model/automationStatusModel';
 import { useAutomationJobPagination } from '../hooks/useAutomationJobPagination';
@@ -66,8 +65,6 @@ export const WorkspaceAutomationPage: React.FC<WorkspaceAutomationPageProps> = (
   const [editLoading, setEditLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [workspaces, setWorkspaces] = useState<AutomationWorkspaceSummary[]>([]);
-  const [commands, setCommands] = useState<SlashCommandItem[]>([]);
-  const [commandsLoading, setCommandsLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!workspaceId) {
@@ -206,38 +203,6 @@ export const WorkspaceAutomationPage: React.FC<WorkspaceAutomationPageProps> = (
         if (controller.signal.aborted) return;
         logger.error('Failed to load workspaces', { error });
         setWorkspaces([]);
-      }
-    })();
-
-    return () => controller.abort();
-  }, [editingTask?.workspaceId, isEditDialogOpen]);
-
-  useEffect(() => {
-    if (!isEditDialogOpen || !editingTask?.workspaceId) {
-      setCommands([]);
-      setCommandsLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    setCommandsLoading(true);
-
-    void (async () => {
-      try {
-        const items = await automationWorkspaceApi.listSlashCommands(
-          editingTask.workspaceId,
-          controller.signal
-        );
-        if (controller.signal.aborted) return;
-        setCommands(items);
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        logger.error('Failed to load slash commands', { error });
-        setCommands([]);
-      } finally {
-        if (!controller.signal.aborted) {
-          setCommandsLoading(false);
-        }
       }
     })();
 
@@ -449,8 +414,6 @@ export const WorkspaceAutomationPage: React.FC<WorkspaceAutomationPageProps> = (
         onClose={handleCloseEditDialog}
         onSave={handleSaveEdit}
         workspaces={workspaces}
-        commands={commands}
-        commandsLoading={commandsLoading}
       />
     </div>
   );

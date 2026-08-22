@@ -14,7 +14,13 @@ import { Label } from '@/shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { useI18n } from '@/shared/hooks/useI18n';
-import type { MarketplaceCreateRequest, MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import { listPackageFormatOptions } from '@/features/marketplace/api/marketplaceApi';
+import type {
+  MarketplaceCreateRequest,
+  MarketplacePackageFormat,
+  MarketplacePackageFormatOption,
+  MarketplaceTargetClient,
+} from '@/features/marketplace/model/marketplaceTypes';
 
 interface CreatePackageDialogProps {
   open: boolean;
@@ -24,12 +30,12 @@ interface CreatePackageDialogProps {
   onSubmit: (request: MarketplaceCreateRequest) => Promise<void>;
 }
 
-const PROVIDERS: MarketplaceProvider[] = ['claude-code', 'codex'];
-
 const initialForm: MarketplaceCreateRequest = {
-  provider: 'claude-code',
+  packageFormat: 'agent-plugin/1.0.0',
+  targetClients: [],
   packageId: '',
   displayName: '',
+  version: '1.0.0',
   description: '',
 };
 
@@ -42,12 +48,31 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
 }) => {
   const { t } = useI18n();
   const [form, setForm] = React.useState<MarketplaceCreateRequest>(initialForm);
-  const providerLabelId = React.useId();
+  const [formatOptions, setFormatOptions] = React.useState<MarketplacePackageFormatOption[]>([]);
+  const packageFormatLabelId = React.useId();
+  const targetClientLabelId = React.useId();
 
   React.useEffect(() => {
     if (!open) {
       setForm(initialForm);
+      setFormatOptions([]);
+      return;
     }
+    let active = true;
+    void listPackageFormatOptions().then(options => {
+      if (!active) return;
+      setFormatOptions(options);
+      const first = options[0];
+      if (first) {
+        setForm(current => ({
+          ...current,
+          packageFormat: first.packageFormat,
+          targetClients: first.targetClients.slice(0, 1),
+          version: first.defaultVersion,
+        }));
+      }
+    });
+    return () => { active = false; };
   }, [open]);
 
   const updateField = <Key extends keyof MarketplaceCreateRequest>(
@@ -60,9 +85,11 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await onSubmit({
-      provider: form.provider,
+      packageFormat: form.packageFormat,
+      targetClients: form.targetClients,
       packageId: form.packageId.trim(),
       displayName: form.displayName.trim(),
+      version: form.version.trim(),
       description: form.description?.trim() || undefined,
     });
   };
@@ -79,23 +106,65 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
 
         <form className="space-y-4" onSubmit={submit}>
           <div className="space-y-2">
-            <Label id={providerLabelId}>{t('marketplace.createPackage.fields.provider')}</Label>
+            <Label id={packageFormatLabelId}>{t('marketplace.createPackage.fields.packageFormat')}</Label>
             <Select
-              value={form.provider}
-              onValueChange={value => updateField('provider', value as MarketplaceProvider)}
-              disabled={isSubmitting}
+              value={form.packageFormat}
+              onValueChange={value => {
+                const option = formatOptions.find(item => item.packageFormat === value);
+                if (!option) return;
+                setForm(current => ({
+                  ...current,
+                  packageFormat: value as MarketplacePackageFormat,
+                  targetClients: option.targetClients.slice(0, 1),
+                  version: option.defaultVersion,
+                }));
+              }}
+              disabled={isSubmitting || formatOptions.length === 0}
             >
-              <SelectTrigger aria-labelledby={providerLabelId}>
+              <SelectTrigger aria-labelledby={packageFormatLabelId}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PROVIDERS.map(provider => (
-                  <SelectItem key={provider} value={provider}>
-                    {t(`marketplace.providers.${provider}`)}
+                {formatOptions.map(option => (
+                  <SelectItem key={option.packageFormat} value={option.packageFormat}>
+                    {option.packageFormat}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label id={targetClientLabelId}>{t('marketplace.createPackage.fields.targetClient')}</Label>
+            <Select
+              value={form.targetClients[0] ?? ''}
+              onValueChange={value => updateField('targetClients', [value as MarketplaceTargetClient])}
+              disabled={isSubmitting}
+            >
+              <SelectTrigger aria-labelledby={targetClientLabelId}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(formatOptions.find(option => option.packageFormat === form.packageFormat)?.targetClients ?? []).map(targetClient => (
+                  <SelectItem key={targetClient} value={targetClient}>
+                    {t(`marketplace.targetClients.${targetClient}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="marketplace-create-version">
+              {t('marketplace.createPackage.fields.version')}
+            </Label>
+            <Input
+              id="marketplace-create-version"
+              value={form.version}
+              onChange={event => updateField('version', event.target.value)}
+              disabled={isSubmitting}
+              required
+            />
           </div>
 
           <div className="space-y-2">

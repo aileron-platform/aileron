@@ -5,6 +5,9 @@ set -e
 ENV_VARS="VITE_BROWSER_EXTENSION_ID"
 HTML_ROOT=/tmp/aileron-html
 
+if [ -d "${HTML_ROOT}" ]; then
+  chmod -R u+w "${HTML_ROOT}"
+fi
 rm -rf "${HTML_ROOT}"
 mkdir -p "${HTML_ROOT}"
 cp -R /opt/aileron/html/. "${HTML_ROOT}/"

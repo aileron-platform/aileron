@@ -1,9 +1,11 @@
-import type { SlashCommandItem } from '@/shared/types/slashCommands';
-import { slashCommandApi } from '@/shared/api/slashCommandApi';
+import type {
+  PromptInvocationCatalog,
+  PromptInvocationTool,
+} from '@/shared/types/promptInvocations';
+import { promptInvocationApi } from '@/shared/api/promptInvocationApi';
 import { apiClient } from '@/shared/api/apiClient';
-import { normalizeAgenticTools } from '@/shared/types/agenticTool';
 import type { WorkspaceCapabilities } from '@/features/ai-chat/public';
-import type { WorkspaceDetailResponse, WorkspaceListResponse } from '@/features/workspace/public';
+import type { WorkspaceListResponse } from '@/features/workspace/public';
 import type { AutomationWorkspaceSummary } from '../model/automationTypes';
 
 const WORKSPACE_LIST_ENDPOINT = '/workspaces?page=1&pageSize=50';
@@ -30,14 +32,9 @@ export const automationWorkspaceApi = {
         id: item.id,
         name: item.name,
         accessSource: item.accessSource === 'owned' ? 'owned' as const : 'shared' as const,
+        runtimeUrl: item.runtimeUrl,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  },
-
-  async getDetail(workspaceId: string, signal?: AbortSignal): Promise<WorkspaceDetailResponse> {
-    handleAbort(signal);
-
-    return await apiClient.get<WorkspaceDetailResponse>(buildWorkspaceDetailEndpoint(workspaceId));
   },
 
   async getCapabilities(workspaceId: string, signal?: AbortSignal): Promise<WorkspaceCapabilities> {
@@ -47,15 +44,11 @@ export const automationWorkspaceApi = {
     );
   },
 
-  async listSlashCommands(workspaceId: string, signal?: AbortSignal): Promise<SlashCommandItem[]> {
-    const detail = await this.getDetail(workspaceId, signal);
-
-    handleAbort(signal);
-
-    const runtimeBaseUrl = detail.runtimeStatus.runtimeUrl;
-
-    const apiPrefix = normalizeAgenticTools(detail.agenticTools)[0];
-
-    return slashCommandApi.list(runtimeBaseUrl, workspaceId, apiPrefix, signal);
+  async listPromptInvocations(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    agenticTool: PromptInvocationTool,
+  ): Promise<PromptInvocationCatalog> {
+    return promptInvocationApi.list(runtimeBaseUrl, workspaceId, agenticTool);
   },
 };

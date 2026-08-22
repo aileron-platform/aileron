@@ -11,8 +11,6 @@ import {
   AlertDialogHeader,
 } from '@/shared/components/ui/alert-dialog';
 import { AlertDialogHeading } from '@/shared/components/ui/dialog-heading';
-import { Input } from '@/shared/components/ui/input';
-import { Label } from '@/shared/components/ui/label';
 import { LoadingSpinner } from '@/shared/components/ui/loading-spinner';
 import { useI18n } from '@/shared/hooks/useI18n';
 import type { MarketplacePackageSummary } from '@/features/marketplace/model/marketplaceTypes';
@@ -30,7 +28,6 @@ import {
   buildMarketplaceDeleteRequest,
   buildMarketplaceExportRequest,
   getMarketplaceActionTextKeys,
-  isMarketplaceDeleteBlocked,
 } from '../marketplacePackageActionModel';
 
 interface MarketplacePackageActionDialogProps {
@@ -48,13 +45,11 @@ export const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDi
   onDeleted,
 }) => {
   const { t } = useI18n();
-  const [confirmText, setConfirmText] = React.useState('');
   const [status, setStatus] = React.useState<'idle' | 'running' | 'success' | 'failed'>('idle');
   const [errorCode, setErrorCode] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (action) {
-      setConfirmText('');
       setStatus('idle');
       setErrorCode(null);
     }
@@ -101,7 +96,6 @@ export const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDi
     }
   };
 
-  const isDeleteBlocked = isMarketplaceDeleteBlocked(action.type, confirmText, item.packageId);
   const shouldShowCloseOnlyFooter = status === 'success' && action.type === 'delete';
 
   return (
@@ -116,16 +110,12 @@ export const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDi
         <div className="space-y-4">
           <div className="grid gap-3 rounded-md border border-border p-3 text-sm">
             <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">{t('marketplace.install.fields.provider')}</span>
-              <span>{t(`marketplace.providers.${item.provider}`)}</span>
+              <span className="text-muted-foreground">{t('marketplace.install.fields.targetClient')}</span>
+              <span>{t(`marketplace.targetClients.${item.targetClient}`)}</span>
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">{t('marketplace.install.fields.package')}</span>
               <span className="font-mono">{item.packageId}</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">{t('marketplace.delete.fields.revision')}</span>
-              <span className="font-mono">{item.revision}</span>
             </div>
           </div>
           {action.type === 'export' ? (
@@ -135,16 +125,10 @@ export const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDi
             </Alert>
           ) : null}
           {action.type === 'delete' ? (
-            <>
-              <Alert variant="destructive">
-                <Trash2 className="h-4 w-4" />
-                <AlertDescription>{t('marketplace.delete.warning')}</AlertDescription>
-              </Alert>
-              <div className="space-y-2">
-                <Label htmlFor="marketplace-center-delete-confirm">{t('marketplace.delete.fields.confirm', { id: item.packageId })}</Label>
-                <Input id="marketplace-center-delete-confirm" value={confirmText} onChange={event => setConfirmText(event.target.value)} />
-              </div>
-            </>
+            <Alert variant="destructive">
+              <Trash2 className="h-4 w-4" />
+              <AlertDescription>{t('marketplace.delete.warning')}</AlertDescription>
+            </Alert>
           ) : null}
           {status === 'success' ? (
             <Alert>
@@ -182,7 +166,7 @@ export const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDi
                   event.preventDefault();
                   void runAction();
                 }}
-                disabled={status === 'running' || isDeleteBlocked}
+                disabled={status === 'running'}
               >
                 {status === 'running' ? <LoadingSpinner size="sm" className="mr-1.5" /> : null}
                 {t(actionTextKeys.actionKey)}

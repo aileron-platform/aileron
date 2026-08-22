@@ -49,6 +49,9 @@ export const BrowserPage: React.FC = () => {
   const {
     connectionState,
     isConnected,
+    websocketConnected,
+    dataChannelOpen,
+    hasLiveVideoTrack,
     error: streamError,
     videoRef,
     audioRef,
@@ -165,7 +168,15 @@ export const BrowserPage: React.FC = () => {
         }
       />
 
-      <div className="flex-1 overflow-hidden relative bg-black">
+      <div
+        className="flex-1 overflow-hidden relative bg-black"
+        data-testid="browser-session-readiness"
+        data-connection-state={connectionState}
+        data-websocket-connected={String(websocketConnected)}
+        data-webrtc-connected={String(isConnected)}
+        data-data-channel-open={String(dataChannelOpen)}
+        data-live-video-track={String(hasLiveVideoTrack)}
+      >
         {shouldShowStream && isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-10">
             <div className="text-center space-y-4">
@@ -245,6 +256,7 @@ export const BrowserPage: React.FC = () => {
           <>
             <video
               ref={videoRef}
+              data-testid="browser-video"
               autoPlay
               playsInline
               muted

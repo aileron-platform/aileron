@@ -77,9 +77,16 @@ interface ClipboardEntry {
 export interface FileManagementSidebarProps {
   collapsed?: boolean;
   showHeader?: boolean;
+  refreshSignal?: number;
+  onRefreshingChange?: (isRefreshing: boolean) => void;
 }
 
-export const FileManagementSidebar: React.FC<FileManagementSidebarProps> = ({ collapsed = false, showHeader = true }) => {
+export const FileManagementSidebar: React.FC<FileManagementSidebarProps> = ({
+  collapsed = false,
+  showHeader = true,
+  refreshSignal,
+  onRefreshingChange,
+}) => {
   const {
     workspace,
     state: workspaceState,
@@ -207,6 +214,27 @@ export const FileManagementSidebar: React.FC<FileManagementSidebarProps> = ({ co
       void loadTree();
     }
   }, [loadTree, selectedGitContextId, showHiddenEntries, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
+
+  const previousRefreshSignalRef = useRef(refreshSignal);
+  useEffect(() => {
+    if (refreshSignal === undefined || refreshSignal === previousRefreshSignalRef.current) {
+      return;
+    }
+    previousRefreshSignalRef.current = refreshSignal;
+    if (!workspaceRuntime.runtimeBaseUrl) {
+      return;
+    }
+    let cancelled = false;
+    onRefreshingChange?.(true);
+    void loadTree().finally(() => {
+      if (!cancelled) {
+        onRefreshingChange?.(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshSignal, loadTree, onRefreshingChange, workspaceRuntime.runtimeBaseUrl]);
 
   const closeTabsForPaths = useCallback(
     (paths: string[]) => {

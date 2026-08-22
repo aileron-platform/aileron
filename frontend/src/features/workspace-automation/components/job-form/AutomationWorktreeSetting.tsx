@@ -1,31 +1,43 @@
+import { useId } from 'react';
 import { GitBranch } from 'lucide-react';
-import { Label } from '@/shared/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/shared/components/ui/radio-group';
 import { useI18n } from '@/shared/hooks/useI18n';
 
 export function AutomationWorktreeSetting() {
   const { t } = useI18n();
+  const summaryId = useId();
+  const fieldLabelId = `${summaryId}-field-label`;
+  const dedicatedLabelId = `${summaryId}-dedicated-label`;
+  const dedicatedDescriptionId = `${summaryId}-dedicated-description`;
 
   return (
     <div className="space-y-2">
-      <Label>{t('automation.form.fields.worktree.label')}</Label>
-      <RadioGroup value="dedicated" aria-label={t('automation.form.fields.worktree.label')}>
-        <Label
-          htmlFor="automation-worktree-dedicated"
-          className="flex cursor-default items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4"
+      <p id={fieldLabelId} className="text-sm font-medium leading-none">
+        {t('automation.form.fields.worktree.label')}
+      </p>
+      <div
+        role="group"
+        aria-labelledby={`${fieldLabelId} ${dedicatedLabelId}`}
+        aria-describedby={dedicatedDescriptionId}
+        className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-4"
+      >
+        <span
+          aria-hidden="true"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
         >
-          <RadioGroupItem id="automation-worktree-dedicated" value="dedicated" className="mt-0.5" />
-          <GitBranch className="mt-0.5 h-4 w-4 flex-none text-primary" />
-          <span className="space-y-1">
-            <span className="block text-sm font-medium text-foreground">
-              {t('automation.form.fields.worktree.dedicated.label')}
-            </span>
-            <span className="block text-xs font-normal leading-5 text-muted-foreground">
-              {t('automation.form.fields.worktree.dedicated.description')}
-            </span>
-          </span>
-        </Label>
-      </RadioGroup>
+          <GitBranch className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 space-y-1">
+          <p id={dedicatedLabelId} className="text-sm font-medium text-foreground">
+            {t('automation.form.fields.worktree.dedicated.label')}
+          </p>
+          <p
+            id={dedicatedDescriptionId}
+            className="text-xs font-normal leading-5 text-muted-foreground"
+          >
+            {t('automation.form.fields.worktree.dedicated.description')}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

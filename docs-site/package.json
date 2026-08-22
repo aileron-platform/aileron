@@ -7,7 +7,7 @@
     "start": "docusaurus start",
     "build": "npm run check:structure && docusaurus build",
     "typecheck": "tsc --noEmit",
-    "test": "npm run check:helm-values-contract && npm run check:structure && node --test scripts/check-workspace-availability-contract.test.mjs && npm run check:workspace-contract && npm run check:authorization-contract && npm run check:platform-resource-contract",
+    "test": "npm run check:helm-values-contract && npm run check:structure && node --test scripts/check-image-size-security.test.mjs && node --test scripts/check-workspace-availability-contract.test.mjs && npm run check:workspace-contract && npm run check:authorization-contract && npm run check:platform-resource-contract",
     "check:structure": "node scripts/check-doc-structure.mjs",
     "check:workspace-contract": "node scripts/check-workspace-availability-contract.mjs",
     "check:authorization-contract": "node --test scripts/check-authorization-contract.test.mjs && node scripts/check-authorization-contract.mjs",
@@ -39,6 +39,8 @@
     "typescript": "~5.2.2"
   },
   "overrides": {
+    "image-size": "npm:image-size-safe@2.0.3",
+    "serialize-javascript": "7.1.0",
     "webpackbar": "5.0.2",
     "webpack": "5.97.0"
   },

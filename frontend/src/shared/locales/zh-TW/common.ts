@@ -84,7 +84,7 @@ const common = {
     }
   },
 
-  // 檔案樹元件
+  // File tree component
   fileTree: {
     toolbar: {
       title: '檔案',
@@ -235,9 +235,9 @@ const common = {
     DirectoryAdded: { label: 'DirectoryAdded', description: 'Session 新增目錄時執行。' },
   },
 
-  // 檔案操作對話框
+  // File operation dialogs
   fileOperations: {
-    // 新增檔案/資料夾
+    // Create files and folders
     create: {
       file: {
         title: '新增檔案',
@@ -251,13 +251,13 @@ const common = {
       },
       nameLabel: '名稱',
     },
-    // 重新命名
+    // Rename
     rename: {
       title: '重新命名',
       description: '請輸入新名稱',
       nameLabel: '新名稱',
     },
-    // 刪除
+    // Delete
     delete: {
       title: '確認刪除',
       description: '此操作無法復原',
@@ -266,7 +266,7 @@ const common = {
       folderWarning: '資料夾內的所有檔案也會被刪除',
       unsavedTabs: '將影響 {{count}} 個尚未儲存的已開啟分頁。',
     },
-    // 批次刪除
+    // Batch delete
     batchDelete: {
       title: '確認批次刪除',
       description: '此操作無法復原',
@@ -276,13 +276,13 @@ const common = {
       folderWarning: '資料夾內的所有檔案也會被刪除',
       deleteAll: '刪除全部',
     },
-    // 按鈕
+    // Buttons
     buttons: {
       cancel: '取消',
       confirm: '確定',
       delete: '刪除',
     },
-    // 驗證錯誤
+    // Validation errors
     validation: {
       nameRequired: '名稱不能為空',
       nameWithPath: '名稱不能包含路徑分隔符號 (/ 或 \\)',
@@ -291,7 +291,7 @@ const common = {
       nameSame: '新名稱與原名稱相同',
       nameExists: '{{name}} 已存在，請使用其他名稱。',
     },
-    // 成功消息
+    // Success messages
     success: {
       fileCreated: '檔案建立成功',
       folderCreated: '資料夾建立成功',
@@ -303,7 +303,7 @@ const common = {
       fileUploaded: '檔案上傳成功',
       noItemsToDelete: '沒有可刪除的項目',
     },
-    // 錯誤消息
+    // Error messages
     error: {
       fileCreateFailed: '檔案建立失敗',
       folderCreateFailed: '資料夾建立失敗',
@@ -320,13 +320,17 @@ const common = {
     },
   },
 
-  // Slash Command 選擇器
-  slashCommand: {
+  // Prompt Invocation picker
+  promptInvocation: {
     picker: {
-      title: '選擇 Slash Command',
-      description: '從指令庫中挑選適合的指令，快速填寫 Prompt。',
+      title: '選擇 Prompt Invocation',
+      description: '選擇指令或 Skill，並插入 Prompt。',
       searchPlaceholder: '輸入名稱、描述或標籤搜尋…',
-      empty: '沒有符合條件的指令',
+      loading: '正在載入 Prompt Invocation…',
+      error: '無法載入 Prompt Invocation，請稍後再試。',
+      degraded: '部分來源暫時無法使用，仍可選取目前載入的項目。',
+      degradedEmpty: '目前可用來源未能載入任何 Prompt Invocation。',
+      empty: '沒有符合條件的 Prompt Invocation',
       scope: {
         all: '全部',
         project: '專案',
@@ -340,7 +344,7 @@ const common = {
     },
   },
 
-  // Markdown 編輯器
+  // Markdown editor
   markdownEditor: {
     placeholder: '請輸入內容...\n支援 Markdown 語法',
     actions: {
@@ -371,7 +375,7 @@ const common = {
     },
   },
 
-  // 其他消息
+  // Other messages
   messages: {
     unauthorized: '請先登入',
     unknownError: '未知錯誤',
@@ -394,7 +398,7 @@ const common = {
     syncFailed: '同步失敗',
   },
 
-  // 模板管理錯誤消息
+  // Template management error messages
   template: {
     errors: {
       loadFailed: '載入失敗',

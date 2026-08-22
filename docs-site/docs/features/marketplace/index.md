@@ -1,41 +1,24 @@
 ---
-title: 應用市集（Marketplace）
+title: 應用中心
 ---
 
-# 應用市集（Marketplace）
+# 應用中心
 
-## 目的與入口
+應用中心只顯示 Aileron Managed Registry working tree 內的 Plugin。這些 Plugin 可由 Platform admin 直接建立，或從 Git repository、ZIP 封存檔匯入；系統不註冊或追蹤外部 Marketplace catalog。
 
-應用市集是瀏覽、安裝、編輯與治理套件的產品面，入口為 `/marketplace/packages`。
+建立或匯入完成後，Plugin 立即出現在應用中心，沒有 Draft、Publish、Sync、Rollback 或獨立 Re-import 狀態。若再次匯入相同 package ID，畫面會要求使用者選擇新版本，或明確確認 Replace。
 
-## 角色與允許操作
+Plugin 的 package format 在建立後不可變，並決定編輯器可用功能：
 
-member 與 admin 可瀏覽、匯出及安裝；發佈、內容管理、刪除與 Registry 管理限定 admin。
+- `claude-native`：支援 Claude Code native 資源，包含 Output Styles。
+- `codex-native`：支援 Codex native 資源，不包含 Output Styles。
+- `agent-plugin/1.0.0`：第一階段只提供 Basic、MCP、Skills 與 Files。
 
-## 核心概念
+member 與 admin 可瀏覽、匯出及安裝；建立、匯入、編輯與刪除限定 Platform admin。
 
-catalog package、provider、user copy、draft 與 registry source 是不同實體。
+## 相關文件
 
-## 主要流程
-
-從 catalog 選擇套件，安裝為使用者副本；admin 可開啟 editor 編輯並發佈。
-
-## 畫面狀態與唯讀行為
-
-畫面分別處理 loading、empty、error 與 denied。只有讀取操作時保留可讀內容與一般變更控制項，但停用變更並顯示 i18n 原因；缺少讀取操作時不啟動受保護 query、Provider 或即時連線。
-
-## 限制、失敗與安全
-
-clone/import 失敗需維持明確狀態；display-only 重複合併不能取代 canonical identity 修正。
-
-## 原始碼依據
-
-- `frontend/src/features/marketplace/MarketplaceModule.tsx::MarketplaceModule`
-- `frontend/src/features/marketplace/model/marketplacePermissions.ts::resolveMarketplacePermissions`
-- `workspace-manager/app/modules/marketplace/`
-- `packages/aileron-marketplace-core/`
-
-## 相關架構與 API
-
-- [frontend](/architecture/frontend/)
-- [manager-api](/api/manager-api)
+- [瀏覽與安裝](./browse-and-install)
+- [建立與匯入](./author-and-publish)
+- [Registry 與治理](./registry-and-governance)
+- [Manager API](/api/manager-api)

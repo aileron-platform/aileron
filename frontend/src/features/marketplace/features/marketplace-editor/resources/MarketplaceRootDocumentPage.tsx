@@ -25,12 +25,12 @@ export const MarketplaceRootDocumentPage: React.FC<MarketplaceRootDocumentPagePr
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
   const [loadError, setLoadError] = React.useState(false);
-  const fileName = packageDetail.provider === 'claude-code' ? 'CLAUDE.md' : 'AGENTS.md';
+  const fileName = packageDetail.targetClient === 'claude-code' ? 'CLAUDE.md' : 'AGENTS.md';
   const {
     identityGeneration,
     session,
   } = useMarketplaceResourceSession({
-    provider: packageDetail.provider,
+    targetClient: packageDetail.targetClient,
     packageId: packageDetail.packageId,
     resourceType: 'root-document',
   }, packageDetail.revision);
@@ -49,7 +49,7 @@ export const MarketplaceRootDocumentPage: React.FC<MarketplaceRootDocumentPagePr
     await session.query(
       identityGeneration,
       'root-document-load',
-      () => getRootDocument(packageDetail.provider, packageDetail.packageId),
+      () => getRootDocument(packageDetail.targetClient, packageDetail.packageId),
       {
         onSuccess: (resource) => {
           setContent(resource.content);
@@ -66,7 +66,7 @@ export const MarketplaceRootDocumentPage: React.FC<MarketplaceRootDocumentPagePr
   }, [
     identityGeneration,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     session,
   ]);
 
@@ -88,7 +88,7 @@ export const MarketplaceRootDocumentPage: React.FC<MarketplaceRootDocumentPagePr
     await session.mutate(
       identityGeneration,
       'root-document-mutation',
-      () => saveRootDocument(packageDetail.provider, packageDetail.packageId, {
+      () => saveRootDocument(packageDetail.targetClient, packageDetail.packageId, {
         revision: session.revision,
         content,
       }),

@@ -28,7 +28,6 @@ const makeColumn = (
   },
   presentation: {
     accessibleLabel: `${name}-label`,
-    chrome: name === 'navigation' ? 'navigation' : 'navigator-muted',
     responsive: 'always',
   },
   ...overrides,
@@ -63,7 +62,7 @@ const makeCompanion = (
   },
   presentation: {
     accessibleLabel: 'companion-label',
-    chrome: 'muted-rail',
+    rail: 'standard',
     collapseLabel: 'collapse companion',
     expandLabel: 'expand companion',
     resizeLabel: 'resize companion',
@@ -134,6 +133,23 @@ describe('ProductShell', () => {
     );
   });
 
+  it('owns one background surface across every shell column', () => {
+    render(<ProductShell body={makeBody()} />);
+
+    const shell = screen.getByTestId('product-shell');
+    const shellBody = shell.querySelector('[data-shell-body]');
+    expect(shellBody).toHaveClass('bg-background');
+
+    shell.querySelectorAll('[data-shell-region]').forEach((region) => {
+      expect(region).toHaveClass('bg-background');
+    });
+
+    expect(screen.getByTestId('navigation-content').parentElement).toHaveClass('bg-background');
+    expect(screen.getByTestId('navigator-content').parentElement).toHaveClass('bg-background');
+    expect(screen.getByTestId('companion-content').parentElement).toHaveClass('bg-background');
+    expect(shell.querySelector('[class~="bg-muted/20"]')).not.toBeInTheDocument();
+  });
+
   it('renders state bodies without region DOM or resize handles', () => {
     const adapter = makeAdapter({ navigation: { collapsed: false, width: 480 } });
     render(
@@ -146,7 +162,10 @@ describe('ProductShell', () => {
     );
 
     expect(screen.getByTestId('state-content')).toBeInTheDocument();
-    expect(screen.getByTestId('state-content').closest('[data-shell-state]')).toHaveClass('flex-col');
+    expect(screen.getByTestId('state-content').closest('[data-shell-state]')).toHaveClass(
+      'flex-col',
+      'bg-background',
+    );
     expect(screen.queryByTestId('navigation-content')).not.toBeInTheDocument();
     expect(screen.queryByRole('separator')).not.toBeInTheDocument();
     expect(adapter.load).toHaveBeenCalledTimes(1);
@@ -172,14 +191,13 @@ describe('ProductShell', () => {
     addEventListenerSpy.mockRestore();
   });
 
-  it('applies column chrome, header slots and read-only collapse state', () => {
+  it('applies the shared column surface, header slots and read-only collapse state', () => {
     render(
       <ProductShell
         body={makeBody({
           navigation: makeColumn('navigation', {
             presentation: {
               accessibleLabel: 'navigation label',
-              chrome: 'navigation',
               responsive: 'always',
               header: {
                 leading: <span data-testid="header-leading">leading</span>,
@@ -219,7 +237,6 @@ describe('ProductShell', () => {
           navigator: makeColumn('navigator', {
             presentation: {
               accessibleLabel: 'navigator label',
-              chrome: 'navigator-muted',
               responsive: 'always',
               header: {
                 leading: <span data-testid="navigator-header-icon">icon</span>,
@@ -316,7 +333,7 @@ describe('ProductShell', () => {
             },
             presentation: {
               accessibleLabel: 'companion-label',
-              chrome: 'plain-compact-rail',
+              rail: 'compact',
               collapseLabel: 'collapse companion',
               expandLabel: 'expand companion',
               resizeLabel: 'resize companion',
@@ -367,7 +384,6 @@ describe('ProductShell', () => {
           navigator: makeColumn('navigator', {
             presentation: {
               accessibleLabel: 'navigator-label',
-              chrome: 'navigator-muted',
               responsive: 'desktop-up',
             },
           }),

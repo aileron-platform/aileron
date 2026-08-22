@@ -31,15 +31,22 @@ Kubernetes deployments also expose TURN path state as `browserConnectivity`:
 
 ## Primary Workflow
 
-Manager consumes only `browserConnectivity.admission` and issues new Browser access only when it is
-`allowed`; it does not reinterpret state or expiry. `pending` and `not_ready` denied projections return
-`409 BROWSER_CONNECTIVITY_NOT_READY`, while `unavailable` returns `503 BROWSER_CONNECTIVITY_UNAVAILABLE`.
-The Browser view displays the projected state directly and does not recalculate evidence freshness. It creates one Neko generation from that access.
+Manager consumes only `browserConnectivity.admission`. `ready`, or `degraded` with still-valid evidence
+and an `allowed` projection, can issue new Browser access. Manager does not reinterpret state or expiry;
+the projection writer changes an expired projection to `not_ready` / `denied`. A `denied` projection in
+`pending` or `not_ready`, including expiry at admission time, returns
+`409 BROWSER_CONNECTIVITY_NOT_READY`. Only `unavailable` returns
+`503 BROWSER_CONNECTIVITY_UNAVAILABLE`. The Browser view displays the projected
+state directly and does not recalculate evidence freshness. It creates one Neko generation from that access.
 If WebSocket, ICE, WebRTC, or the data channel fails, it closes the whole generation, requests fresh
 access, and then creates the next one.
 Every access under a `turnRest` profile contains fresh short-lived `iceServers`. That generation's
 `RTCPeerConnection` overrides the Neko startup ICE list, and credentials are never reused across
 generations.
+A Browser session is ready only after the Neko WebSocket and WebRTC connection are established, a video
+track in the `live` state has arrived, and the data channel is open. A close, cleanup, or video-track
+`ended` event immediately clears the corresponding readiness. Reaching the page or Workspace URL alone
+does not prove that Browser is usable.
 
 The Evidence Authority stamps `acceptedAt` and derives `expiresAt` from its own clock. Producer
 `measuredAt` is diagnostic only. Latest attempt and last success are retained per producer and exact

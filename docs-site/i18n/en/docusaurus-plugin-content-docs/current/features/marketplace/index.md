@@ -1,41 +1,24 @@
 ---
-title: Marketplace
+title: Application Center
 ---
 
-# Marketplace
+# Application Center
 
-## Purpose and Entry Point
+Application Center shows only plugins in the Aileron Managed Registry working tree. Platform admins can create them directly or import them from a Git repository or ZIP archive. Aileron does not register or track external Marketplace catalogs.
 
-Marketplace is the product surface for browsing, installing, editing, and governing packages, entered at `/marketplace/packages`.
+A created or imported plugin is immediately available. There is no Draft, Publish, Sync, Rollback, or separate Re-import state. Importing an existing package ID asks the user to choose a version and explicitly confirm Replace.
 
-## Roles and Allowed Operations
+Package format is immutable and controls editor capabilities:
 
-Members and admins browse, export, and install. Publishing, content management, deletion, and Registry management are admin-only.
+- `claude-native` supports Claude Code native resources, including Output Styles.
+- `codex-native` supports Codex native resources without Output Styles.
+- `agent-plugin/1.0.0` initially exposes only Basic, MCP, Skills, and Files.
 
-## Core Concepts
+Members and admins can browse, export, and install. Creating, importing, editing, and deleting require Platform Admin.
 
-Catalog package, provider, user copy, draft, and registry source are distinct entities.
+## Related pages
 
-## Primary Workflow
-
-Select a catalog package and install a user copy. Admins can open the editor, edit, and publish.
-
-## View States and Read-only Behavior
-
-The view handles loading, empty, error, and denied states separately. With read-only operations, readable content and normal mutation controls remain visible while mutations are disabled with an i18n reason. Without read access, protected queries, providers, and realtime connections do not start.
-
-## Constraints, Failures, and Safety
-
-Clone/import failures retain explicit state. Display-only deduplication never replaces canonical identity handling.
-
-## Source Basis
-
-- `frontend/src/features/marketplace/MarketplaceModule.tsx::MarketplaceModule`
-- `frontend/src/features/marketplace/model/marketplacePermissions.ts::resolveMarketplacePermissions`
-- `workspace-manager/app/modules/marketplace/`
-- `packages/aileron-marketplace-core/`
-
-## Related Architecture and APIs
-
-- [frontend](/architecture/frontend/)
-- [manager-api](/api/manager-api)
+- [Browse and Install](./browse-and-install)
+- [Create and Import](./author-and-publish)
+- [Registry and Governance](./registry-and-governance)
+- [Manager API](/api/manager-api)

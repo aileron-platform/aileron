@@ -14,7 +14,7 @@ import { ROUTES } from '@/shared/constants/routes';
 import type {
   MarketplaceFeatureContentItem,
   MarketplacePackageDetail,
-  MarketplaceProvider,
+  MarketplaceTargetClient,
 } from '@/features/marketplace/model/marketplaceTypes';
 import {
   canRunMarketplacePackageAction,
@@ -24,7 +24,6 @@ import {
 import {
   getHooks,
   getMarketplaceReadme,
-  getMCPServer,
   getPackage,
   getRootDocument,
   listDocuments,
@@ -57,7 +56,7 @@ import { MarketplaceShellAdapter } from '../../components/MarketplaceShellAdapte
 
 type MarketplaceDetailTab = 'basic-info' | MarketplaceDetailFeatureItem['id'];
 
-const isProvider = (value: string | undefined): value is MarketplaceProvider =>
+const isTargetClient = (value: string | undefined): value is MarketplaceTargetClient =>
   value === 'claude-code' || value === 'codex';
 
 type MarketplaceDetailEmptyResource = 'mcp' | 'commands' | 'subagents' | 'output-styles';
@@ -106,17 +105,17 @@ const MarketplaceDetailFeatureEmptyState: React.FC<{
 
 const LazyMarkdownPanel: React.FC<{
   title: string;
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   packageId: string;
   resource: 'readme' | 'root';
-}> = ({ title, provider, packageId, resource }) => {
+}> = ({ title, targetClient, packageId, resource }) => {
   const [content, setContent] = React.useState<string | null>(null);
   const [error, setError] = React.useState(false);
   const {
     identityGeneration,
     session,
   } = useMarketplaceResourceSession({
-    provider,
+    targetClient,
     packageId,
     resourceType: `detail-${resource}`,
   }, '');
@@ -134,15 +133,15 @@ const LazyMarkdownPanel: React.FC<{
       'detail-markdown',
       () => (
         resource === 'readme'
-          ? getMarketplaceReadme(provider, packageId)
-          : getRootDocument(provider, packageId)
+          ? getMarketplaceReadme(targetClient, packageId)
+          : getRootDocument(targetClient, packageId)
       ),
       {
         onSuccess: result => setContent(result.content),
         onError: () => setError(true),
       },
     );
-  }, [identityGeneration, packageId, provider, resource, session]);
+  }, [identityGeneration, packageId, targetClient, resource, session]);
   React.useEffect(() => {
     void load();
   }, [load]);
@@ -153,16 +152,16 @@ const LazyMarkdownPanel: React.FC<{
 };
 
 const LazyHooksPanel: React.FC<{
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   packageId: string;
-}> = ({ provider, packageId }) => {
+}> = ({ targetClient, packageId }) => {
   const [hooks, setHooks] = React.useState<MarketplaceFeatureContentItem[] | null>(null);
   const [error, setError] = React.useState(false);
   const {
     identityGeneration,
     session,
   } = useMarketplaceResourceSession({
-    provider,
+    targetClient,
     packageId,
     resourceType: 'detail-hooks',
   }, '');
@@ -178,7 +177,7 @@ const LazyHooksPanel: React.FC<{
     await session.query(
       identityGeneration,
       'detail-hooks',
-      () => getHooks(provider, packageId),
+      () => getHooks(targetClient, packageId),
       {
         onSuccess: (resource) => {
           setHooks(resource.sources.flatMap((source) => (
@@ -195,27 +194,27 @@ const LazyHooksPanel: React.FC<{
         onError: () => setError(true),
       },
     );
-  }, [identityGeneration, packageId, provider, session]);
+  }, [identityGeneration, packageId, targetClient, session]);
   React.useEffect(() => {
     void load();
   }, [load]);
   if (error) return <MarketplaceResourceLoadError onRetry={() => { void load(); }} />;
   return hooks === null
     ? <LoadingSpinner className="h-full" />
-    : <MarketplaceHooksWorkflow provider={provider} hooks={hooks} />;
+    : <MarketplaceHooksWorkflow targetClient={targetClient} hooks={hooks} />;
 };
 
 const LazyMCPPanel: React.FC<{
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   packageId: string;
-}> = ({ provider, packageId }) => {
+}> = ({ targetClient, packageId }) => {
   const [servers, setServers] = React.useState<MarketplaceFeatureContentItem[] | null>(null);
   const [error, setError] = React.useState(false);
   const {
     identityGeneration,
     session,
   } = useMarketplaceResourceSession({
-    provider,
+    targetClient,
     packageId,
     resourceType: 'detail-mcp',
   }, '');
@@ -232,15 +231,8 @@ const LazyMCPPanel: React.FC<{
       identityGeneration,
       'detail-mcp',
       async () => {
-        const summaries = await listMCPServers(provider, packageId);
-        return Promise.all(
-          summaries.map(summary => getMCPServer(
-            provider,
-            packageId,
-            summary.name,
-            summary.ownerFilePath,
-          )),
-        );
+        const summaries = await listMCPServers(targetClient, packageId);
+        return summaries;
       },
       {
         onSuccess: (details) => {
@@ -256,7 +248,7 @@ const LazyMCPPanel: React.FC<{
         onError: () => setError(true),
       },
     );
-  }, [identityGeneration, packageId, provider, session]);
+  }, [identityGeneration, packageId, targetClient, session]);
   React.useEffect(() => {
     void load();
   }, [load]);
@@ -267,11 +259,11 @@ const LazyMCPPanel: React.FC<{
 };
 
 const LazyDocumentsPanel: React.FC<{
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   packageId: string;
   resourceType: 'commands' | 'subagents' | 'output-styles';
   title: string;
-}> = ({ provider, packageId, resourceType, title }) => {
+}> = ({ targetClient, packageId, resourceType, title }) => {
   const { t } = useI18n();
   const [documents, setDocuments] = React.useState<Awaited<ReturnType<typeof listDocuments>> | null>(null);
   const [selected, setSelected] = React.useState<Awaited<ReturnType<typeof loadDocument>> | null>(null);
@@ -284,7 +276,7 @@ const LazyDocumentsPanel: React.FC<{
     identityGeneration,
     session,
   } = useMarketplaceResourceSession({
-    provider,
+    targetClient,
     packageId,
     resourceType: `detail-${resourceType}`,
   }, '');
@@ -305,13 +297,13 @@ const LazyDocumentsPanel: React.FC<{
     await session.query(
       identityGeneration,
       'detail-document-list',
-      () => listDocuments(provider, packageId, resourceType),
+      () => listDocuments(targetClient, packageId, resourceType),
       {
         onSuccess: setDocuments,
         onError: () => setListError(true),
       },
     );
-  }, [identityGeneration, packageId, provider, resourceType, session]);
+  }, [identityGeneration, packageId, targetClient, resourceType, session]);
   const loadSelected = React.useCallback(async (path: string) => {
     setSelectedPath(path);
     setSelected(null);
@@ -320,14 +312,14 @@ const LazyDocumentsPanel: React.FC<{
     await session.query(
       identityGeneration,
       'detail-document-content',
-      () => loadDocument(provider, packageId, resourceType, path),
+      () => loadDocument(targetClient, packageId, resourceType, path),
       {
         onSuccess: setSelected,
         onError: () => setContentError(true),
         onSettled: () => setIsContentLoading(false),
       },
     );
-  }, [identityGeneration, packageId, provider, resourceType, session]);
+  }, [identityGeneration, packageId, targetClient, resourceType, session]);
   React.useEffect(() => {
     void loadList();
   }, [loadList]);
@@ -392,7 +384,7 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
   const { t } = useI18n();
   const { platformRole } = useAuth();
   const navigate = useNavigate();
-  const { provider, packageId } = useParams();
+  const { targetClient, packageId } = useParams();
   const [activeTab, setActiveTab] = React.useState<MarketplaceDetailTab>('basic-info');
   const [detail, setDetail] = React.useState<MarketplacePackageDetail | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -402,13 +394,13 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
     () => resolveMarketplacePermissions(platformRole),
     [platformRole],
   );
-  const resolvedProvider = isProvider(provider) ? provider : null;
+  const resolvedTargetClient = isTargetClient(targetClient) ? targetClient : null;
   const resolvedPackageId = packageId ?? '';
   const {
     identityGeneration,
     session,
   } = useMarketplaceResourceSession({
-    provider: resolvedProvider,
+    targetClient: resolvedTargetClient,
     packageId: resolvedPackageId,
     resourceType: 'detail-package',
   }, '');
@@ -425,7 +417,7 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
     const load = async () => {
       setIsLoading(true);
       setError(null);
-      if (!resolvedProvider || !resolvedPackageId) {
+      if (!resolvedTargetClient || !resolvedPackageId) {
         setError('marketplace.errors.packageNotFound');
         setIsLoading(false);
         return;
@@ -433,7 +425,7 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
       await session.query(
         identityGeneration,
         'detail-package',
-        () => getPackage(resolvedProvider, resolvedPackageId),
+        () => getPackage(resolvedTargetClient, resolvedPackageId),
         {
           onSuccess: setDetail,
           onError: (loadError) => {
@@ -447,7 +439,7 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
   }, [
     identityGeneration,
     resolvedPackageId,
-    resolvedProvider,
+    resolvedTargetClient,
     session,
   ]);
 
@@ -482,7 +474,7 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
     permissions.canInstall,
   ]);
 
-  const detailMatchesRoute = detail?.provider === provider && detail.packageId === packageId;
+  const detailMatchesRoute = detail?.targetClient === targetClient && detail.packageId === packageId;
 
   if (isLoading || (!error && !detailMatchesRoute)) {
     return <MarketplaceShellAdapter navigationSlot={navigationSlot} surface={{
@@ -511,8 +503,12 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
         return (
           <MarketplaceBasicInfoPanel
             detail={detail}
-            onOpenVariant={(variantProvider, variantPackageId) => {
-              navigate(ROUTES.marketplace.packageDetail(variantProvider, variantPackageId));
+            onOpenVariant={(variantTargetClient, variantPackageId, variantPackageFormat) => {
+              navigate(ROUTES.marketplace.packageDetail(
+                variantTargetClient,
+                variantPackageId,
+                variantPackageFormat,
+              ));
             }}
           />
         );
@@ -520,7 +516,7 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
         return (
           <LazyMarkdownPanel
             title={t('marketplace.detail.readme.title')}
-            provider={detail.provider}
+            targetClient={detail.targetClient}
             packageId={detail.packageId}
             resource="readme"
           />
@@ -528,20 +524,20 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
       case 'agents-md':
         return (
           <LazyMarkdownPanel
-            title={t(getMarketplaceFeatureLabelKey(detail.provider, 'agentsMd'))}
-            provider={detail.provider}
+            title={t(getMarketplaceFeatureLabelKey(detail.targetClient, 'agentsMd'))}
+            targetClient={detail.targetClient}
             packageId={detail.packageId}
             resource="root"
           />
         );
       case 'hooks':
-        return <LazyHooksPanel provider={detail.provider} packageId={detail.packageId} />;
+        return <LazyHooksPanel targetClient={detail.targetClient} packageId={detail.packageId} />;
       case 'mcp':
-        return <LazyMCPPanel provider={detail.provider} packageId={detail.packageId} />;
+        return <LazyMCPPanel targetClient={detail.targetClient} packageId={detail.packageId} />;
       case 'agent':
         return (
           <LazyDocumentsPanel
-            provider={detail.provider}
+            targetClient={detail.targetClient}
             packageId={detail.packageId}
             resourceType="subagents"
             title={t('marketplace.features.subagents')}
@@ -550,7 +546,7 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
       case 'commands':
         return (
           <LazyDocumentsPanel
-            provider={detail.provider}
+            targetClient={detail.targetClient}
             packageId={detail.packageId}
             resourceType="commands"
             title={t('marketplace.features.slashCommands')}
@@ -559,7 +555,7 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
       case 'output-style':
         return (
           <LazyDocumentsPanel
-            provider={detail.provider}
+            targetClient={detail.targetClient}
             packageId={detail.packageId}
             resourceType="output-styles"
             title={t('marketplace.features.outputStyle')}
@@ -568,18 +564,18 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
       case 'skills':
         return (
           <MarketplaceDetailFilesSection
-            key={`${detail.provider}:${detail.packageId}:skills`}
+            key={`${detail.targetClient}:${detail.packageId}:skills`}
             mode="skills"
-            provider={detail.provider}
+            targetClient={detail.targetClient}
             packageId={detail.packageId}
           />
         );
       case 'files':
         return (
           <MarketplaceDetailFilesSection
-            key={`${detail.provider}:${detail.packageId}:package`}
+            key={`${detail.targetClient}:${detail.packageId}:package`}
             mode="package"
-            provider={detail.provider}
+            targetClient={detail.targetClient}
             packageId={detail.packageId}
             rootLabel={detail.registryPath}
           />
@@ -604,7 +600,11 @@ export const MarketplaceDetailPage: React.FC<MarketplaceDetailPageProps> = ({ na
       onBack={() => navigate(ROUTES.marketplace.packages)}
       onEdit={() => {
         if (permissions.canEdit) {
-          navigate(ROUTES.marketplace.packageEdit(detail.provider, detail.packageId));
+          navigate(ROUTES.marketplace.packageEdit(
+            detail.targetClient,
+            detail.packageId,
+            detail.packageFormat,
+          ));
         }
       }}
       onExport={() => openAction('export')}

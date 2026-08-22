@@ -34,14 +34,18 @@ Browser generation 另有同 network namespace 的 connectivity probe。Kubernet
 
 ## 主要流程
 
-Manager 只消費 `browserConnectivity.admission`；`allowed` 才核發新的 Browser access，不重新解讀
-state 或檢查 expiry。`denied` 且 state 為 `pending`／`not_ready` 會回傳
-`409 BROWSER_CONNECTIVITY_NOT_READY`；state 為 `unavailable` 則回傳
-`503 BROWSER_CONNECTIVITY_UNAVAILABLE`。Browser 畫面直接顯示 projection 的 state，不自行重算
-evidence freshness。畫面取得 access 後建立一個 Neko generation；若 WebSocket、
+Manager 只消費 `browserConnectivity.admission`；`ready`，或仍有有效 evidence 且 projection 為
+`allowed` 的 `degraded`，可核發新的 Browser access。Manager 不重新解讀 state 或檢查 expiry；
+projection writer 必須在 TTL 到期時改投影為 `not_ready`／`denied`。`pending`／`not_ready` 的
+`denied` projection（包括 admission 當下已到期）回傳 `409 BROWSER_CONNECTIVITY_NOT_READY`；
+只有 `unavailable` 回傳 `503 BROWSER_CONNECTIVITY_UNAVAILABLE`。Browser 畫面直接顯示
+projection 的 state，不自行重算 evidence freshness。畫面取得 access 後建立一個 Neko generation；若 WebSocket、
 ICE、WebRTC 或 data channel 失敗，會先關閉整個 generation，再重新取得 access 後建立下一個。
 `turnRest` profile 的每次 access 都包含新的短效 `iceServers`，該 generation 的
 `RTCPeerConnection` 必須覆寫 Neko startup ICE list；credential 不跨 generation 重用。
+Browser session 只有在 Neko WebSocket 已連線、WebRTC 已連線、收到狀態為 `live` 的 video
+track，且 data channel 已開啟時才算 ready。任一連線關閉、cleanup 或 video track `ended` 都會
+立即清除對應 readiness；頁面或 Workspace URL 可開啟本身不代表 Browser 可用。
 
 Docker Manager 在 Browser／probe lifecycle commit 後立即排入 reconcile，並以 5 秒週期批次
 重新讀取 backend probe 與每個 required frontend vantage 的 evidence。HTTP 讀取在資料庫鎖外

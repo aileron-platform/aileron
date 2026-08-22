@@ -13,7 +13,7 @@ import {
 } from '../api/marketplaceApi';
 import type {
   MarketplacePackageSummary,
-  MarketplaceProvider,
+  MarketplaceTargetClient,
 } from '../model/marketplaceTypes';
 import {
   MARKETPLACE_CURRENT_WORKSPACE_OPTION_ID,
@@ -39,7 +39,7 @@ export const createMarketplaceInstallWorkflowAdapter = (
         agenticTools: (workspace.agenticTools ?? [])
           .filter(isAgenticTool)
           .filter(
-            (agenticTool): agenticTool is MarketplaceProvider =>
+            (agenticTool): agenticTool is MarketplaceTargetClient =>
               agenticTool !== 'opencode',
           ),
       }),
@@ -62,14 +62,14 @@ export const createMarketplaceInstallWorkflowAdapter = (
   preflightUserCopy: preflightMarketplaceUserCopy,
   installPlugin: installMarketplacePlugin,
   applyUserCopy: createMarketplaceUserCopy,
-  refreshPackage: async (provider, packageId) => {
-    await refreshMarketplacePackage(provider, packageId);
-    return getPackage(provider, packageId);
+  refreshPackage: async (targetClient, packageId, packageFormat) => {
+    await refreshMarketplacePackage(targetClient, packageId, packageFormat);
+    return getPackage(targetClient, packageId, packageFormat);
   },
-  invalidateUserScopeSettings: async (provider, workspaceId) => {
+  invalidateUserScopeSettings: async (targetClient, workspaceId) => {
     await invalidateMarketplaceUserScopeSettingsQueries(
       queryClient,
-      provider,
+      targetClient,
       workspaceId,
     );
   },

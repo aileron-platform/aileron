@@ -71,6 +71,8 @@ Entry Gate 在 Workspace authorization 尚未完成或 availability 尚未確認
 | `WORKSPACE_AVAILABILITY_ACTION_ACCEPTED` | `transitioning` | `workspace` | `202` | 否 | `return` |
 | `WORKSPACE_RUNTIME_INSTANCE_MISMATCH` | `transitioning` | `workspace` | `423` | 否 | `return` |
 | `WORKSPACE_BROWSER_WORKLOAD_NOT_READY` | `ready` | `browser` | `423` | 否 | — |
+| `WORKSPACE_EXECUTION_PLANE_DRIFT` | `blocked` | `workspace` | `409` | 否 | — |
+| `WORKSPACE_EXECUTION_PLANE_OBSERVATION_UNAVAILABLE` | `transitioning` | `workspace` | `503` | 否 | — |
 | `WORKSPACE_KB_MOUNT_SYNC_IN_PROGRESS` | `ready` | `knowledge_mount` | `409` | 否 | — |
 
 ### Workspace 永久刪除投影
@@ -212,20 +214,21 @@ Runtime instance login 不是平台 DB 管理帳號。它不具 `SUPERUSER`、`C
 
 `AILERON_RUNTIME_CONTROL_TOKEN_FILE` 是另一條邊界。唯讀檔案內容是 Runtime-instance-scoped opaque token，明文只交給該 Runtime；Manager database 只保存 digest，且驗證時同時比對 Workspace ID、current Runtime instance 與 lifecycle 狀態。它只能呼叫該 Workspace 的 Manager automation-control endpoints，不是使用者 access token，也不是跨 Workspace 或平台共用的 token。
 
-Kubernetes 會為每個 Workspace 維護一個 `Opaque` Runtime Secret，內容固定只有：
+Kubernetes 會為每個 Workspace 維護一個名稱為 `workspace-generation-<sha256[:16]>` 的 `Opaque` generation bundle Secret，內容固定只有：
 
 | Secret key | Runtime 環境變數 | 用途 |
 | --- | --- | --- |
-| `state-database-url` | `AILERON_RUNTIME_STATE_DATABASE_URL_FILE` | 目前 Runtime instance 的 PostgreSQL login 與固定 Workspace schema |
+| `runtime-database-connection` | `AILERON_RUNTIME_DATABASE_CONNECTION_FILE` | 目前 Workspace generation 的 Runtime login 與固定 Workspace schema |
 | `runtime-control-token` | `AILERON_RUNTIME_CONTROL_TOKEN_FILE` | 呼叫該 Workspace automation-control endpoints 的 opaque token |
+| `custom-setup.sh` | 無；以唯讀 subPath 掛載 | 目前 Workspace generation 的 setup script |
 
-這個 Secret 只以唯讀 volume 掛載至 Runtime container，再由 `*_FILE` 變數指向檔案；Browser／Canvas 不會取得。Manager 的 credential derivation key、Ed25519 private key、平台 database credential 與 Redis credential 都不會放進此 Secret。Docker 使用同樣的唯讀 Secret file 契約。
+這個 generation bundle 只以唯讀 volume 掛載至 Runtime container，再由 `*_FILE` 變數指向 credential 檔案；Browser／Canvas 不會取得。Manager 的 credential derivation key、Ed25519 private key、平台 database credential 與 Redis credential 都不會放進此 Secret。Docker 使用同樣的唯讀 Secret file 契約。
 
 Lifecycle 對 schema、login、token 與 Secret 的處理如下：
 
-| 事件 | PostgreSQL schema | Runtime instance login／token | Kubernetes Runtime Secret |
+| 事件 | PostgreSQL schema | Runtime instance login／token | Kubernetes generation bundle |
 | --- | --- | --- | --- |
-| start | 不存在時建立，存在時沿用 | 建立新 login 與 opaque token | 建立或更新，只有兩個固定 key |
+| start | 不存在時建立，存在時沿用 | 建立新 login 與 opaque token | 建立或更新三個固定 key 的 generation bundle |
 | Runtime component restart | 保留資料與同一 schema | 終止 superseded 連線並旋轉 login、password、token | 以新Runtime revision值更新 |
 | Browser／Canvas component restart | 保留 | 不變 | 不變 |
 | stop | 保留，供下次 start 使用 | 終止連線並將 login 設為 `NOLOGIN`；清除 current token fence | 保留；Workspace CR與PVC也保留 |
@@ -242,9 +245,11 @@ sidecar 的 backend relay evidence，以及 Connectivity Evidence Gateway 保存
 vantage evidence。每筆 evidence 都綁定 TURN Reachability Profile revision、credential revision、
 observed time 與 expiry。
 
-Operator 是 connectivity state 的唯一 writer。Manager 將 CR status 投影至 Workspace detail 與
-資料庫，並只在新 Browser access admission 檢查 `ready` 與 freshness。使用 `turnRest` 時，
-Manager 會在每次核發 Browser access 時以安裝層保管的 shared secret 產生 Workspace-scoped
+Operator 是 connectivity state 的唯一 writer，並負責依 evidence freshness 產生 authoritative
+`admission` projection。Manager 將 CR status 投影至 Workspace detail 與資料庫；新 Browser
+access 只消費該 projection，`ready` 或 TTL 內的 `degraded` 必須是 `allowed` 才可核發，
+`pending`／`not_ready` 的 `denied`（包括 admission 當下 evidence 已到期）回傳 409，只有
+`unavailable` 回傳 503。使用 `turnRest` 時，Manager 會在每次核發 Browser access 時以安裝層保管的 shared secret 產生 Workspace-scoped
 短效 `iceServers`；Browser Pod 內的 sidecar 也會在每次 backend probe 產生新的短效憑證，
 且探測身分綁定 Workspace ID。Neko container 不持有 TURN REST shared secret。
 

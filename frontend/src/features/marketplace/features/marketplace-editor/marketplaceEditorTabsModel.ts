@@ -1,19 +1,24 @@
-import type { MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type {
+  MarketplaceAuthoringCapability,
+  MarketplaceAuthoringFeature,
+  MarketplaceTargetClient,
+} from '@/features/marketplace/model/marketplaceTypes';
 import type { FileTreeNode } from '@/shared/components/file-workbench';
 
 export const marketplaceEditorTabs = ['basic', 'agentsMd', 'hooks', 'mcp', 'agents', 'commands', 'outputStyle', 'skills', 'files'] as const;
 export type MarketplaceEditorTab = typeof marketplaceEditorTabs[number];
 
-export const providerEditorTabs: Record<MarketplaceProvider, MarketplaceEditorTab[]> = {
-  'claude-code': ['basic', 'agentsMd', 'hooks', 'mcp', 'agents', 'commands', 'outputStyle', 'skills', 'files'],
-  codex: ['basic', 'agentsMd', 'hooks', 'mcp', 'agents', 'commands', 'skills', 'files'],
-};
+export const visibleMarketplaceEditorTabs = (
+  capabilities: Record<MarketplaceAuthoringFeature, MarketplaceAuthoringCapability>,
+): MarketplaceEditorTab[] => marketplaceEditorTabs.filter(
+  tab => capabilities[tab] !== 'unsupported',
+);
 
 export const getMarketplaceEditorTabLabelKey = (
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   tab: MarketplaceEditorTab,
 ): string => {
-  if (provider === 'claude-code' && tab === 'agentsMd') {
+  if (targetClient === 'claude-code' && tab === 'agentsMd') {
     return 'marketplace.editor.tabs.claudeMd';
   }
   if (tab === 'agents') {
@@ -31,6 +36,6 @@ export const countMarketplaceFileNodes = (nodes: FileTreeNode[]): number => (
   ), 0)
 );
 
-export const getMarketplacePackageRoot = (provider: MarketplaceProvider, packageId: string): string => (
-  `${provider}/plugins/${packageId}`
+export const getMarketplacePackageRoot = (targetClient: MarketplaceTargetClient, packageId: string): string => (
+  `${targetClient}/plugins/${packageId}`
 );

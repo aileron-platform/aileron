@@ -1,24 +1,32 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DrawioViewer } from './DrawioViewer';
 import { FileViewerWorkbenchProvider } from './FileViewerWorkbenchContext';
 import { ImageViewer } from './ImageViewer';
 import { MarkdownViewer } from './MarkdownViewer';
 import { MermaidViewer } from './MermaidViewer';
 import type { FileViewerWorkbenchAdapter } from './types';
+import {
+  ApiClient,
+  registerExecutionGrantProvider,
+  registerExecutionGrantRejectionHandler,
+} from '@/shared/api/apiClient';
 
 const mermaidInitializeMock = vi.hoisted(() => vi.fn());
 const mermaidRenderMock = vi.hoisted(() => vi.fn());
+const i18nStateMock = vi.hoisted(() => ({ currentLanguage: 'en' }));
 const tMock = vi.hoisted(() => (key: string, values?: Record<string, unknown>) => (
+  values?.count !== undefined ? `${key}:${values.count}` : key
+));
+const alternateTMock = vi.hoisted(() => (key: string, values?: Record<string, unknown>) => (
   values?.count !== undefined ? `${key}:${values.count}` : key
 ));
 
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: tMock,
+    t: i18nStateMock.currentLanguage === 'en' ? tMock : alternateTMock,
     state: {
-      currentLanguage: 'en',
+      currentLanguage: i18nStateMock.currentLanguage,
     },
   }),
 }));
@@ -54,17 +62,6 @@ vi.mock('./CodeTextEditor', () => ({
   CodeTextEditor: ({ content }: { content: string }) => <textarea aria-label="shared-code-editor" value={content} readOnly />,
 }));
 
-class DrawioUnavailableError extends Error {
-  readonly status = 503;
-  readonly errorCode = 'DRAWIO_UNAVAILABLE';
-  readonly reason?: string;
-
-  constructor(reason: string) {
-    super('Draw.io unavailable');
-    this.reason = reason;
-  }
-}
-
 const firePointerEvent = (
   element: Element,
   type: string,
@@ -98,8 +95,23 @@ const renderWithFormatActions = (
   return render(<Harness />);
 };
 
+const ImageViewerHarness: React.FC<React.ComponentProps<typeof ImageViewer>> = (props) => {
+  const [actions, setActions] = React.useState<React.ReactNode | null>(null);
+  const registerFormatActions = React.useCallback((node: React.ReactNode | null) => {
+    setActions(node);
+  }, []);
+
+  return (
+    <FileViewerWorkbenchProvider registerFormatActions={registerFormatActions}>
+      <div data-testid="registered-format-actions">{actions}</div>
+      <ImageViewer {...props} />
+    </FileViewerWorkbenchProvider>
+  );
+};
+
 describe('specialized file viewers', () => {
   beforeEach(() => {
+    i18nStateMock.currentLanguage = 'en';
     mermaidInitializeMock.mockReset();
     mermaidRenderMock.mockReset();
     mermaidRenderMock.mockResolvedValue({ svg: '<svg data-testid="diagram-svg"></svg>' });
@@ -235,14 +247,14 @@ describe('specialized file viewers', () => {
       <MarkdownViewer
         content="[Config](../../schemas/spec-driven-api/standards/configuration-standards.md)"
         fileName="design.md"
-        filePath="/openspec/changes/parse-policy-excel-file/design.md"
+        filePath="/guides/parse-policy-excel-file/design.md"
         onOpenPath={onOpenPath}
       />,
     );
 
     fireEvent.click(screen.getByRole('link', { name: 'config' }));
 
-    expect(onOpenPath).toHaveBeenCalledWith('/openspec/schemas/spec-driven-api/standards/configuration-standards.md');
+    expect(onOpenPath).toHaveBeenCalledWith('/schemas/spec-driven-api/standards/configuration-standards.md');
   });
 
   it('renders Mermaid through the shared renderer and exposes shared toolbar actions', async () => {
@@ -345,74 +357,207 @@ describe('specialized file viewers', () => {
     await waitFor(() => {
       expect(adapter.readBlob).toHaveBeenCalledWith('/assets/logo.png');
     });
+    expect(adapter.readBlob).toHaveBeenCalledTimes(1);
     expect(await screen.findByAltText('logo.png')).toHaveAttribute('src', 'blob:viewer-object');
     expect(screen.getByLabelText('shared.fileViewer.image.rotate')).toBeInTheDocument();
     expect(screen.getByLabelText('shared.fileViewer.image.download')).toBeInTheDocument();
   });
 
-  it('loads Draw.io viewer URLs through the injected adapter and switches edit mode', async () => {
-    const adapter: FileViewerWorkbenchAdapter = {
-      readFile: vi.fn(),
-      getDrawioViewerUrl: vi
-        .fn()
-        .mockResolvedValueOnce('about:blank?mode=view')
-        .mockResolvedValueOnce('about:blank?mode=edit'),
-      saveDrawio: vi.fn(),
-    };
+  it('renders the fresh image after a Blob execution grant is renewed', async () => {
+    const grants = vi.fn()
+      .mockResolvedValueOnce('stale-image-grant')
+      .mockResolvedValueOnce('fresh-image-grant');
+    const rejectGrant = vi.fn().mockReturnValue(true);
+    registerExecutionGrantProvider(grants);
+    registerExecutionGrantRejectionHandler(rejectGrant);
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        detail: { errorCode: 'WORKSPACE_RUNTIME_INSTANCE_MISMATCH' },
+      }), { status: 423 }))
+      .mockResolvedValueOnce(new Response('fresh image', {
+        status: 200,
+        headers: { 'Content-Type': 'image/png' },
+      }));
+    const client = new ApiClient({
+      baseUrl: 'https://runtime.example/api/v1',
+      executionAudience: 'workspace-runtime',
+      unauthorizedBehavior: 'propagate',
+    });
+    const readBlob = vi.fn((path: string) => client.getBlob(path));
 
-    renderWithFormatActions(
-      <DrawioViewer
-        content="<mxfile />"
-        originalContent="<mxfile />"
-        filePath="/docs/diagram.drawio"
-        fileName="diagram.drawio"
-        readOnly={false}
-        adapter={adapter}
-        onContentChange={vi.fn()}
-        onModifiedChange={vi.fn()}
+    try {
+      renderWithFormatActions(
+        <ImageViewer
+          filePath="/assets/logo.png"
+          fileName="logo.png"
+          adapter={{ readFile: vi.fn(), readBlob }}
+        />,
+      );
+
+      expect(await screen.findByAltText('logo.png')).toHaveAttribute('src', 'blob:viewer-object');
+      expect(screen.queryByText('shared.fileViewer.image.error')).not.toBeInTheDocument();
+      expect(readBlob).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(grants).toHaveBeenCalledTimes(2);
+      expect(rejectGrant).toHaveBeenCalledTimes(1);
+    } finally {
+      registerExecutionGrantProvider(null);
+      registerExecutionGrantRejectionHandler(null);
+      fetchMock.mockRestore();
+    }
+  });
+
+  it('keeps the loaded image when adapter and translation identities change for the same path', async () => {
+    const initialReadBlob = vi.fn().mockResolvedValue(new Blob(['first'], { type: 'image/png' }));
+    const initialAdapter: FileViewerWorkbenchAdapter = {
+      readFile: vi.fn(),
+      readBlob: initialReadBlob,
+    };
+    const view = render(
+      <ImageViewerHarness
+        filePath="/assets/logo.png"
+        fileName="logo.png"
+        adapter={initialAdapter}
+      />,
+    );
+
+    expect(await screen.findByAltText('logo.png')).toHaveAttribute('src', 'blob:viewer-object');
+    expect(initialReadBlob).toHaveBeenCalledTimes(1);
+
+    const replacementReadBlob = vi.fn().mockResolvedValue(new Blob(['replacement'], { type: 'image/png' }));
+    i18nStateMock.currentLanguage = 'zh-TW';
+    view.rerender(
+      <ImageViewerHarness
+        filePath="/assets/logo.png"
+        fileName="logo.png"
+        adapter={{ readFile: vi.fn(), readBlob: replacementReadBlob }}
+      />,
+    );
+
+    expect(initialReadBlob).toHaveBeenCalledTimes(1);
+    expect(replacementReadBlob).not.toHaveBeenCalled();
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    expect(screen.getByAltText('logo.png')).toHaveAttribute('src', 'blob:viewer-object');
+    expect(screen.queryByText('shared.fileViewer.image.loading')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('shared.fileViewer.image.rotate')).toBeInTheDocument();
+  });
+
+  it('reloads a changed image path with the latest adapter and replaces the old object URL', async () => {
+    vi.mocked(URL.createObjectURL)
+      .mockReturnValueOnce('blob:first-image')
+      .mockReturnValueOnce('blob:second-image');
+    const firstReadBlob = vi.fn().mockResolvedValue(new Blob(['first'], { type: 'image/png' }));
+    const view = render(
+      <ImageViewerHarness
+        filePath="/assets/first.png"
+        fileName="first.png"
+        adapter={{ readFile: vi.fn(), readBlob: firstReadBlob }}
+      />,
+    );
+
+    expect(await screen.findByAltText('first.png')).toHaveAttribute('src', 'blob:first-image');
+
+    const secondReadBlob = vi.fn().mockResolvedValue(new Blob(['second'], { type: 'image/png' }));
+    view.rerender(
+      <ImageViewerHarness
+        filePath="/assets/second.png"
+        fileName="second.png"
+        adapter={{ readFile: vi.fn(), readBlob: secondReadBlob }}
+      />,
+    );
+
+    expect(await screen.findByAltText('second.png')).toHaveAttribute('src', 'blob:second-image');
+    expect(firstReadBlob).toHaveBeenCalledTimes(1);
+    expect(secondReadBlob).toHaveBeenCalledTimes(1);
+    expect(secondReadBlob).toHaveBeenCalledWith('/assets/second.png');
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:first-image');
+  });
+
+  it('revokes the current image object URL on unmount', async () => {
+    const view = render(
+      <ImageViewerHarness
+        filePath="/assets/logo.png"
+        fileName="logo.png"
+        adapter={{
+          readFile: vi.fn(),
+          readBlob: vi.fn().mockResolvedValue(new Blob(['image'], { type: 'image/png' })),
+        }}
+      />,
+    );
+
+    expect(await screen.findByAltText('logo.png')).toHaveAttribute('src', 'blob:viewer-object');
+    view.unmount();
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:viewer-object');
+  });
+
+  it('loads the image when readBlob becomes available for the current path', async () => {
+    const view = render(
+      <ImageViewerHarness
+        filePath="/assets/logo.png"
+        fileName="logo.png"
+        adapter={{ readFile: vi.fn() }}
+      />,
+    );
+
+    expect(await screen.findByText('shared.fileViewer.image.unavailable')).toBeInTheDocument();
+
+    const readBlob = vi.fn().mockResolvedValue(new Blob(['image'], { type: 'image/png' }));
+    view.rerender(
+      <ImageViewerHarness
+        filePath="/assets/logo.png"
+        fileName="logo.png"
+        adapter={{ readFile: vi.fn(), readBlob }}
+      />,
+    );
+
+    expect(await screen.findByAltText('logo.png')).toHaveAttribute('src', 'blob:viewer-object');
+    expect(readBlob).toHaveBeenCalledTimes(1);
+    expect(readBlob).toHaveBeenCalledWith('/assets/logo.png');
+  });
+
+  it('does not let a stale image load replace the current path', async () => {
+    let resolveFirstBlob: (blob: Blob) => void = () => undefined;
+    const firstBlob = new Promise<Blob>((resolve) => {
+      resolveFirstBlob = resolve;
+    });
+    const firstReadBlob = vi.fn().mockReturnValue(firstBlob);
+    vi.mocked(URL.createObjectURL)
+      .mockReturnValueOnce('blob:current-image')
+      .mockReturnValueOnce('blob:stale-image');
+    const view = render(
+      <ImageViewerHarness
+        filePath="/assets/slow.png"
+        fileName="slow.png"
+        adapter={{ readFile: vi.fn(), readBlob: firstReadBlob }}
       />,
     );
 
     await waitFor(() => {
-      expect(adapter.getDrawioViewerUrl).toHaveBeenCalledWith('/docs/diagram.drawio', 'view');
+      expect(firstReadBlob).toHaveBeenCalledWith('/assets/slow.png');
     });
 
-    await waitFor(() => {
-      expect(screen.getByLabelText('shared.fileViewer.drawio.edit')).not.toBeDisabled();
-    });
-
-    fireEvent.click(screen.getByLabelText('shared.fileViewer.drawio.edit'));
-
-    await waitFor(() => {
-      expect(adapter.getDrawioViewerUrl).toHaveBeenCalledWith('/docs/diagram.drawio', 'edit');
-    });
-    await waitFor(() => {
-      expect(document.querySelector('iframe')).toBeInTheDocument();
-    });
-  });
-
-  it('renders Draw.io service-unavailable XML fallback without the code editor provider path', async () => {
-    const adapter: FileViewerWorkbenchAdapter = {
-      readFile: vi.fn(),
-      getDrawioViewerUrl: vi.fn().mockRejectedValue(new DrawioUnavailableError('DISABLED')),
-    };
-
-    renderWithFormatActions(
-      <DrawioViewer
-        content="<mxfile><diagram /></mxfile>"
-        originalContent="<mxfile><diagram /></mxfile>"
-        filePath="/docs/diagram.drawio"
-        fileName="diagram.drawio"
-        readOnly={false}
-        adapter={adapter}
-        onContentChange={vi.fn()}
-        onModifiedChange={vi.fn()}
+    const currentReadBlob = vi.fn().mockResolvedValue(new Blob(['current'], { type: 'image/png' }));
+    view.rerender(
+      <ImageViewerHarness
+        filePath="/assets/current.png"
+        fileName="current.png"
+        adapter={{ readFile: vi.fn(), readBlob: currentReadBlob }}
       />,
     );
 
-    expect(await screen.findByText('shared.fileViewer.drawio.serviceUnavailable.title')).toBeInTheDocument();
-    expect(screen.getByText('shared.fileViewer.drawio.serviceUnavailable.disabled')).toBeInTheDocument();
-    expect(screen.getByText('<mxfile><diagram /></mxfile>')).toBeInTheDocument();
-    expect(screen.queryByLabelText('shared-code-editor')).not.toBeInTheDocument();
+    expect(await screen.findByAltText('current.png')).toHaveAttribute('src', 'blob:current-image');
+    resolveFirstBlob(new Blob(['stale'], { type: 'image/png' }));
+
+    await waitFor(() => {
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:stale-image');
+    });
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:current-image');
+    expect(screen.getByAltText('current.png')).toHaveAttribute('src', 'blob:current-image');
   });
+
 });

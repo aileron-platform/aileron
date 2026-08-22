@@ -1,4 +1,4 @@
-import type { MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 import type {
   DocumentResourceItem,
   ResourceListResult,
@@ -38,7 +38,7 @@ export interface MarketplaceDocumentSource {
 }
 
 const MARKETPLACE_DOCUMENT_RESOURCE_ROOT: Record<
-  MarketplaceProvider,
+  MarketplaceTargetClient,
   Record<MarketplaceDocumentResourceType, string>
 > = {
   'claude-code': {
@@ -55,10 +55,10 @@ const MARKETPLACE_DOCUMENT_RESOURCE_ROOT: Record<
 
 export const marketplaceDocumentResourcePath = (
   rawPath: string,
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   resourceType: MarketplaceDocumentResourceType,
 ): string => {
-  const root = MARKETPLACE_DOCUMENT_RESOURCE_ROOT[provider][resourceType];
+  const root = MARKETPLACE_DOCUMENT_RESOURCE_ROOT[targetClient][resourceType];
   const segments = rawPath.trim().replace(/^\/+/, '').replace(/\/+$/, '').split('/').filter(Boolean);
   if (segments[0] === root) {
     segments.shift();
@@ -77,7 +77,7 @@ export const MARKETPLACE_TAB_TO_DOCUMENT_RESOURCE = {
 } as const;
 
 export function createMarketplaceDocumentSource(
-  provider: MarketplaceProvider,
+  targetClient: MarketplaceTargetClient,
   packageId: string,
   resourceType: MarketplaceDocumentResourceType,
   session: MarketplaceResourceSession,
@@ -139,21 +139,21 @@ export function createMarketplaceDocumentSource(
       const raw = await session.run(
         identityGeneration,
         'document-list',
-        () => listDocuments(provider, packageId, resourceType),
+        () => listDocuments(targetClient, packageId, resourceType),
       );
       return { items: raw.map(stripDocument), availableScopes: [] };
     },
     loadContent: async (document) => stripDocument(await session.run(
       identityGeneration,
       `document-content:${pathOf(document)}`,
-      () => loadDocument(provider, packageId, resourceType, pathOf(document)),
+      () => loadDocument(targetClient, packageId, resourceType, pathOf(document)),
     )),
     create: async (document) => {
-      const path = marketplaceDocumentResourcePath(pathOf(document), provider, resourceType);
+      const path = marketplaceDocumentResourcePath(pathOf(document), targetClient, resourceType);
       const result = await session.mutate(
         identityGeneration,
         'document-mutation',
-        () => createDocument(provider, packageId, resourceType, {
+        () => createDocument(targetClient, packageId, resourceType, {
           path,
           revision: session.revision,
           content: document.content,
@@ -170,8 +170,8 @@ export function createMarketplaceDocumentSource(
       const result = await session.mutate(
         identityGeneration,
         'document-mutation',
-        () => updateDocument(provider, packageId, resourceType, currentPath, {
-          path: marketplaceDocumentResourcePath(currentPath, provider, resourceType),
+        () => updateDocument(targetClient, packageId, resourceType, currentPath, {
+          path: marketplaceDocumentResourcePath(currentPath, targetClient, resourceType),
           revision: session.revision,
           content: document.content,
           ...token,
@@ -187,14 +187,14 @@ export function createMarketplaceDocumentSource(
       const token = tokenByPath.get(previousPath) ?? {};
       const payload: MarketplaceDocumentRenamePayload = {
         previousPath,
-        nextPath: marketplaceDocumentResourcePath(nextPath, provider, resourceType),
+        nextPath: marketplaceDocumentResourcePath(nextPath, targetClient, resourceType),
         revision: session.revision,
         ...token,
       };
       const result = await session.mutate(
         identityGeneration,
         'document-mutation',
-        () => renameDocument(provider, packageId, resourceType, payload),
+        () => renameDocument(targetClient, packageId, resourceType, payload),
       );
       tokenByPath.delete(previousPath);
       return {
@@ -212,7 +212,7 @@ export function createMarketplaceDocumentSource(
       const result = await session.mutate(
         identityGeneration,
         'document-mutation',
-        () => removeDocument(provider, packageId, resourceType, previousPath, payload),
+        () => removeDocument(targetClient, packageId, resourceType, previousPath, payload),
       );
       tokenByPath.delete(previousPath);
       return result;

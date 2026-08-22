@@ -173,8 +173,56 @@ describe('AgentFileTreeDataAdapter', () => {
     await expect(adapter.update('review/SKILL.md', '# Updated')).rejects.toThrow('Cannot write files in a read-only scope');
     await expect(adapter.delete('review/SKILL.md')).rejects.toThrow('Cannot write files in a read-only scope');
 
+    expect(apiClientMock.post).not.toHaveBeenCalled();
     expect(apiClientMock.put).not.toHaveBeenCalled();
     expect(apiClientMock.delete).not.toHaveBeenCalled();
+  });
+
+  it('creates Codex skill files through the generic Skills POST route', async () => {
+    apiClientMock.post.mockResolvedValueOnce({ success: true });
+
+    const adapter = new AgentFileTreeDataAdapter({
+      workspaceId: 'ws-1',
+      apiPrefix: 'codex',
+      collection: 'skills',
+      scope: 'project',
+    });
+
+    const result = await adapter.create({
+      type: 'create',
+      path: '/review tools/SKILL #1.md',
+      content: '# Review',
+      isDirectory: false,
+    });
+
+    expect(apiClientMock.post).toHaveBeenCalledWith(
+      '/workspaces/ws-1/codex/skills?scope=project&path=review%20tools%2FSKILL%20%231.md&type=file',
+      { content: '# Review' },
+    );
+    expect(apiClientMock.put).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: true });
+  });
+
+  it('creates Codex skill directories without a content body', async () => {
+    apiClientMock.post.mockResolvedValueOnce({ success: true });
+
+    const adapter = new AgentFileTreeDataAdapter({
+      workspaceId: 'ws-1',
+      apiPrefix: 'codex',
+      collection: 'skills',
+      scope: 'user',
+    });
+
+    await adapter.create({
+      type: 'create',
+      path: 'review tools/assets',
+      isDirectory: true,
+    });
+
+    expect(apiClientMock.post).toHaveBeenCalledWith(
+      '/workspaces/ws-1/codex/skills?scope=user&path=review%20tools%2Fassets&type=directory',
+    );
+    expect(apiClientMock.put).not.toHaveBeenCalled();
   });
 
   it('groups all scope file trees and preserves source metadata', async () => {
@@ -313,9 +361,9 @@ describe('AgentFileTreeDataAdapter', () => {
     );
   });
 
-  it('uses the full destination path when moving Codex files', async () => {
+  it('creates the full Codex Skills destination before deleting the move source', async () => {
     apiClientMock.get.mockResolvedValueOnce({ content: '# Skill' });
-    apiClientMock.put.mockResolvedValueOnce({ success: true });
+    apiClientMock.post.mockResolvedValueOnce({ success: true });
     apiClientMock.delete.mockResolvedValueOnce({ success: true });
 
     const adapter = new AgentFileTreeDataAdapter({
@@ -326,13 +374,38 @@ describe('AgentFileTreeDataAdapter', () => {
     });
     await adapter.move('builder/SKILL.md', 'renamed/SKILL.md');
 
-    expect(apiClientMock.put).toHaveBeenCalledWith(
-      '/workspaces/ws-1/codex/skills/file?scope=project',
-      { path: 'renamed/SKILL.md', content: '# Skill' },
+    expect(apiClientMock.post).toHaveBeenCalledWith(
+      '/workspaces/ws-1/codex/skills?scope=project&path=renamed%2FSKILL.md&type=file',
+      { content: '# Skill' },
     );
     expect(apiClientMock.delete).toHaveBeenCalledWith(
       '/workspaces/ws-1/codex/skills/file?scope=project&path=builder%2FSKILL.md',
     );
+    expect(apiClientMock.post.mock.invocationCallOrder[0]).toBeLessThan(
+      apiClientMock.delete.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('does not delete a Codex move source when destination creation fails', async () => {
+    apiClientMock.get.mockResolvedValueOnce({ content: '# Skill' });
+    apiClientMock.post.mockRejectedValueOnce(new Error('create failed'));
+
+    const adapter = new AgentFileTreeDataAdapter({
+      workspaceId: 'ws-1',
+      apiPrefix: 'codex',
+      collection: 'skills',
+      scope: 'project',
+    });
+
+    await expect(
+      adapter.move('builder/SKILL.md', 'renamed/SKILL.md'),
+    ).rejects.toThrow('create failed');
+
+    expect(apiClientMock.post).toHaveBeenCalledWith(
+      '/workspaces/ws-1/codex/skills?scope=project&path=renamed%2FSKILL.md&type=file',
+      { content: '# Skill' },
+    );
+    expect(apiClientMock.delete).not.toHaveBeenCalled();
   });
 
   it('uploads binary skill files as multipart without reading them into text', async () => {

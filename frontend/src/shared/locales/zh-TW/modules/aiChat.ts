@@ -127,7 +127,7 @@ const aiChat = {
   workbench: {
     header: "對話",
     newTaskTitle: "開始新任務",
-    cancel: "取消",
+    stop: "停止",
     retry: "重試",
   },
   newTask: {

@@ -255,7 +255,7 @@ if (invalidSidebarIds.length > 0) {
   );
 }
 
-const sourcePathPattern = /`((?:frontend|workspace-manager|workspace-runtime|workspace-operator|terminal-service|packages|contracts|helm)\/[^`\n]+)`/g;
+const sourcePathPattern = /`((?:frontend|workspace-manager|workspace-runtime|workspace-operator|workspace-terminal|packages|contracts|helm)\/[^`\n]*)`/g;
 for (const relativePath of zhHantDocuments) {
   const source = await readFile(path.join(localeRoots.get('zh-Hant'), relativePath), 'utf8');
   for (const match of source.matchAll(sourcePathPattern)) {
@@ -267,6 +267,113 @@ for (const relativePath of zhHantDocuments) {
       await access(path.join(repositoryDirectory, reference));
     } catch {
       throw new Error(`${relativePath} references a missing source path: ${reference}.`);
+    }
+  }
+}
+
+for (const [locale, root] of localeRoots) {
+  const source = await readFile(path.join(root, 'installation/kubernetes.md'), 'utf8');
+  const externalOidc = source.match(/^- `externalOidc`[：:][\s\S]*?(?=\n\n)/m)?.[0];
+  if (!externalOidc) {
+    throw new Error(`${locale}:installation/kubernetes.md has no externalOidc Namespace contract.`);
+  }
+  for (const namespace of [
+    'workspace-system',
+    'aileron-turn-system',
+    'aileron-backend-attestor-system',
+    'aileron-identity-system',
+  ]) {
+    if (!externalOidc.includes(`\`${namespace}\``)) {
+      throw new Error(`${locale}:externalOidc contract is missing ${namespace}.`);
+    }
+  }
+  const identityAbsent = locale === 'zh-Hant'
+    ? /`aileron-identity-system` 必須不存在/.test(externalOidc)
+    : /`aileron-identity-system` must be absent/.test(externalOidc);
+  if (!identityAbsent || /前兩個 Namespace|first two Namespaces/.test(externalOidc)) {
+    throw new Error(`${locale}:externalOidc Namespace contract is stale.`);
+  }
+  for (const requiredAcceptanceToken of [
+    'kubeconfig.raw',
+    'acceptance_bundle.py',
+    'acceptance_evidence.py',
+    'frontend/e2e/homelab-acceptance.mjs',
+    'acceptance_producer.py',
+    'oidcWorkspace',
+    'workspaceLifecycle',
+    '`terminal`',
+    '`http`',
+    '`websocket`',
+    '`browser`',
+    '`turn`',
+    'opaque Manager session',
+    'CSRF',
+    '`Origin`',
+    'prepare_browser_input.py',
+    '--use-break-glass-login',
+    '--login-username-file',
+    '--login-password-file',
+    '/root/aileron-private/acceptance-inputs/<full SHA>/<deployment run ID>/browser-input.json',
+    locale === 'zh-Hant' ? 'duplicate JSON key' : 'duplicate object key',
+  ]) {
+    if (!source.includes(requiredAcceptanceToken)) {
+      throw new Error(
+        `${locale}:installation/kubernetes.md is missing ${requiredAcceptanceToken}.`,
+      );
+    }
+  }
+  if (/acceptance_(?:bundle|evidence)\.py[\s\S]{0,220}--kubeconfig/.test(source)) {
+    throw new Error(`${locale}:final acceptance commands expose --kubeconfig.`);
+  }
+  for (const unsupportedAcceptanceToken of [
+    'smoke.sh',
+    'smoke_kubeconfig.py',
+    'AILERON_API_TOKEN',
+  ]) {
+    if (source.includes(unsupportedAcceptanceToken)) {
+      throw new Error(
+        `${locale}:installation/kubernetes.md exposes unsupported ${unsupportedAcceptanceToken}.`,
+      );
+    }
+  }
+  const shellBlocks = [...source.matchAll(/```(?:bash|sh)\n([\s\S]*?)```/g)].map(
+    (match) => match[1],
+  );
+  const browserInputCommands = shellBlocks.filter((block) =>
+    block.includes('prepare_browser_input.py'),
+  );
+  if (
+    browserInputCommands.length !== 2
+    || !browserInputCommands.some((block) => block.includes('--use-break-glass-login'))
+    || !browserInputCommands.some(
+      (block) => block.includes('--login-username-file')
+        && block.includes('--login-password-file'),
+    )
+  ) {
+    throw new Error(`${locale}:browser-input source modes are incomplete.`);
+  }
+}
+
+for (const [locale, root] of localeRoots) {
+  const source = await readFile(path.join(root, 'installation/troubleshooting.md'), 'utf8');
+  for (const requiredTurnDiagnosticToken of [
+    'docker compose ps turn-readiness-preflight coturn',
+    'connectivity-evidence-gateway connectivity-external-agent workspace-manager',
+    'docker compose logs --tail=200 turn-readiness-preflight',
+    'workspace-browser-connectivity-probe-<workspace-id>',
+    '${HOST_TURN_CONFIG_DIR}/turn-reachability-profile.json',
+    '${HOST_TURN_SECRETS_DIR}',
+    '${TURN_CONNECTIVITY_GATEWAY_EXTERNAL_PORT:-18083}',
+    'TURN_CREDENTIAL_REVISION',
+    'browser_connectivity_state',
+    'browser_connectivity_reason',
+    'browser_connectivity_backend_*',
+    'browser_connectivity_frontend_*',
+  ]) {
+    if (!source.includes(requiredTurnDiagnosticToken)) {
+      throw new Error(
+        `${locale}:installation/troubleshooting.md is missing ${requiredTurnDiagnosticToken}.`,
+      );
     }
   }
 }

@@ -29,14 +29,16 @@ export const MarketplacePackageListRow: React.FC<MarketplacePackageListRowProps>
       <button className="min-w-0 flex-1 text-left" onClick={() => onOpenDetail(item)}>
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="truncate text-sm font-semibold text-foreground hover:text-primary">{item.displayName}</h3>
-          <Badge variant="outline">{t(`marketplace.providers.${item.provider}`)}</Badge>
-          <Badge variant={item.lifecycleStatus === 'draft' ? 'outline' : 'secondary'}>
-            {t(`marketplace.lifecycle.${item.lifecycleStatus}`)}
-          </Badge>
+          <Badge variant="outline">{t(`marketplace.targetClients.${item.targetClient}`)}</Badge>
+          {item.validationSeverity !== 'none' ? (
+            <Badge variant={item.validationSeverity === 'error' ? 'destructive' : 'outline'}>
+              {t(`marketplace.validation.severity.${item.validationSeverity}`)}
+            </Badge>
+          ) : null}
           {item.variants.length > 1 ? (
             item.variants.map(variant => (
-              <Badge key={`${variant.provider}:${variant.packageId}`} variant="secondary">
-                {t(`marketplace.providers.${variant.provider}`)}
+              <Badge key={`${variant.targetClient}:${variant.packageFormat}`} variant="secondary">
+                {t(`marketplace.targetClients.${variant.targetClient}`)} · {variant.packageFormat}
               </Badge>
             ))
           ) : null}
@@ -51,13 +53,7 @@ export const MarketplacePackageListRow: React.FC<MarketplacePackageListRowProps>
           <Button
             size="sm"
             className="h-7 px-2 text-xs"
-            disabled={item.lifecycleStatus !== 'ready'}
             onClick={() => onInstall(item)}
-            title={
-              item.lifecycleStatus === 'draft'
-                ? t('marketplace.lifecycle.draftInstallDisabled')
-                : undefined
-            }
           >
             <Terminal className="mr-1.5 h-3.5 w-3.5" />
             {t('marketplace.center.card.actions.install')}

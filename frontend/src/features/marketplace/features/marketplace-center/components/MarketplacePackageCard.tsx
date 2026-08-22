@@ -16,8 +16,11 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
-import type { MarketplaceFeatureKey, MarketplacePackageSummary } from '@/features/marketplace/model/marketplaceTypes';
-import { getMarketplaceFeatureLabelKey } from '../../../model/marketplaceFeatureLabels';
+import type { MarketplacePackageSummary } from '@/features/marketplace/model/marketplaceTypes';
+import {
+  getMarketplaceFeatureLabelKey,
+  getMarketplacePackageFeatures,
+} from '../../../model/marketplaceFeatureLabels';
 
 export interface MarketplacePackageCardProps {
   item: MarketplacePackageSummary;
@@ -28,30 +31,6 @@ export interface MarketplacePackageCardProps {
   onExport?: (item: MarketplacePackageSummary) => void;
 }
 
-const marketplaceFeatureOrder: MarketplaceFeatureKey[] = ['agentsMd', 'hooks', 'mcp', 'agents', 'commands', 'outputStyle', 'skills'];
-
-const getPackageFeatures = (item: MarketplacePackageSummary): MarketplaceFeatureKey[] => {
-  const haystack = [...item.indexedResourceNames, ...item.tags].join(' ').toLowerCase();
-  return marketplaceFeatureOrder.filter(feature => {
-    switch (feature) {
-    case 'agentsMd':
-        return haystack.includes('agentsmd') || haystack.includes('agents.md') || haystack.includes('claude.md');
-      case 'hooks':
-        return haystack.includes('hook');
-      case 'mcp':
-        return haystack.includes('mcp');
-      case 'agents':
-        return haystack.includes('agent') || haystack.includes('subagent');
-      case 'commands':
-        return haystack.includes('command') || haystack.includes('slash');
-      case 'outputStyle':
-        return haystack.includes('outputstyle') || haystack.includes('output-style') || haystack.includes('output style');
-      case 'skills':
-        return haystack.includes('skill');
-    }
-  });
-};
-
 export const MarketplacePackageCard: React.FC<MarketplacePackageCardProps> = ({
   item,
   onOpenDetail,
@@ -61,9 +40,10 @@ export const MarketplacePackageCard: React.FC<MarketplacePackageCardProps> = ({
   onExport,
 }) => {
   const { t } = useI18n();
-  const featureBadges = getPackageFeatures(item);
+  const featureBadges = getMarketplacePackageFeatures(item);
   const siblingVariants = item.variants.filter(variant => (
-    variant.provider !== item.provider || variant.packageId !== item.packageId
+    variant.targetClient !== item.targetClient
+    || variant.packageFormat !== item.packageFormat
   ));
 
   return (
@@ -71,7 +51,7 @@ export const MarketplacePackageCard: React.FC<MarketplacePackageCardProps> = ({
       <div className="flex items-start justify-between gap-4">
         <button className="space-y-1 text-left min-w-0" onClick={() => onOpenDetail(item)}>
           <p className="text-xs uppercase text-muted-foreground">
-            {t(`marketplace.providers.${item.provider}`)} · {item.category ?? t('marketplace.common.uncategorized')}
+            {t(`marketplace.targetClients.${item.targetClient}`)} · {item.category ?? t('marketplace.common.uncategorized')}
           </p>
           <h3 className="text-lg font-semibold text-foreground hover:text-primary">
             {item.displayName}
@@ -114,22 +94,21 @@ export const MarketplacePackageCard: React.FC<MarketplacePackageCardProps> = ({
       <div className="mt-4 mb-5 flex flex-wrap gap-2">
         {siblingVariants.length > 0 ? (
           item.variants.map(variant => (
-            <Badge key={`${variant.provider}:${variant.packageId}`} variant="outline" className="text-xs">
-              {t(`marketplace.providers.${variant.provider}`)}
+            <Badge key={`${variant.targetClient}:${variant.packageFormat}`} variant="outline" className="text-xs">
+              {t(`marketplace.targetClients.${variant.targetClient}`)} · {variant.packageFormat}
             </Badge>
           ))
         ) : null}
         {featureBadges.map(feature => (
           <Badge key={feature} variant="secondary" className="text-xs">
-            {t(getMarketplaceFeatureLabelKey(item.provider, feature))}
+            {t(getMarketplaceFeatureLabelKey(item.targetClient, feature))}
           </Badge>
         ))}
-        <Badge
-          variant={item.lifecycleStatus === 'draft' ? 'outline' : 'secondary'}
-          className="text-xs"
-        >
-          {t(`marketplace.lifecycle.${item.lifecycleStatus}`)}
-        </Badge>
+        {item.validationSeverity !== 'none' ? (
+          <Badge variant={item.validationSeverity === 'error' ? 'destructive' : 'outline'} className="text-xs">
+            {t(`marketplace.validation.severity.${item.validationSeverity}`)}
+          </Badge>
+        ) : null}
       </div>
 
       <div className="flex-1" />
@@ -138,13 +117,7 @@ export const MarketplacePackageCard: React.FC<MarketplacePackageCardProps> = ({
         {onInstall ? (
           <Button
             className="flex-1"
-            disabled={item.lifecycleStatus !== 'ready'}
             onClick={() => onInstall(item)}
-            title={
-              item.lifecycleStatus === 'draft'
-                ? t('marketplace.lifecycle.draftInstallDisabled')
-                : undefined
-            }
           >
             <Play className="h-4 w-4 mr-2" />
             {t('marketplace.center.card.actions.install')}

@@ -12,7 +12,7 @@ const identity = (
   packageId: string,
   resourceType = 'commands',
 ): MarketplaceResourceIdentity => ({
-  provider: 'codex',
+  targetClient: 'codex',
   packageId,
   resourceType,
 });

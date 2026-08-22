@@ -120,8 +120,8 @@ export const createThreadApiHttp = (
           payload,
         ),
       ),
-    cancel: (threadId) =>
-      request(() => runtimeClient.post<Thread>(`${threadPath(threadId)}/cancel`)),
+    stop: (threadId) =>
+      request(() => runtimeClient.post<Thread>(`${threadPath(threadId)}/stop`)),
     retry: (threadId) =>
       request(() => runtimeClient.post<Thread>(`${threadPath(threadId)}/retry`)),
     archive: (threadId) =>

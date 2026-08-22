@@ -39,7 +39,7 @@ describe('MarketplaceDetailFilesSection', () => {
     render(
       <MarketplaceDetailFilesSection
         mode="package"
-        provider="codex"
+        targetClient="codex"
         packageId="review-tools"
       />,
     );
@@ -57,7 +57,7 @@ describe('MarketplaceDetailFilesSection', () => {
     render(
       <MarketplaceDetailFilesSection
         mode="skills"
-        provider="codex"
+        targetClient="codex"
         packageId="review-tools"
       />,
     );
@@ -75,7 +75,7 @@ describe('MarketplaceDetailFilesSection', () => {
     render(
       <MarketplaceDetailFilesSection
         mode="package"
-        provider="codex"
+        targetClient="codex"
         packageId="review-tools"
       />,
     );
@@ -87,7 +87,7 @@ describe('MarketplaceDetailFilesSection', () => {
     expect(screen.queryByText('marketplace.common.resourceLoadError')).not.toBeInTheDocument();
   }, 20_000);
 
-  it('keeps the latest provider, package, and mode tree when requests resolve out of order', async () => {
+  it('keeps the latest targetClient, package, and mode tree when requests resolve out of order', async () => {
     const stalePackage = deferred<unknown>();
     const currentSkills = deferred<unknown>();
     apiMock.listPackageFilesTree.mockReturnValueOnce(stalePackage.promise);
@@ -96,7 +96,7 @@ describe('MarketplaceDetailFilesSection', () => {
     const { rerender } = render(
       <MarketplaceDetailFilesSection
         mode="package"
-        provider="codex"
+        targetClient="codex"
         packageId="old-package"
       />,
     );
@@ -106,7 +106,7 @@ describe('MarketplaceDetailFilesSection', () => {
     rerender(
       <MarketplaceDetailFilesSection
         mode="skills"
-        provider="claude-code"
+        targetClient="claude-code"
         packageId="current-package"
       />,
     );
@@ -144,7 +144,7 @@ describe('MarketplaceDetailFilesSection', () => {
     const { rerender } = render(
       <MarketplaceDetailFilesSection
         mode="package"
-        provider="codex"
+        targetClient="codex"
         packageId="review-tools"
       />,
     );
@@ -153,7 +153,7 @@ describe('MarketplaceDetailFilesSection', () => {
     rerender(
       <MarketplaceDetailFilesSection
         mode="skills"
-        provider="codex"
+        targetClient="codex"
         packageId="review-tools"
       />,
     );
@@ -184,7 +184,7 @@ describe('MarketplaceDetailFilesSection', () => {
     const { rerender } = render(
       <MarketplaceDetailFilesSection
         mode="package"
-        provider="codex"
+        targetClient="codex"
         packageId="review-tools"
       />,
     );
@@ -195,7 +195,7 @@ describe('MarketplaceDetailFilesSection', () => {
     rerender(
       <MarketplaceDetailFilesSection
         mode="skills"
-        provider="codex"
+        targetClient="codex"
         packageId="review-tools"
       />,
     );
@@ -219,7 +219,7 @@ describe('MarketplaceDetailFilesSection', () => {
     render(
       <MarketplaceDetailFilesSection
         mode="package"
-        provider="codex"
+        targetClient="codex"
         packageId="review-tools"
       />,
     );
@@ -260,7 +260,7 @@ describe('MarketplaceDetailFilesSection', () => {
     render(
       <MarketplaceDetailFilesSection
         mode="package"
-        provider="codex"
+        targetClient="codex"
         packageId="review-tools"
       />,
     );

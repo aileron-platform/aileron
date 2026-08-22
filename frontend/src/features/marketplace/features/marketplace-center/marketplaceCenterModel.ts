@@ -1,19 +1,19 @@
 import type {
   MarketplaceFeatureKey,
-  MarketplaceImportProvider,
+  MarketplaceImportTargetClient,
   MarketplaceImportResult,
   MarketplaceListQuery,
-  MarketplaceProvider,
+  MarketplaceTargetClient,
 } from '@/features/marketplace/model/marketplaceTypes';
 
 export const PAGE_SIZE_OPTIONS = [6, 12, 24];
 export const MARKETPLACE_FEATURES: MarketplaceFeatureKey[] = ['mcp', 'commands', 'hooks', 'agentsMd', 'agents', 'outputStyle', 'skills'];
 export const IMPORT_SCAN_HIDDEN_VALIDATION_CODES = new Set(['marketplace.validation.metadata_conflict']);
-export const IMPORT_PROVIDERS: MarketplaceImportProvider[] = ['all', 'claude-code', 'codex'];
+export const IMPORT_TARGET_CLIENTS: MarketplaceImportTargetClient[] = ['all', 'claude-code', 'codex'];
 
 export interface MarketplaceCenterQueryState {
   searchTerm: string;
-  provider: MarketplaceProvider | 'all';
+  targetClient: MarketplaceTargetClient | 'all';
   category: string;
   activeFeatures: Set<MarketplaceFeatureKey>;
   page: number;
@@ -22,7 +22,7 @@ export interface MarketplaceCenterQueryState {
 
 export type MarketplaceImportedPackageRevealFilters = Pick<
   MarketplaceListQuery,
-  'q' | 'provider' | 'category' | 'features' | 'page'
+  'q' | 'targetClient' | 'category' | 'features' | 'page'
 >;
 
 export const buildMarketplaceListQuery = (
@@ -30,7 +30,7 @@ export const buildMarketplaceListQuery = (
   overrides: Partial<MarketplaceListQuery> = {},
 ): MarketplaceListQuery => ({
   q: overrides.q ?? state.searchTerm,
-  provider: overrides.provider ?? state.provider,
+  targetClient: overrides.targetClient ?? state.targetClient,
   category: overrides.category ?? state.category,
   features: overrides.features ?? Array.from(state.activeFeatures),
   sort: 'updatedAt',
@@ -58,10 +58,10 @@ export const resolveImportedPackageRevealFilters = (
   if (importResult.imported.length === 0) {
     return null;
   }
-  const importedProviders = new Set(importResult.imported.map(item => item.provider));
+  const importTargetClients = new Set(importResult.imported.map(item => item.targetClient));
   return {
     q: '',
-    provider: importedProviders.size === 1 ? importResult.imported[0].provider : 'all',
+    targetClient: importTargetClients.size === 1 ? importResult.imported[0].targetClient : 'all',
     category: 'all',
     features: [],
     page: 1,

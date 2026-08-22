@@ -5,7 +5,12 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { cn } from '@/shared/utils/cn';
 import { sharedComponents } from './markdownComponents';
-import { parseFrontmatterSegments, preprocessMarkdown, type FrontmatterValue } from './markdownPreprocess';
+import {
+  parseFrontmatterSegments,
+  preprocessMarkdown,
+  remarkCurrencyDollars,
+  type FrontmatterValue,
+} from './markdownPreprocess';
 import { remarkLineBreakTag } from './remarkLineBreakTag';
 import { classifyMarkdownHref } from './markdownLinkUtils';
 
@@ -131,7 +136,7 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
         return (
           <ReactMarkdown
             key={`markdown-${index}`}
-            remarkPlugins={[remarkGfm, remarkMath, remarkLineBreakTag]}
+            remarkPlugins={[remarkGfm, remarkMath, remarkCurrencyDollars, remarkLineBreakTag]}
             rehypePlugins={[rehypeKatex]}
             components={components}
           >

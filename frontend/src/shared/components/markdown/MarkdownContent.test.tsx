@@ -207,32 +207,32 @@ describe('MarkdownContent', () => {
   it('renders YAML frontmatter as a structured block', () => {
     const content = `---
 name: generate-contracts
-description: Generate contracts from OpenSpec delta specs
+description: Generate example artifacts
 metadata:
-  author: openspec
+  author: example
   version: "1.0"
 ---`;
 
     const { container } = render(<MarkdownContent content={content} />);
     expect(container.querySelector('pre code')).toBeNull();
     expect(screen.getByText('generate-contracts')).toBeTruthy();
-    expect(screen.getByText('openspec')).toBeTruthy();
+    expect(screen.getByText('example')).toBeTruthy();
     expect(screen.getByText('1.0')).toBeTruthy();
   });
 
   it('continues rendering markdown content after embedded frontmatter', () => {
     const content = `<skill>
-<name>openspec-ff-change</name>
+<name>sample-skill-update</name>
 ---
-name: openspec-ff-change
+name: sample-skill-update
 metadata:
-  author: openspec
+  author: example
 ---
 
 ## Steps`;
 
     render(<MarkdownContent content={content} />);
-    expect(screen.getByText('openspec-ff-change')).toBeTruthy();
+    expect(screen.getByText('sample-skill-update')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Steps');
   });
 

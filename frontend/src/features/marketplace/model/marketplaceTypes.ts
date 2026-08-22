@@ -1,6 +1,11 @@
-export type MarketplaceProvider = 'claude-code' | 'codex';
+export type MarketplaceTargetClient = 'claude-code' | 'codex';
+export type MarketplacePackageFormat =
+  | 'codex-native'
+  | 'claude-native'
+  | 'agent-plugin/1.0.0';
+export type MarketplaceTargetClient = 'claude-code' | 'codex';
 
-export type MarketplaceImportProvider = MarketplaceProvider | 'all';
+export type MarketplaceImportTargetClient = MarketplaceTargetClient | 'all';
 
 export type MarketplacePackageType = 'plugin';
 
@@ -31,7 +36,9 @@ export type MarketplaceUserCopyResourceType =
   | 'rule'
   | 'mcp'
   | 'hook'
-  | 'dependency-payload';
+  | 'dependency-payload'
+  | 'extension'
+  | 'component';
 
 export type MarketplaceUserCopyBlockingCode =
   | 'marketplace.user_copy.inventory_unavailable'
@@ -45,12 +52,24 @@ export type MarketplaceUserCopyBlockingCode =
   | 'marketplace.user_copy.profile_invalid'
   | 'marketplace.user_copy.source_reference_invalid'
   | 'marketplace.user_copy.source_not_allowed'
-  | 'marketplace.user_copy.unsupported_resource';
+  | 'marketplace.user_copy.source_document_invalid'
+  | 'marketplace.user_copy.source_missing'
+  | 'marketplace.user_copy.duplicate_resource_id'
+  | 'marketplace.user_copy.unsupported_resource'
+  | 'marketplace.user_copy.projection_not_supported';
 
 export type MarketplaceValidationSeverity = 'error' | 'warning' | 'info' | 'none';
-
-export type MarketplaceSourceType = 'created' | 'imported' | 'cloned';
-export type MarketplaceLifecycleStatus = 'draft' | 'ready';
+export type MarketplaceAuthoringCapability = 'read-write' | 'read-only' | 'unsupported';
+export type MarketplaceAuthoringFeature =
+  | 'basic'
+  | 'agentsMd'
+  | 'hooks'
+  | 'mcp'
+  | 'agents'
+  | 'commands'
+  | 'outputStyle'
+  | 'skills'
+  | 'files';
 
 export type MarketplaceImportVariantStatus =
   | 'new-family'
@@ -61,7 +80,7 @@ export type MarketplaceImportVariantStatus =
 
 export type MarketplaceFeatureKey = 'mcp' | 'commands' | 'hooks' | 'agentsMd' | 'agents' | 'outputStyle' | 'skills';
 
-export type MarketplaceSortKey = 'updatedAt' | 'displayName' | 'provider' | 'validationSeverity';
+export type MarketplaceSortKey = 'updatedAt' | 'displayName' | 'targetClient' | 'validationSeverity';
 
 export type MarketplaceSortDirection = 'asc' | 'desc';
 
@@ -73,8 +92,9 @@ export interface MarketplaceValidationResult {
   details?: Record<string, unknown>;
 }
 
-export interface MarketplaceProviderVariant {
-  provider: MarketplaceProvider;
+export interface MarketplacePackageVariant {
+  targetClient: MarketplaceTargetClient;
+  packageFormat: MarketplacePackageFormat;
   packageId: string;
   displayName: string;
   registryPath?: string;
@@ -83,7 +103,10 @@ export interface MarketplaceProviderVariant {
 }
 
 export interface MarketplacePackageSummary {
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
+  packageFormat: MarketplacePackageFormat;
+  catalogPluginId: string;
+  userCopyTargetClient: MarketplaceTargetClient;
   packageType: MarketplacePackageType;
   packageId: string;
   displayName: string;
@@ -91,17 +114,16 @@ export interface MarketplacePackageSummary {
   description?: string;
   category?: string;
   tags: string[];
-  sourceType: MarketplaceSourceType;
   indexedResourceNames: string[];
   validationSeverity: MarketplaceValidationSeverity;
-  lifecycleStatus: MarketplaceLifecycleStatus;
+  authoringCapabilities: Record<MarketplaceAuthoringFeature, MarketplaceAuthoringCapability>;
   registryPath: string;
   revision: string;
   updatedAt: string;
   familyId?: string;
   familyDisplayName?: string;
   sourceIdentity?: string;
-  variants: MarketplaceProviderVariant[];
+  variants: MarketplacePackageVariant[];
 }
 
 export interface MarketplaceFeatureContentItem {
@@ -124,12 +146,11 @@ export interface MarketplacePackageDetail extends MarketplacePackageSummary {
 
 export interface MarketplaceListQuery {
   q?: string;
-  provider?: MarketplaceProvider | 'all';
+  targetClient?: MarketplaceTargetClient | 'all';
   packageType?: MarketplacePackageType | 'all';
   category?: string;
   features?: MarketplaceFeatureKey[];
   validationSeverity?: MarketplaceValidationSeverity | 'all';
-  sourceType?: MarketplaceSourceType | 'all';
   updatedFrom?: string;
   updatedTo?: string;
   sort?: MarketplaceSortKey;
@@ -145,7 +166,6 @@ export interface MarketplaceListResult {
   pageSize: number;
   totalPages: number;
   categories: string[];
-  sourceTypes: MarketplaceSourceType[];
   validationSeverities: MarketplaceValidationSeverity[];
 }
 
@@ -160,7 +180,8 @@ export type MarketplaceActivityStatus = 'succeeded' | 'failed';
 export interface MarketplaceActivityRecord {
   id: string;
   action: MarketplaceActivityAction;
-  provider?: MarketplaceProvider;
+  packageFormat?: MarketplacePackageFormat;
+  targetClient?: MarketplaceTargetClient;
   packageId?: string;
   operationId?: string;
   workspaceId?: string;
@@ -174,7 +195,8 @@ export interface MarketplaceActivityListQuery {
   page: number;
   pageSize: number;
   workspaceId?: string;
-  provider?: MarketplaceProvider;
+  packageFormat?: MarketplacePackageFormat;
+  targetClient?: MarketplaceTargetClient;
   packageId?: string;
   action?: MarketplaceActivityAction;
   status?: MarketplaceActivityStatus;
@@ -188,17 +210,45 @@ export interface MarketplaceActivityListResult {
   totalPages: number;
 }
 
+export interface MarketplaceActivityDetail extends MarketplaceActivityRecord {
+  workspaceIdSnapshot?: string;
+  catalogPluginId?: string;
+  releaseRevision?: string;
+  profileDigest?: string;
+  projectionDigest?: string;
+  materializationDigest?: string;
+  projectedCount?: number;
+  skippedCount?: number;
+  conflictCount?: number;
+  createdCount?: number;
+  mergedCount?: number;
+  unchangedCount?: number;
+  overwrittenCount?: number;
+  targetLocators: string[];
+  diagnosticCodes: string[];
+  commands: MarketplacePluginCliCommand[];
+}
+
 export interface MarketplaceCreateRequest {
-  provider: MarketplaceProvider;
+  packageFormat: MarketplacePackageFormat;
+  targetClients: MarketplaceTargetClient[];
   packageId: string;
   displayName: string;
+  version: string;
   description?: string;
 }
 
+export interface MarketplacePackageFormatOption {
+  packageFormat: MarketplacePackageFormat;
+  targetClients: MarketplaceTargetClient[];
+  authoringCapabilities: Record<MarketplaceAuthoringFeature, MarketplaceAuthoringCapability>;
+  defaultVersion: string;
+}
+
 export interface MarketplaceDeleteRequest {
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
+  packageFormat: MarketplacePackageFormat;
   packageId: string;
-  revision: string;
 }
 
 export interface MarketplaceDeleteResult {
@@ -208,16 +258,18 @@ export interface MarketplaceDeleteResult {
 }
 
 export interface MarketplacePluginInstallRequest {
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
+  packageFormat: MarketplacePackageFormat;
   packageId: string;
-  revision: string;
+  version: string;
   workspaceId: string;
 }
 
 export interface MarketplaceUserCopyPreflightRequest {
-  provider: MarketplaceProvider;
-  packageId: string;
-  revision: string;
+  packageFormat: MarketplacePackageFormat;
+  targetClient: MarketplaceTargetClient;
+  catalogPluginId: string;
+  releaseRevision: string;
   workspaceId: string;
 }
 
@@ -228,8 +280,11 @@ export interface MarketplaceUserCopyOverwriteApproval {
 
 export interface MarketplaceUserCopyApplyRequest
   extends MarketplaceUserCopyPreflightRequest {
+  expectedProfileDigest: string;
   expectedSourceDigest: string;
+  expectedProjectionDigest: string;
   expectedMaterializationDigest: string;
+  acceptPartialCopy: boolean;
   overwriteApprovals: MarketplaceUserCopyOverwriteApproval[];
 }
 
@@ -253,11 +308,18 @@ export interface MarketplaceUserCopyConflict {
 }
 
 export interface MarketplaceUserCopyBlockingIssue {
-  resourceType: MarketplaceUserCopyResourceType | null;
+  resourceType: string | null;
   resourceId: string | null;
   sourceLocator: string | null;
   targetLocator: string | null;
   errorCode: MarketplaceUserCopyBlockingCode;
+}
+
+export interface MarketplaceSkippedUserCopyResource {
+  code: string;
+  resourceType: string;
+  resourceId: string;
+  sourceLocator: string;
 }
 
 export type MarketplaceUserCopyPreflightStatus =
@@ -267,13 +329,17 @@ export type MarketplaceUserCopyPreflightStatus =
 
 export interface MarketplaceUserCopyPreflightResult {
   status: MarketplaceUserCopyPreflightStatus;
-  provider: MarketplaceProvider;
-  packageId: string;
+  packageFormat: MarketplacePackageFormat;
+  targetClient: MarketplaceTargetClient;
+  catalogPluginId: string;
+  releaseRevision: string;
   workspaceId: string;
   sourceDigest: string;
   profileDigest: string;
+  projectionDigest: string;
   materializationDigest: string;
   resources: MarketplaceUserCopyResource[];
+  skippedResources: MarketplaceSkippedUserCopyResource[];
   conflicts: MarketplaceUserCopyConflict[];
   blockingIssues: MarketplaceUserCopyBlockingIssue[];
 }
@@ -281,27 +347,46 @@ export interface MarketplaceUserCopyPreflightResult {
 export interface MarketplaceUserCopyApplyResult {
   status: 'completed';
   operationId: string;
-  provider: MarketplaceProvider;
-  packageId: string;
+  packageFormat: MarketplacePackageFormat;
+  targetClient: MarketplaceTargetClient;
+  catalogPluginId: string;
+  releaseRevision: string;
   workspaceId: string;
   createdCount: number;
   mergedCount: number;
   unchangedCount: number;
   overwrittenCount: number;
+  skippedCount: number;
 }
 
 export type MarketplacePluginCommandStage =
   | 'marketplace-add'
   | 'plugin-install'
+  | 'plugin-enable'
   | 'marketplace-list'
   | 'plugin-list'
   | 'completed';
 
+export interface MarketplacePluginCliCommand {
+  sequence: number;
+  stage: MarketplacePluginCommandStage;
+  argvDisplay: string;
+  exitCode: number | null;
+  startedAt: string;
+  endedAt: string;
+  stdout: string | null;
+  stderr: string | null;
+  stdoutOriginalByteCount: number;
+  stderrOriginalByteCount: number;
+  truncated: boolean;
+}
+
 export interface MarketplacePluginCommandResult {
   operationId: string;
   status: 'installed' | 'failed';
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   packageId: string;
+  version: string;
   marketplaceId: string;
   workspaceId: string;
   stage: MarketplacePluginCommandStage;
@@ -310,10 +395,16 @@ export interface MarketplacePluginCommandResult {
   stdout: string | null;
   stderr: string | null;
   truncated: boolean;
+  commands: MarketplacePluginCliCommand[];
+  warnings: Array<
+    | 'marketplace.install.state-unconfirmed'
+    | 'marketplace.install.command-timeout'
+    | 'marketplace.install.audit-persistence-failed'
+  >;
 }
 
 export interface MarketplaceImportSource {
-  provider: MarketplaceImportProvider;
+  targetClient: MarketplaceImportTargetClient;
   sourceKind: 'git' | 'local';
   source: string;
 }
@@ -325,8 +416,10 @@ export interface MarketplaceImportUploadResult {
 
 export interface MarketplaceImportCandidate {
   id: string;
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
+  packageFormat: MarketplacePackageFormat;
   packageId: string;
+  version: string;
   displayName: string;
   familyId?: string;
   familyDisplayName?: string;
@@ -334,24 +427,34 @@ export interface MarketplaceImportCandidate {
   sourcePath: string;
   sourceMetadata?: Record<string, unknown>;
   duplicate: boolean;
-  duplicateAction: 'skip' | 'overwrite' | 'import-as-new';
-  newPackageId?: string;
   localRevision?: string;
   variantStatus: MarketplaceImportVariantStatus;
-  variants: MarketplaceProviderVariant[];
+  variants: MarketplacePackageVariant[];
   validationSeverity: MarketplaceValidationSeverity;
   validationResults: MarketplaceValidationResult[];
+  import?: MarketplaceImportMetadata;
+}
+
+export interface MarketplaceImportMetadata {
+  version: string;
+  overwrite: boolean;
 }
 
 export interface MarketplaceImportResult {
   imported: MarketplacePackageSummary[];
-  skipped: MarketplaceImportCandidate[];
-  failed: Array<MarketplaceImportCandidate & { errorCode: string }>;
+  failed: Array<MarketplaceImportCandidate & {
+    errorCode: string;
+    stage: string;
+    source?: string;
+    destination?: string;
+    category: string;
+  }>;
   warnings: MarketplaceValidationResult[];
 }
 
 export interface MarketplaceExportRequest {
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
+  packageFormat: MarketplacePackageFormat;
   packageId: string;
   revision: string;
 }

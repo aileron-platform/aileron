@@ -1,15 +1,20 @@
 import type {
   MarketplaceDeliveryMethod,
   MarketplacePackageSummary,
+  MarketplacePackageFormat,
   MarketplacePluginCommandResult,
   MarketplacePluginInstallRequest,
-  MarketplaceProvider,
+  MarketplaceTargetClient,
   MarketplaceUserCopyApplyRequest,
   MarketplaceUserCopyApplyResult,
   MarketplaceUserCopyPreflightRequest,
   MarketplaceUserCopyPreflightResult,
 } from '../model/marketplaceTypes';
-import { getMarketplaceErrorCode } from '../model/marketplacePackageActionModel';
+import {
+  getMarketplaceErrorCode,
+  getMarketplaceInstallErrorContext,
+  type MarketplaceInstallErrorContext,
+} from '../model/marketplacePackageActionModel';
 import { MARKETPLACE_CURRENT_WORKSPACE_OPTION_ID } from '../storage/marketplaceStorage';
 
 export type MarketplaceInstallWorkflowStatus =
@@ -25,7 +30,7 @@ export type MarketplaceInstallFailureKind = 'preflight' | 'delivery' | null;
 export interface MarketplaceInstallWorkspaceOption {
   id: string;
   label: string;
-  agenticTools: MarketplaceProvider[];
+  agenticTools: MarketplaceTargetClient[];
 }
 
 export interface MarketplaceInstallWorkspaceInventory {
@@ -47,11 +52,12 @@ export interface MarketplaceInstallWorkflowAdapter {
     request: MarketplaceUserCopyApplyRequest,
   ) => Promise<MarketplaceUserCopyApplyResult>;
   refreshPackage: (
-    provider: MarketplaceProvider,
+    targetClient: MarketplaceTargetClient,
     packageId: string,
+    packageFormat: MarketplacePackageFormat,
   ) => Promise<MarketplacePackageSummary>;
   invalidateUserScopeSettings: (
-    provider: MarketplaceProvider,
+    targetClient: MarketplaceTargetClient,
     workspaceId: string,
   ) => Promise<void>;
   publishRefreshedItem: (item: MarketplacePackageSummary) => void;
@@ -73,11 +79,14 @@ export interface MarketplaceInstallWorkflowState {
   pluginResult: MarketplacePluginCommandResult | null;
   userCopyResult: MarketplaceUserCopyApplyResult | null;
   overwriteConfirmed: boolean;
+  releaseVersion: string;
   installErrorCode: string | null;
+  installErrorContext: MarketplaceInstallErrorContext | null;
   selectedWorkspace: MarketplaceInstallWorkspaceOption | null;
-  isWorkspaceProviderEnabled: boolean;
+  isWorkspaceTargetClientEnabled: boolean;
   requiresOverwriteConfirmation: boolean;
   isPreflightEligible: boolean;
+  releaseVersionValid: boolean;
   canRun: boolean;
   workspaceSelectionDisabled: boolean;
   deliverySelectionDisabled: boolean;
@@ -92,6 +101,7 @@ export type MarketplaceInstallWorkflowCommand =
   | { type: 'reload-workspaces' }
   | { type: 'select-workspace'; workspaceId: string }
   | { type: 'select-delivery'; deliveryMethod: MarketplaceDeliveryMethod }
+  | { type: 'set-release-version'; version: string }
   | { type: 'set-overwrite-confirmed'; confirmed: boolean }
   | { type: 'refresh-preflight' }
   | { type: 'run' };
@@ -105,9 +115,10 @@ export interface MarketplaceInstallWorkflow {
 type InternalState = Omit<
   MarketplaceInstallWorkflowState,
   | 'selectedWorkspace'
-  | 'isWorkspaceProviderEnabled'
+  | 'isWorkspaceTargetClientEnabled'
   | 'requiresOverwriteConfirmation'
   | 'isPreflightEligible'
+  | 'releaseVersionValid'
   | 'canRun'
   | 'workspaceSelectionDisabled'
   | 'deliverySelectionDisabled'
@@ -133,8 +144,12 @@ const createInitialState = (
   pluginResult: null,
   userCopyResult: null,
   overwriteConfirmed: false,
+  releaseVersion: '',
   installErrorCode: null,
+  installErrorContext: null,
 });
+
+const SEMVER_PATTERN = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 const deriveState = (
   state: InternalState,
@@ -142,9 +157,9 @@ const deriveState = (
   const selectedWorkspace = state.workspaceOptions.find(
     workspace => workspace.id === state.workspaceId,
   ) ?? null;
-  const isWorkspaceProviderEnabled = Boolean(
+  const isWorkspaceTargetClientEnabled = Boolean(
     state.item
-    && selectedWorkspace?.agenticTools.includes(state.item.provider),
+    && selectedWorkspace?.agenticTools.includes(state.item.userCopyTargetClient),
   );
   const requiresOverwriteConfirmation =
     state.preflight?.status === 'confirmation-required';
@@ -155,17 +170,21 @@ const deriveState = (
       state.preflight.status === 'ready'
       || (
         state.preflight.status === 'confirmation-required'
-        && state.preflight.conflicts.length > 0
+        && (
+          state.preflight.conflicts.length > 0
+          || state.preflight.skippedResources.length > 0
+        )
         && state.preflight.conflicts.every(conflict => conflict.overwritable)
       )
     ),
   );
+  const releaseVersionValid = SEMVER_PATTERN.test(state.releaseVersion.trim());
   const isPreflightEligible = state.deliveryMethod === 'plugin'
-    ? state.item?.lifecycleStatus === 'ready'
+    ? releaseVersionValid
     : userCopyCanProceed;
   const canRun = Boolean(
     state.isOpen
-    && isWorkspaceProviderEnabled
+    && isWorkspaceTargetClientEnabled
     && isPreflightEligible
     && (!requiresOverwriteConfirmation || state.overwriteConfirmed)
     && state.status !== 'checking'
@@ -195,9 +214,10 @@ const deriveState = (
   return {
     ...state,
     selectedWorkspace,
-    isWorkspaceProviderEnabled,
+    isWorkspaceTargetClientEnabled,
     requiresOverwriteConfirmation,
     isPreflightEligible,
+    releaseVersionValid,
     canRun,
     workspaceSelectionDisabled,
     deliverySelectionDisabled,
@@ -206,13 +226,26 @@ const deriveState = (
   };
 };
 
-const buildRequestIdentity = (
+const buildPluginRequest = (
   item: MarketplacePackageSummary,
   workspaceId: string,
-): MarketplacePluginInstallRequest & MarketplaceUserCopyPreflightRequest => ({
-  provider: item.provider,
+  releaseVersion: string,
+): MarketplacePluginInstallRequest => ({
+  targetClient: item.userCopyTargetClient,
+  packageFormat: item.packageFormat,
   packageId: item.packageId,
-  revision: item.revision,
+  version: releaseVersion.trim(),
+  workspaceId,
+});
+
+const buildUserCopyRequest = (
+  item: MarketplacePackageSummary,
+  workspaceId: string,
+): MarketplaceUserCopyPreflightRequest => ({
+  packageFormat: item.packageFormat,
+  targetClient: item.userCopyTargetClient,
+  catalogPluginId: item.catalogPluginId,
+  releaseRevision: item.revision,
   workspaceId,
 });
 
@@ -220,8 +253,7 @@ const isSamePackage = (
   left: MarketplacePackageSummary | null,
   right: MarketplacePackageSummary,
 ) => (
-  left?.provider === right.provider
-  && left.packageId === right.packageId
+  left?.catalogPluginId === right.catalogPluginId
 );
 
 export const createMarketplaceInstallWorkflow = (
@@ -265,12 +297,19 @@ export const createMarketplaceInstallWorkflow = (
     if (!item) return null;
 
     const latestItem = await adapter.refreshPackage(
-      item.provider,
+      item.targetClient,
       item.packageId,
+      item.packageFormat,
     );
     if (!isCurrentSession(generation)) return null;
 
-    updateState({ item: latestItem });
+    const followsCurrentVersion = internalState.releaseVersion === (item.version ?? '');
+    updateState({
+      item: latestItem,
+      ...(followsCurrentVersion
+        ? { releaseVersion: latestItem.version ?? '' }
+        : {}),
+    });
     adapter.publishRefreshedItem(latestItem);
     return latestItem;
   };
@@ -285,7 +324,7 @@ export const createMarketplaceInstallWorkflow = (
       || !item
       || internalState.deliveryMethod !== 'user-copy'
       || internalState.workspaceLoading
-      || !deriveState(internalState).isWorkspaceProviderEnabled
+      || !deriveState(internalState).isWorkspaceTargetClientEnabled
     ) {
       return;
     }
@@ -301,6 +340,7 @@ export const createMarketplaceInstallWorkflow = (
       preflightLoading: true,
       preflightErrorCode: null,
       installErrorCode: null,
+      installErrorContext: null,
       pluginResult: null,
       userCopyResult: null,
       overwriteConfirmed: false,
@@ -308,7 +348,7 @@ export const createMarketplaceInstallWorkflow = (
 
     try {
       const preflight = await adapter.preflightUserCopy(
-        buildRequestIdentity(item, internalState.workspaceId),
+        buildUserCopyRequest(item, internalState.workspaceId),
         controller.signal,
       );
       if (
@@ -410,6 +450,7 @@ export const createMarketplaceInstallWorkflow = (
       isOpen: true,
       status: 'checking',
       item,
+      releaseVersion: item.version ?? '',
       workspaceLoading: true,
     });
     await loadWorkspaces(generation);
@@ -429,8 +470,13 @@ export const createMarketplaceInstallWorkflow = (
       return;
     }
 
-    const revisionChanged = internalState.item?.revision !== item.revision;
-    updateState({ item });
+    const previousItem = internalState.item;
+    const revisionChanged = previousItem?.revision !== item.revision;
+    const followsCurrentVersion = internalState.releaseVersion === (previousItem?.version ?? '');
+    updateState({
+      item,
+      ...(followsCurrentVersion ? { releaseVersion: item.version ?? '' } : {}),
+    });
     if (
       revisionChanged
       && internalState.deliveryMethod === 'user-copy'
@@ -463,6 +509,7 @@ export const createMarketplaceInstallWorkflow = (
       userCopyResult: null,
       overwriteConfirmed: false,
       installErrorCode: null,
+      installErrorContext: null,
     });
     if (internalState.deliveryMethod === 'user-copy') {
       await runPreflight(sessionGeneration);
@@ -492,10 +539,30 @@ export const createMarketplaceInstallWorkflow = (
       userCopyResult: null,
       overwriteConfirmed: false,
       installErrorCode: null,
+      installErrorContext: null,
     });
     if (deliveryMethod === 'user-copy') {
       await runPreflight(sessionGeneration);
     }
+  };
+
+  const setReleaseVersion = (version: string) => {
+    if (
+      !internalState.isOpen
+      || internalState.status === 'running'
+      || internalState.status === 'succeeded'
+    ) {
+      return;
+    }
+    updateState({
+      status: internalState.workspaceLoading ? 'checking' : 'idle',
+      failureKind: null,
+      releaseVersion: version,
+      pluginResult: null,
+      userCopyResult: null,
+      installErrorCode: null,
+      installErrorContext: null,
+    });
   };
 
   const refreshPreflight = async () => {
@@ -521,6 +588,7 @@ export const createMarketplaceInstallWorkflow = (
       userCopyResult: null,
       overwriteConfirmed: false,
       installErrorCode: null,
+      installErrorContext: null,
     });
     try {
       const latestItem = await refreshCurrentItem(generation);
@@ -565,6 +633,7 @@ export const createMarketplaceInstallWorkflow = (
       status: 'running',
       failureKind: null,
       installErrorCode: null,
+      installErrorContext: null,
     });
     adapter.rememberWorkspace(workspaceId);
 
@@ -577,7 +646,7 @@ export const createMarketplaceInstallWorkflow = (
 
       if (isRetry && deliveryMethod === 'user-copy') {
         currentPreflight = await adapter.preflightUserCopy(
-          buildRequestIdentity(deliveryItem, workspaceId),
+          buildUserCopyRequest(deliveryItem, workspaceId),
         );
         if (!isCurrentSession(generation)) return;
 
@@ -607,7 +676,11 @@ export const createMarketplaceInstallWorkflow = (
 
       if (deliveryMethod === 'plugin') {
         const result = await adapter.installPlugin(
-          buildRequestIdentity(deliveryItem, workspaceId),
+          buildPluginRequest(
+            deliveryItem,
+            workspaceId,
+            internalState.releaseVersion,
+          ),
         );
         if (!isCurrentSession(generation)) return;
 
@@ -618,10 +691,11 @@ export const createMarketplaceInstallWorkflow = (
           pluginResult: result,
           userCopyResult: null,
           installErrorCode: null,
+          installErrorContext: null,
         });
         if (succeeded) {
           await adapter.invalidateUserScopeSettings(
-            result.provider,
+            result.targetClient,
             result.workspaceId,
           );
         }
@@ -637,9 +711,12 @@ export const createMarketplaceInstallWorkflow = (
       }
 
       const result = await adapter.applyUserCopy({
-        ...buildRequestIdentity(deliveryItem, workspaceId),
+        ...buildUserCopyRequest(deliveryItem, workspaceId),
+        expectedProfileDigest: currentPreflight.profileDigest,
         expectedSourceDigest: currentPreflight.sourceDigest,
+        expectedProjectionDigest: currentPreflight.projectionDigest,
         expectedMaterializationDigest: currentPreflight.materializationDigest,
+        acceptPartialCopy: currentPreflight.skippedResources.length > 0,
         overwriteApprovals:
           currentPreflight.status === 'confirmation-required'
             ? currentPreflight.conflicts.map(conflict => ({
@@ -651,7 +728,7 @@ export const createMarketplaceInstallWorkflow = (
       if (!isCurrentSession(generation)) return;
 
       await adapter.invalidateUserScopeSettings(
-        result.provider,
+        result.targetClient,
         result.workspaceId,
       );
       if (!isCurrentSession(generation)) return;
@@ -662,6 +739,7 @@ export const createMarketplaceInstallWorkflow = (
         pluginResult: null,
         userCopyResult: result,
         installErrorCode: null,
+        installErrorContext: null,
       });
     } catch (error) {
       if (!isCurrentSession(generation)) return;
@@ -670,10 +748,7 @@ export const createMarketplaceInstallWorkflow = (
         error,
         'marketplace.install.command_failed',
       );
-      if (
-        errorCode === 'marketplace.package.revision_conflict'
-        || errorCode === 'marketplace.user_copy.revision_conflict'
-      ) {
+      if (errorCode === 'marketplace.user_copy.revision_conflict') {
         try {
           const refreshedItem = await refreshCurrentItem(generation);
           if (!refreshedItem) return;
@@ -690,6 +765,7 @@ export const createMarketplaceInstallWorkflow = (
         pluginResult: null,
         userCopyResult: null,
         installErrorCode: errorCode,
+        installErrorContext: getMarketplaceInstallErrorContext(error),
       });
     }
   };
@@ -715,6 +791,9 @@ export const createMarketplaceInstallWorkflow = (
         return;
       case 'select-delivery':
         await selectDelivery(command.deliveryMethod);
+        return;
+      case 'set-release-version':
+        setReleaseVersion(command.version);
         return;
       case 'set-overwrite-confirmed':
         if (deriveState(internalState).requiresOverwriteConfirmation) {

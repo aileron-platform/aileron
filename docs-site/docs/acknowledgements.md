@@ -105,7 +105,6 @@ workspace-manager 與 workspace-runtime 的 FastAPI 服務。
 | [Kubernetes](https://kubernetes.io/) | 生產部署 runtime | Apache-2.0 |
 | [Helm](https://helm.sh/) | K8s 部署套件管理 | Apache-2.0 |
 | [Cilium](https://cilium.io/) | Kubernetes 模式的網路政策（workspace / browser allowlist） | Apache-2.0 |
-| [drawio (jgraph/drawio)](https://github.com/jgraph/drawio) | 內建的繪圖服務容器 | Apache-2.0 |
 | [mise](https://mise.jdx.dev/) | workspace-runtime 內的多版本工具管理 | MIT |
 
 ## 📚 文件站（本站）

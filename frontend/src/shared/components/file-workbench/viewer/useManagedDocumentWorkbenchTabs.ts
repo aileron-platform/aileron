@@ -1,16 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { isImageFile } from '../model/fileTypeUtils';
 import type { FileViewerWorkbenchAdapter, FileViewerWorkbenchTab } from './types';
 
 export interface ManagedDocumentWorkbenchAdapter<TDocument> {
   getKey: (document: TDocument) => string;
   getName: (document: TDocument) => string;
   readFile: (document: TDocument) => Promise<string>;
+  readBlob?: (document: TDocument) => Promise<Blob>;
   saveFile?: (document: TDocument, content: string) => Promise<void>;
   isWritable?: (document: TDocument) => boolean;
 }
 
+export interface ManagedDocumentWorkbenchState<TDocument> {
+  documents: TDocument[];
+  activeTabId: string | null;
+  contents: Record<string, string>;
+  originalContents: Record<string, string>;
+}
+
 export interface UseManagedDocumentWorkbenchTabsOptions<TDocument> {
   adapter: ManagedDocumentWorkbenchAdapter<TDocument>;
+  initialState?: ManagedDocumentWorkbenchState<TDocument>;
+  onStateChange?: (state: ManagedDocumentWorkbenchState<TDocument>) => void;
 }
 
 export interface UseManagedDocumentWorkbenchTabsReturn<TDocument> {
@@ -42,11 +53,17 @@ const remapPath = (path: string, from: string, to: string): string => (
 
 export const useManagedDocumentWorkbenchTabs = <TDocument,>({
   adapter,
+  initialState,
+  onStateChange,
 }: UseManagedDocumentWorkbenchTabsOptions<TDocument>): UseManagedDocumentWorkbenchTabsReturn<TDocument> => {
-  const [documents, setDocuments] = useState<TDocument[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  const [contents, setContents] = useState<Record<string, string>>({});
-  const [originalContents, setOriginalContents] = useState<Record<string, string>>({});
+  const [documents, setDocuments] = useState<TDocument[]>(() => [...(initialState?.documents ?? [])]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(() => initialState?.activeTabId ?? null);
+  const [contents, setContents] = useState<Record<string, string>>(() => ({
+    ...(initialState?.contents ?? {}),
+  }));
+  const [originalContents, setOriginalContents] = useState<Record<string, string>>(() => ({
+    ...(initialState?.originalContents ?? {}),
+  }));
   const [loadingPaths, setLoadingPaths] = useState<string[]>([]);
   const [savingPaths, setSavingPaths] = useState<string[]>([]);
 
@@ -55,9 +72,18 @@ export const useManagedDocumentWorkbenchTabs = <TDocument,>({
   const loadingPathsRef = useRef(new Set<string>());
   const savingPathsRef = useRef(savingPaths);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     documentsRef.current = documents;
   }, [documents]);
+
+  useLayoutEffect(() => {
+    onStateChange?.({
+      documents,
+      activeTabId,
+      contents,
+      originalContents,
+    });
+  }, [activeTabId, contents, documents, onStateChange, originalContents]);
 
   useEffect(() => {
     contentsRef.current = contents;
@@ -98,7 +124,8 @@ export const useManagedDocumentWorkbenchTabs = <TDocument,>({
     setDocuments(prev => (prev.some(item => adapter.getKey(item) === path) ? prev : [...prev, document]));
     setActiveTabId(path);
 
-    if (contentsRef.current[path] === undefined) {
+    const usesBlobReader = Boolean(adapter.readBlob && isImageFile(adapter.getName(document)));
+    if (!usesBlobReader && contentsRef.current[path] === undefined) {
       void loadDocument(document);
     }
   }, [adapter, loadDocument]);
@@ -212,6 +239,15 @@ export const useManagedDocumentWorkbenchTabs = <TDocument,>({
       setOriginalContents(prev => ({ ...prev, [path]: content }));
       return content;
     },
+    readBlob: adapter.readBlob
+      ? async (path: string) => {
+          const document = getDocumentByPath(path);
+          if (!document) {
+            throw new Error('Managed document not found');
+          }
+          return adapter.readBlob!(document);
+        }
+      : undefined,
     saveFile: adapter.saveFile
       ? async (path: string, content: string) => {
           const document = getDocumentByPath(path);

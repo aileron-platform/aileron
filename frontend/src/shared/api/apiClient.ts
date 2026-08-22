@@ -160,6 +160,86 @@ interface ApiErrorMetadata {
   canForceUnlock?: boolean;
 }
 
+const isApiErrorBlockingScope = (value: unknown): value is ApiErrorBlockingScope => (
+  value === 'working_tree_target' || value === 'common_repository'
+);
+
+const parseNullableString = (value: unknown): string | null | undefined => {
+  if (value === null) return null;
+  return typeof value === 'string' ? value : undefined;
+};
+
+const parseNullableNumber = (value: unknown): number | null | undefined => {
+  if (value === null) return null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+};
+
+const parseOperationStatus = (value: unknown): ApiErrorOperationStatus | undefined => {
+  if (!isRecord(value)) return undefined;
+
+  const operation = parseNullableString(value.operation);
+  const actorDisplayName = parseNullableString(value.actorDisplayName);
+  const startedAt = parseNullableString(value.startedAt);
+  const blockingScope = value.blockingScope === null
+    ? null
+    : isApiErrorBlockingScope(value.blockingScope)
+      ? value.blockingScope
+      : undefined;
+  const progressCurrent = parseNullableNumber(value.progressCurrent);
+  const progressTotal = parseNullableNumber(value.progressTotal);
+  const phase = parseNullableString(value.phase);
+
+  if (
+    typeof value.isActive !== 'boolean'
+    || operation === undefined
+    || actorDisplayName === undefined
+    || startedAt === undefined
+    || blockingScope === undefined
+    || typeof value.stale !== 'boolean'
+    || typeof value.retryable !== 'boolean'
+    || progressCurrent === undefined
+    || progressTotal === undefined
+    || phase === undefined
+    || typeof value.cancellable !== 'boolean'
+    || typeof value.cancelRequested !== 'boolean'
+  ) {
+    return undefined;
+  }
+
+  return {
+    isActive: value.isActive,
+    operation,
+    actorDisplayName,
+    startedAt,
+    blockingScope,
+    stale: value.stale,
+    retryable: value.retryable,
+    progressCurrent,
+    progressTotal,
+    phase,
+    cancellable: value.cancellable,
+    cancelRequested: value.cancelRequested,
+  };
+};
+
+const parseErrorMetadata = (value: Record<string, unknown>): ApiErrorMetadata | undefined => {
+  const messageKey = getStringField(value, 'messageKey');
+  if (!messageKey) return undefined;
+
+  const blockingScopeValue = getStringField(value, 'blockingScope');
+  return {
+    messageKey,
+    blockingScope: isApiErrorBlockingScope(blockingScopeValue)
+      ? blockingScopeValue
+      : undefined,
+    operationStatus: parseOperationStatus(value.operationStatus),
+    stale: typeof value.stale === 'boolean' ? value.stale : undefined,
+    canForceUnlock: typeof value.canForceUnlock === 'boolean'
+      ? value.canForceUnlock
+      : undefined,
+  };
+};
+
 const extractErrorMessage = (errorData: unknown, status: number): {
   message: string;
   code?: string;
@@ -171,27 +251,12 @@ const extractErrorMessage = (errorData: unknown, status: number): {
   const detail = errorRecord.detail;
   const errorCode = getStringField(errorRecord, 'error_code') ?? getStringField(errorRecord, 'errorCode');
 
-  const messageKey = getStringField(errorRecord, 'messageKey');
-  if (errorCode && messageKey) {
-    const blockingScopeValue = getStringField(errorRecord, 'blockingScope');
-    const blockingScope = blockingScopeValue === 'working_tree_target'
-      || blockingScopeValue === 'common_repository'
-      ? blockingScopeValue
-      : undefined;
+  const metadata = parseErrorMetadata(errorRecord);
+  if (errorCode && metadata?.messageKey) {
     return {
       message: `HTTP ${status}`,
       code: errorCode,
-      metadata: {
-        messageKey,
-        blockingScope,
-        operationStatus: isRecord(errorRecord.operationStatus)
-          ? errorRecord.operationStatus as unknown as ApiErrorOperationStatus
-          : undefined,
-        stale: typeof errorRecord.stale === 'boolean' ? errorRecord.stale : undefined,
-        canForceUnlock: typeof errorRecord.canForceUnlock === 'boolean'
-          ? errorRecord.canForceUnlock
-          : undefined,
-      },
+      metadata,
     };
   }
 
@@ -222,6 +287,7 @@ const extractErrorMessage = (errorData: unknown, status: number): {
       code,
       reason: getStringField(detail, 'reason'),
       validationResults,
+      metadata: parseErrorMetadata(detail),
     };
   }
 
@@ -396,23 +462,37 @@ class ApiClient {
     return response.json() as Promise<T>;
   }
 
-  private async executeJsonRequest<T>(makeRequest: () => Promise<Response>): Promise<T> {
+  private shouldRetryExecutionGrant(error: unknown): boolean {
+    const errorCode = error instanceof ApiError ? error.errorCode : undefined;
+    const isGenerationMismatch = errorCode === 'WORKSPACE_RUNTIME_INSTANCE_MISMATCH'
+      || errorCode === 'WORKSPACE_RUNTIME_ACCESS_REVISION_MISMATCH';
+    return Boolean(
+      this.executionAudience
+      && errorCode
+      && isGenerationMismatch
+      && executionGrantRejectionHandler?.({ targetUrl: this.baseUrl, errorCode }),
+    );
+  }
+
+  private async executeRequestWithGrantRecovery<T>(
+    makeRequest: () => Promise<Response>,
+    readResponse: (response: Response) => Promise<T>,
+  ): Promise<T> {
     try {
-      return await this.handleResponse<T>(await makeRequest());
+      return await readResponse(await makeRequest());
     } catch (error) {
-      const errorCode = error instanceof ApiError ? error.errorCode : undefined;
-      const isGenerationMismatch = errorCode === 'WORKSPACE_RUNTIME_INSTANCE_MISMATCH'
-        || errorCode === 'WORKSPACE_RUNTIME_ACCESS_REVISION_MISMATCH';
-      if (
-        !this.executionAudience
-        || !errorCode
-        || !isGenerationMismatch
-        || !executionGrantRejectionHandler?.({ targetUrl: this.baseUrl, errorCode })
-      ) {
+      if (!this.shouldRetryExecutionGrant(error)) {
         throw error;
       }
-      return this.handleResponse<T>(await makeRequest());
+      return readResponse(await makeRequest());
     }
+  }
+
+  private executeJsonRequest<T>(makeRequest: () => Promise<Response>): Promise<T> {
+    return this.executeRequestWithGrantRecovery(
+      makeRequest,
+      response => this.handleResponse<T>(response),
+    );
   }
 
   async get<T>(path: string, headersOrOptions?: ApiRequestHeaders | ApiRequestOptions): Promise<T> {
@@ -526,13 +606,12 @@ class ApiClient {
       credentials: 'include',
     });
 
-    const response = await makeRequest();
-
-    if (!response.ok) {
-      await this.handleResponse<never>(response);
-    }
-
-    return response.blob();
+    return this.executeRequestWithGrantRecovery(makeRequest, async (response) => {
+      if (!response.ok) {
+        await this.handleResponse<never>(response);
+      }
+      return response.blob();
+    });
   }
 }
 

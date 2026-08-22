@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from '@/__tests__/utils/render';
 import { fetchWorkspaceList } from '@/features/workspace/public';
+import { ApiError } from '@/shared/api/apiClient';
 import {
   createMarketplaceUserCopy,
   getPackage,
@@ -52,24 +53,27 @@ vi.mock('@/features/workspace/public', async importOriginal => ({
 }));
 
 const packageSummary: MarketplacePackageSummary = {
-  provider: 'codex',
+  targetClient: 'codex',
+  packageFormat: 'codex-native',
+  catalogPluginId: 'codex/review-tools',
+  userCopyTargetClient: 'codex',
   packageType: 'plugin',
   packageId: 'review-tools',
   displayName: 'Review Tools',
   tags: [],
-  sourceType: 'created',
-  indexedResourceNames: ['skills', 'apps'],
+  indexedResourceNames: ['hooks', 'mcp', 'agents', 'commands', 'skills'],
   validationSeverity: 'none',
-  lifecycleStatus: 'ready',
   registryPath: 'codex/plugins/review-tools',
   revision: 'revision-1',
+  version: '1.2.3',
   updatedAt: '2026-07-25T00:00:00Z',
   variants: [],
 };
 
 const pluginResult: MarketplacePluginCommandResult = {
   status: 'installed',
-  provider: 'codex',
+  targetClient: 'codex',
+  packageFormat: 'codex-native',
   packageId: 'review-tools',
   marketplaceId: 'team-tools',
   workspaceId: 'workspace-1',
@@ -84,13 +88,17 @@ const pluginResult: MarketplacePluginCommandResult = {
 
 const confirmationRequired: MarketplaceUserCopyPreflightResult = {
   status: 'confirmation-required',
-  provider: 'codex',
-  packageId: 'review-tools',
+  packageFormat: 'codex-native',
+  targetClient: 'codex',
+  catalogPluginId: 'codex/review-tools',
+  releaseRevision: 'revision-1',
   workspaceId: 'workspace-1',
   sourceDigest: 'source-digest',
   profileDigest: 'profile-digest',
   materializationDigest: 'materialization-digest',
+  projectionDigest: 'projection-digest',
   resources: [],
+  skippedResources: [],
   conflicts: [{
     resourceType: 'skill',
     resourceId: 'review-skill',
@@ -120,13 +128,16 @@ const blockedByEffectiveIdentityConflict: MarketplaceUserCopyPreflightResult = {
 const copyResult: MarketplaceUserCopyApplyResult = {
   status: 'completed',
   operationId: 'copy-1',
-  provider: 'codex',
-  packageId: 'review-tools',
+  packageFormat: 'codex-native',
+  targetClient: 'codex',
+  catalogPluginId: 'codex/review-tools',
+  releaseRevision: 'revision-1',
   workspaceId: 'workspace-1',
   createdCount: 1,
   mergedCount: 2,
   unchangedCount: 3,
   overwrittenCount: 4,
+  skippedCount: 0,
 };
 
 const waitForWorkspaceReady = async () => {
@@ -155,6 +166,27 @@ describe('MarketplaceInstallDialog', () => {
     vi.mocked(refreshMarketplacePackage)
       .mockResolvedValue({ refreshed: true });
     vi.mocked(getPackage).mockResolvedValue(packageSummary);
+  });
+
+  it('uses the same English feature tags as the package card', async () => {
+    render(
+      <MarketplaceInstallDialog
+        open
+        item={packageSummary}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    await waitForWorkspaceReady();
+    for (const key of [
+      'marketplace.features.hooks',
+      'marketplace.features.mcp',
+      'marketplace.features.subagents',
+      'marketplace.features.slashCommands',
+      'marketplace.features.skills',
+    ]) {
+      expect(screen.getByText(key)).toBeInTheDocument();
+    }
   });
 
   it('keeps the title and actions outside the scrollable body', async () => {
@@ -197,9 +229,10 @@ describe('MarketplaceInstallDialog', () => {
 
     await screen.findByText('marketplace.install.result.success.plugin');
     expect(installMarketplacePlugin).toHaveBeenCalledWith({
-      provider: 'codex',
+      targetClient: 'codex',
+      packageFormat: 'codex-native',
       packageId: 'review-tools',
-      revision: 'revision-1',
+      version: '1.2.3',
       workspaceId: 'workspace-1',
     });
     expect(screen.getByText('marketplace.install.stages.completed'))
@@ -210,6 +243,71 @@ describe('MarketplaceInstallDialog', () => {
         'codex',
         'workspace-1',
       );
+  });
+
+  it('selects an older immutable release for rollback', async () => {
+    const user = userEvent.setup();
+    render(
+      <MarketplaceInstallDialog
+        open
+        item={packageSummary}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    await waitForWorkspaceReady();
+    const versionInput = screen.getByLabelText(
+      'marketplace.install.fields.releaseVersion',
+    );
+    await user.clear(versionInput);
+    await user.type(versionInput, '1.0.0');
+    await user.click(screen.getByRole('button', {
+      name: 'marketplace.install.actions.install',
+    }));
+
+    await screen.findByText('marketplace.install.result.success.plugin');
+    expect(installMarketplacePlugin).toHaveBeenCalledWith(
+      expect.objectContaining({ version: '1.0.0' }),
+    );
+  });
+
+  it('renders structured install failure diagnostics', async () => {
+    const user = userEvent.setup();
+    vi.mocked(installMarketplacePlugin).mockRejectedValue(new ApiError(
+      'access denied',
+      403,
+      'marketplace.workspace.access_denied',
+      undefined,
+      undefined,
+      {
+        detail: {
+          errorCode: 'marketplace.workspace.access_denied',
+          message: 'access denied',
+          stage: 'authorize',
+          source: 'plugins/codex/review-tools/v1.2.3',
+          destination: 'workspace-1',
+          category: 'authorization',
+        },
+      },
+    ));
+    render(
+      <MarketplaceInstallDialog
+        open
+        item={packageSummary}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    await waitForWorkspaceReady();
+    await user.click(screen.getByRole('button', {
+      name: 'marketplace.install.actions.install',
+    }));
+
+    expect(await screen.findByText('authorize')).toBeInTheDocument();
+    expect(screen.getByText('authorization')).toBeInTheDocument();
+    expect(screen.getByText('plugins/codex/review-tools/v1.2.3'))
+      .toBeInTheDocument();
+    expect(screen.getByText('workspace-1')).toBeInTheDocument();
   });
 
   it('binds workspace reload after an inventory failure', async () => {
@@ -266,12 +364,16 @@ describe('MarketplaceInstallDialog', () => {
 
     await screen.findByText('marketplace.install.result.success.user-copy');
     expect(createMarketplaceUserCopy).toHaveBeenCalledWith({
-      provider: 'codex',
-      packageId: 'review-tools',
-      revision: 'revision-1',
+      packageFormat: 'codex-native',
+      targetClient: 'codex',
+      catalogPluginId: 'codex/review-tools',
+      releaseRevision: 'revision-1',
       workspaceId: 'workspace-1',
+      expectedProfileDigest: 'profile-digest',
       expectedSourceDigest: 'source-digest',
+      expectedProjectionDigest: 'projection-digest',
       expectedMaterializationDigest: 'materialization-digest',
+      acceptPartialCopy: false,
       overwriteApprovals: [{
         targetIdentity: 'skill:review-skill',
         expectedRevision: 'target-r1',
@@ -301,5 +403,84 @@ describe('MarketplaceInstallDialog', () => {
         'marketplace.install.errors.userCopyEffectiveIdentityConflict',
       )).toHaveLength(1);
     });
+  });
+
+  it('groups repeated blocking reasons into one localized summary', async () => {
+    const user = userEvent.setup();
+    vi.mocked(preflightMarketplaceUserCopy).mockResolvedValue({
+      ...blockedByEffectiveIdentityConflict,
+      blockingIssues: [
+        {
+          resourceType: 'skill',
+          resourceId: 'first-skill',
+          sourceLocator: 'skills/first-skill/SKILL.md',
+          targetLocator: '.codex/skills/first-skill/SKILL.md',
+          errorCode: 'marketplace.user_copy.target_not_writable',
+        },
+        {
+          resourceType: 'skill',
+          resourceId: 'second-skill',
+          sourceLocator: 'skills/second-skill/SKILL.md',
+          targetLocator: '.codex/skills/second-skill/SKILL.md',
+          errorCode: 'marketplace.user_copy.target_not_writable',
+        },
+      ],
+    });
+    render(
+      <MarketplaceInstallDialog
+        open
+        item={packageSummary}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    await waitForWorkspaceReady();
+    await user.click(screen.getByRole('radio', {
+      name: /marketplace\.install\.deliveryMethods\.user-copy\.title/,
+    }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(
+        'marketplace.install.errors.userCopyTargetNotWritable',
+      )).toHaveLength(1);
+    });
+    expect(screen.getByText(
+      'marketplace.install.blockingIssues.affectedResources:2',
+    )).toBeInTheDocument();
+  });
+
+  it('labels skipped-only confirmation as partial copy', async () => {
+    const user = userEvent.setup();
+    vi.mocked(preflightMarketplaceUserCopy).mockResolvedValue({
+      ...confirmationRequired,
+      conflicts: [],
+      skippedResources: [{
+        code: 'format-unsupported',
+        resourceType: 'subagent',
+        resourceId: 'reviewer',
+        sourceLocator: 'agents/reviewer.md',
+      }],
+    });
+    render(
+      <MarketplaceInstallDialog
+        open
+        item={packageSummary}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    await waitForWorkspaceReady();
+    await user.click(screen.getByRole('radio', {
+      name: /marketplace\.install\.deliveryMethods\.user-copy\.title/,
+    }));
+
+    expect(await screen.findByRole('button', {
+      name: 'marketplace.install.actions.acceptPartialAndCopy',
+    })).toBeDisabled();
+    expect(screen.getByLabelText('marketplace.install.skipped.confirmPartial'))
+      .toBeInTheDocument();
+    expect(screen.getByText('reviewer').closest('li')).toHaveTextContent(
+      'marketplace.install.skipped.reasons.formatUnsupported',
+    );
   });
 });

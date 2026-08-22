@@ -4,37 +4,10 @@ title: Registry 與治理
 
 # Registry 與治理
 
-## 目的與入口
+Platform admin 在應用中心管理 Managed Plugins，並在 Marketplace Settings 管理 Managed Registry、Git identity、SSH 金鑰、版本控制與活動紀錄。
 
-platform admin 由 Marketplace Settings 管理 Registry、SSH 金鑰、版本控制與活動紀錄。
+Managed Registry 是可變的 working tree。Aileron 不建立不可變 release tag、不自動 commit 或 push，也不追蹤外部 Marketplace Source。Git 操作由使用者自行決定；系統不提供內容 rollback。
 
-## 角色與允許操作
+Import 只在操作期間讀取 Git 或 ZIP 來源，並把選取內容與來源證明複製進 Registry。來源不是持續存在的產品物件，沒有 refresh、removal impact、sync 或 update 狀態。
 
-Registry 與治理操作限定 admin；未通過 operation 前不啟動 registry query。
-
-## 核心概念
-
-registry source、同步狀態、package identity 與 audit record 分離。
-
-## 主要流程
-
-新增或更新 registry、驗證連線、同步 catalog、檢查活動紀錄。
-
-## 畫面狀態與唯讀行為
-
-畫面分別處理 loading、empty、error 與 denied。只有讀取操作時保留可讀內容與一般變更控制項，但停用變更並顯示 i18n 原因；缺少讀取操作時不啟動受保護 query、Provider 或即時連線。
-
-## 限制、失敗與安全
-
-SSH private key 與 credential 不回顯；同步失敗保留來源與錯誤，不刪除 last-known-good catalog。
-
-## 原始碼依據
-
-- `frontend/src/features/marketplace/features/marketplace-settings/MarketplaceSettingsPage.tsx`
-- `workspace-manager/app/modules/marketplace/workflows/registry_operations.py`
-- `workspace-manager/app/modules/marketplace/activity_repository.py`
-
-## 相關架構與 API
-
-- [workspace-manager](/architecture/backend/workspace-manager/)
-- [manager-api](/api/manager-api)
+Activity 是 append-only terminal audit，action 為 `import`、`install`、`copy` 或 `delete`，不是 authoritative installation lifecycle。CLI 命令結果依既有 audit 保存期限保留。

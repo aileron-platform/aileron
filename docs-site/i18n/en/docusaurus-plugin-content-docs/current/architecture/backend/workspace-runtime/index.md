@@ -172,14 +172,14 @@ For Version Control targets, lock scopes, and the Repository Setup interface, se
 |--------|--------|------|
 | `AILERON_WORKSPACE_ID` | Required | Workspace identifier |
 | `AILERON_WORKSPACE_PATH` | Required | Workspace path |
-| `AILERON_RUNTIME_STATE_DATABASE_URL_FILE` | Required | Read-only Secret file containing the current Runtime instance's Workspace-scoped PostgreSQL URL |
+| `AILERON_RUNTIME_DATABASE_CONNECTION_FILE` | Required | Read-only Secret file containing the current Workspace generation's Runtime database connection |
 | `AILERON_RUNTIME_CONTROL_TOKEN_FILE` | Required | Read-only Secret file containing the current Runtime instance's Manager control token |
 | `HOME` | `/home/developer` | Standard user HOME directly mounted and fully persisted by Docker and Kubernetes |
 | `CODEX_HOME` | `${HOME}/.codex` | Codex configuration, login, and session directory |
 | `XDG_CONFIG_HOME` | `${HOME}/.config` | Standard configuration directory for OpenCode and other tools |
 | `XDG_DATA_HOME` | `${HOME}/.local/share` | Standard data directory for OpenCode and other tools |
 | `XDG_STATE_HOME` | `${HOME}/.local/state` | Root for Runtime bootstrap and application state |
-| `MARKETPLACE_OPERATION_JOURNAL_DIR` | `${XDG_STATE_HOME}/aileron/marketplace-operations` | Marketplace operation journal, provider mutation gate, and user-copy transactional recovery directory |
+| `MARKETPLACE_OPERATION_JOURNAL_DIR` | `${XDG_STATE_HOME}/aileron/marketplace-operations` | Marketplace operation journal, target-client mutation gate, and user-copy transactional recovery directory |
 | `AILERON_MANAGER_INTERNAL_URL` | Required | Internal Workspace Manager Service URL |
 | `AILERON_PLATFORM_PUBLIC_ORIGIN` | Required | Sole exact Platform Public Origin |
 | `AILERON_RUNTIME_INSTANCE_ID` | — | UUID of the current execution-plane generation |
@@ -191,7 +191,7 @@ For Version Control targets, lock scopes, and the Repository Setup interface, se
 
 Browser, Canvas, and worktree platform fields use the same `AILERON_*` namespace. Every Secret is delivered through an absolute read-only file path, and Workspace-user environments may not use the `AILERON_*` prefix.
 
-This directory stores only the operation journal for provider mutations and transactional recovery data for user-copy; it is not installation state. After a successful operation, Runtime retains no installation, ownership, provenance, baseline, drift, reconciliation, uninstall, or cleanup lifecycle.
+This directory stores only the operation journal for target-client mutations and transactional recovery data for user-copy; it is not installation state. After a successful operation, Runtime retains no installation, ownership, provenance, baseline, drift, reconciliation, uninstall, or cleanup lifecycle.
 
 :::note Agent Credentials
 API keys, tokens, and login state required by Claude Code, Codex, and OpenCode should be injected dynamically through frontend settings pages. They must not be hardcoded in container environment variables.

@@ -1,40 +1,13 @@
 ---
-title: 製作與發佈
+title: 建立與匯入
 ---
 
-# 製作與發佈
+# 建立與匯入
 
-## 目的與入口
+Platform admin 可在應用中心選擇 package format、相容的 Target Client、package ID、顯示名稱與版本來建立 Plugin。建立成功即寫入 Managed Registry working tree 並可編輯、安裝或複製，不需要另外發佈。
 
-platform admin 由套件 editor 製作內容、管理檔案與版本控制，並發佈 catalog 版本。
+`Import Plugin` 接受 Git repository 或 ZIP 封存檔。Manager 會在 server 端重新掃描來源，列出可匯入的 Plugin 與偵測到的 format；使用者選取候選項目並確認版本後，內容才會複製到 Managed Registry。
 
-## 角色與允許操作
+Package ID 在應用中心內必須唯一。若匯入發現重複 ID，必須明確選擇 Replace；相同版本也可覆寫，系統不保留 rollback。更新 upstream 內容的方式是再次使用 Import 並 Replace，沒有獨立 Re-import 或自動同步。
 
-內容寫入與發佈都是 admin-only platform operation。
-
-## 核心概念
-
-draft、revision、working tree 與 published package 分離；儲存各文件不代表整包已發佈。
-
-## 主要流程
-
-建立或開啟 draft、編輯檔案、解決 revision conflict、提交與發佈。
-
-## 畫面狀態與唯讀行為
-
-畫面分別處理 loading、empty、error 與 denied。只有讀取操作時保留可讀內容與一般變更控制項，但停用變更並顯示 i18n 原因；缺少讀取操作時不啟動受保護 query、Provider 或即時連線。
-
-## 限制、失敗與安全
-
-發布前驗證 manifest、路徑與 provider；衝突不得靜默覆寫。
-
-## 原始碼依據
-
-- `frontend/src/features/marketplace/features/marketplace-editor/MarketplaceEditorPage.tsx`
-- `workspace-manager/app/modules/marketplace/`
-- `packages/aileron-marketplace-core/`
-
-## 相關架構與 API
-
-- [version-control](/architecture/overview/version-control)
-- [manager-api](/api/manager-api)
+應用中心不會自動執行 Git commit、tag 或 push。Working tree 內容可立即用於 User Copy；CLI 安裝則依 CLI 從設定的 Git repository 取得內容，尚未由使用者自行 commit/push 的內容會自然無法被遠端 CLI 取得。

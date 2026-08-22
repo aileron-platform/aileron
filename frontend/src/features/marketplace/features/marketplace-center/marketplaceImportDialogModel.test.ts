@@ -4,13 +4,15 @@ import {
   buildGitImportSource,
   buildImportResultSummary,
   buildUploadedLocalImportSource,
+  filterImportCandidates,
   getSelectableCandidateIds,
   getVisibleImportValidationResults,
+  initializeImportCandidates,
+  isImportCandidateReady,
   isImportScanBlocked,
-  resolveLocalUploadProvider,
+  resolveLocalUploadTargetClient,
   toggleImportCandidateSelection,
-  updateImportCandidateDuplicateAction,
-  updateImportCandidateNewPackageId,
+  updateImportCandidateMetadata,
 } from './marketplaceImportDialogModel';
 
 const createCandidate = (
@@ -18,12 +20,13 @@ const createCandidate = (
   overrides: Partial<MarketplaceImportCandidate> = {},
 ): MarketplaceImportCandidate => ({
   id,
-  provider: 'claude-code',
+  targetClient: 'claude-code',
+  packageFormat: 'claude-native',
   packageId: id,
+  version: '1.0.0',
   displayName: id,
   sourcePath: `plugins/${id}`,
   duplicate: false,
-  duplicateAction: 'skip',
   variantStatus: 'new-family',
   variants: [],
   validationSeverity: 'none',
@@ -42,20 +45,20 @@ describe('marketplaceImportDialogModel', () => {
 
   it('builds normalized git and uploaded-local import sources', () => {
     expect(buildGitImportSource('codex', ' https://github.com/example/marketplace.git ')).toEqual({
-      provider: 'codex',
+      targetClient: 'codex',
       sourceKind: 'git',
       source: 'https://github.com/example/marketplace.git',
     });
     expect(buildUploadedLocalImportSource('all', 'upload://pkg.zip')).toEqual({
-      provider: 'all',
+      targetClient: 'all',
       sourceKind: 'local',
       source: 'upload://pkg.zip',
     });
   });
 
-  it('uses Claude Code as the local upload provider when scanning all providers', () => {
-    expect(resolveLocalUploadProvider('all')).toBe('claude-code');
-    expect(resolveLocalUploadProvider('codex')).toBe('codex');
+  it('uses Claude Code as the local upload targetClient when scanning all target clients', () => {
+    expect(resolveLocalUploadTargetClient('all')).toBe('claude-code');
+    expect(resolveLocalUploadTargetClient('codex')).toBe('codex');
   });
 
   it('toggles selected candidate ids without mutating the original set', () => {
@@ -69,17 +72,22 @@ describe('marketplaceImportDialogModel', () => {
     expect(Array.from(added)).toEqual(['one', 'two']);
   });
 
-  it('updates duplicate action and new package id immutably', () => {
-    const candidates = [createCandidate('existing', { duplicate: true })];
+  it('initializes version choices and requires explicit replacement for duplicates', () => {
+    const candidates = initializeImportCandidates([
+      createCandidate('existing', { duplicate: true }),
+    ]);
+    expect(isImportCandidateReady(candidates[0])).toBe(false);
+    const updated = updateImportCandidateMetadata(candidates, 'existing', {
+      version: '1.0.0-internal.1',
+      overwrite: true,
+    });
 
-    expect(updateImportCandidateDuplicateAction(candidates, 'existing', 'import-as-new')).toEqual([
-      expect.objectContaining({ duplicateAction: 'import-as-new' }),
-    ]);
-    expect(updateImportCandidateNewPackageId(candidates, 'existing', 'existing-team')).toEqual([
-      expect.objectContaining({ newPackageId: 'existing-team' }),
-    ]);
-    expect(candidates[0].duplicateAction).toBe('skip');
-    expect(candidates[0].newPackageId).toBeUndefined();
+    expect(isImportCandidateReady(updated[0])).toBe(true);
+    expect(updated[0].import).toEqual({
+      version: '1.0.0-internal.1',
+      overwrite: true,
+    });
+    expect(candidates[0].import?.version).toBe('1.0.0');
   });
 
   it('filters hidden import validation codes from candidate display', () => {
@@ -98,8 +106,11 @@ describe('marketplaceImportDialogModel', () => {
   it('builds import summaries from result counts and selected duplicate candidates', () => {
     const result: MarketplaceImportResult = {
       imported: [],
-      skipped: [createCandidate('skipped')],
-      failed: [createCandidate('failed', { errorCode: 'marketplace.import.failed' })],
+      failed: [createCandidate('failed', {
+        errorCode: 'marketplace.import.failed',
+        stage: 'copy',
+        category: 'filesystem',
+      })],
       warnings: [{ severity: 'warning', code: 'marketplace.warning', messageKey: 'marketplace.warning' }],
     };
 
@@ -108,7 +119,6 @@ describe('marketplaceImportDialogModel', () => {
       createCandidate('duplicate', { duplicate: true }),
     ])).toEqual({
       imported: 0,
-      skipped: 1,
       failed: 1,
       duplicates: 1,
       warnings: 1,
@@ -120,5 +130,31 @@ describe('marketplaceImportDialogModel', () => {
       createCandidate('one'),
       createCandidate('two'),
     ])).toEqual(['one', 'two']);
+  });
+
+  it('filters candidates across identifying fields with case-insensitive keyword matching', () => {
+    const candidates = [
+      createCandidate('review-assistant', {
+        displayName: 'Review Assistant',
+        sourceIdentity: 'openai/plugins',
+      }),
+      createCandidate('security-audit', {
+        displayName: 'Security Audit',
+        targetClient: 'codex',
+        packageFormat: 'codex-native',
+        familyDisplayName: 'Engineering Tools',
+      }),
+    ];
+
+    expect(filterImportCandidates(candidates, 'SECURITY codex')).toEqual([
+      expect.objectContaining({ id: 'security-audit' }),
+    ]);
+    expect(filterImportCandidates(candidates, 'engineering native')).toEqual([
+      expect.objectContaining({ id: 'security-audit' }),
+    ]);
+    expect(filterImportCandidates(candidates, 'openai/plugins')).toEqual([
+      expect.objectContaining({ id: 'review-assistant' }),
+    ]);
+    expect(filterImportCandidates(candidates, '   ')).toBe(candidates);
   });
 });

@@ -7,9 +7,9 @@ title: 簡介
 
 **企業級 AI 代理的強韌編排平台（The Hardened Orchestration Layer for Enterprise AI Agents）**
 
-Aileron 是一個專為企業環境設計的多 Agent workspace 與編排平台。它以容器化技術、Model Context Protocol (MCP)、可治理的 Marketplace，以及逐步擴充的 Agent 執行架構為核心，解決現有 AI 開發工具在**資安監控、環境隔離與大規模部署**上的痛點，讓團隊可以放心地把 AI Agent 引入日常工作流。
+Aileron 是一個專為企業環境設計的多 Agent workspace 與編排平台。它以容器化技術、Model Context Protocol (MCP)、可治理的 Marketplace，以及完整的多 Agent 執行架構為核心，解決現有 AI 開發工具在**資安監控、環境隔離與大規模部署**上的痛點，讓團隊可以放心地把 AI Agent 引入日常工作流。
 
-目前 Aileron 已完整支援 **Claude Code**、**Codex** 與 **OpenCode**，包含對話執行、串流輸出、設定管理與自動化。平台以多 Agent 架構為核心，讓團隊可以依照任務、模型供應商與治理需求選擇合適的 agent 執行路徑。
+目前 Aileron 已將 **Claude Code**、**OpenCode** 與 **Codex** 作為第一級 Agent 執行引擎完整支援，包含對話執行、串流輸出、設定管理與自動化。平台以多 Agent 架構為核心，讓團隊可以依照任務、模型供應商與治理需求選擇合適的 Agent 執行路徑。
 
 ## 🛡️ 為什麼選擇 Aileron？
 
@@ -19,7 +19,7 @@ Aileron 是一個專為企業環境設計的多 Agent workspace 與編排平台�
 
 ### 兩條一次性 Marketplace 路徑
 
-**Marketplace** 提供兩條彼此獨立的一次性路徑：Provider plugin 先發佈到團隊 private GitLab repository，再由 Claude Code 或 Codex 的標準 CLI 安裝；user-copy 則把相容資源一次性合併到 user scope。成功後內容由使用者自行更新或移除，Marketplace 不建立安裝後 lifecycle。
+**Marketplace** 提供兩條彼此獨立的一次性路徑：Plugin artifact 先發佈到團隊 private GitLab repository，再由相容 Target Client 的標準 CLI 安裝並啟用；user-copy 則把相容資源一次性投影到 Workspace Runtime HOME 的 user scope。成功後 standalone resources 由使用者自行更新或移除，Marketplace 不建立安裝後 lifecycle。
 
 ### 降低非技術使用門檻
 
@@ -27,7 +27,7 @@ Aileron 之所以值得選擇，其中一個重要原因，是它大幅簡化了
 
 ### 雲地混合彈性（Hybrid & Pluggable Runtime）
 
-Claude Code、Codex 與 OpenCode 都可作為 workspace 內的完整 agent 執行引擎，並透過 MCP 協定串接內部服務與工具。平台架構與模型解耦，可依治理需求搭配不同雲端或地端模型與 agent CLI。
+Claude Code、OpenCode 與 Codex 都是 workspace 內完整支援的第一級 Agent 執行引擎，並透過 MCP 協定串接內部服務與工具。平台架構與模型解耦，可依治理需求搭配不同雲端或地端模型與 Agent CLI。
 
 ### 企業級認證與治理
 
@@ -40,11 +40,11 @@ boundary；Frontend 使用 opaque session，Runtime 與 Terminal 使用短效 Ex
 | 功能 | 說明 |
 |------|------|
 | [Workspace 生命週期管理](/features/workspace/lifecycle-and-access) | 建立、啟動、停止、刪除工作區，支援 Docker 動態 provisioner 與 Kubernetes（workspace-operator + CRD） |
-| [多 Agent 執行架構](/features/workspace/ai-agent/) | 完整支援 Claude Code、Codex、OpenCode 等 agent 執行路徑 |
-| [Marketplace 套件](/features/marketplace) | Provider plugin 經 private GitLab 發佈後由標準 CLI 一次性安裝；user-copy 一次性合併到 user scope，後續由使用者自行管理 |
+| [多 Agent 執行架構](/features/workspace/ai-agent/) | 完整支援 Claude Code、OpenCode、Codex 等 Agent 執行路徑 |
+| [Marketplace 套件](/features/marketplace) | Plugin artifact 經 private GitLab 發佈後由相容 Target Client CLI 一次性安裝並啟用；user-copy 投影 standalone resources 到 Workspace user scope |
 | [多型態 Runtime](/architecture/backend/workspace-runtime/) | Terminal (Go-based PTY)、Chrome/Browser、Next.js，皆可作為 Agent 可操作的執行載體 |
 | [檔案總管與 Git](/api/runtime-api#檔案管理) | 檔案讀寫、local history、版本控制操作與分支管理 |
-| [Scheduler / Automation](/features/automation) | Cron 定時任務可結合 Claude Code、Codex、OpenCode agent workflow 執行 |
+| [Scheduler / Automation](/features/automation) | Cron 定時任務可結合 Claude Code、OpenCode、Codex Agent 工作流程執行 |
 | [外部 OIDC](/installation/oidc) | Manager BFF 企業級 SSO、opaque session 與 execution-plane Grant |
 | 防火牆政策 | Docker 使用 Runtime-local iptables，Kubernetes 使用 Cilium；兩者都將 workspace 與 browser domain allowlist 分組管理 |
 | [Knowledge Base](/features/knowledge-base/) | 保存團隊知識、專案規範與操作手冊，可授權共享並零複製唯讀掛載到 Workspace |
@@ -55,8 +55,8 @@ boundary；Frontend 使用 opaque session，Runtime 與 Terminal 使用短效 Ex
 | Agent | 狀態 | 說明 |
 |------|------|------|
 | Claude Code | 完整支援 | 支援聊天、設定管理與自動化 |
-| Codex | 完整支援 | 支援聊天、設定管理與自動化 |
 | OpenCode | 完整支援 | 支援聊天、設定管理與自動化 |
+| Codex | 完整支援 | 支援聊天、設定管理與自動化 |
 
 ## 專案狀態
 
@@ -70,13 +70,13 @@ Aileron 目前以 **100% Vibe Coding** 的方式快速開發與演進。這讓�
 
 ## Roadmap
 
-- 持續強化 Claude Code、Codex、OpenCode 的跨 agent 體驗一致性
+- 持續強化 Claude Code、OpenCode、Codex 的跨 Agent 體驗一致性
 - 擴展更完整的團隊協作與治理能力
 - 導入 worktree 導向的開發流程，支援更自然的多任務並行與隔離
 
 ## 🛠️ 技術棧
 
-- **Runtime**：Claude Code CLI / Codex CLI / OpenCode CLI
+- **Runtime**：Claude Code CLI / OpenCode CLI / Codex CLI
 - **Orchestrator**：Python + FastAPI（workspace-manager / workspace-runtime）
 - **Interface**：React-based Web UI、Go-based Web Terminal
 - **Integration**：Chrome Extension (WXT/MV3)、Next.js Workspace、MCP Servers

@@ -53,8 +53,8 @@ export const MarketplaceDetailTopTabs = <TTab extends string>({
                   <span className="font-medium">{detail.version ?? t('marketplace.common.noVersion')}</span>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">{t('marketplace.detail.sidebar.info.providerLabel')}</span>
-                  <span className="font-medium">{t(`marketplace.providers.${detail.provider}`)}</span>
+                  <span className="text-muted-foreground">{t('marketplace.detail.sidebar.info.targetClientLabel')}</span>
+                  <span className="font-medium">{t(`marketplace.targetClients.${detail.targetClient}`)}</span>
                 </div>
               </div>
             </section>

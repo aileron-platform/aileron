@@ -206,7 +206,7 @@ describe('MarketplaceSettingsPage', () => {
       queryScope: 'current',
       items: [{
         id: 'a1b2c3d',
-        message: 'Update provider package listings',
+        message: 'Update targetClient package listings',
         author: 'Marketplace Registry',
         email: 'marketplace@example.local',
         timestamp: Date.parse('2026-05-06T08:30:00.000Z') / 1000,
@@ -428,7 +428,7 @@ const renderView = (initialEntry = '/') => render(
     expect(versionControlMocks.setRemote).not.toHaveBeenCalled();
   });
 
-  it('shows provider-neutral registry settings in General', async () => {
+  it('shows targetClient-neutral registry settings in General', async () => {
     renderView();
 
     await screen.findByDisplayValue('marketplace.settings.general.mock.displayName');
@@ -440,7 +440,7 @@ const renderView = (initialEntry = '/') => render(
     expect(screen.getByLabelText('claude-code/.claude-plugin/marketplace.json')).toBeInTheDocument();
     expect(screen.getByLabelText('codex/.agents/plugins/marketplace.json')).toBeInTheDocument();
     expect(screen.queryByText('marketplace.settings.general.status')).not.toBeInTheDocument();
-    expect(screen.queryByText('marketplace.settings.general.defaultProvider')).not.toBeInTheDocument();
+    expect(screen.queryByText('marketplace.settings.general.defaultTargetClient')).not.toBeInTheDocument();
     expect(screen.queryByText('marketplace.settings.general.defaultViewMode')).not.toBeInTheDocument();
     expect(screen.queryByText('marketplace.settings.general.defaultWorkspace')).not.toBeInTheDocument();
     expect(screen.queryByText('marketplace.settings.general.version')).not.toBeInTheDocument();
@@ -517,7 +517,7 @@ const renderView = (initialEntry = '/') => render(
     expect(await screen.findByText(/"version": "0\.3\.0"/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'shared.versionControl.mode.commitHistory' }));
-    expect(await screen.findByText('Update provider package listings')).toBeInTheDocument();
+    expect(await screen.findByText('Update targetClient package listings')).toBeInTheDocument();
     expect(screen.getByRole('button', {
       name: 'shared.versionControl.actions.refresh.label',
     })).toBeInTheDocument();
@@ -529,7 +529,7 @@ const renderView = (initialEntry = '/') => render(
     const user = userEvent.setup();
     renderView('/?tab=versionControl&mode=history');
 
-    expect(await screen.findByText('Update provider package listings')).toBeInTheDocument();
+    expect(await screen.findByText('Update targetClient package listings')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByTestId('location-search')).toHaveTextContent(
         '?section=versionControl&submenu=history',

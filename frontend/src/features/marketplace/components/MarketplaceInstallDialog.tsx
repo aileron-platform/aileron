@@ -19,6 +19,7 @@ import {
   DialogHeader,
 } from '@/shared/components/ui/dialog';
 import { DialogHeading } from '@/shared/components/ui/dialog-heading';
+import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import {
   Select,
@@ -29,14 +30,19 @@ import {
 } from '@/shared/components/ui/select';
 import { useI18n } from '@/shared/hooks/useI18n';
 import type { MarketplacePackageSummary } from '../model/marketplaceTypes';
+import {
+  getMarketplaceFeatureLabelKey,
+  getMarketplacePackageFeatures,
+} from '../model/marketplaceFeatureLabels';
 import { getMarketplaceInstallCommandName } from '../model/marketplacePackageActionModel';
 import { useMarketplaceInstallWorkflow } from '../install-workflow/useMarketplaceInstallWorkflow';
 import { MarketplaceInstallOutput } from './MarketplaceInstallOutput';
 import {
   getMarketplaceInstallErrorKey,
-  getMarketplacePluginIndexedResourceTypes,
   getMarketplaceInstallResourceTypeLabelKey,
+  getMarketplaceSkippedReasonKey,
   MARKETPLACE_DELIVERY_METHODS,
+  marketplaceBlockingIssueGroups,
   marketplaceResourceTypeCounts,
 } from './marketplaceInstallModel';
 
@@ -72,7 +78,10 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
     pluginResult,
     userCopyResult,
     overwriteConfirmed,
-    isWorkspaceProviderEnabled,
+    releaseVersion,
+    releaseVersionValid,
+    installErrorContext,
+    isWorkspaceTargetClientEnabled,
     requiresOverwriteConfirmation,
     isPreflightEligible,
     canRun,
@@ -81,11 +90,15 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
   } = state;
   const deliveryFailed =
     state.status === 'failed' && state.failureKind === 'delivery';
-  const commandName = getMarketplaceInstallCommandName(currentItem.provider, t);
+  const commandName = getMarketplaceInstallCommandName(
+    currentItem.userCopyTargetClient,
+    t,
+  );
   const resourceTypeCounts =
     marketplaceResourceTypeCounts(userCopyPreflight ?? null);
-  const pluginIndexedResourceTypes =
-    getMarketplacePluginIndexedResourceTypes(currentItem);
+  const blockingIssueGroups =
+    marketplaceBlockingIssueGroups(userCopyPreflight ?? null);
+  const pluginFeatureBadges = getMarketplacePackageFeatures(currentItem);
   const plannedCreatedResourceCount = userCopyPreflight?.resources.filter(
     resource => resource.operation === 'create',
   ).length ?? 0;
@@ -120,9 +133,9 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
           <div className="grid gap-3 rounded-md border border-border p-3 text-sm md:grid-cols-2">
             <div>
               <div className="text-xs text-muted-foreground">
-                {t('marketplace.install.fields.provider')}
+                {t('marketplace.install.fields.packageFormat')}
               </div>
-              <div>{t(`marketplace.providers.${currentItem.provider}`)}</div>
+              <div className="font-mono">{currentItem.packageFormat}</div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">
@@ -232,7 +245,7 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
                     {method === 'plugin' ? (
                       <span className="mt-3 block space-y-2">
                         <span className="block text-xs font-medium">
-                          {pluginIndexedResourceTypes.length > 0
+                          {pluginFeatureBadges.length > 0
                             ? t(
                               'marketplace.install.deliveryMethods.plugin.inventory',
                             )
@@ -240,13 +253,13 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
                               'marketplace.install.deliveryMethods.plugin.capabilitySummary',
                             )}
                         </span>
-                        {pluginIndexedResourceTypes.length > 0 ? (
+                        {pluginFeatureBadges.length > 0 ? (
                           <span className="flex flex-wrap gap-1.5">
-                            {pluginIndexedResourceTypes.map(resourceType => (
-                              <Badge key={resourceType} variant="secondary">
-                                {t(getMarketplaceInstallResourceTypeLabelKey(
-                                  currentItem.provider,
-                                  resourceType,
+                            {pluginFeatureBadges.map(feature => (
+                              <Badge key={feature} variant="secondary">
+                                {t(getMarketplaceFeatureLabelKey(
+                                  currentItem.targetClient,
+                                  feature,
                                 ))}
                               </Badge>
                             ))}
@@ -260,23 +273,46 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
             </div>
           </div>
 
-          {!isLoadingWorkspaces && !isWorkspaceProviderEnabled ? (
+          {deliveryMethod === 'plugin' ? (
+            <div className="space-y-2">
+              <Label htmlFor="marketplace-install-release-version">
+                {t('marketplace.install.fields.releaseVersion')}
+              </Label>
+              <Input
+                id="marketplace-install-release-version"
+                value={releaseVersion}
+                onChange={event => void send({
+                  type: 'set-release-version',
+                  version: event.target.value,
+                })}
+                disabled={state.deliverySelectionDisabled}
+                aria-invalid={!releaseVersionValid}
+                placeholder="1.2.3"
+              />
+              <p className="text-xs text-muted-foreground">
+                {t('marketplace.install.plugin.releaseVersionDescription')}
+              </p>
+              {!releaseVersionValid ? (
+                <p className="text-xs text-destructive">
+                  {t('marketplace.install.errors.releaseVersionInvalid')}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!isLoadingWorkspaces && !isWorkspaceTargetClientEnabled ? (
             <Alert variant="destructive">
               <Info className="h-4 w-4" />
               <AlertDescription>
-                {t('marketplace.install.providerNotEnabled')}
+                {t('marketplace.install.targetClientNotEnabled')}
               </AlertDescription>
             </Alert>
           ) : null}
 
-          {isWorkspaceProviderEnabled && !hasDetailedBlockingIssues ? (
+          {isWorkspaceTargetClientEnabled && !hasDetailedBlockingIssues ? (
             <Alert
               variant={
                 preflightErrorCode
-                || (
-                  deliveryMethod === 'plugin'
-                  && currentItem.lifecycleStatus !== 'ready'
-                )
                 || userCopyPreflight?.status === 'blocked'
                   ? 'destructive'
                   : 'default'
@@ -289,9 +325,7 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
               )}
               <AlertDescription>
                 {deliveryMethod === 'plugin'
-                  ? currentItem.lifecycleStatus === 'ready'
-                    ? t('marketplace.install.plugin.publishReady')
-                    : t('marketplace.install.errors.packageNotReady')
+                  ? t('marketplace.install.plugin.publishReady')
                   : isLoadingPreflight
                   ? t('marketplace.install.preflight.loading')
                   : requiresOverwriteConfirmation
@@ -331,13 +365,20 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
                     count: userCopyPreflight.resources.length,
                   })}
                 </p>
+                <dl className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                  <div><dt className="inline">{t('marketplace.install.fields.packageFormat')}: </dt><dd className="inline font-mono">{userCopyPreflight.packageFormat}</dd></div>
+                  <div><dt className="inline">{t('marketplace.install.fields.targetClient')}: </dt><dd className="inline font-mono">{userCopyPreflight.targetClient}</dd></div>
+                </dl>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t('marketplace.install.profile.workspaceSharedStandalone')}
+                </p>
               </div>
               {resourceTypeCounts.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {resourceTypeCounts.map(([resourceType, count]) => (
                     <Badge key={resourceType} variant="secondary">
                       {t(getMarketplaceInstallResourceTypeLabelKey(
-                        currentItem.provider,
+                        currentItem.userCopyTargetClient,
                         resourceType,
                       ))}: {count}
                     </Badge>
@@ -364,7 +405,7 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
                     >
                       <div className="font-medium">
                         {t(getMarketplaceInstallResourceTypeLabelKey(
-                          currentItem.provider,
+                          currentItem.userCopyTargetClient,
                           resource.resourceType,
                         ))}
                         {' · '}
@@ -395,7 +436,7 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
                       >
                         <div className="font-medium">
                           {t(getMarketplaceInstallResourceTypeLabelKey(
-                            currentItem.provider,
+                            currentItem.userCopyTargetClient,
                             conflict.resourceType,
                           ))}
                           {' · '}
@@ -424,31 +465,60 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
                       </li>
                     ))}
                   </ul>
-                  {requiresOverwriteConfirmation ? (
-                    <div className="flex items-start gap-3 rounded-md border border-amber-500/40 p-3">
-                      <Checkbox
-                        id="marketplace-user-copy-overwrite"
-                        checked={overwriteConfirmed}
-                        onCheckedChange={checked => void send({
-                          type: 'set-overwrite-confirmed',
-                          confirmed: checked === true,
-                        })}
-                      />
-                      <Label htmlFor="marketplace-user-copy-overwrite">
-                        {t('marketplace.install.conflicts.confirmOverwrite')}
-                      </Label>
-                    </div>
-                  ) : null}
                 </div>
               ) : null}
-              {userCopyPreflight.blockingIssues.map((issue, index) => (
+              {userCopyPreflight.skippedResources.length > 0 ? (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">
+                    {t('marketplace.install.skipped.title')}
+                  </h4>
+                  <ul className="space-y-2 text-xs">
+                    {userCopyPreflight.skippedResources.map(resource => (
+                      <li key={`${resource.resourceType}:${resource.resourceId}`} className="rounded border border-amber-500/40 bg-amber-500/5 px-2 py-1.5">
+                        <div className="font-medium">{resource.resourceId}</div>
+                        <div className="text-muted-foreground">
+                          <span className="font-mono">{resource.sourceLocator}</span>
+                          {' · '}
+                          {t(getMarketplaceSkippedReasonKey(resource.code))}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {requiresOverwriteConfirmation ? (
+                <div className="flex items-start gap-3 rounded-md border border-amber-500/40 p-3">
+                  <Checkbox
+                    id="marketplace-user-copy-confirm"
+                    checked={overwriteConfirmed}
+                    onCheckedChange={checked => void send({
+                      type: 'set-overwrite-confirmed',
+                      confirmed: checked === true,
+                    })}
+                  />
+                  <Label htmlFor="marketplace-user-copy-confirm">
+                    {userCopyPreflight.skippedResources.length > 0
+                      ? t('marketplace.install.skipped.confirmPartial')
+                      : t('marketplace.install.conflicts.confirmOverwrite')}
+                  </Label>
+                </div>
+              ) : null}
+              {blockingIssueGroups.map(issue => (
                 <Alert
-                  key={`${issue.errorCode}:${issue.resourceId ?? index}`}
+                  key={issue.errorCode}
                   variant="destructive"
                 >
                   <Info className="h-4 w-4" />
-                  <AlertDescription>
-                    {t(getMarketplaceInstallErrorKey(issue.errorCode))}
+                  <AlertDescription className="space-y-1">
+                    <div>{t(getMarketplaceInstallErrorKey(issue.errorCode))}</div>
+                    {issue.count > 1 ? (
+                      <div className="text-xs">
+                        {t(
+                          'marketplace.install.blockingIssues.affectedResources',
+                          { count: issue.count },
+                        )}
+                      </div>
+                    ) : null}
                   </AlertDescription>
                 </Alert>
               ))}
@@ -473,6 +543,7 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
                       ['merged', userCopyResult.mergedCount],
                       ['unchanged', userCopyResult.unchangedCount],
                       ['overwritten', userCopyResult.overwrittenCount],
+                      ['skipped', userCopyResult.skippedCount],
                     ] as const).map(([operation, count]) => (
                       <div key={operation}>
                         <dt className="text-muted-foreground">
@@ -501,14 +572,52 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
             </Alert>
           ) : null}
 
-          {visibleErrorCode ? (
+          {visibleErrorCode || installErrorContext ? (
             <details className="text-xs text-muted-foreground">
               <summary className="cursor-pointer">
                 {t('marketplace.install.diagnostics.title')}
               </summary>
-              <code className="mt-2 block break-all rounded bg-muted p-2">
-                {visibleErrorCode}
-              </code>
+              {visibleErrorCode ? (
+                <code className="mt-2 block break-all rounded bg-muted p-2">
+                  {visibleErrorCode}
+                </code>
+              ) : null}
+              {installErrorContext ? (
+                <dl className="mt-2 grid gap-1 rounded bg-muted p-2">
+                  <div>
+                    <dt className="inline font-medium">
+                      {t('marketplace.install.diagnostics.stage')}:
+                    </dt>{' '}
+                    <dd className="inline font-mono">{installErrorContext.stage}</dd>
+                  </div>
+                  <div>
+                    <dt className="inline font-medium">
+                      {t('marketplace.install.diagnostics.category')}:
+                    </dt>{' '}
+                    <dd className="inline font-mono">{installErrorContext.category}</dd>
+                  </div>
+                  {installErrorContext.source ? (
+                    <div>
+                      <dt className="inline font-medium">
+                        {t('marketplace.install.diagnostics.source')}:
+                      </dt>{' '}
+                      <dd className="inline break-all font-mono">
+                        {installErrorContext.source}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {installErrorContext.destination ? (
+                    <div>
+                      <dt className="inline font-medium">
+                        {t('marketplace.install.diagnostics.destination')}:
+                      </dt>{' '}
+                      <dd className="inline break-all font-mono">
+                        {installErrorContext.destination}
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+              ) : null}
             </details>
           ) : null}
 
@@ -546,6 +655,8 @@ export const MarketplaceInstallDialog: React.FC<MarketplaceInstallDialogProps> =
                   ? t('marketplace.install.actions.retry')
                   : deliveryMethod === 'plugin'
                   ? t('marketplace.install.actions.install')
+                  : userCopyPreflight?.skippedResources.length
+                    ? t('marketplace.install.actions.acceptPartialAndCopy')
                   : requiresOverwriteConfirmation
                     ? t('marketplace.install.actions.overwriteAndCopy')
                     : t('marketplace.install.actions.copy')}

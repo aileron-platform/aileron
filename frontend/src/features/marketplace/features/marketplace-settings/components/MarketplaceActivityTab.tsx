@@ -21,15 +21,25 @@ import {
 import { useI18n } from '@/shared/hooks/useI18n';
 import type {
   MarketplaceActivityAction,
+  MarketplaceActivityDetail,
   MarketplaceActivityRecord,
   MarketplaceActivityStatus,
-  MarketplaceProvider,
+  MarketplacePackageFormat,
+  MarketplaceTargetClient,
 } from '@/features/marketplace/model/marketplaceTypes';
-import { listMarketplaceActivity } from '../../../api/marketplaceApi';
+import {
+  getMarketplaceActivityDetail,
+  listMarketplaceActivity,
+} from '../../../api/marketplaceApi';
 import { getMarketplaceInstallErrorKey } from '../../../components/marketplaceInstallModel';
 
 const PAGE_SIZE = 50;
-const PROVIDER_OPTIONS: MarketplaceProvider[] = ['claude-code', 'codex'];
+const PACKAGE_FORMAT_OPTIONS: MarketplacePackageFormat[] = [
+  'codex-native',
+  'claude-native',
+  'agent-plugin/1.0.0',
+];
+const TARGET_CLIENT_OPTIONS: MarketplaceTargetClient[] = ['claude-code', 'codex'];
 const ACTION_OPTIONS: MarketplaceActivityAction[] = [
   'install',
   'copy',
@@ -41,8 +51,12 @@ const STATUS_OPTIONS: MarketplaceActivityStatus[] = [
   'failed',
 ];
 
-const isProvider = (value: string | null): value is MarketplaceProvider => (
-  value !== null && PROVIDER_OPTIONS.includes(value as MarketplaceProvider)
+const isPackageFormat = (value: string | null): value is MarketplacePackageFormat => (
+  value !== null && PACKAGE_FORMAT_OPTIONS.includes(value as MarketplacePackageFormat)
+);
+
+const isTargetClient = (value: string | null): value is MarketplaceTargetClient => (
+  value !== null && TARGET_CLIENT_OPTIONS.includes(value as MarketplaceTargetClient)
 );
 
 const isAction = (
@@ -76,12 +90,18 @@ export const MarketplaceActivityTab: React.FC = () => {
   const [totalPages, setTotalPages] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
   const [hasError, setHasError] = React.useState(false);
+  const [details, setDetails] = React.useState<Record<string, MarketplaceActivityDetail>>({});
+  const [detailErrors, setDetailErrors] = React.useState<Set<string>>(new Set());
+  const [loadingDetailId, setLoadingDetailId] = React.useState<string | null>(null);
   const requestSequence = React.useRef(0);
 
   const page = positivePage(searchParams.get('page'));
   const workspaceId = searchParams.get('workspaceId')?.trim() ?? '';
-  const provider = isProvider(searchParams.get('provider'))
-    ? searchParams.get('provider') as MarketplaceProvider
+  const packageFormat = isPackageFormat(searchParams.get('packageFormat'))
+    ? searchParams.get('packageFormat') as MarketplacePackageFormat
+    : null;
+  const targetClient = isTargetClient(searchParams.get('targetClient'))
+    ? searchParams.get('targetClient') as MarketplaceTargetClient
     : null;
   const packageId = searchParams.get('packageId')?.trim() ?? '';
   const action = isAction(searchParams.get('action'))
@@ -113,7 +133,8 @@ export const MarketplaceActivityTab: React.FC = () => {
         page,
         pageSize: PAGE_SIZE,
         workspaceId: workspaceId || undefined,
-        provider: provider ?? undefined,
+        packageFormat: packageFormat ?? undefined,
+        targetClient: targetClient ?? undefined,
         packageId: packageId || undefined,
         action: action ?? undefined,
         status: status ?? undefined,
@@ -129,11 +150,36 @@ export const MarketplaceActivityTab: React.FC = () => {
         setIsLoading(false);
       }
     }
-  }, [action, packageId, page, provider, status, workspaceId]);
+  }, [action, packageFormat, packageId, page, status, targetClient, workspaceId]);
 
   React.useEffect(() => {
     void loadActivity();
   }, [loadActivity]);
+
+  const loadDetail = React.useCallback(async (activityId: string) => {
+    if (details[activityId]) {
+      setDetails(current => {
+        const next = { ...current };
+        delete next[activityId];
+        return next;
+      });
+      return;
+    }
+    setLoadingDetailId(activityId);
+    setDetailErrors(current => {
+      const next = new Set(current);
+      next.delete(activityId);
+      return next;
+    });
+    try {
+      const detail = await getMarketplaceActivityDetail(activityId);
+      setDetails(current => ({ ...current, [activityId]: detail }));
+    } catch {
+      setDetailErrors(current => new Set(current).add(activityId));
+    } finally {
+      setLoadingDetailId(current => current === activityId ? null : current);
+    }
+  }, [details]);
 
   return (
     <Card>
@@ -174,23 +220,45 @@ export const MarketplaceActivityTab: React.FC = () => {
             placeholder={t('marketplace.settings.activity.filters.workspace')}
           />
           <Select
-            value={provider ?? 'all'}
+            value={packageFormat ?? 'all'}
             onValueChange={value => updateFilters({
-              provider: value === 'all' ? null : value,
+              packageFormat: value === 'all' ? null : value,
             })}
           >
             <SelectTrigger
-              aria-label={t('marketplace.settings.activity.filters.provider')}
+              aria-label={t('marketplace.settings.activity.filters.packageFormat')}
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">
-                {t('marketplace.settings.activity.filters.allProviders')}
+                {t('marketplace.settings.activity.filters.allPackageFormats')}
               </SelectItem>
-              {PROVIDER_OPTIONS.map(option => (
+              {PACKAGE_FORMAT_OPTIONS.map(option => (
                 <SelectItem key={option} value={option}>
-                  {t(`marketplace.providers.${option}`)}
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={targetClient ?? 'all'}
+            onValueChange={value => updateFilters({
+              targetClient: value === 'all' ? null : value,
+            })}
+          >
+            <SelectTrigger
+              aria-label={t('marketplace.settings.activity.filters.targetClient')}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                {t('marketplace.settings.activity.filters.allTargetClients')}
+              </SelectItem>
+              {TARGET_CLIENT_OPTIONS.map(option => (
+                <SelectItem key={option} value={option}>
+                  {t(`marketplace.targetClients.${option}`)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -297,12 +365,20 @@ export const MarketplaceActivityTab: React.FC = () => {
                   <dd className="font-mono">{item.workspaceId}</dd>
                 </div>
               ) : null}
-              {item.provider ? (
+              {item.packageFormat ? (
                 <div>
                   <dt className="text-muted-foreground">
-                    {t('marketplace.settings.activity.fields.provider')}
+                    {t('marketplace.settings.activity.fields.packageFormat')}
                   </dt>
-                  <dd>{t(`marketplace.providers.${item.provider}`)}</dd>
+                  <dd>{item.packageFormat}</dd>
+                </div>
+              ) : null}
+              {item.targetClient ? (
+                <div>
+                  <dt className="text-muted-foreground">
+                    {t('marketplace.settings.activity.fields.targetClient')}
+                  </dt>
+                  <dd>{t(`marketplace.targetClients.${item.targetClient}`)}</dd>
                 </div>
               ) : null}
               {item.packageId ? (
@@ -334,6 +410,48 @@ export const MarketplaceActivityTab: React.FC = () => {
                     {item.errorCode}
                   </code>
                 </details>
+              </div>
+            ) : null}
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void loadDetail(item.id)}
+              disabled={loadingDetailId === item.id}
+            >
+              {details[item.id]
+                ? t('marketplace.settings.activity.hideDetails')
+                : t('marketplace.settings.activity.showDetails')}
+            </Button>
+
+            {detailErrors.has(item.id) ? (
+              <p className="text-xs text-destructive">
+                {t('marketplace.settings.activity.detailLoadError')}
+              </p>
+            ) : null}
+
+            {details[item.id] ? (
+              <div className="space-y-3 rounded-md bg-muted/30 p-3 text-xs">
+                {details[item.id].commands.map(command => (
+                  <section key={command.sequence} className="space-y-1 border-b border-border pb-3 last:border-0 last:pb-0">
+                    <div className="font-mono">{command.argvDisplay}</div>
+                    <div className="text-muted-foreground">
+                      {command.stage} · {command.exitCode ?? t('marketplace.common.unknown')}
+                    </div>
+                    {command.stdout ? (
+                      <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background p-2">{command.stdout}</pre>
+                    ) : null}
+                    {command.stderr ? (
+                      <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background p-2">{command.stderr}</pre>
+                    ) : null}
+                  </section>
+                ))}
+                {details[item.id].commands.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    {t('marketplace.settings.activity.noCommandDetails')}
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </article>

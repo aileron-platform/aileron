@@ -11,8 +11,35 @@ const bridgeSource = `(() => {
   const MAX_SKILL_EVENT_BYTES = 32 * 1024;
   const SKILL_EVENT_DEBOUNCE_MS = 200;
   const SKILL_EVENT_TYPE = /^[A-Z][A-Z0-9_]*$/;
+  const BRIDGE_SCRIPT_SUFFIX = "/__aileron/bridge.js";
   if (window.__aileronCanvasBridgeInstalled) return;
   window.__aileronCanvasBridgeInstalled = true;
+
+  const bridgeScriptPath = (() => {
+    try {
+      return new URL(document.currentScript?.src || "", location.href).pathname;
+    } catch {
+      return "";
+    }
+  })();
+  const publicRoutePrefix = bridgeScriptPath.endsWith(BRIDGE_SCRIPT_SUFFIX)
+    ? bridgeScriptPath.slice(0, -BRIDGE_SCRIPT_SUFFIX.length)
+    : "";
+  const canvasRoutePath = (pathname) => {
+    const routePath = pathname || "/";
+    if (!publicRoutePrefix || !routePath.startsWith(publicRoutePrefix)) return routePath;
+    const localPath = routePath.slice(publicRoutePrefix.length);
+    if (!localPath) return "/";
+    return localPath.startsWith("/") ? localPath : "/" + localPath;
+  };
+  const publishTheme = (theme) => {
+    const resolvedTheme = theme === "dark" ? "dark" : "light";
+    window.aileron = window.aileron || {};
+    window.aileron.theme = resolvedTheme;
+    window.dispatchEvent(new CustomEvent("aileron:themechange", {
+      detail: { theme: resolvedTheme },
+    }));
+  };
 
   let mode = "default";
   let interactionPaused = false;
@@ -22,7 +49,7 @@ const bridgeSource = `(() => {
   let hoverBox = null;
   let selectionBox = null;
   let dragBox = null;
-  let lastRoutePath = location.pathname || "/";
+  let lastRoutePath = canvasRoutePath(location.pathname);
   const skillEventTimers = new Map();
 
   const post = (type, payload = {}) => {
@@ -30,7 +57,7 @@ const bridgeSource = `(() => {
   };
   const warn = (message) => console.warn("[aileron-canvas-bridge]", message);
   const emitRouteChanged = () => {
-    const routePath = location.pathname || "/";
+    const routePath = canvasRoutePath(location.pathname);
     if (routePath === lastRoutePath) return;
     lastRoutePath = routePath;
     clear();
@@ -38,10 +65,11 @@ const bridgeSource = `(() => {
     measureWatched();
   };
   const announceRoutePath = (routePath) => {
-    if (!routePath || routePath === lastRoutePath) return;
-    lastRoutePath = routePath;
+    const nextRoutePath = canvasRoutePath(routePath);
+    if (!nextRoutePath || nextRoutePath === lastRoutePath) return;
+    lastRoutePath = nextRoutePath;
     clear();
-    post("ROUTE_CHANGED", { routePath });
+    post("ROUTE_CHANGED", { routePath: nextRoutePath });
   };
   const clampText = (value) => String(value || "").replace(/\\s+/g, " ").trim().slice(0, MAX_PREVIEW);
   const rectPayload = (rect, coordinateSpace = "viewport") => ({
@@ -140,7 +168,7 @@ const bridgeSource = `(() => {
     return { x: left, y: top, width: right - left, height: bottom - top, coordinateSpace: "viewport" };
   };
   const emitSelection = (target) => {
-    post("TARGET_SELECTED", { routePath: location.pathname || "/", target });
+    post("TARGET_SELECTED", { routePath: canvasRoutePath(location.pathname), target });
   };
   const selectElement = (element, event) => {
     const target = elementTarget(element);
@@ -156,7 +184,7 @@ const bridgeSource = `(() => {
     else if (selected.length < MAX_ELEMENTS) selected.push(target);
     if (selected.length === 0) {
       paintBox(ensureBox("selection"), null);
-      post("TARGET_SELECTED", { routePath: location.pathname || "/", target: null });
+      post("TARGET_SELECTED", { routePath: canvasRoutePath(location.pathname), target: null });
       return;
     }
     const rect = boundingRect(selected);
@@ -187,7 +215,7 @@ const bridgeSource = `(() => {
         return { id: item.id, selector: item.selector, resolved: false };
       }
     });
-    post("TARGET_RECTS", { routePath: location.pathname || "/", rects });
+    post("TARGET_RECTS", { routePath: canvasRoutePath(location.pathname), rects });
   };
   const emitSkillEvent = (eventType, data = {}) => {
     if (!SKILL_EVENT_TYPE.test(String(eventType || ""))) {
@@ -295,7 +323,9 @@ const bridgeSource = `(() => {
   window.addEventListener("message", (event) => {
     const message = event.data;
     if (!message || message.source !== SOURCE || message.version !== VERSION || !message.type) return;
-    if (message.type === "SET_MODE") {
+    if (message.type === "SET_THEME") {
+      publishTheme(message.payload?.theme);
+    } else if (message.type === "SET_MODE") {
       mode = message.payload?.mode === "select" ? "select" : "default";
       if (mode !== "select") clear();
       document.documentElement.style.cursor = mode === "select" && !interactionPaused ? "crosshair" : "";

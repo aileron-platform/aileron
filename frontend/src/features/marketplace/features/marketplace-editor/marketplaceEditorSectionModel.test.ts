@@ -5,22 +5,35 @@ import {
 } from './marketplaceEditorSectionModel';
 
 describe('marketplaceEditorSectionModel', () => {
+  const agentPluginCapabilities = {
+    basic: 'read-write',
+    agentsMd: 'unsupported',
+    hooks: 'unsupported',
+    mcp: 'read-write',
+    agents: 'unsupported',
+    commands: 'unsupported',
+    outputStyle: 'unsupported',
+    skills: 'read-write',
+    files: 'read-write',
+  } as const;
+
   it('resolves a supported section', () => {
-    expect(resolveMarketplaceEditorSection('claude-code', 'skills')).toBe('skills');
+    expect(resolveMarketplaceEditorSection(agentPluginCapabilities, 'skills')).toBe('skills');
   });
 
   it('falls back to basic for unsupported or unknown sections', () => {
-    expect(resolveMarketplaceEditorSection('claude-code', 'policies')).toBe('basic');
-    expect(resolveMarketplaceEditorSection('codex', 'outputStyle')).toBe('basic');
-    expect(resolveMarketplaceEditorSection('claude-code', undefined)).toBe('basic');
-    expect(resolveMarketplaceEditorSection('claude-code', 'nope')).toBe('basic');
+    expect(resolveMarketplaceEditorSection(agentPluginCapabilities, 'policies')).toBe('basic');
+    expect(resolveMarketplaceEditorSection(agentPluginCapabilities, 'outputStyle')).toBe('basic');
+    expect(resolveMarketplaceEditorSection(agentPluginCapabilities, undefined)).toBe('basic');
+    expect(resolveMarketplaceEditorSection(agentPluginCapabilities, 'nope')).toBe('basic');
   });
 
   it('builds edit paths', () => {
     expect(buildMarketplaceEditorPath({
-      provider: 'claude-code',
+      targetClient: 'claude-code',
+      packageFormat: 'claude-native',
       packageId: 'pkg',
       section: 'skills',
-    })).toBe('/marketplace/packages/claude-code/pkg/edit/skills');
+    })).toBe('/marketplace/packages/claude-code/pkg/edit/skills?packageFormat=claude-native');
   });
 });

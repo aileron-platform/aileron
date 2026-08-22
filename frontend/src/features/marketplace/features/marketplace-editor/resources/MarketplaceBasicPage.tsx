@@ -29,7 +29,7 @@ export const MarketplaceBasicPage: React.FC<MarketplaceBasicPageProps> = ({
     identityGeneration,
     session,
   } = useMarketplaceResourceSession({
-    provider: packageDetail.provider,
+    targetClient: packageDetail.targetClient,
     packageId: packageDetail.packageId,
     resourceType: 'basic',
   }, packageDetail.revision);
@@ -57,7 +57,7 @@ export const MarketplaceBasicPage: React.FC<MarketplaceBasicPageProps> = ({
     await session.mutate(
       identityGeneration,
       'basic-mutation',
-      () => updateBasic(packageDetail.provider, packageDetail.packageId, {
+      () => updateBasic(packageDetail.targetClient, packageDetail.packageId, {
         revision: session.revision,
         displayName,
         description,
@@ -92,7 +92,7 @@ export const MarketplaceBasicPage: React.FC<MarketplaceBasicPageProps> = ({
       <div className="min-h-0 flex-1 overflow-auto">
         <MarketplaceEditorBasicSection
           mode="edit"
-          provider={packageDetail.provider}
+          targetClient={packageDetail.targetClient}
           packageId={packageDetail.packageId}
           displayName={displayName}
           description={description}

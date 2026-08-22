@@ -27,13 +27,13 @@ vi.mock('../contexts/AiChatIntegrationContext', () => ({
   }),
 }));
 
-vi.mock('@/shared/components/slash-command-picker', () => ({
-  SlashCommandPickerDialog: () => null,
+vi.mock('@/shared/components/prompt-invocation-picker', () => ({
+  PromptInvocationPickerDialog: () => null,
 }));
 
-vi.mock('@/shared/api/slashCommandApi', () => ({
-  slashCommandApi: {
-    listPickerItems: vi.fn(async () => []),
+vi.mock('@/shared/api/promptInvocationApi', () => ({
+  promptInvocationApi: {
+    list: vi.fn(),
   },
 }));
 
@@ -42,7 +42,7 @@ const submitMock = vi.fn();
 const postMessageMock = vi.fn();
 const removeQueuedMessageMock = vi.fn();
 const patchDraftMock = vi.fn();
-const cancelMock = vi.fn();
+const stopMock = vi.fn();
 const retryMock = vi.fn();
 const selectMock = vi.fn();
 const threadApiMock = vi.hoisted(() => ({
@@ -91,8 +91,9 @@ vi.mock('../hooks/useThread', () => ({
     removeQueuedMessage: {
       mutate: removeQueuedMessageMock,
     },
-    cancel: {
-      mutate: cancelMock,
+    stop: {
+      mutate: stopMock,
+      isPending: false,
     },
     retry: {
       mutate: retryMock,
@@ -163,7 +164,7 @@ beforeEach(() => {
   submitMock.mockReset();
   postMessageMock.mockReset();
   patchDraftMock.mockReset();
-  cancelMock.mockReset();
+  stopMock.mockReset();
   retryMock.mockReset();
   selectMock.mockReset();
   URL.createObjectURL = vi.fn(() => 'blob:preview');

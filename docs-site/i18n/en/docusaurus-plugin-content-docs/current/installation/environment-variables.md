@@ -59,7 +59,7 @@ Manager Provisioner and Workspace Operator inject the same `AILERON_*` key set. 
 | `AILERON_WORKTREE_SUBDIR` | Managed Git worktree subdirectory |
 | `AILERON_MANAGER_INTERNAL_URL` | Internal Manager Service URL |
 | `AILERON_PLATFORM_PUBLIC_ORIGIN` | Sole exact platform Origin |
-| `AILERON_RUNTIME_STATE_DATABASE_URL_FILE` | Workspace-scoped database URL Secret file |
+| `AILERON_RUNTIME_DATABASE_CONNECTION_FILE` | Generation-scoped Runtime database connection Secret file |
 | `AILERON_RUNTIME_CONTROL_TOKEN_FILE` | Generation-scoped control-token Secret file |
 | `AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE` | Manager assertion public JWKS file |
 | `AILERON_RUNTIME_ASSERTION_ISSUER` | Manager assertion issuer |
@@ -75,7 +75,7 @@ Workspace-user environments may not use the `AILERON_*` prefix.
 ## Secret delivery
 
 - Docker: the root `.env` stores only host Secret directory or file paths. Compose mounts them read-only, and services consume only `*_FILE` or fixed mounted paths.
-- The local OpenLDAP adapter uses the third-party image's native `LDAP_ADMIN_PASSWORD_FILE` and `LDAP_CONFIG_PASSWORD_FILE` interface only during first-start initialization. The long-running `slapd` argv and environment must not contain Secret values afterward.
+- The local Keycloak adapter creates its realm, client, Keycloak administrator, and native break-glass principal only from read-only mounted Secret files. The long-running Keycloak process retains no bootstrap, client, or user-password environment variable.
 - Kubernetes: values store only existing Secret names and keys. Application Pods receive Secrets only through read-only Secret volumes and consume them through `*_FILE` or contract-defined fixed mounted paths.
 - Application Secrets must not be materialized into the process environment through `SecretKeyRef` or `envFrom.secretRef`. `SecretKeyRef` is not an accepted Secret delivery interface.
 - Secret values never belong in ordinary environment variables, ConfigMaps, Frontend build environments, documentation examples, or version control.

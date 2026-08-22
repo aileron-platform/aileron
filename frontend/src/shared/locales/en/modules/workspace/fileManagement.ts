@@ -261,30 +261,6 @@ const fileManagement = {
     loading: 'Loading image...',
     error: 'Failed to load image',
   },
-  drawio: {
-    title: 'Draw.io Diagram',
-    edit: 'Edit',
-    cancel: 'Cancel',
-    saving: 'Saving...',
-    loading: 'Loading diagram...',
-    retry: 'Retry',
-    retrying: 'Retrying... ({{count}}/{{max}})',
-    download: 'Download',
-    expand: 'Expand view',
-    exitExpanded: 'Exit expanded',
-    empty: 'No diagram content',
-    error: {
-      title: 'Diagram Loading Error',
-      description: 'Unable to load Draw.io diagram. Please check the file format.',
-    },
-    serviceUnavailable: {
-      title: 'Draw.io preview unavailable',
-      description: 'The file is shown as read-only XML because the Draw.io preview service is not available.',
-      disabled: 'The Draw.io preview service is not enabled in this workspace. The file is shown as read-only XML.',
-      unreachable: 'The Draw.io preview service cannot be reached right now. The file is shown as read-only XML.',
-      retry: 'Retry',
-    },
-  },
 };
 
 export default fileManagement;

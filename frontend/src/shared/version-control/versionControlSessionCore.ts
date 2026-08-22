@@ -26,15 +26,22 @@ interface VersionControlRequestOptions {
 
 const SHARED_INSTANCE = 'shared';
 const DEFAULT_TARGET = 'default';
+const VERSION_CONTROL_QUERY_RETRY_LIMIT = 2;
 
 export const shouldRetryVersionControlQuery = (
   failureCount: number,
   error: unknown,
 ): boolean => {
+  const withinRetryBudget = failureCount < VERSION_CONTROL_QUERY_RETRY_LIMIT;
   if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+    if (error.status === 409) {
+      return withinRetryBudget
+        && error.operationStatus?.isActive === true
+        && error.operationStatus.retryable === true;
+    }
     return false;
   }
-  return failureCount < 2;
+  return withinRetryBudget;
 };
 
 export const isFirstVersionControlLoad = (

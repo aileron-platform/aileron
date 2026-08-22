@@ -86,14 +86,13 @@ turn:
       requiredFrontendVantages: [internet]
 ```
 
-正式外部 vantage 使用 `turnRest`，對應 Secret 必須包含 `turn-rest-shared-secret`；Gateway
-依 Coturn TURN REST 規則產生到期 timestamp username 與 HMAC credential。`staticSecret` 只適用
-於明確標記的開發或單站測試 profile，不能作為 production-required vantage credential。
+所有 TURN profile 均使用 `turnRest`，對應 Secret 必須包含 `turn-rest-shared-secret`；Gateway
+依 Coturn TURN REST 規則產生到期 timestamp username 與 HMAC credential。
 
 `turnRest` 也涵蓋實際 Browser 資料路徑。Browser Pod sidecar 每次 backend probe 都以 shared
 secret 產生新的短效 credential；Manager 的 Browser access response 會回傳新的 frontend
 `iceServers`，前端以該值建立本次 `RTCPeerConnection`，不使用 Neko 啟動時的固定 TURN
-credential。內建 Coturn 使用 `staticSecret`；外部 TURN 才使用 `turnRest`。
+credential。內建與外部 Coturn 使用相同的 `turnRest` 契約。
 
 `policyBackend` 支援 `cilium`、`kubernetes` 與明確的 `unenforced`。Destination 必須使用與
 backend 相容的 `ciliumEntities`、`cidrs`、`namespacePods`、`fqdns` 或 `unenforced`；relay
@@ -102,8 +101,8 @@ entity。control port 與 relay UDP range 會產生不同 egress rule，不能�
 
 ## 內建 Coturn
 
-`coturn.enabled=true` 時，Chart 會建立獨立 namespace、`hostNetwork` Coturn DaemonSet、
-公開 TURN Service、Browser ICE Secret，以及與 Browser credential 分離的 probe identity。
+`coturn.enabled=true` 時，Chart 會在 installer 預先建立的 namespace 部署 `hostNetwork` Coturn
+DaemonSet 與公開 TURN Service。Chart 不建立 Namespace 或 Secret。
 
 ```yaml
 coturn:
@@ -115,8 +114,13 @@ coturn:
 ```
 
 `turn.{baseDomain}` 只可解析至執行 Coturn 的節點。每個節點與上游設備必須放行 profile 的
-listener TCP/UDP 與 relay UDP range。部署前必須建立 `coturn.auth.existingSecretName` 指向的
-credential Secret；輪替 Browser 或 probe credential 時必須同步提高 `turn.credentialRevision`。
+listener TCP/UDP 與 relay UDP range。部署前必須在 Coturn namespace 建立兩份 Secret：
+Runtime namespace 的 `turn.existingSecretName` 提供 `turn-rest-shared-secret`；Coturn namespace 的
+`coturn.auth.existingSecretName` 提供相同的 `turn-rest-shared-secret`。Coturn 從 namespace-local
+唯讀 Secret 檔案載入 shared secret，啟用 `use-auth-secret` 與 `static-auth-secret`；Secret 不會
+出現在 argv、環境變數值或 log。TURN acceptance attestor 另外從 Runtime Secret 讀取
+`probe-username` 作為稽核 identity，動態產生短效 HMAC credential，不接受固定 probe password。
+輪替 shared secret 時必須同步提高 `turn.credentialRevision`。
 
 ## 外部 TURN
 
@@ -148,7 +152,7 @@ stringData:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: aileron-aileron-connectivity-evidence
+  name: aileron-connectivity-evidence
   namespace: workspace-system
 type: Opaque
 stringData:

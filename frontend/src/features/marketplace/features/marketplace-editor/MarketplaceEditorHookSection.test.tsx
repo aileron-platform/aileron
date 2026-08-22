@@ -21,7 +21,7 @@ describe('MarketplaceEditorHookSection helpers', () => {
     const onRefresh = vi.fn();
     render(
       <MarketplaceEditorHookSection
-        provider="claude-code"
+        targetClient="claude-code"
         icon={Workflow}
         items={[]}
         onDirty={() => undefined}
@@ -45,7 +45,7 @@ describe('MarketplaceEditorHookSection helpers', () => {
 
     render(
       <MarketplaceEditorHookSection
-        provider="claude-code"
+        targetClient="claude-code"
         icon={Workflow}
         items={[]}
         onDirty={vi.fn()}
@@ -98,7 +98,7 @@ describe('MarketplaceEditorHookSection helpers', () => {
     ];
     const { container } = render(
       React.createElement(MarketplaceEditorHookSection, {
-        provider: 'codex',
+        targetClient: 'codex',
         icon: Workflow,
         items,
         onItemsChange,
@@ -146,7 +146,7 @@ describe('MarketplaceEditorHookSection helpers', () => {
     ];
     render(
       React.createElement(MarketplaceEditorHookSection, {
-        provider: 'codex',
+        targetClient: 'codex',
         icon: Workflow,
         items,
       }),
@@ -187,7 +187,7 @@ describe('MarketplaceEditorHookSection helpers', () => {
     ];
     const { container } = render(
       React.createElement(MarketplaceEditorHookSection, {
-        provider: 'claude-code',
+        targetClient: 'claude-code',
         icon: Workflow,
         items,
       }),

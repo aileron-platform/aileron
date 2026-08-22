@@ -12,7 +12,7 @@ describe('ManagerSessionService', () => {
     const resetRecovery = vi.spyOn(managerSessionRecovery, 'reset');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       user: {
-        id: 'user-1', username: 'nova', email: null, display_name: null,
+        id: 'user-1', subject: 'oidc-subject-1', username: 'nova', email: null, display_name: null,
         platform_role: 'member', allowed_operations: [],
       },
       csrf_token: 'csrf-1',

@@ -282,57 +282,21 @@ const renderHeaderSlots = (header: ProductShellRegionHeader | undefined): React.
   );
 };
 
-const getColumnChrome = (region: ProductShellColumnRegion): {
+const PRODUCT_SHELL_COLUMN_SURFACE: {
   region: string;
   header: string;
   content: string;
-} => {
-  switch (region.presentation.chrome) {
-    case 'navigation':
-      return {
-        region: 'border-r border-border bg-background',
-        header: 'border-b border-sidebar-border bg-card',
-        content: 'bg-background',
-      };
-    case 'navigator-plain':
-      return {
-        region: 'border-r border-border bg-background',
-        header: 'border-b border-border bg-card',
-        content: 'bg-background',
-      };
-    case 'navigator-muted':
-      return {
-        region: 'border-r border-border bg-muted/20',
-        header: 'border-b border-border bg-card',
-        content: 'bg-muted/20',
-      };
-    default:
-      return {
-        region: 'border-r border-border bg-background',
-        header: 'border-b border-border bg-card',
-        content: 'bg-background',
-      };
-  }
+} = {
+  region: 'border-r border-border bg-background',
+  header: 'border-b border-border bg-background',
+  content: 'bg-background',
 };
 
-const getCompanionChrome = (region: ProductShellCompanionRegion): {
-  region: string;
-  collapsedWidth: number;
-  header: string;
-  content: string;
-} => region.presentation.chrome === 'plain-compact-rail'
-  ? {
-      region: 'border-l border-border bg-background',
-      collapsedWidth: PRODUCT_SHELL_COMPACT_COMPANION_WIDTH,
-      header: 'border-b border-border bg-background',
-      content: 'bg-background',
-    }
-  : {
-      region: 'border-l border-border bg-muted/20',
-      collapsedWidth: PRODUCT_SHELL_COLLAPSED_COLUMN_WIDTH,
-      header: 'border-b border-border bg-card',
-      content: 'bg-muted/20',
-    };
+const getCompanionCollapsedWidth = (region: ProductShellCompanionRegion): number => (
+  region.presentation.rail === 'compact'
+    ? PRODUCT_SHELL_COMPACT_COMPANION_WIDTH
+    : PRODUCT_SHELL_COLLAPSED_COLUMN_WIDTH
+);
 
 export const ProductShell: React.FC<ProductShellProps> = ({
   topBar,
@@ -662,7 +626,7 @@ export const ProductShell: React.FC<ProductShellProps> = ({
     if (!region) {
       return null;
     }
-    const chrome = getColumnChrome(region);
+    const surface = PRODUCT_SHELL_COLUMN_SURFACE;
     const state = layout[key];
     const collapsed = region.behavior.collapsible && state.collapsed;
     const isVisibleByDisplay = display?.mode !== 'main-expanded' && display?.mode !== 'companion-fullscreen';
@@ -677,7 +641,7 @@ export const ProductShell: React.FC<ProductShellProps> = ({
         data-shell-region={key}
         className={cn(
           'relative flex h-full min-h-0 shrink-0 flex-col transition-[width] duration-200',
-          chrome.region,
+          surface.region,
           hiddenAtResponsiveBreakpoint && 'max-[1023px]:hidden',
         )}
         style={{ width: collapsed ? PRODUCT_SHELL_COLLAPSED_COLUMN_WIDTH : state.width }}
@@ -686,7 +650,7 @@ export const ProductShell: React.FC<ProductShellProps> = ({
           <div className={cn(
             'flex h-10 shrink-0 items-center gap-2 px-3',
             collapsed ? 'justify-center px-0' : 'justify-between',
-            chrome.header,
+            surface.header,
           )}>
             {collapsed ? null : renderHeaderSlots(region.presentation.header)}
             {region.behavior.collapsible ? (
@@ -700,7 +664,7 @@ export const ProductShell: React.FC<ProductShellProps> = ({
         ) : null}
         <div className={cn(
           'flex min-h-0 flex-1 flex-col overflow-hidden [&>*]:min-h-0 [&>*]:flex-1',
-          chrome.content,
+          surface.content,
         )}>
           {collapsed && key !== 'navigation' ? (
             <div className="flex min-h-0 flex-1 flex-col items-center overflow-hidden pt-3">
@@ -724,7 +688,7 @@ export const ProductShell: React.FC<ProductShellProps> = ({
   };
 
   const renderCompanion = (region: ProductShellCompanionRegion): React.ReactNode => {
-    const chrome = getCompanionChrome(region);
+    const collapsedWidth = getCompanionCollapsedWidth(region);
     const fullscreen = display?.mode === 'companion-fullscreen';
     const placement = region.placement;
     const rawCollapsed = layout.companion.collapsed;
@@ -766,7 +730,7 @@ export const ProductShell: React.FC<ProductShellProps> = ({
             {region.presentation.header ? (
               <div
                 data-testid="shell-companion-header"
-                className={cn('flex h-10 shrink-0 items-center gap-2 px-3', chrome.header)}
+                className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-background px-3"
               >
                 {renderHeaderSlots(region.presentation.header)}
               </div>
@@ -783,17 +747,17 @@ export const ProductShell: React.FC<ProductShellProps> = ({
         data-shell-region="companion"
         className={cn(
           'relative flex h-full min-h-0 shrink-0 flex-col transition-[width] duration-200',
-          chrome.region,
+          'border-l border-border bg-background',
           fullscreen && 'fixed inset-0 z-50 w-screen',
         )}
         style={fullscreen ? undefined : {
           width: collapsed
-            ? collapsedByResponsive ? PRODUCT_SHELL_COMPACT_COMPANION_WIDTH : chrome.collapsedWidth
+            ? collapsedByResponsive ? PRODUCT_SHELL_COMPACT_COMPANION_WIDTH : collapsedWidth
             : layout.companion.width,
         }}
       >
         {!collapsed ? (
-          <div className={cn('flex h-10 shrink-0 items-center justify-between gap-2 px-3', chrome.header)}>
+          <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-3">
             {renderHeaderSlots(region.presentation.header)}
             <div className="flex shrink-0 items-center gap-1">
               <SidebarCollapseToggle
@@ -804,7 +768,7 @@ export const ProductShell: React.FC<ProductShellProps> = ({
             </div>
           </div>
         ) : (
-          <div className={cn('flex h-10 shrink-0 items-center justify-center', chrome.header)}>
+          <div className="flex h-10 shrink-0 items-center justify-center border-b border-border bg-background">
             <SidebarCollapseToggle
               collapsed
               label={region.presentation.expandLabel}
@@ -813,11 +777,11 @@ export const ProductShell: React.FC<ProductShellProps> = ({
           </div>
         )}
         {!collapsed ? (
-          <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', chrome.content)}>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
             {region.content(renderState)}
           </div>
         ) : region.presentation.collapsedContent ? (
-          <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', chrome.content)}>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
             {region.presentation.collapsedContent}
           </div>
         ) : null}
@@ -844,13 +808,13 @@ export const ProductShell: React.FC<ProductShellProps> = ({
   const main = regionsBody?.main;
   const companion = regionsBody?.companion;
   const bodyContent = body.kind === 'state' ? (
-    <div data-shell-state className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-muted/20">
+    <div data-shell-state className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-background">
       {body.content}
     </div>
   ) : isCompanionFullscreen ? (
     companion ? renderCompanion(companion) : null
   ) : (
-    <div data-shell-body className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/20">
+    <div data-shell-body className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       {!isMainExpanded ? renderColumn('navigation', regionsBody.navigation) : null}
       {!isMainExpanded ? renderColumn('navigator', regionsBody.navigator) : null}
       {!isCompanionFullscreen && main ? (

@@ -24,13 +24,12 @@ Frontend gateway 只接受 canonical Workspace UUID 與固定 `runtime`、`brows
 | 服務 | URL | 說明 |
 | --- | --- | --- |
 | Aileron | `http://localhost:8082` | 唯一瀏覽器入口 |
-| Draw.io | `http://localhost:8082/draw/` | 經 Aileron 同源 gateway 提供的本機圖表工具 |
 | Connectivity Gateway | `http://localhost:18083` | host frontend vantage 的 evidence 入口，不是公開 Manager API |
 | Coturn | `turn:localhost:3478` | TURN control listener；relay range 由 profile 決定 |
 
 ## 登入
 
-登入 credential 由外部 OIDC Provider 管理。Docker 與 Kubernetes 都設定 canonical issuer 與 Manager confidential client；bootstrap admin 只建立本地角色快照，不建立 Provider 密碼。
+登入 credential 由目前選用的 Identity adapter 管理。Docker 與 Kubernetes 都設定 canonical issuer 與 Manager confidential client；Bundled Keycloak 的 native user 由 Keycloak Admin Console 管理，Aileron bootstrap admin 只建立本地角色快照，不建立 Provider 密碼。
 
 ## Workspace 健康檢查
 

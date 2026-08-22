@@ -44,7 +44,7 @@ export interface ThreadApi {
     messageId: string,
     payload: QuestionAnswerPayload,
   ): Promise<ThreadMutation>;
-  cancel(threadId: string): Promise<Thread>;
+  stop(threadId: string): Promise<Thread>;
   retry(threadId: string): Promise<Thread>;
   archive(threadId: string): Promise<Thread>;
   deleteThread(threadId: string): Promise<void>;

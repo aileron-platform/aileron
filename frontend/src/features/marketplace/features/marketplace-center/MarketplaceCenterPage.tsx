@@ -88,7 +88,7 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
   const [queryState, setQueryState] = React.useState<MarketplaceCenterQueryState>(
     () => ({
       searchTerm: '',
-      provider: initialFilters.provider,
+      targetClient: initialFilters.targetClient,
       activeFeatures: new Set(initialFilters.features),
       category: initialFilters.category,
       page: 1,
@@ -97,13 +97,12 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
   );
   const {
     searchTerm,
-    provider,
+    targetClient,
     activeFeatures,
     category,
     page,
     pageSize,
   } = queryState;
-  const [statusFilter, setStatusFilter] = React.useState<'all' | 'draft' | 'ready'>('all');
   const [viewMode, setViewMode] = React.useState<MarketplaceCenterViewMode>(
     () => loadMarketplaceCenterViewMode(MARKETPLACE_STORAGE_USER_SCOPE),
   );
@@ -225,23 +224,23 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
 
   React.useEffect(() => {
     saveMarketplaceCenterFilters(MARKETPLACE_STORAGE_USER_SCOPE, {
-      provider,
+      targetClient,
       category,
       features: Array.from(activeFeatures),
     });
-  }, [activeFeatures, category, provider]);
+  }, [activeFeatures, category, targetClient]);
 
   React.useEffect(() => {
     saveMarketplaceCenterViewMode(MARKETPLACE_STORAGE_USER_SCOPE, viewMode);
   }, [viewMode]);
 
   const openDetail = (item: MarketplacePackageSummary) => {
-    navigate(ROUTES.marketplace.packageDetail(item.provider, item.packageId));
+    navigate(ROUTES.marketplace.packageDetail(item.targetClient, item.packageId, item.packageFormat));
   };
 
   const openEdit = (item: MarketplacePackageSummary) => {
     if (!permissions.canEdit) return;
-    navigate(ROUTES.marketplace.packageEdit(item.provider, item.packageId));
+    navigate(ROUTES.marketplace.packageEdit(item.targetClient, item.packageId, item.packageFormat));
   };
 
   const completeRegistrySetup = async () => {
@@ -260,7 +259,7 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
     setQueryState(current => ({
       ...current,
       searchTerm: '',
-      provider: 'all',
+      targetClient: 'all',
       activeFeatures: new Set(),
       category: 'all',
       page: 1,
@@ -276,7 +275,7 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
     setQueryState(current => ({
       ...current,
       searchTerm: revealFilters.q ?? '',
-      provider: revealFilters.provider ?? 'all',
+      targetClient: revealFilters.targetClient ?? 'all',
       activeFeatures: new Set(revealFilters.features ?? []),
       category: revealFilters.category ?? 'all',
       page: revealFilters.page ?? 1,
@@ -290,7 +289,12 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
     try {
       const created = await createPackage(request);
       setIsCreateOpen(false);
-      navigate(`${ROUTES.marketplace.packageEdit(created.provider, created.packageId)}/basic`);
+      navigate(ROUTES.marketplace.packageEdit(
+        created.targetClient,
+        created.packageId,
+        created.packageFormat,
+        'basic',
+      ));
     } catch (err) {
       setCreateErrorKey(resolveCreatePackageErrorKey(err));
     } finally {
@@ -299,20 +303,15 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
   };
 
   const totalPages = result?.totalPages ?? 1;
-  const visibleItems = React.useMemo(
-    () => (result?.items ?? []).filter(item => statusFilter === 'all' || item.lifecycleStatus === statusFilter),
-    [result?.items, statusFilter],
-  );
+  const visibleItems = result?.items ?? [];
   const visiblePackageAction = packageAction
     && canRunMarketplacePackageAction(packageAction.type, permissions)
     ? packageAction
     : null;
 
   React.useEffect(() => {
-    if (!permissions.canImport) {
-      setIsImportOpen(false);
-    }
     if (!permissions.canEdit) {
+      setIsImportOpen(false);
       setIsCreateOpen(false);
       setCreateErrorKey(null);
     }
@@ -329,7 +328,6 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
     permissions.canDelete,
     permissions.canEdit,
     permissions.canExport,
-    permissions.canImport,
     permissions.canInstall,
   ]);
 
@@ -381,7 +379,7 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
           <MarketplaceCenterHeaderActions
             permissions={permissions}
             onImport={() => {
-              if (permissions.canImport) {
+              if (permissions.canEdit) {
                 setIsImportOpen(true);
               }
             }}
@@ -407,7 +405,7 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
       <div className="h-full overflow-auto p-6">
           <MarketplaceCenterFilters
             searchTerm={searchTerm}
-            provider={provider}
+            targetClient={targetClient}
             activeFeatures={activeFeatures}
             category={category}
             categories={result?.categories ?? []}
@@ -416,9 +414,9 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
               searchTerm: value,
               page: 1,
             }))}
-            onProviderChange={value => setQueryState(current => ({
+            onTargetClientChange={value => setQueryState(current => ({
               ...current,
-              provider: value,
+              targetClient: value,
               page: 1,
             }))}
             onActiveFeaturesChange={value => setQueryState(current => ({
@@ -450,18 +448,6 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
               onViewModeChange={setViewMode}
             />
 
-            <div className="flex items-center gap-2 px-6 pt-4">
-              <Button size="sm" variant={statusFilter === 'all' ? 'default' : 'outline'} className="h-7 px-2 text-xs" onClick={() => setStatusFilter('all')}>
-                {t('marketplace.lifecycle.all')}
-              </Button>
-              <Button size="sm" variant={statusFilter === 'draft' ? 'default' : 'outline'} className="h-7 px-2 text-xs" onClick={() => setStatusFilter('draft')}>
-                {t('marketplace.lifecycle.draft')}
-              </Button>
-              <Button size="sm" variant={statusFilter === 'ready' ? 'default' : 'outline'} className="h-7 px-2 text-xs" onClick={() => setStatusFilter('ready')}>
-                {t('marketplace.lifecycle.ready')}
-              </Button>
-            </div>
-
             <div className="flex-1 overflow-auto px-6 py-6">
               {isLoading ? (
                 <LoadingSpinner text={t('marketplace.center.list.loading')} />
@@ -482,7 +468,7 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {visibleItems.map(item => (
                         <MarketplacePackageCard
-                          key={`${item.provider}:${item.packageId}`}
+                          key={`${item.targetClient}:${item.packageId}`}
                           item={item}
                           onOpenDetail={openDetail}
                           onInstall={permissions.canInstall ? item => openPackageAction('install', item) : undefined}
@@ -496,7 +482,7 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
                     <div className="space-y-3">
                       {visibleItems.map(item => (
                         <MarketplacePackageListRow
-                          key={`${item.provider}:${item.packageId}`}
+                          key={`${item.targetClient}:${item.packageId}`}
                           item={item}
                           onOpenDetail={openDetail}
                           onInstall={permissions.canInstall ? item => openPackageAction('install', item) : undefined}
@@ -554,7 +540,7 @@ export const MarketplaceCenterPage: React.FC<MarketplaceCenterPageProps> = ({ na
           onSubmit={submitCreatePackage}
         />
       ) : null}
-      {permissions.canImport ? (
+      {permissions.canEdit ? (
         <MarketplaceImportDialog
           open={isImportOpen}
           onOpenChange={setIsImportOpen}

@@ -13,8 +13,10 @@ account state. The resource-authorization model remains canonical in [Permission
 
 The OIDC provider owns sign-in and credentials. Manager uses `(oidc_issuer, oidc_subject)` as the
 canonical external identity, creates a member snapshot on first successful sign-in, and syncs
-optional username, email, and display-name claims. Keycloak and LDAP can only back an external
-provider; they are not UI or API management dependencies.
+optional username, email, and display-name claims. Keycloak may come from the product's independent
+Identity Plane or an external installation. A future LDAP directory connects only through Keycloak
+User Federation. Neither is
+an Aileron UI or API account-management dependency.
 
 ## Roles and operations
 

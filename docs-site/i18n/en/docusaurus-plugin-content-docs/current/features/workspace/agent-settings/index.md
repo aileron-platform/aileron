@@ -18,7 +18,7 @@ Project, local, and user scope are independent from provider. Runtime provider a
 
 ## Primary Workflow
 
-Select a provider and settings type, then scope; read and save with revision. User-scope content remains isolated per user.
+Select a provider and settings type, then scope; read and save with revision. User-scope content lives in the Workspace's own persistent Runtime HOME, shared by every user and session of that Workspace — it is not an isolated personal space per human user.
 
 ## View States and Read-only Behavior
 

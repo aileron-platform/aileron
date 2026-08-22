@@ -75,6 +75,8 @@ export type NekoOutboundMessage =
 
 export interface NekoClientCallbacks {
   onConnectionStateChange?: (state: NekoConnectionState) => void;
+  onWebSocketStateChange?: (open: boolean) => void;
+  onDataChannelStateChange?: (open: boolean) => void;
   onTrack?: (event: RTCTrackEvent) => void;
   onError?: (error: Error) => void;
 }

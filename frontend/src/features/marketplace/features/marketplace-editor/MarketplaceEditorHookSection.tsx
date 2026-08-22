@@ -12,7 +12,7 @@ import {
   type HookDialogData,
 } from '@/shared/components/hook-workflow';
 import { useI18n } from '@/shared/hooks/useI18n';
-import type { MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 
 import type { MarketplaceEditorResourceItem } from './marketplaceEditorResourceItems';
 import {
@@ -32,7 +32,7 @@ const commonHookEventLabelKey = (eventName: string) => getHookEventI18nKey(event
 const commonHookEventDescriptionKey = (eventName: string) => getHookEventI18nKey(eventName, 'description');
 
 export interface MarketplaceEditorHookSectionProps {
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   icon: LucideIcon;
   items: MarketplaceEditorResourceItem[];
   onDirty?: () => void;
@@ -41,7 +41,7 @@ export interface MarketplaceEditorHookSectionProps {
   defaultSource?: { sourceId: string; path: string; manifestPointer: string } | null;
 }
 
-export const MarketplaceEditorHookSection: React.FC<MarketplaceEditorHookSectionProps> = ({ provider, icon: Icon, items: initialItems, onDirty, onItemsChange, onRefresh, defaultSource = null }) => {
+export const MarketplaceEditorHookSection: React.FC<MarketplaceEditorHookSectionProps> = ({ targetClient, icon: Icon, items: initialItems, onDirty, onItemsChange, onRefresh, defaultSource = null }) => {
   const { t } = useI18n();
   const [items, setItems] = React.useState(initialItems);
   const [hookDialogOpen, setHookDialogOpen] = React.useState(false);
@@ -50,7 +50,7 @@ export const MarketplaceEditorHookSection: React.FC<MarketplaceEditorHookSection
     setItems(initialItems);
   }, [initialItems]);
 
-  const emptyHook: MarketplaceHookDialogValue = createEmptyHookValue(provider);
+  const emptyHook: MarketplaceHookDialogValue = createEmptyHookValue(targetClient);
 
   const addHook = async (value: MarketplaceHookDialogValue) => {
     const id = `local-${Math.random().toString(36).slice(2, 10)}`;
@@ -75,7 +75,7 @@ export const MarketplaceEditorHookSection: React.FC<MarketplaceEditorHookSection
         meta: [
           { labelKey: 'marketplace.editor.featureMeta.labels.type', value: firstAction?.type ?? 'command' },
           { labelKey: 'marketplace.editor.featureMeta.labels.matcher', value: firstMatcher?.matcher ?? '*' },
-          { labelKey: 'marketplace.editor.featureMeta.labels.timeout', value: formatMarketplaceHookTimeout(provider, firstAction?.timeout) },
+          { labelKey: 'marketplace.editor.featureMeta.labels.timeout', value: formatMarketplaceHookTimeout(targetClient, firstAction?.timeout) },
           ...(firstMatcher?.sequential ? [{ labelKey: 'marketplace.editor.featureMeta.labels.sequential', value: t('marketplace.common.labels.enabled') }] : []),
         ],
       },
@@ -118,7 +118,7 @@ export const MarketplaceEditorHookSection: React.FC<MarketplaceEditorHookSection
           }}
           card={item => (
             <MarketplaceHookCard
-              provider={provider}
+              targetClient={targetClient}
               item={item}
               onDirty={onDirty}
               onRemove={async (itemId) => {
@@ -139,7 +139,7 @@ export const MarketplaceEditorHookSection: React.FC<MarketplaceEditorHookSection
               open={hookDialogOpen}
               mode="create"
               value={emptyHook}
-              provider={provider}
+              targetClient={targetClient}
               onOpenChange={setHookDialogOpen}
               onSave={addHook}
             />
@@ -151,17 +151,17 @@ export const MarketplaceEditorHookSection: React.FC<MarketplaceEditorHookSection
 };
 
 interface MarketplaceHookCardProps {
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   item: MarketplaceEditorResourceItem;
   onDirty?: () => void;
   onRemove: (id: string) => Promise<void>;
   onChange: (item: MarketplaceEditorResourceItem) => Promise<void>;
 }
 
-const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, item, onDirty, onRemove, onChange }) => {
+const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ targetClient, item, onDirty, onRemove, onChange }) => {
   const { t } = useI18n();
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [hook, setHook] = React.useState<MarketplaceHookDialogValue>(() => marketplaceHookDialogValueFromItem(item, provider, t));
+  const [hook, setHook] = React.useState<MarketplaceHookDialogValue>(() => marketplaceHookDialogValueFromItem(item, targetClient, t));
 
   return (
     <>
@@ -169,7 +169,7 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, ite
         <div className="flex items-start">
           <div className="min-w-0 flex-1 pr-16">
             <HookCard
-              provider={provider}
+              provider={targetClient}
               hook={{
                 event: t(commonHookEventLabelKey(hook.event)),
                 description: t(commonHookEventDescriptionKey(hook.event)),
@@ -197,10 +197,10 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, ite
       <MarketplaceHookDialog
         open={dialogOpen}
         value={hook}
-        provider={provider}
+        targetClient={targetClient}
         onOpenChange={setDialogOpen}
         onSave={async (value) => {
-          await onChange(marketplaceHookResourceItemFromValue(item, provider, value, t));
+          await onChange(marketplaceHookResourceItemFromValue(item, targetClient, value, t));
           setHook(value);
           setDialogOpen(false);
           onDirty?.();
@@ -213,7 +213,7 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, ite
 interface MarketplaceHookDialogProps {
   open: boolean;
   mode?: 'create' | 'edit';
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   value: MarketplaceHookDialogValue;
   onOpenChange: (open: boolean) => void;
   onSave: (value: MarketplaceHookDialogValue) => Promise<void>;
@@ -222,26 +222,26 @@ interface MarketplaceHookDialogProps {
 const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
   open,
   mode = 'edit',
-  provider,
+  targetClient,
   value,
   onOpenChange,
   onSave,
 }) => {
   const { t } = useI18n();
   const eventOptions = React.useMemo(
-    () => HOOK_EVENTS[provider].map((eventName) => ({
+    () => HOOK_EVENTS[targetClient].map((eventName) => ({
       value: eventName,
       label: t(commonHookEventLabelKey(eventName)),
     })),
-    [provider, t],
+    [targetClient, t],
   );
   const labels = React.useMemo(
-    () => createMarketplaceHookDialogLabels(t, provider, mode),
-    [mode, provider, t],
+    () => createMarketplaceHookDialogLabels(t, targetClient, mode),
+    [mode, targetClient, t],
   );
   const options = React.useMemo(
-    () => createMarketplaceHookDialogOptions(t, provider, eventOptions),
-    [eventOptions, provider, t],
+    () => createMarketplaceHookDialogOptions(t, targetClient, eventOptions),
+    [eventOptions, targetClient, t],
   );
   const hook = React.useMemo<HookDialogData | null>(() => ({
     id: value.name || value.event,
@@ -255,7 +255,7 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
     <HookDialog
       open={open}
       mode={mode}
-      provider={provider}
+      provider={targetClient}
       hook={mode === 'edit' ? hook : null}
       showNameField
       showScopeField={false}

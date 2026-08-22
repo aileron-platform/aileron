@@ -10,9 +10,11 @@ import {
 } from '@/shared/components/shell';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { VersionControlRefreshButton } from '@/shared/components/version-control';
+import { FileTreeRefreshButton } from './FileTreeRefreshButton';
 import { WorkspaceRealtimeProvider } from '../realtime/WorkspaceRealtimeProvider';
 import { useWorkspace } from '../providers/WorkspaceProvider';
 import type { AgentSelectedFile } from '../features/agent-settings/model/documents';
+import type { AgentSettingsToolId } from '../features/agent-settings/model/capabilities';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import {
   WorkspaceCompanionCollapsedContent,
@@ -41,6 +43,11 @@ export interface WorkspaceShellAdapterProps {
   userId?: string;
   navigationSlot: React.ReactNode;
   stateContent?: React.ReactNode;
+}
+
+interface ScopedSkillSelection {
+  toolId: AgentSettingsToolId;
+  file: AgentSelectedFile;
 }
 
 const createWorkspacePreferencesAdapter = (
@@ -131,8 +138,13 @@ export const WorkspaceShellAdapter: React.FC<WorkspaceShellAdapterProps> = ({
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const surface = resolveWorkspaceShellSurface({ state, permissions, workspaceRuntime });
-  const [skillSelectedFile, setSkillSelectedFile] = useState<AgentSelectedFile | null>(null);
+  const [skillSelection, setSkillSelection] = useState<ScopedSkillSelection | null>(null);
+  const skillSelectedFile = skillSelection?.toolId === surface.activeAgentToolId
+    ? skillSelection.file
+    : null;
   const [isVersionControlRefreshing, setIsVersionControlRefreshing] = useState(false);
+  const [fileTreeRefreshSignal, setFileTreeRefreshSignal] = useState(0);
+  const [isFileTreeRefreshing, setIsFileTreeRefreshing] = useState(false);
   const versionControlSession = useWorkspaceVersionControlSession({
     workspaceId: workspaceRuntime.workspaceId ?? '',
     runtimeBaseUrl: workspaceRuntime.runtimeBaseUrl ?? '',
@@ -149,10 +161,20 @@ export const WorkspaceShellAdapter: React.FC<WorkspaceShellAdapterProps> = ({
   );
 
   React.useEffect(() => {
-    if (!surface.isAgentToolSkillsView) {
-      setSkillSelectedFile(null);
+    if (
+      skillSelection
+      && (
+        !surface.isAgentToolSkillsView
+        || skillSelection.toolId !== surface.activeAgentToolId
+      )
+    ) {
+      setSkillSelection(null);
     }
-  }, [surface.isAgentToolSkillsView]);
+  }, [skillSelection, surface.activeAgentToolId, surface.isAgentToolSkillsView]);
+
+  const handleSkillSelect = useCallback((file: AgentSelectedFile | null) => {
+    setSkillSelection(file ? { toolId: surface.activeAgentToolId, file } : null);
+  }, [surface.activeAgentToolId]);
 
   const handleVersionControlRefresh = useCallback(async () => {
     if (!workspaceRuntime.workspaceId || isVersionControlRefreshing) {
@@ -174,6 +196,13 @@ export const WorkspaceShellAdapter: React.FC<WorkspaceShellAdapterProps> = ({
     workspaceRuntime.workspaceId,
   ]);
 
+  const handleFileTreeRefresh = useCallback(() => {
+    if (isFileTreeRefreshing) {
+      return;
+    }
+    setFileTreeRefreshSignal((value) => value + 1);
+  }, [isFileTreeRefreshing]);
+
   if (stateContent) {
     return <ProductShell topBar={navigationSlot} body={{ kind: 'state', content: stateContent }} />;
   }
@@ -185,12 +214,14 @@ export const WorkspaceShellAdapter: React.FC<WorkspaceShellAdapterProps> = ({
       activeAgentToolId={surface.activeAgentToolId}
       isAgentToolFeatureActive={surface.isAgentToolFeatureActive}
       skillSelectedFile={skillSelectedFile}
-      onSkillSelect={setSkillSelectedFile}
+      onSkillSelect={handleSkillSelect}
       documentSelectedId={documentSelection.selectedId}
       onDocumentSelect={documentSelection.handleSelect}
       onDocumentDirtyChange={documentSelection.handleDirtyChange}
       documentSelectionBlocked={documentSelection.selectionBlocked}
       columnCollapsed={collapsed}
+      fileTreeRefreshSignal={fileTreeRefreshSignal}
+      onFileTreeRefreshingChange={setIsFileTreeRefreshing}
     />
   );
 
@@ -199,7 +230,6 @@ export const WorkspaceShellAdapter: React.FC<WorkspaceShellAdapterProps> = ({
     behavior: navigationBehavior,
     presentation: {
       accessibleLabel: t('workspace.sidebar.title'),
-      chrome: 'navigation',
       responsive: 'always',
       header: {
         leading: <Navigation className="h-4 w-4 text-sidebar-primary" aria-hidden="true" />,
@@ -213,6 +243,13 @@ export const WorkspaceShellAdapter: React.FC<WorkspaceShellAdapterProps> = ({
       return {
         leading: <Folder className="h-4 w-4 text-primary" aria-hidden="true" />,
         title: t('workspace.fileManagement.view.treeTitle'),
+        actions: (
+          <FileTreeRefreshButton
+            onRefresh={handleFileTreeRefresh}
+            isRefreshing={isFileTreeRefreshing}
+            disabled={!workspaceRuntime.workspaceId}
+          />
+        ),
       };
     }
     if (state.currentFeature === 'version-control') {
@@ -247,7 +284,6 @@ export const WorkspaceShellAdapter: React.FC<WorkspaceShellAdapterProps> = ({
     behavior: navigatorBehavior,
     presentation: {
       accessibleLabel: t('workspace.layout.panelTitle'),
-      chrome: 'navigator-muted',
       responsive: 'always',
       header: navigatorHeader,
     },
@@ -273,7 +309,7 @@ export const WorkspaceShellAdapter: React.FC<WorkspaceShellAdapterProps> = ({
     bottom: companionBottomBehavior,
     presentation: {
       accessibleLabel: t('aiChat.companion.tabs.label'),
-      chrome: 'plain-compact-rail',
+      rail: 'compact',
       header: surface.companionPlacement === 'bottom' && surface.companionActiveTab === 'terminal'
         ? undefined
         : {

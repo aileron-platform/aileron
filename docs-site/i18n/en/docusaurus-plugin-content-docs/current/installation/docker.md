@@ -27,7 +27,7 @@ title: Docker Mode
 In Docker mode, the root `docker compose` manages only the control plane. Workspace Manager uses the Docker API to create an isolated execution plane for each running Workspace:
 
 ```text
-Frontend / Manager / external OIDC or development IdP fixture
+Frontend / Manager / external OIDC or bundled Keycloak
                |
        Workspace Manager + Docker API
                |
@@ -45,8 +45,8 @@ PostgreSQL and Redis provide control-plane infrastructure.
 |------|------|------|
 | **postgres** | `postgres:15-alpine` | Primary platform database |
 | **redis** | `redis:7-alpine` | Task queue (Celery broker), result backend, and session management |
-| **openldap** | `osixia/openldap:1.5.0` | LDAP directory for local account-lifecycle development |
-| **openldap-seed** | `osixia/openldap:1.5.0` | One-shot local LDAP seed job; exits after success |
+| **local-oidc-config** | `python:3.12-alpine` | One-shot Keycloak realm rendering from mounted Secret files; exits after success |
+| **keycloak** | `${PLATFORM_KEYCLOAK_IMAGE}` | Native-user OIDC provider and Admin Console for the `local-oidc` profile |
 | **turn-readiness-preflight** | `ailerondocker/workspace-manager:dev` | Validates the TURN profile, secret bundle, image, and relay ports before startup |
 | **coturn** | `${COTURN_IMAGE}` | TURN control listener and relay UDP range |
 | **connectivity-evidence-gateway** | `${WORKSPACE_OPERATOR_IMAGE}` | Accepts host frontend-vantage challenges and evidence |
@@ -55,7 +55,6 @@ PostgreSQL and Redis provide control-plane infrastructure.
 | **identity-bootstrap** | `ailerondocker/workspace-manager:dev` | One-shot local platform-role and administrator-snapshot bootstrap; never creates a provider password |
 | **workspace-manager** | `ailerondocker/workspace-manager:dev` | Core management service: Workspace CRUD, permissions, lifecycle, and dynamic execution-plane provisioning |
 | **frontend** | `ailerondocker/workspace-ui:dev` | React + Vite development server |
-| **drawio** | `jgraph/drawio` | Embedded diagram editor |
 
 These thirteen names are the complete root Compose service list. Celery worker, Celery Beat, and
 Flower are not separate Compose services; Supervisor runs them inside the `workspace-manager`
@@ -89,7 +88,7 @@ Each source type owns its versions; neither `ops.py` nor Compose duplicates them
 | Frontend and Canvas npm packages | Their respective `package.json` and `package-lock.json` | Reproduce the lockfile with `npm ci` |
 | Manager and Runtime Python packages | Their respective `pyproject.toml` and `uv.lock` | Build from a frozen lockfile |
 | Go modules | Their respective `go.mod` and `go.sum` | Reproduce the Go module lock state |
-| Runtime service images such as PostgreSQL, Redis, an OIDC adapter, and Draw.io | `docker-compose.yml` or Helm values | Managed separately from the application build toolchain |
+| Runtime service images such as PostgreSQL, Redis, and an OIDC adapter | `docker-compose.yml` or Helm values | Managed separately from the application build toolchain |
 
 When updating a toolchain version, change only `docker-bake.hcl` and update checksum fields together. Do not add another numeric version to a Dockerfile, Compose file, Makefile, shell script, or `ops.py`.
 
@@ -119,6 +118,7 @@ See [Environment Variable Reference](./environment-variables) for the complete l
 | `HOST_RUNTIME_HOME_DIR` | `./data/runtime-home` | Root for each dynamic Runtime's complete user HOME |
 | `WORKSPACE_OPERATOR_IMAGE` | `ailerondocker/workspace-operator:dev` | Existing Operator image used by the Gateway, host agent, and Browser probe |
 | `COTURN_IMAGE` | `ailerondocker/platform-coturn:dev` | Coturn image, supplied locally or by the deployer |
+| `PLATFORM_KEYCLOAK_IMAGE` | `ailerondocker/platform-keycloak:dev` | Product-built immutable Keycloak image for `local-oidc` |
 | `HOST_TURN_CONFIG_DIR` | `./data/turn-config` | Host directory containing the canonical TURN profile |
 | `HOST_TURN_SECRETS_DIR` | `./data/turn-secrets` | Directory containing the TURN REST, backend/frontend ICE, Coturn, Gateway, and host-agent secret bundle |
 | `TURN_CREDENTIAL_REVISION` | `docker-compose-v1` | Credential revision for this installation |
@@ -133,16 +133,17 @@ Create `.env` in the project root and Docker Compose loads it automatically.
 ### Local OIDC Secrets
 
 When the `local-oidc` profile is enabled, `${HOST_PLATFORM_SECRETS_DIR}` must also
-contain `local-admin-password`, `ldap-admin-password`, `ldap-config-password`,
-`ldap-alice-password`, and `ldap-bob-password`. OpenLDAP reads the mounted files
-through the image-native `*_FILE` adapter; after first-start initialization, the
-long-running `slapd` argv and environment contain no Secret value. Keycloak imports
-the `aileron` realm with its local emergency administrator and does not create a
-master-realm bootstrap administrator, so no separate Keycloak admin Secret is needed.
+contain `keycloak-bootstrap-admin-password` and `local-oidc-platform-admin-password`.
+The former creates the separate Admin Console administrator before Keycloak starts and
+is then removed from the process environment. The latter is written only to the
+mode-`0600` realm import and defaults to `admin123` for an isolated local environment.
+The OIDC client continues to use the shared `oidc-client-secret`.
 
-`ldap-admin-password` and `ldap-config-password` contain the exact password bytes and
-must not include surrounding whitespace or a trailing newline. `local-oidc-config`
-validates this contract before OpenLDAP starts and fails closed on invalid files.
+The Aileron platform administrator in the realm and the Manager bootstrap snapshot share
+`BOOTSTRAP_ADMIN_SUBJECT`, `BOOTSTRAP_ADMIN_USERNAME`, and `BOOTSTRAP_ADMIN_EMAIL`; the
+default username is `admin`. The Keycloak Admin Console administrator uses the separate
+`KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME`. Passwords are accepted only through mounted Secret
+files. This profile deploys no OpenLDAP, LDAP seed, or LDAP federation.
 
 ### TURN readiness bundle
 
@@ -286,7 +287,8 @@ docker buildx bake --load local
 Start with existing images, or stop non-destructively while preserving data:
 
 ```bash
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 make down
 ```
 
@@ -299,8 +301,8 @@ make verify-local
 Follow logs:
 
 ```bash
-docker compose logs -f
-docker compose logs -f workspace-manager
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml logs -f
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml logs -f workspace-manager
 docker logs -f workspace-runtime-<workspace-id>
 ```
 
@@ -345,7 +347,8 @@ Restart after the full reset:
 
 ```bash
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 ```
 
 ## Health Checks
@@ -370,7 +373,7 @@ Manager lifecycle reconciliation owns dynamic execution-plane health and each co
 | Workspace lifecycle | Docker container | Pod + internal Service; public traffic uses Frontend's gateway |
 | Network isolation | Docker bridge network | Cilium Network Policy |
 | Storage | Host volume mount | PVC (Persistent Volume Claim) |
-| Authentication | Required (external OIDC or the local development IdP fixture) | Required (external OIDC provider with Ingress TLS) |
+| Authentication | Required (external OIDC or bundled Keycloak) | Required (external OIDC or the independent bundled Keycloak Identity Plane) |
 | Best suited for | Development, testing, demos | Production and multi-user collaboration |
 
 For Kubernetes deployment, see [Kubernetes Mode](./kubernetes).

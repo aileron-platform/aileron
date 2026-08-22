@@ -57,6 +57,10 @@ describe('Vite Workspace Canvas gateway', () => {
     let receivedPrefix: string | undefined;
     canvas = http.createServer((request, response) => {
       receivedPrefix = request.headers['x-forwarded-prefix'] as string | undefined;
+      if (request.url?.split('?', 1)[0] === '/') {
+        response.writeHead(418).end('upstream-root');
+        return;
+      }
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       response.end('<!doctype html><html><body>Canvas</body></html>');
     });
@@ -97,7 +101,7 @@ describe('Vite Workspace Canvas gateway', () => {
     const address = vite.httpServer?.address() as AddressInfo;
 
     const response = await fetch(
-      `http://127.0.0.1:${address.port}${FORWARDED_PREFIX}/?lang=zh-TW`,
+      `http://127.0.0.1:${address.port}${FORWARDED_PREFIX}/headers?lang=zh-TW`,
       {
         headers: {
           cookie: 'aileron_workspace_gateway_session=test-session',
@@ -106,6 +110,19 @@ describe('Vite Workspace Canvas gateway', () => {
     );
 
     expect(response.status).toBe(200);
+    expect(receivedPrefix).toBe(FORWARDED_PREFIX);
+
+    const rootResponse = await fetch(
+      `http://127.0.0.1:${address.port}${FORWARDED_PREFIX}/?lang=zh-TW`,
+      {
+        headers: {
+          cookie: 'aileron_workspace_gateway_session=test-session',
+        },
+      },
+    );
+
+    expect(rootResponse.status).toBe(418);
+    await expect(rootResponse.text()).resolves.toBe('upstream-root');
     expect(receivedPrefix).toBe(FORWARDED_PREFIX);
   });
 

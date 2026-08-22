@@ -1,14 +1,16 @@
 ---
-title: Kubernetes 快速安裝
-description: 以 Helm 從全新環境安裝 Aileron 的最短流程
+title: RKE2 HomeLab 安裝
+description: 以唯一的三階段安裝器部署及升級 RKE2 HomeLab
 ---
 
-# Kubernetes 快速安裝
+# RKE2 HomeLab 安裝
 
-本章是全新 Kubernetes 環境的安裝入口。專案不提供可直接部署的 production platform
-overlay；部署流程必須產生 `/run/aileron/platform-values.yaml`，提供該叢集已驗證的儲存、
-網路、Ingress、TURN 與安全契約。`helm/aileron/tests/values/platform-*.yaml` 只供 render
-contract 測試，不是部署 profile。正式部署前，先完成下列專題：
+本頁只描述已驗證的 RKE2 HomeLab 正式契約。唯一頂層入口是
+`scripts/deploy/rke2/install.py`；不得以手動建立 Namespace／Secret 或直接執行 Helm
+取代安裝器。其他 Kubernetes provider 尚未具備相同的完整安裝與復原驗證，因此本頁不提供
+推測性的通用安裝路徑。
+
+部署前另請確認：
 
 - [儲存設計](./kubernetes-storage.md)
 - [映像建置與私有 Registry](./kubernetes-images.md)
@@ -18,359 +20,262 @@ contract 測試，不是部署 profile。正式部署前，先完成下列專題
 
 ## 前置條件
 
-- 已列入專案 conformance matrix 且實際通過驗證的 Kubernetes minor／provider 組合、
-  `kubectl`、Helm 3 與可用的 Ingress Controller。不得只因某個 API 已存在，就推論其後
-  所有 Kubernetes minor 都受支援。
-- 叢集必須提供 GA
-  [`discovery.k8s.io/v1` EndpointSlice API](https://kubernetes.io/docs/reference/kubernetes-api/discovery/endpoint-slice-v1/)；
-  conformance 無法使用時應直接失敗，不得改用 `Endpoints` API。
-- Cilium。正式環境必須以 `cilium.enabled=true` 啟用 Workspace 網路隔離；目前的
-  firewall attestor DaemonSet 需要以 UID 0 唯讀掛載 node 上的 Cilium socket。
-- Workspace working tree 使用 `Filesystem + ReadWriteMany` 的共享儲存。
-- Runtime HOME 預設使用 `ReadWriteOnce`；平台也可明確改用 `ReadWriteMany`。
-- Knowledge Base 使用 `Filesystem + ReadWriteMany + Retain` 的共享儲存。
-- Manager state、PostgreSQL 與 Redis 各自使用明確的 `ReadWriteOnce + Retain` StorageClass。
-- 所有 Aileron 映像均為目標架構的不可變 digest，且節點信任私有 Registry CA。
-- `platformPublicOrigin` 的單一公開 DNS 與 TLS Secret 已完成。
-- Runtime assertion 金鑰與 Browser credential 等必要 Secret 已建立；Registry 認證則依平台
-  使用 kubelet identity 或 image pull Secret。
-- 內建 TURN 的 DNS 與節點防火牆已完成；使用外部 TURN 時則已建立 ICE JSON Secret。
+- 使用乾淨 checkout 與完整 40 字元 Git SHA；部署與映像皆為 `linux/amd64`。
+- 使用 tracked `scripts/deploy/rke2/requirements.txt` 的 hashes 建立部署 Python runtime。
+  CI 會在 pinned Python 3.9／linux/amd64 stage 實際安裝同一份 production lock，執行
+  `pip check`，並匯入 `jsonschema` 與 `yaml`。
+- 使用 stable Helm `>=3.13.0,<4.0.0`。Preflight 會實際驗證 server-side dry-run、
+  atomic upgrade、history limit 與 rollback cleanup capability。
+- 固定 private root 為 `/root/aileron-private`、mode `0700`；private root、其下每一層
+  installation-owned 目錄，以及所有 mode `0600` kubeconfig、inventory、TLS、CA、dockerconfig
+  與其他私密輸入，都必須由安裝器的 effective UID 擁有。路徑不得含 symbolic link 或 hard link。
+- Kubeconfig 的 `current-context` 必須等於命令指定 context，只能包含 inline CA 與 inline
+  token，或 inline client certificate/key。`certificate-authority`、`client-certificate`、
+  `client-key`、`tokenFile`、`exec`、`auth-provider` 等外部或動態引用一律拒絕。
+- 所有 Aileron 映像都已推送為目標 commit 的不可變 digest，且已產生受信任的 published image
+  inventory。
+- 叢集的 StorageClass、Cilium、Ingress、DNS、Apps TLS、OIDC TLS、TURN 與 Registry trust
+  已依 HomeLab profile 完成。Registry CA、Apps ingress CA 與 OIDC CA 是三個獨立輸入，不得
+  fallback。
 
-正式 profile 不會從 `global.storageClass` 推測資料用途。每個持久化元件都必須指定自己的
-StorageClass。
+完整參數與 private input 路徑以 repository 中的 `scripts/deploy/rke2/INSTALL.md` 為準。
 
-## 1. 準備 namespace 與 Secrets
+## Identity 模式
 
-以下命令都應在叢集管理主機執行：
+- `bundledKeycloak`：安裝器管理 bundled Keycloak，以及 `workspace-system`、
+  `aileron-turn-system`、`aileron-backend-attestor-system`、`aileron-identity-system`。
+- `externalOidc`：安裝器管理 `workspace-system`、`aileron-turn-system` 與
+  retained `aileron-backend-attestor-system`；`aileron-identity-system` 必須不存在，外部 issuer
+  必須提供標準 OIDC Discovery／JWKS。
 
-先在權限 `0700` 的暫存目錄準備：
+Bundled 模式會建立用途分離的 Aileron 平台管理員、Keycloak Console 管理員與 break-glass
+帳號。HomeLab 的平台管理員預設為 `admin`／`admin123`，只適用於隔離測試環境；一般 Kubernetes
+安裝會產生強隨機密碼。完整角色、密碼政策與私密 artifact 位置請見
+[OIDC 與 Identity Plane 安裝](./oidc.md#內建帳號與密碼)。
 
-```bash
-install -d -m 0700 /run/aileron/private-material
-```
+未來 LDAP 支援位於 Identity provider federation 邊界：LDAP 管理帳號生命週期，Keycloak 或
+外部 IdP 透過 OIDC 提供應用登入，本專案只管理應用授權並保留本機緊急管理員。Installer 不會
+直接綁定 LDAP protocol 或預先匯入整個 directory，因此現行 Docker／HomeLab 不啟用 LDAP
+不會封死後續支援路徑。
 
-- `private-key.pem`：Ed25519 PKCS#8 private key，檔案權限 `0600`。
-- `jwks.json`：只包含對應 public key，且其 `kid` 與
-  `runtimeAssertions.activeKid` 完全相同。
-- `browser-credential-keyring.json`：由受控 secret workflow 產生，檔案權限 `0600`，
-  格式如下；key material 是 32-byte random value 的 unpadded base64url。
+## Retained backend attestor prerequisite
 
-`jwks.json` 必須使用以下 OKP／Ed25519 signing-key schema；`x` 是 32-byte raw public
-key 的 unpadded base64url，不是 PEM 或 DER 內容：
+完整重建會保留 `aileron-acceptance-system` 與 `aileron-backend-attestor-system`；兩者都不是
+reset target。Backend attestor Namespace 由 `aileron-installer` 擁有，PSA 固定為
+`enforce=privileged`、`audit=restricted`、`warn=restricted`，且只使用固定
+`harbor-rke-creds` image pull Secret。Harbor dockerconfig 必須只含命令指定的 exact registry
+entry，不得把 credential 寫入 log 或 evidence。
 
-```json
-{
-  "keys": [
-    {
-      "kty": "OKP",
-      "crv": "Ed25519",
-      "alg": "EdDSA",
-      "use": "sig",
-      "kid": "workspace-manager-ed25519-v1",
-      "x": "<base64url-encoded-32-byte-public-key>"
-    }
-  ]
-}
-```
+第一次 signed pre-reset snapshot 前，先在 repository 外建立 mode `0600` canonical JSON
+execution profile。Profile 固定使用 schema `aileron-backend-execution-profile/v1`，將 NFS target
+限制在 pinned IPv4 與 approved mount roots，並將 local-path target 限制在 live node hostname、
+node UID 與 approved mount roots；至少要提供一種 target。可由 tracked
+`scripts/deploy/rke2/backend-execution-profile.example.json` 建立輸入，但所有 placeholder 與
+`_comment` 都必須移除，並依 schema canonicalize 後再使用。
 
-在受控管理主機準備 `openssl` 與 `jq` 後，可用下列命令驗證 schema、`kid` 與
-private／public key pair。命令不會輸出 private key，但仍不得開啟 shell tracing：
+Dedicated preparer 預設只驗證並執行 Kubernetes server-side dry-run：
 
 ```bash
-set +x
-export ACTIVE_KID=workspace-manager-ed25519-v1
-
-head -n 1 /run/aileron/private-material/private-key.pem \
-  | grep -qx -- '-----BEGIN PRIVATE KEY-----'
-openssl pkey \
-  -in /run/aileron/private-material/private-key.pem \
-  -check -noout >/dev/null
-
-jq -e --arg kid "${ACTIVE_KID}" '
-  ([.keys[] | select(.kid == $kid)] | length) == 1 and
-  any(.keys[];
-    .kid == $kid and
-    .kty == "OKP" and
-    .crv == "Ed25519" and
-    .alg == "EdDSA" and
-    .use == "sig" and
-    (.x | test("^[A-Za-z0-9_-]{43}$"))
-  )
-' /run/aileron/private-material/jwks.json >/dev/null
-
-EXPECTED_X="$(
-  jq -er --arg kid "${ACTIVE_KID}" \
-    '.keys[] | select(.kid == $kid) | .x' \
-    /run/aileron/private-material/jwks.json
-)"
-ACTUAL_X="$(
-  openssl pkey \
-    -in /run/aileron/private-material/private-key.pem \
-    -pubout -outform DER 2>/dev/null \
-  | tail -c 32 \
-  | openssl base64 -A \
-  | tr '+/' '-_' \
-  | tr -d '='
-)"
-test "${EXPECTED_X}" = "${ACTUAL_X}"
-unset EXPECTED_X ACTUAL_X ACTIVE_KID
+python3 scripts/deploy/rke2/prepare_backend_attestor.py \
+  --kubeconfig /root/aileron-private/kubeconfig \
+  --harbor-dockerconfig /root/aileron-private/harbor/dockerconfig.json \
+  --execution-profile /root/aileron-private/inputs/backend-execution-profile.json \
+  --context rke \
+  --registry harbor.rke.soez.tw
 ```
 
-`runtimeAssertions.activeKid` 必須設成同一個 `kid`。正式 PKI／secret workflow 應直接產生
-上述兩份 material，這段命令只負責部署前驗證，不負責產生或輪替金鑰。
+Exit `78` 表示 prerequisite 尚未 Ready；此時才以完全相同參數加上 `--apply`，再重新執行上方
+validate。Apply 會以 UID／resourceVersion precondition 建立或精確收斂 Namespace 與 pull Secret，
+並將 profile exact bytes write-once 發布到
+`/root/aileron-private/backend-attestor/execution-profile.json`。Namespace 是 durable prerequisite；
+若後續 Secret 步驟失敗也不會自動刪除。既存固定 profile 內容不同、Namespace／Secret owner、UID、
+PSA、type、data key 或 Registry credential 漂移時都會 fail closed。
 
-Browser credential keyring 使用另一組獨立 secret，格式如下：
+## 唯一三階段流程
 
-```json
-{
-  "algorithm": "hkdf-sha256-v1",
-  "activeKeyId": "browser-credential-v1",
-  "keys": {
-    "browser-credential-v1": "<base64url-encoded-32-byte-secret>"
-  }
-}
-```
-
-專案的 `workspace-manager/scripts/generate_runtime_assertion_keys.py` 目前是 Docker
-development 初始化工具，不是 production PKI 契約。正式環境應由組織的 PKI／secret
-manager 產生並保管 matching assertion pair 與 Browser keyring。
-
-接著建立 namespace 與 Secret：
+三次命令必須使用完全相同的 commit、context、Identity 選擇與完整 private inputs，包括上述
+repo 外 `--execution-profile`：
 
 ```bash
-export NAMESPACE=workspace-system
-export TURN_NAMESPACE=aileron-turn-system
-
-kubectl create namespace "${NAMESPACE}" \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-kubectl create secret docker-registry registry-pull \
-  --namespace "${NAMESPACE}" \
-  --docker-server="${REGISTRY_HOST}" \
-  --docker-username="${REGISTRY_USERNAME}" \
-  --docker-password="${REGISTRY_PASSWORD}"
-
-kubectl create secret generic runtime-assertion-signer \
-  --namespace "${NAMESPACE}" \
-  --from-file=private-key.pem=/run/aileron/private-material/private-key.pem
-
-kubectl create secret generic runtime-assertion-public-jwks \
-  --namespace "${NAMESPACE}" \
-  --from-file=jwks.json=/run/aileron/private-material/jwks.json
-
-kubectl create secret generic browser-credential-keyring \
-  --namespace "${NAMESPACE}" \
-  --from-file=keyring.json=/run/aileron/private-material/browser-credential-keyring.json
-
-kubectl create secret tls aileron-platform-tls \
-  --namespace "${NAMESPACE}" \
-  --cert=./tls.crt \
-  --key=./tls.key
+python3 scripts/deploy/rke2/install.py validate <完整安裝參數>
+python3 scripts/deploy/rke2/install.py prepare-cluster <完整安裝參數> --confirm-create-namespaces
+python3 scripts/deploy/rke2/install.py apply <完整安裝參數>
 ```
 
-若使用 built-in TURN、private Coturn image，且採 Secret-based Registry 認證，
-`global.imagePullSecrets` 也會被 Coturn DaemonSet 引用，但 Kubernetes Secret 不能跨
-namespace。Chart 不會複製 Registry Secret，因此安裝前還必須預建 Coturn namespace、
-標記為本 Helm release 管理，並建立同名 Secret：
+### `validate`
+
+`validate` 不持久變更 Kubernetes，也不在 stable private tree 留下 phase artifact。若目標
+Namespace 不存在，安裝器會對包含 installer owner 與完整 PSA labels 的固定 manifest 執行
+server-side dry-run，再以 exit `78` 要求執行 `prepare-cluster`。缺少真實 namespace scope 時，
+不得把 Namespace-scoped Secret 或 Helm validation 誤報為成功。
+
+### `prepare-cluster`
+
+此 phase 唯一允許的持久 mutation 是 Namespace。所有 ownership、UID、resourceVersion check
+與 server-side dry-run 都必須在第一個 mutation 前完成；既存 Namespace 只能由安裝器收斂其
+完整 PSA profile。Exact profile 會移除所有未宣告的 `pod-security.kubernetes.io/*` label，但保留
+非 PSA label。所有 server-side dry-run 完成後、第一個 mutation 前會重新讀取完整 target inventory；
+原先 absent target 或 external OIDC 禁止的 Identity Namespace 新出現時，維持零 mutation 並停止。
+Mutation 後必須重新查詢並確認：
+
+- Namespace UID 未替換。
+- Owner 與 exact PSA labels 相符。
+- `status.phase` 精確等於 `Active`。
+- `metadata.deletionTimestamp` 不存在。
+
+任何 allowlisted target 或 external OIDC 模式下殘留的 Identity Namespace 正在 Terminating
+時，都必須 fail closed。此 phase 不得建立 Secret、Helm release 或 application data。
+
+### `apply`
+
+`apply` 先完成相同 validation。Identity／Core Secret dry-run、Helm server-side dry-run 與完整
+core preflight 全部通過後，才可進入 Secret transaction。第一個 Secret mutation 前會再次驗證
+所有 Namespace 的 UID、owner、PSA、`Active` phase 與 deletion timestamp；任何 replacement、
+drift 或 termination 都在零 Secret／release mutation 下停止。
+
+Namespace 是 transaction 之外的 durable prerequisite。後續部署或復原失敗不會自動刪除已安全
+建立的 Namespace。
+
+## 全域鎖與 private input snapshot
+
+安裝器直接對自身 effective UID 擁有、mode `0700` 的 private root directory file descriptor 取得 non-blocking flock，並
+驗證 path 與 descriptor 的 device／inode；不建立 `installation.lock` 或其他穩定 lock artifact。
+因此首次 `validate`／`prepare-cluster` 即使遇到 contention，也不會污染 stable private tree。
+
+每個外部檔案與其 private parent directories 都必須由相同 effective UID 擁有。檔案以同一個
+`O_NOFOLLOW` descriptor 執行 `fstat → read → fstat`，接著以
+`O_EXCL` 建立 mode `0600` snapshot，並 fsync 檔案與目錄。Snapshot 後不再讀取原始路徑；原始
+檔案被替換也不會改變本 phase 使用的內容。`validate` 與 `prepare-cluster` 使用會自動清除的
+private phase directory；`apply` 使用 commit-scoped write-once snapshots，重試時內容不一致即
+停止。
+
+Kubeconfig 先保存 raw snapshot，再以該 raw snapshot 與原始 context 執行
+`kubectl config view --raw --flatten --minify`，輸出第二份 mode `0600` snapshot。Flatten 前後的
+API server 與 CA 必須相同；cluster UID 與所有後續 Kubernetes／Helm 命令都固定使用 flattened
+snapshot，不會再次讀取原 kubeconfig。
+
+## Secret 與 release transaction
+
+安裝器依 Identity mode 與 canonical Secret registry 展開 exact allowlist。Mutation 前會記錄每個
+Secret 的 `existing`／`absent` pre-state；既存 Secret 的完整 JSON 只保存在 mode `0600` private
+snapshot，inventory 不包含 Secret value。失敗時只復原 allowlist 內的項目，且所有 replace／delete
+都以 UID 與 resourceVersion precondition fail closed。
+
+Core preflight 會驗證映像、TLS、Namespace、網路安全、Helm capability、DaemonSet 與
+Deployment／StatefulSet／Job capacity，以及新 Workspace 的 Runtime／Browser／Canvas capacity。
+通過後才安裝或升級 Identity，再驗 OIDC readiness，最後重新執行 live Core preflight 並部署 Core。
+Core rollback、Secret restore 或 Identity recovery 任一步不可信時，不得宣告部署成功。
+
+## 驗收
+
+Pod Ready、PVC Bound 與 Helm `deployed` 只屬最小健康訊號，不是完整部署證據。完整驗收唯一
+信任 `scripts/deploy/rke2/deployment-acceptance-contract.json` 與 code-owned digest，且必須從正常
+OIDC API／UI 流程建立新的 `oidcWorkspace`。
+
+驗收依因果 DAG 證明 signed 11-image release 集合、clean reset、Identity／OIDC、Runtime、Terminal、
+Browser、Canvas、WebSocket、TURN、Workspace lifecycle、component restart 與 soak；live workload
+實際使用的映像必須另以 Pod `imageID` 證據核對，`imageRelease` 本身不宣稱 live rollout attestation。所有 private
+input、raw report、bundle 與 sidecar 都必須留在 code-owned mode `0700` 目錄內，檔案為 mode
+`0600`；Secret、token、密碼與私鑰不得寫入 Git、report 或 log。
+
+目前 v8 因果順序固定為：signed image inventory → `cleanReset --reset-phase pre-reset` snapshot／epoch →
+non-mutating `suites` 與 `offlineOidcConformance`（可平行）→ reset → signed post-reset `cleanReset` report →
+top-level `install.py` 三階段 → `imageRelease` → bundled 模式的 `identity` → `oidcWorkspace` → 其餘
+Workspace reports。Reset executor 在讀取 signed backend inputs 或執行任何 mutation 前，會以同一
+commit／run／context／trust 驗證兩份 root report的 canonical JSON、HMAC、source與 observation，並把 digest／
+`finishedAt` 綁入 execution state；resume漂移會停止。每個 active 非 root producer 都直接從 v8 `causalEdges`
+計算目前 authentication mode 的 immediate predecessors，並在自己的 side effect 前以同一個 canonical／HMAC／
+identity／source／observation／freshness validator 全部驗證；Workspace predecessor 另須完全符合目前的
+Workspace ID／subject。既有 `cleanReset` 重跑與 final bundle 也重用同一 validator。
+
+每個 producer 先以完整 commit 與 deployment run ID 導出唯一
+`/root/aileron-private/evidence/<完整 SHA>/<deployment run ID>/`，在任何 trust／cluster query 前將
+CLI 提供的 kubeconfig write-once 保存為 `kubeconfig.raw`，再以明確
+`kubectl --kubeconfig <raw snapshot> --context <context> config view --raw --flatten --minify --output=json`
+建立 `kubeconfig`。Raw／flattened selected identity digest 必須相同；中斷重跑只接受兩份 exact
+bytes。來源替換、identity drift 或既有 snapshot 不一致都會在 trust query 前停止。之後的 reset
+inventory collector、backend attestor、Job、restart、browser lifecycle、kubectl 與 Helm 全部只使用
+該 flattened path，且每個命令明確指定 kubeconfig 與 context。
+
+Bundle 與 final validator 不接受 `--kubeconfig`，只從相同 commit／run directory 讀取上述 canonical
+raw／flattened pair；bundle 發布後的第二次 validation 也使用完全相同的 flattened path：
 
 ```bash
-kubectl create namespace "${TURN_NAMESPACE}" \
-  --dry-run=client -o yaml | kubectl apply -f -
-kubectl label namespace "${TURN_NAMESPACE}" \
-  app.kubernetes.io/managed-by=Helm --overwrite
-kubectl annotate namespace "${TURN_NAMESPACE}" \
-  meta.helm.sh/release-name=aileron \
-  meta.helm.sh/release-namespace="${NAMESPACE}" \
-  --overwrite
-
-kubectl create secret docker-registry registry-pull \
-  --namespace "${TURN_NAMESPACE}" \
-  --docker-server="${REGISTRY_HOST}" \
-  --docker-username="${REGISTRY_USERNAME}" \
-  --docker-password="${REGISTRY_PASSWORD}"
+python3 scripts/deploy/rke2/acceptance_bundle.py \
+  --expected-commit "$FULL_GIT_SHA" \
+  --deployment-run-id "$DEPLOYMENT_RUN_ID" \
+  --context rke
+python3 scripts/deploy/rke2/acceptance_evidence.py \
+  --expected-commit "$FULL_GIT_SHA" \
+  --deployment-run-id "$DEPLOYMENT_RUN_ID" \
+  --context rke
 ```
 
-若關閉 TURN、使用 external provider，或透過 kubelet／node managed identity 取得映像
-拉取權限，則不需執行這個流程。雙 namespace Secret 流程只適用於 Secret-based Registry
-認證；Chart 尚未自動複製或輪替 Secret。
+### Tracked OIDC Browser 驗收
 
-不要將 Secret 值、kubeconfig、私鑰或含機密的 deployment values 放入 Git。
+唯一 active Workspace 驗收流程由 `scripts/deploy/rke2/acceptance_producer.py` 固定執行 tracked
+`frontend/e2e/homelab-acceptance.mjs`。Producer 必須證明 checkout clean、HEAD 等於完整驗收 commit，
+且 probe bytes 等於該 commit 的 Git object，再以完整 SHA 建置並依 image ID 執行 Playwright image。
+`oidcWorkspace` 會走真實 OIDC Authorization Code／PKCE 登入並建立 Workspace；Frontend 完成 callback
+後只使用 opaque Manager session，所有 authenticated mutation 都帶同一 session 取得的 memory-only
+CSRF token 與正確 `Origin`。
 
-上述 `registry-pull` 只適用於需要 Kubernetes Secret 的外部私有 Registry。EKS／ECR、
-GKE／Artifact Registry 或 AKS／ACR 若已由 kubelet／node managed identity 取得 pull
-權限，請省略該 Secret 與 `global.imagePullSecrets`。
+`terminal`、`http`、`websocket` 與 `browser` 會以該 Workspace 與 OIDC session 驗證正式 Gateway、
+execution grant、protocol round-trip 與 Browser UI。Workspace-scoped `turn` attestor 驗證真實 TURN relay；
+上述報告全部成功後，`workspaceLifecycle` 才以同一 session／CSRF 依序執行 component restart、stop、
+Stopped observation、start 與 Running／Ready observation。這組 tracked OIDC Browser probes 與 TURN
+attestor 是 active lifecycle 驗收的唯一入口，其 causal order 由
+`scripts/deploy/rke2/deployment-acceptance-contract.json` 固定。
 
-Helm release namespace 必須等於 `kubernetes.workspaceRuntimeNamespace`；Chart 會在
-render 階段拒絕不一致的設定。外部 Registry 的 `registry-pull` 只需在這個共同 namespace
-建立一份，供 Chart workload 與 Workspace 專用 ServiceAccount 使用。Kubernetes Secret
-無法跨 namespace 引用，Chart 也不會替管理者複製 Registry credential。
+### Bundled Keycloak browser input
 
-每套 Workspace Operator installation只管理這一個runtime namespace。Controller cache、
-Workspace CR與所有namespaced受管資源都限制在相同namespace；平台不提供cluster-wide、
-multi-namespace或selector-based watch模式。需要隔離多個runtime namespace時，應各自部署
-獨立installation。
-
-Operator的Kubernetes API依賴與Helm RBAC來自同一份Controller Dependency Contract。
-Chart只為namespaced dependency建立Role；只有實際設定Workspace或Runtime HOME
-StorageClass時，才建立僅允許StorageClass `get`的ClusterRole。啟用Cilium時才加入
-CiliumNetworkPolicy與CiliumEndpoint權限。Operator在所有已啟用dependency完成API
-discovery、scope與wiring驗證、direct read及cache sync前不會啟動reconcile worker，任一
-失敗都會使readiness fail closed，且不會只啟動部分controller。
-
-## 2. 建立 deployment values
-
-以平台 profile 加上不進版控的 values 檔案：
-
-```yaml
-global:
-  imagePullSecrets:
-    - name: registry-pull
-
-platformPublicOrigin: https://aileron.apps.example.com
-
-oidc:
-  issuerUrl: https://login.example.com/realms/aileron
-  clientId: aileron-manager
-
-ingress:
-  enabled: true
-  className: "<ingress-class>"
-  useDefaultClass: false
-  tlsMode: kubernetesSecret
-  tlsSecretName: aileron-platform-tls
-  annotations: {}
-
-runtimeAssertions:
-  issuer: workspace-manager
-  activeKid: workspace-manager-ed25519-v1
-  privateKeySecretName: runtime-assertion-signer
-  publicKeySetSecretName: runtime-assertion-public-jwks
-
-browserCredentials:
-  existingSecretName: browser-credential-keyring
-  key: keyring.json
-  revision: 1
-
-cilium:
-  enabled: true
-```
-
-映像 digest、StorageClass、強密碼與 TURN 設定請依專題文件補齊。
-使用平台原生 Registry identity 時，將 `global.imagePullSecrets` 保持空陣列。
-`ingress.annotations` 只套用於單一平台 Ingress。請由部署環境填入 AWS Load Balancer
-Controller、GKE Ingress、Application Gateway、NGINX 或其他控制器所需值；產品預設會關閉
-公開 Ingress，也不假設任何特定控制器。Runtime、Browser 與 Canvas 只建立內部 Service，
-Frontend gateway 以 `/workspaces/{uuid}/runtime|browser|canvas` 固定 path 轉送。
-
-控制器選擇可使用 `ingress.className`、`kubernetes.io/ingress.class` annotation，或在叢集已有刻意設定的 default IngressClass 時
-明確設為 `ingress.useDefaultClass: true`。TLS 由 Kubernetes Secret 終止時使用
-`tlsMode: kubernetesSecret`；由 AWS ACM、GCP pre-shared certificate 或其他控制器政策管理時
-使用 `tlsMode: controllerManaged` 並保持 `tlsSecretName: ""`。
-
-## 3. 部署前檢查
-
-以下以部署流程產生的 platform overlay 示範；每個叢集都必須讓 `PLATFORM_VALUES`
-指向自己的 platform overlay：
+目前不含 LDAP 的 bundled Keycloak HomeLab 使用 `--use-break-glass-login`，由固定的 installation-owned
+Keycloak bootstrap administrator 與 break-glass credential sources 產生 Browser 驗收 input：
 
 ```bash
-export PLATFORM_VALUES=/run/aileron/platform-values.yaml
-
-helm lint helm/aileron \
-  -f "${PLATFORM_VALUES}" \
-  -f /run/aileron/deployment-values.yaml
-
-helm template aileron helm/aileron \
-  --namespace workspace-system \
-  -f "${PLATFORM_VALUES}" \
-  -f /run/aileron/deployment-values.yaml \
-  >/tmp/aileron-rendered.yaml
-
-kubectl apply --dry-run=server -f /tmp/aileron-rendered.yaml
+python3 scripts/deploy/rke2/prepare_browser_input.py \
+  --expected-commit "$FULL_GIT_SHA" \
+  --deployment-run-id "$DEPLOYMENT_RUN_ID" \
+  --use-break-glass-login
 ```
 
-`PLATFORM_VALUES` 必須是該叢集的 provider-neutral／provider-specific production profile；
-不可把其他環境的 GID、StorageClass 或管理者設定當成 EKS、GKE、AKS 或原生 Kubernetes
-的預設。
-`helm/aileron/tests/values/platform-*.yaml` 只是 Helm render contract fixtures，不是可部署
-profile；render 通過也不能取代目標 provider 與實際 CSI 上的 conformance 認證。
-任何環境的通過結果都只代表該次記錄的 Kubernetes minor、CSI、CNI 與 admission 組合；
-若要新增或升級原生 Kubernetes、EKS、GKE、AKS、OCP 或 RKE2 版本，必須把該組合納入矩陣
-並重新執行完整 conformance。
-
-目前的 production 網路隔離契約只涵蓋允許部署 Cilium、DaemonSet、UID 0 container 與
-Cilium socket `hostPath` 的 node-based cluster。GKE Autopilot、EKS Fargate、AKS virtual
-nodes 或禁止該 host access 的環境不在此契約內；若未來要支援，必須先提供另一個可驗證的
-firewall attestation backend，不能把 Cilium enforcement 靜默略過。
-
-成功條件：
-
-- lint、render 與 server-side dry-run 都回傳成功。
-- render 結果沒有浮動 image tag。
-- 所有持久化元件都有專屬 StorageClass。
-- 內建 TURN 是唯一允許使用 `hostNetwork` 的 workload，且只放行設定的 relay 範圍。
-- TURN 認證只透過 Secret 引用，不出現在 Pod arguments 的實際值中。
-- 使用 built-in TURN 與 private Registry 時，`workspace-system` 與 `coturn.namespace`
-  都能讀取 `global.imagePullSecrets` 指定的同名 Secret。
-
-## 4. 安裝
+輸出固定為
+`/root/aileron-private/acceptance-inputs/<full SHA>/<deployment run ID>/browser-input.json`，是 mode
+`0600` write-once canonical JSON；CLI 不提供任意 output path。Keycloak 啟用 LDAP federation 時，使用
+完整的一對 private login credential files，且不搭配 `--use-break-glass-login`：
 
 ```bash
-helm upgrade --install aileron helm/aileron \
-  --namespace workspace-system \
-  --create-namespace \
-  -f "${PLATFORM_VALUES}" \
-  -f /run/aileron/deployment-values.yaml \
-  --atomic \
-  --timeout 15m
+python3 scripts/deploy/rke2/prepare_browser_input.py \
+  --expected-commit "$FULL_GIT_SHA" \
+  --deployment-run-id "$DEPLOYMENT_RUN_ID" \
+  --login-username-file "$LOGIN_USERNAME_FILE" \
+  --login-password-file "$LOGIN_PASSWORD_FILE"
 ```
 
-## 5. 最小驗收
+兩個 login files 都必須位於 owner-only private tree，且通過 regular-file、owner、mode、symlink 與
+hardlink 檢查。LDAP 管理帳號生命週期，Keycloak 負責 federation 與 OIDC authentication；Aileron 仍以
+相同 OIDC／JIT provisioning／應用授權 seam 接收使用者，並保留本機 break-glass administrator。
 
-```bash
-kubectl get pods,pvc,ingress -n workspace-system
-export RELEASE=aileron
-for component in frontend workspace-manager workspace-operator; do
-  kubectl wait deployment \
-    --namespace workspace-system \
-    --selector="app.kubernetes.io/instance=${RELEASE},app.kubernetes.io/component=${component}" \
-    --for=condition=Available \
-    --timeout=10m
-done
-kubectl get jobs -n workspace-system
-helm status aileron -n workspace-system
-```
+Epoch、reset snapshot、report 與 bundle 都必須是 strict UTF-8、所有層級不得有 duplicate JSON key，
+且 raw bytes 必須精確等於 sorted compact canonical JSON 加單一換行。重新排欄位、調整空白、移除
+結尾換行或以 duplicate key 製造語意相同文件，一律不得通過簽章與 write-once evidence gate；tracked
+acceptance contract 仍由 code-owned digest 綁定格式，但 parser 同樣拒絕 duplicate key。
 
-所有平台 Pod 應為 Ready，PVC 應為 Bound，Helm release 應為 `deployed`。接著建立測試
-Workspace，確認首次 bootstrap 完成後 Runtime、Browser 與 Canvas 各自 Ready。
+Clean reset snapshot 會將 exact PV name／UID／backend locator digest 綁定上述 execution profile、
+retained Namespace／pull Secret UID 與 signed image inventory。Reset executor 只有在三個 resettable
+Namespace、Workspace、PVC 與 target PV 已由權威 live inventory 證明不存在後，才可逐 target 執行
+backend cleanup；每個 target 都先寫入可續跑 journal，再將 canonical aggregate write-once 發布到
+`/root/aileron-private/reset/<commit>/<run-id>/backend-cleanup-results.json`。Journal 已完成時，aggregate
+缺少、非 canonical 或 digest 不符都會停止，不會從 journal 重建檔案。
 
-## 升級
+Post-reset producer 只接受相同 commit、run ID 與人工核准的 snapshot SHA-256。它先驗證 signed
+cleanup aggregate，再以 read-only mount 的獨立 attestor Jobs 重驗每個 backend path 不存在；producer
+沒有 cleanup surface，也不信任 aggregate 自報的 `allAbsent`。任何 target identity、execution resource、
+image、Job provenance 或 live Kubernetes absence 漂移都會 fail closed。
 
-先保存目前 revision 與 values，再以新的不可變 digest升級：
+## 升級與復原
 
-```bash
-helm history aileron -n workspace-system
-helm get values aileron -n workspace-system -o yaml \
-  >/run/aileron/previous-values.yaml
-
-helm upgrade aileron helm/aileron \
-  --namespace workspace-system \
-  -f "${PLATFORM_VALUES}" \
-  -f /run/aileron/deployment-values.yaml \
-  --atomic \
-  --timeout 15m
-```
-
-## 回復
-
-只變更 Deployment 與 values，且未變更資料契約時：
-
-```bash
-helm rollback aileron <revision> \
-  --namespace workspace-system \
-  --wait \
-  --timeout 15m
-```
-
-資料庫 schema、CRD 或 PVC 契約已變更時，單獨執行 `helm rollback` 不足。必須同時還原相符
-的 PostgreSQL/NFS snapshot、CRD 與映像 digest。Knowledge Base 與平台狀態應使用 Retain
-StorageClass，避免 release 操作直接回收資料。
+升級同樣重新執行 `validate → prepare-cluster → apply`，並提供新的 full SHA 與 signed image
+inventory；不得直接執行 Helm upgrade。復原由 installer 的 Secret／Core／Identity transaction
+契約處理，不得以手動 Helm rollback 取代。資料庫、CRD 或 PVC 契約需要復原時，必須搭配相符的
+資料 snapshot、CRD 與 image digest，並重新完成整套驗收。

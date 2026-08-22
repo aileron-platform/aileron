@@ -132,6 +132,10 @@ test('all product workbenches expose the same ProductShell region contract', asy
       elements.map(element => element.getAttribute('data-shell-region'))
     ));
     expect(regions).toEqual(['navigator', 'main']);
+    const regionBackgrounds = await page.locator('[data-shell-region]').evaluateAll((elements) => (
+      elements.map(element => window.getComputedStyle(element).backgroundColor)
+    ));
+    expect([...new Set(regionBackgrounds)]).toHaveLength(1);
   }
 });
 

@@ -176,7 +176,14 @@ describe("toolPartRegistry", () => {
     expect(screen.getByText("… +1 aiChat.tool.lines.more")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "(aiChat.tool.preview.showAll)" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "(aiChat.tool.preview.showAll)" }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass("flex", "flex-col");
+    expect(dialog).not.toHaveClass("grid");
+    expect(dialog.querySelector("pre")?.parentElement).toHaveClass(
+      "min-h-0",
+      "flex-1",
+      "overflow-auto",
+    );
     expect(screen.getByText("aiChat.tool.preview.showAll", { selector: "h2" })).toBeInTheDocument();
   });
 

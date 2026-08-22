@@ -196,7 +196,7 @@ describe('FileViewerWorkbench', () => {
     expect(screen.getByText('markdown:# A')).toBeInTheDocument();
   });
 
-  it('dispatches Markdown, Mermaid, image, Draw.io fallback, and code viewers', () => {
+  it('dispatches Markdown, Mermaid, image, and code viewers', () => {
     renderWorkbench();
     expect(screen.getByText('markdown:# A')).toBeInTheDocument();
 
@@ -210,13 +210,6 @@ describe('FileViewerWorkbench', () => {
       activeTabId: '/docs/logo.png',
     });
     expect(screen.getByText('image:/docs/logo.png')).toBeInTheDocument();
-
-    cleanup();
-    renderWorkbench({
-      tabs: [{ ...tabs[1], id: '/docs/diagram.drawio', path: '/docs/diagram.drawio', name: 'diagram.drawio' }],
-      activeTabId: '/docs/diagram.drawio',
-    });
-    expect(screen.getByText('shared.fileViewer.drawio.fallback')).toBeInTheDocument();
 
     cleanup();
     renderWorkbench({ activeTabId: '/docs/b.ts' });

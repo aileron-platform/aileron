@@ -151,29 +151,6 @@ const shared = {
       rotate: 'Rotate',
       download: 'Download image',
     },
-    drawio: {
-      title: 'Draw.io diagram',
-      edit: 'Edit',
-      cancel: 'Cancel',
-      download: 'Download',
-      loading: 'Loading Draw.io preview...',
-      unavailable: 'Draw.io preview is unavailable in this viewer.',
-      retry: 'Retry',
-      retrying: 'Retrying... ({{count}}/{{max}})',
-      empty: 'No diagram content',
-      fallbackTitle: 'Draw.io preview unavailable',
-      fallback: 'Draw.io preview is unavailable. Showing XML content.',
-      error: {
-        title: 'Diagram Loading Error',
-      },
-      serviceUnavailable: {
-        title: 'Draw.io preview unavailable',
-        description: 'The file is shown as read-only XML because the Draw.io preview service is not available.',
-        disabled: 'The Draw.io preview service is not enabled in this viewer. The file is shown as read-only XML.',
-        unreachable: 'The Draw.io preview service cannot be reached right now. The file is shown as read-only XML.',
-        retry: 'Retry',
-      },
-    },
   },
   documentWorkflow: {
     metadata: {

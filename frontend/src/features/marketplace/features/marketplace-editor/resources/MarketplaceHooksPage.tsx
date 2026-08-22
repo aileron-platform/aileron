@@ -1,6 +1,6 @@
 import React from 'react';
 import { Workflow } from 'lucide-react';
-import type { MarketplacePackageDetail, MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplacePackageDetail, MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 import { MarketplaceEditorHookSection } from '../MarketplaceEditorHookSection';
 import type { MarketplaceEditorResourceItem } from '../marketplaceEditorResourceItems';
 import { getHooks, updateHooks } from '../../../api/marketplaceApi';
@@ -138,7 +138,7 @@ export const MarketplaceHooksPage: React.FC<MarketplaceHooksPageProps> = ({
     identityGeneration,
     session,
   } = useMarketplaceResourceSession({
-    provider: packageDetail.provider,
+    targetClient: packageDetail.targetClient,
     packageId: packageDetail.packageId,
     resourceType: 'hooks',
   }, packageDetail.revision);
@@ -157,7 +157,7 @@ export const MarketplaceHooksPage: React.FC<MarketplaceHooksPageProps> = ({
     await session.query(
       identityGeneration,
       'hooks-list',
-      () => getHooks(packageDetail.provider, packageDetail.packageId),
+      () => getHooks(packageDetail.targetClient, packageDetail.packageId),
       {
         onSuccess: (resource) => {
           setSources(resource.sources);
@@ -185,7 +185,7 @@ export const MarketplaceHooksPage: React.FC<MarketplaceHooksPageProps> = ({
   }, [
     identityGeneration,
     packageDetail.packageId,
-    packageDetail.provider,
+    packageDetail.targetClient,
     session,
   ]);
 
@@ -252,7 +252,7 @@ export const MarketplaceHooksPage: React.FC<MarketplaceHooksPageProps> = ({
       const result = await session.mutate(
         identityGeneration,
         `hooks-mutation:${sourceKey || 'create'}`,
-        () => updateHooks(packageDetail.provider, packageDetail.packageId, {
+        () => updateHooks(packageDetail.targetClient, packageDetail.packageId, {
           revision: session.revision,
           sourceId: sourceKey || null,
           content,
@@ -300,7 +300,7 @@ export const MarketplaceHooksPage: React.FC<MarketplaceHooksPageProps> = ({
     <div className="flex h-full min-w-0 flex-1 flex-col">
       <div className="min-h-0 flex-1">
         <MarketplaceEditorHookSection
-          provider={packageDetail.provider as MarketplaceProvider}
+          targetClient={packageDetail.targetClient as MarketplaceTargetClient}
           icon={Workflow}
           items={items}
           defaultSource={defaultSource}

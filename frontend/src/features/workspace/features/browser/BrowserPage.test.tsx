@@ -83,6 +83,9 @@ describe('BrowserPage', () => {
     mocks.useNekoStream.mockReturnValue({
       connectionState: 'disconnected',
       isConnected: false,
+      websocketConnected: false,
+      dataChannelOpen: false,
+      hasLiveVideoTrack: false,
       error: null,
       videoRef: { current: null },
       audioRef: { current: null },
@@ -111,5 +114,29 @@ describe('BrowserPage', () => {
     expect(screen.getByTestId('browser-connectivity-state')).toHaveTextContent(
       'workspace.browser.connectivity.state.degraded'
     );
+  });
+
+  it('exposes non-secret Browser session readiness attributes', () => {
+    mocks.useNekoStream.mockReturnValue({
+      connectionState: 'connected',
+      isConnected: true,
+      websocketConnected: true,
+      dataChannelOpen: true,
+      hasLiveVideoTrack: true,
+      error: null,
+      videoRef: { current: null },
+      audioRef: { current: null },
+    });
+
+    render(<BrowserPage />);
+
+    const readiness = screen.getByTestId('browser-session-readiness');
+    expect(readiness).toHaveAttribute('data-connection-state', 'connected');
+    expect(readiness).toHaveAttribute('data-websocket-connected', 'true');
+    expect(readiness).toHaveAttribute('data-webrtc-connected', 'true');
+    expect(readiness).toHaveAttribute('data-data-channel-open', 'true');
+    expect(readiness).toHaveAttribute('data-live-video-track', 'true');
+    expect(screen.getByTestId('browser-video')).toBeInTheDocument();
+    expect(readiness.outerHTML).not.toContain('derived-user-password');
   });
 });

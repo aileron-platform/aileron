@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render as renderTestingLibrary, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AiChatIntegrationProvider,
@@ -35,8 +35,16 @@ const integrationMock = vi.hoisted(() => ({
   clearCodeReference: vi.fn(),
 }));
 
-const slashCommandApiMock = vi.hoisted(() => ({
-  listPickerItems: vi.fn(async () => []),
+const promptInvocationApiMock = vi.hoisted(() => ({
+  list: vi.fn(async () => ({
+    workspaceId: 'workspace-1',
+    agenticTool: 'claude-code',
+    completeness: 'complete',
+    revision: 'empty',
+    availableScopes: [],
+    sourceErrors: [],
+    items: [],
+  })),
 }));
 
 vi.mock('../api/threadApi', () => ({
@@ -60,26 +68,31 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   }),
 }));
 
-vi.mock('@/shared/components/slash-command-picker', () => ({
-  SlashCommandPickerDialog: ({
+vi.mock('@/shared/components/prompt-invocation-picker', () => ({
+  PromptInvocationPickerDialog: ({
     open,
     onOpenChange,
+    loadCatalog,
   }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-  }) => (
-    open ? (
-      <div role="dialog" aria-label="slash-command-picker">
+    loadCatalog: () => Promise<unknown>;
+  }) => {
+    useEffect(() => {
+      if (open) void loadCatalog();
+    }, [loadCatalog, open]);
+    return open ? (
+      <div role="dialog" aria-label="prompt-invocation-picker">
         <button type="button" onClick={() => onOpenChange(false)}>
-          close-slash-command-picker
+          close-prompt-invocation-picker
         </button>
       </div>
-    ) : null
-  ),
+    ) : null;
+  },
 }));
 
-vi.mock('@/shared/api/slashCommandApi', () => ({
-  slashCommandApi: slashCommandApiMock,
+vi.mock('@/shared/api/promptInvocationApi', () => ({
+  promptInvocationApi: promptInvocationApiMock,
 }));
 
 const TestFileChooser = ({ open, onFileSelect }: AiChatFileChooserProps) => (
@@ -161,8 +174,16 @@ beforeEach(() => {
   threadApiMock.transcribeAudio.mockReset();
   threadApiMock.uploadAttachment.mockReset();
   threadApiMock.deleteAttachment.mockReset();
-  slashCommandApiMock.listPickerItems.mockReset();
-  slashCommandApiMock.listPickerItems.mockResolvedValue([]);
+  promptInvocationApiMock.list.mockReset();
+  promptInvocationApiMock.list.mockResolvedValue({
+    workspaceId: 'workspace-1',
+    agenticTool: 'claude-code',
+    completeness: 'complete',
+    revision: 'empty',
+    availableScopes: [],
+    sourceErrors: [],
+    items: [],
+  });
   threadApiMock.transcribeAudio.mockResolvedValue({ text: 'voice transcript' });
   threadApiMock.uploadAttachment.mockImplementation((_threadId: string, file: File, onProgress: (progress: number) => void) => {
     onProgress(50);
@@ -249,7 +270,7 @@ describe('ChatInputArea', () => {
     expect(slashButton.compareDocumentPosition(voiceButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('loads skills for the tool selected immediately before opening the slash picker', async () => {
+  it('loads invocations for the tool selected immediately before opening the prompt invocation picker', async () => {
     const capabilitiesWithCodex: WorkspaceCapabilities = {
       ...capabilities,
       defaultTool: 'codex',
@@ -284,14 +305,14 @@ describe('ChatInputArea', () => {
     fireEvent.click(screen.getByRole('button', { name: 'claude' }));
     fireEvent.click(screen.getByRole('button', { name: 'aiChat.input.slashCommand' }));
 
-    await waitFor(() => expect(slashCommandApiMock.listPickerItems).toHaveBeenCalledWith(
+    await waitFor(() => expect(promptInvocationApiMock.list).toHaveBeenCalledWith(
       'http://runtime.test',
       'workspace-1',
       'claude-code',
     ));
   });
 
-  it('does not reopen the slash picker while typing after it is closed', async () => {
+  it('does not reopen the prompt invocation picker while typing after it is closed', async () => {
     render(
       <ChatInputArea
         thread={buildThread()}
@@ -304,16 +325,16 @@ describe('ChatInputArea', () => {
 
     const textbox = screen.getByRole('textbox');
     fireEvent.change(textbox, { target: { value: '/' } });
-    expect(screen.getByRole('dialog', { name: 'slash-command-picker' })).toBeInTheDocument();
-    await waitFor(() => expect(slashCommandApiMock.listPickerItems).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('dialog', { name: 'prompt-invocation-picker' })).toBeInTheDocument();
+    await waitFor(() => expect(promptInvocationApiMock.list).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getByRole('button', { name: 'close-slash-command-picker' }));
-    expect(screen.queryByRole('dialog', { name: 'slash-command-picker' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'close-prompt-invocation-picker' }));
+    expect(screen.queryByRole('dialog', { name: 'prompt-invocation-picker' })).not.toBeInTheDocument();
 
     fireEvent.change(textbox, { target: { value: '/review' } });
     fireEvent.change(textbox, { target: { value: '/review details' } });
 
-    expect(screen.queryByRole('dialog', { name: 'slash-command-picker' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'prompt-invocation-picker' })).not.toBeInTheDocument();
   });
 
   it('only disables the agent menu after the first message is submitted', () => {
@@ -398,7 +419,7 @@ describe('ChatInputArea', () => {
         onSubmitDraft={vi.fn()}
         onPostMessage={vi.fn()}
         onPatchDraft={onPatchDraft}
-        onCancel={vi.fn()}
+        onStop={vi.fn()}
       />,
     );
 
@@ -410,7 +431,7 @@ describe('ChatInputArea', () => {
     expect(onPatchDraft).not.toHaveBeenCalled();
   });
 
-  it('blocks keyboard send while voice input is recording without blocking cancel', async () => {
+  it('blocks keyboard send while voice input is recording without blocking stop', async () => {
     const onSubmitDraft = vi.fn();
     render(
       <ChatInputArea
@@ -430,8 +451,8 @@ describe('ChatInputArea', () => {
     expect(onSubmitDraft).not.toHaveBeenCalled();
   });
 
-  it('keeps cancel available while a working thread is recording voice input', async () => {
-    const onCancel = vi.fn();
+  it('keeps stop available while a working thread is recording voice input', async () => {
+    const onStop = vi.fn();
     render(
       <ChatInputArea
         thread={buildThread({ status: 'working' })}
@@ -439,17 +460,17 @@ describe('ChatInputArea', () => {
         onSubmitDraft={vi.fn()}
         onPostMessage={vi.fn()}
         onPatchDraft={vi.fn()}
-        onCancel={onCancel}
+        onStop={onStop}
       />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'aiChat.input.voice.start' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'aiChat.input.voice.stop' })).toBeInTheDocument());
 
-    const cancelButton = screen.getByRole('button', { name: 'aiChat.workbench.cancel' });
-    expect(cancelButton).not.toBeDisabled();
-    fireEvent.click(cancelButton);
-    expect(onCancel).toHaveBeenCalledTimes(1);
+    const stopButton = screen.getByRole('button', { name: 'aiChat.workbench.stop' });
+    expect(stopButton).not.toBeDisabled();
+    fireEvent.click(stopButton);
+    expect(onStop).toHaveBeenCalledTimes(1);
   });
 
   it('disables voice input when the runtime thread API is unavailable', () => {
@@ -878,7 +899,7 @@ describe('ChatInputArea', () => {
   });
 
   it('shows stop instead of send while the thread is running', () => {
-    const onCancel = vi.fn();
+    const onStop = vi.fn();
     render(
       <ChatInputArea
         thread={buildThread({ status: 'working' })}
@@ -886,15 +907,35 @@ describe('ChatInputArea', () => {
         onSubmitDraft={vi.fn()}
         onPostMessage={vi.fn()}
         onPatchDraft={vi.fn()}
-        onCancel={onCancel}
+        onStop={onStop}
       />,
     );
 
     expect(screen.queryByRole('button', { name: 'aiChat.input.send' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'aiChat.workbench.cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'aiChat.workbench.stop' }));
 
-    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the stop button while a stop request is pending', () => {
+    const onStop = vi.fn();
+    render(
+      <ChatInputArea
+        thread={buildThread({ status: 'stopping' })}
+        capabilities={capabilities}
+        onSubmitDraft={vi.fn()}
+        onPostMessage={vi.fn()}
+        onPatchDraft={vi.fn()}
+        onStop={onStop}
+        isStopping
+      />,
+    );
+
+    const stopButton = screen.getByRole('button', { name: 'aiChat.workbench.stop' });
+    expect(stopButton).toBeDisabled();
+    fireEvent.click(stopButton);
+    expect(onStop).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -902,7 +943,7 @@ describe('ChatInputArea', () => {
     ['codex', 'gpt-5.4', null, '$aileron-web-canvas-review'],
     ['opencode', 'glm-5', null, '/aileron-web-canvas-review'],
   ] as const)(
-    'formats an inserted skill for the selected %s agent without opening the slash picker',
+    'formats an inserted skill for the selected %s agent without opening the prompt invocation picker',
     async (agenticTool, model, claudeMode, invocation) => {
       const allAgentCapabilities: WorkspaceCapabilities = {
         defaultTool: 'claude',
@@ -952,7 +993,7 @@ describe('ChatInputArea', () => {
     },
   );
 
-  it('does not open the slash picker for an inserted skill draft', () => {
+  it('does not open the prompt invocation picker for an inserted skill draft', () => {
     render(
       <ChatInputArea
         thread={buildThread()}
@@ -972,7 +1013,7 @@ describe('ChatInputArea', () => {
       />,
     );
 
-    expect(screen.queryByRole('dialog', { name: 'slash-command-picker' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'prompt-invocation-picker' })).not.toBeInTheDocument();
   });
 
   it('keeps settings on the left and borderless tool actions on the right', () => {

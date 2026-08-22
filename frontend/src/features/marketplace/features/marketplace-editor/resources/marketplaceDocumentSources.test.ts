@@ -20,7 +20,7 @@ const mutationResult = (
 
 const createSource = () => {
   const session = new MarketplaceResourceSession({
-    provider: 'claude-code',
+    targetClient: 'claude-code',
     packageId: 'pkg',
     resourceType: 'commands',
   }, 'rev1');
@@ -232,7 +232,7 @@ describe('createMarketplaceDocumentSource', () => {
 
   it('uses the Codex-native prompts root for the Slash Command resource', async () => {
     const session = new MarketplaceResourceSession({
-      provider: 'codex',
+      targetClient: 'codex',
       packageId: 'pkg',
       resourceType: 'commands',
     }, 'rev1');

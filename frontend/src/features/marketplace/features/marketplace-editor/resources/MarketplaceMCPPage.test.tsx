@@ -7,7 +7,6 @@ import type { MarketplacePackageDetail } from '@/features/marketplace/model/mark
 const apiMock = vi.hoisted(() => ({
   createMCPServer: vi.fn(),
   deleteMCPServer: vi.fn(),
-  getMCPServer: vi.fn(),
   listMCPServers: vi.fn(),
   saveMCPServer: vi.fn(),
 }));
@@ -19,13 +18,12 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 vi.mock('../../../api/marketplaceApi', () => ({
   createMCPServer: (...args: unknown[]) => apiMock.createMCPServer(...args),
   deleteMCPServer: (...args: unknown[]) => apiMock.deleteMCPServer(...args),
-  getMCPServer: (...args: unknown[]) => apiMock.getMCPServer(...args),
   listMCPServers: (...args: unknown[]) => apiMock.listMCPServers(...args),
   saveMCPServer: (...args: unknown[]) => apiMock.saveMCPServer(...args),
 }));
 
 vi.mock('../MarketplaceEditorMCPSection', () => ({
-  MarketplaceEditorMCPSection: ({ items, onItemsChange, onLoadItem }: {
+  MarketplaceEditorMCPSection: ({ items, onItemsChange }: {
     items: Array<{
       id: string;
       title: string;
@@ -42,31 +40,17 @@ vi.mock('../MarketplaceEditorMCPSection', () => ({
       ownerFilePath?: string;
       baseEntryFingerprint?: string;
     }>) => Promise<void>;
-    onLoadItem?: (item: {
-      id: string;
-      title: string;
-      path: string;
-      content: string;
-      ownerFilePath?: string;
-      baseEntryFingerprint?: string;
-    }) => Promise<{
-      id: string;
-      title: string;
-      path: string;
-      content: string;
-      ownerFilePath?: string;
-      baseEntryFingerprint?: string;
-    }>;
   }) => (
     <>
       <span>mcp-count:{items.length}</span>
       <span data-testid="mcp-item-ids">{items.map(item => item.id).join('|')}</span>
+      <span data-testid="mcp-item-content">{items[0]?.content ?? ''}</span>
       <button
       type="button"
       onClick={() => {
         void (async () => {
           if (items.length > 0) {
-            const loaded = onLoadItem ? await onLoadItem(items[0]) : items[0];
+            const loaded = items[0];
             await onItemsChange?.(items.map((item, index) => (
               index === 0
                 ? {
@@ -109,7 +93,7 @@ vi.mock('../MarketplaceEditorMCPSection', () => ({
 }));
 
 const packageDetail = (): MarketplacePackageDetail => ({
-  provider: 'codex',
+  targetClient: 'codex',
   packageType: 'plugin',
   packageId: 'codex-toolkit',
   displayName: 'Codex Toolkit',
@@ -117,10 +101,8 @@ const packageDetail = (): MarketplacePackageDetail => ({
   description: 'Package description',
   category: 'coding',
   tags: [],
-  sourceType: 'created',
   indexedResourceNames: [],
   validationSeverity: 'none',
-  lifecycleStatus: 'draft',
   registryPath: 'codex/plugins/codex-toolkit',
   revision: 'rev1',
   updatedAt: '2026-06-26T00:00:00.000Z',
@@ -194,14 +176,8 @@ describe('MarketplaceMCPPage', () => {
       path: '.mcp.json',
       ownerFilePath: '.mcp.json',
       baseEntryFingerprint: 'entry-fp',
+      server: { type: 'http', url: 'https://mcp.example.test' },
     }]);
-    apiMock.getMCPServer.mockResolvedValueOnce({
-      name: 'ASDF',
-      path: '.mcp.json',
-      server: { command: 'node' },
-      ownerFilePath: '.mcp.json',
-      baseEntryFingerprint: 'entry-fp',
-    });
     const result = mutationResult();
     apiMock.saveMCPServer.mockResolvedValueOnce(result);
 
@@ -215,18 +191,15 @@ describe('MarketplaceMCPPage', () => {
     expect(await screen.findByTestId('mcp-item-ids')).toHaveTextContent(
       '["ASDF",".mcp.json"]',
     );
+    expect(screen.getByTestId('mcp-item-content')).toHaveTextContent(
+      '"url": "https://mcp.example.test"',
+    );
     await user.click(await screen.findByRole(
       'button',
       { name: 'submit-mcp-dialog' },
       { timeout: 10_000 },
     ));
 
-    expect(apiMock.getMCPServer).toHaveBeenCalledWith(
-      'codex',
-      'codex-toolkit',
-      'ASDF',
-      '.mcp.json',
-    );
     expect(apiMock.createMCPServer).not.toHaveBeenCalled();
     expect(apiMock.saveMCPServer).toHaveBeenCalledWith('codex', 'codex-toolkit', 'ASDF', {
       revision: 'rev1',
@@ -246,6 +219,7 @@ describe('MarketplaceMCPPage', () => {
       path: '.mcp.json',
       ownerFilePath: '.mcp.json',
       baseEntryFingerprint: 'entry-fp',
+      server: { command: 'node' },
     }]);
     const result = mutationResult('rev2', null);
     apiMock.deleteMCPServer.mockResolvedValueOnce(result);
@@ -296,12 +270,14 @@ describe('MarketplaceMCPPage', () => {
       path: string;
       ownerFilePath: string;
       baseEntryFingerprint: string;
+      server: Record<string, unknown>;
     }>>();
     const current = deferred<Array<{
       name: string;
       path: string;
       ownerFilePath: string;
       baseEntryFingerprint: string;
+      server: Record<string, unknown>;
     }>>();
     apiMock.listMCPServers
       .mockReturnValueOnce(stale.promise)
@@ -333,12 +309,14 @@ describe('MarketplaceMCPPage', () => {
         path: '.mcp.json',
         ownerFilePath: '.mcp.json',
         baseEntryFingerprint: 'a',
+        server: { command: 'a' },
       },
       {
         name: 'current-b',
         path: '.mcp.json',
         ownerFilePath: '.mcp.json',
         baseEntryFingerprint: 'b',
+        server: { command: 'b' },
       },
     ]);
     expect(await screen.findByText('mcp-count:2')).toBeInTheDocument();
@@ -348,6 +326,7 @@ describe('MarketplaceMCPPage', () => {
       path: '.mcp.json',
       ownerFilePath: '.mcp.json',
       baseEntryFingerprint: 'stale',
+      server: { command: 'stale' },
     }]);
     await waitFor(() => {
       expect(screen.getByText('mcp-count:2')).toBeInTheDocument();

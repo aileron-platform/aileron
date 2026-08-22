@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { Command, FilePlus2, Paperclip, SendHorizontal, Square, X } from 'lucide-react';
-import { slashCommandApi } from '@/shared/api/slashCommandApi';
-import { SlashCommandPickerDialog } from '@/shared/components/slash-command-picker';
-import type { SlashCommandItem } from '@/shared/types/slashCommands';
+import { promptInvocationApi } from '@/shared/api/promptInvocationApi';
+import { PromptInvocationPickerDialog } from '@/shared/components/prompt-invocation-picker';
+import { toPromptInvocationTool } from '@/shared/types/promptInvocations';
 import { useI18n } from '@/shared/hooks/useI18n';
 import {
   WORKSPACE_FILE_REFERENCE_MIME,
@@ -38,19 +38,14 @@ interface ChatInputAreaProps {
   capabilities: WorkspaceCapabilities;
   onSubmitDraft: (message: OutgoingMessage) => void;
   onPostMessage: (message: OutgoingMessage) => void;
-  onCancel?: () => void;
+  onStop?: () => void;
+  isStopping?: boolean;
   onPatchDraft: (patch: Partial<ThreadSettings> & { draftMessage?: OutgoingMessage | null }) => void;
   onHeightChange?: (height: number) => void;
   onEnsureThread?: () => Promise<Thread | null>;
   draftHandoff?: AiChatHandoffRequest | null;
   onDraftHandoffApplied?: (handoffId: string) => void;
 }
-
-const apiPrefixByTool: Record<string, string> = {
-  claude: 'claude-code',
-  codex: 'codex',
-  opencode: 'opencode',
-};
 
 interface AttachmentPreviewItem {
   id: string;
@@ -120,7 +115,8 @@ export const ChatInputArea = ({
   capabilities,
   onSubmitDraft,
   onPostMessage,
-  onCancel,
+  onStop,
+  isStopping = false,
   onPatchDraft,
   onHeightChange,
   onEnsureThread,
@@ -151,8 +147,7 @@ export const ChatInputArea = ({
   const appliedDraftHandoffIdsRef = useRef(new Set<string>());
   const uploadOperationsRef = useRef(new Map<string, ChatAttachmentUploadOperation>());
   const [fileChooserOpen, setFileChooserOpen] = useState(false);
-  const [slashOpen, setSlashOpen] = useState(false);
-  const [slashItems, setSlashItems] = useState<SlashCommandItem[]>([]);
+  const [promptInvocationOpen, setPromptInvocationOpen] = useState(false);
   const [isVoiceBusy, setIsVoiceBusy] = useState(false);
   const isVoiceBusyRef = useRef(false);
   const threadApi = useMemo(
@@ -332,31 +327,28 @@ export const ChatInputArea = ({
     });
   }, [patchDraftText]);
 
-  const loadSlashItems = useCallback(async () => {
+  const loadPromptInvocationCatalog = useCallback(async () => {
     const workspaceId = integrationWorkspaceId ?? thread.workspaceId;
     if (!runtimeBaseUrl || !workspaceId) {
-      setSlashItems([]);
-      return;
+      throw new Error('Workspace Runtime is unavailable');
     }
 
-    const items = await slashCommandApi.listPickerItems(
+    return promptInvocationApi.list(
       runtimeBaseUrl,
       workspaceId,
-      apiPrefixByTool[selectedAgenticToolRef.current] ?? 'claude-code',
+      toPromptInvocationTool(selectedAgenticToolRef.current),
     );
-    setSlashItems(items);
   }, [integrationWorkspaceId, runtimeBaseUrl, thread.workspaceId]);
 
-  const openSlashPicker = useCallback(() => {
-    setSlashOpen(true);
-    void loadSlashItems();
-  }, [loadSlashItems]);
+  const openPromptInvocationPicker = useCallback(() => {
+    setPromptInvocationOpen(true);
+  }, []);
 
   const handleTextChange = (next: string) => {
     setText(next);
     patchDraftText(next);
     if (!text.startsWith('/') && next.startsWith('/')) {
-      openSlashPicker();
+      openPromptInvocationPicker();
     }
   };
 
@@ -784,7 +776,7 @@ export const ChatInputArea = ({
               type="button"
               aria-label={t('aiChat.input.slashCommand')}
               className={toolbarIconButtonClass}
-              onClick={openSlashPicker}
+              onClick={openPromptInvocationPicker}
             >
               <Command className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -797,21 +789,22 @@ export const ChatInputArea = ({
             />
             <button
               type="button"
-              aria-label={t(isRunning(thread.status) ? 'aiChat.workbench.cancel' : 'aiChat.input.send')}
+              aria-label={t(isRunning(thread.status) ? 'aiChat.workbench.stop' : 'aiChat.input.send')}
               className={
                 isRunning(thread.status)
-                  ? 'inline-flex h-8 w-8 items-center justify-center rounded-md border border-border hover:bg-accent'
+                  ? 'inline-flex h-8 w-8 items-center justify-center rounded-md border border-border hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50'
                   : 'inline-flex h-8 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50'
               }
               disabled={
-                !isRunning(thread.status)
-                && (isVoiceBusy
-                  || (!text.trim() && attachments.length === 0 && !codeReference)
-                  || attachments.some((item) => item.attachment.status !== 'ready'))
+                isRunning(thread.status)
+                  ? isStopping
+                  : (isVoiceBusy
+                    || (!text.trim() && attachments.length === 0 && !codeReference)
+                    || attachments.some((item) => item.attachment.status !== 'ready'))
               }
               onClick={() => {
                 if (isRunning(thread.status)) {
-                  onCancel?.();
+                  onStop?.();
                   return;
                 }
                 submitText(text);
@@ -838,13 +831,14 @@ export const ChatInputArea = ({
           t={t}
         />
       ) : null}
-      <SlashCommandPickerDialog
-        open={slashOpen}
-        onOpenChange={setSlashOpen}
-        commands={slashItems}
-        onSelect={(command) => {
-          setText(command.invocation);
-          patchDraftText(command.invocation);
+      <PromptInvocationPickerDialog
+        open={promptInvocationOpen}
+        onOpenChange={setPromptInvocationOpen}
+        catalogKey={`${integrationWorkspaceId ?? thread.workspaceId}:${selectedAgenticToolRef.current}`}
+        loadCatalog={loadPromptInvocationCatalog}
+        onSelect={(item) => {
+          setText(item.invocation);
+          patchDraftText(item.invocation);
         }}
       />
     </div>

@@ -40,7 +40,7 @@ vi.mock('../../../api/marketplaceApi', () => ({
 }));
 
 const packageDetail = (): MarketplacePackageDetail => ({
-  provider: 'codex',
+  targetClient: 'codex',
   packageType: 'plugin',
   packageId: 'codex-toolkit',
   displayName: 'Codex Toolkit',
@@ -48,14 +48,13 @@ const packageDetail = (): MarketplacePackageDetail => ({
   description: 'Package description',
   category: 'coding',
   tags: [],
-  sourceType: 'created',
   indexedResourceNames: [],
   validationSeverity: 'none',
-  lifecycleStatus: 'draft',
   registryPath: 'codex/plugins/codex-toolkit',
   revision: 'rev1',
   variants: [{
-    provider: 'codex',
+    targetClient: 'codex',
+    packageFormat: 'codex-native',
     packageId: 'codex-toolkit',
     displayName: 'Codex Toolkit',
   }],

@@ -42,11 +42,13 @@ const WORKSPACE_GATEWAY_AUTHORIZATION_PATH = '/api/v1/workspaces/gateway/authori
 const WORKSPACE_GATEWAY_AUTHORIZATION_TIMEOUT_MS = 3_000;
 
 export const WORKSPACE_GATEWAY_PROXY_PATTERN =
-  '^/workspaces/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/(?:runtime|browser|canvas)/';
+  '^/workspaces/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/(?:canvas/.*|(?:runtime|browser)/.+)';
 
 const matchWorkspaceGatewayRequest = (requestPath: string | undefined) => {
   const path = (requestPath ?? '').split('?', 1)[0];
-  return WORKSPACE_GATEWAY_PATTERN.exec(path);
+  const match = WORKSPACE_GATEWAY_PATTERN.exec(path);
+  if (match?.[2] !== 'canvas' && match?.[3] === '/') return null;
+  return match;
 };
 
 export const resolveWorkspaceGatewayRequest = (

@@ -15,22 +15,6 @@ const canvas = {
     iframeTitle: 'Workspace Web Canvas',
     loading: 'Loading Canvas...',
     manifest: {
-      status: {
-        missing: 'No manifest',
-        valid: 'Manifest ready',
-        invalid: 'Manifest error',
-      },
-      statusNotice: {
-        skill: {
-          title: '{{title}}',
-          description: 'Active skill canvas from {{skillName}}.',
-        },
-        user: {
-          title: '{{title}}',
-          description: 'Active user canvas.',
-        },
-        details: 'Manifest: {{manifest}} · Runtime: {{runtime}}',
-      },
       errors: {
         invalid: {
           title: 'Canvas manifest error',
@@ -39,27 +23,6 @@ const canvas = {
       },
       actions: {},
       warnings: {},
-    },
-    owner: {
-      skill: {
-        label: 'Skill canvas',
-      },
-      user: {
-        label: 'User canvas',
-      },
-    },
-    default: {
-      guidance: {
-        title: 'Default Canvas',
-        description: 'No active canvas manifest is present. Create /workspace/.aileron/canvas.json to activate one.',
-      },
-    },
-    runtime: {
-      healthy: 'Healthy',
-      starting: 'Starting',
-      errors: {
-        startupFailed: 'Startup failed',
-      },
     },
     error: {
       title: 'Canvas unavailable',

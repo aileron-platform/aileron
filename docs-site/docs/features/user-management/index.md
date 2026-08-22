@@ -13,8 +13,8 @@ Platform admin 由 `/user-management` 管理本地使用者快照、群組、平
 
 OIDC provider 負責登入與 credential。Manager 以 `(oidc_issuer, oidc_subject)` 作為外部
 canonical identity，首次成功登入時 JIT 建立 member snapshot，並同步 username、email 與
-display name 等 optional claims。LDAP 與 Keycloak 只可能是外部 provider，
-不是 UI 或 API 的管理依賴。
+display name 等 optional claims。Keycloak 可以由產品的獨立 Identity Plane 或外部安裝提供；未來 LDAP 只會在 Keycloak
+User Federation 內接入。兩者都不是 Aileron UI 或 API 的帳號管理依賴。
 
 ## 角色與操作
 

@@ -84,6 +84,6 @@ matches the deployment values exactly.
 - CA trust is a node responsibility; imagePullSecret handles Registry authentication within the namespace.
 - Do not use an insecure registry or skip TLS verification.
 
-See [Kubernetes Quick Installation — Prepare the Namespace and Secrets](./kubernetes.md#1-prepare-the-namespace-and-secrets) for the two-namespace procedure. After changing CA or Registry settings, pull the digest on every node and, when Secret-based authentication is used, verify both namespace Secrets before running the Helm upgrade.
+For RKE2 HomeLab, prepare namespaces and Secrets only through [Kubernetes Installation — `prepare-cluster`](./kubernetes.md#prepare-cluster). After changing CA or Registry settings, pull the digest on every node, then rerun `validate`, `prepare-cluster`, and `apply` in order. Do not create Secrets or run a Helm upgrade directly.
 
 Deployment verification should pull every digest from the Registry again and verify the target architecture, a numeric non-root user, and the Git revision label. Completing the build and push does not permit skipping verification.

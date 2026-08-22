@@ -4,37 +4,10 @@ title: 瀏覽與安裝
 
 # 瀏覽與安裝
 
-## 目的與入口
+應用中心只列出 Managed Registry 中的 Plugin。卡片顯示名稱、package format、版本、Target Client 與 validation 狀態，不顯示 Draft、Published、Git Dirty、Remote Ready、Created／Imported 或 Public／Private 標籤。
 
-由應用市集 catalog 或套件詳情進入，搜尋、篩選、匯出並安裝套件。
+Plugin Installation 將完整 artifact 交給相容 Target Client CLI。CLI 的命令輸出與 terminal result 是安裝及啟用結果的權威；Aileron 只把回覆呈現在 UI 並保存 audit，不另行推導 client state。Codex 需要在新 session 載入新安裝能力。
 
-## 角色與允許操作
+User Copy 使用目前 Managed Registry working tree，依明確的 `(packageFormat, targetClient)` projection，把可投影資源一次性寫入 Workspace Runtime HOME 的 client user scope。Preflight 會列出 projected、skipped、conflict 與 blocking resources；partial copy 與 overwrite 仍需使用者確認。成功產物是 Workspace 共享的 standalone agent resources，不是 installed plugin，也不會自動同步後續更新。
 
-member 與 admin 可瀏覽、匯出及安裝；以 platform Operation ID 做最終檢查。
-
-## 核心概念
-
-provider 與 package ID 共同形成 route identity；安裝產生 user copy，不修改 catalog source。
-
-## 主要流程
-
-開啟詳情、選擇安裝目標、建立 user copy，完成後以 canonical identity 重新整理清單。
-
-## 畫面狀態與唯讀行為
-
-畫面分別處理 loading、empty、error 與 denied。只有讀取操作時保留可讀內容與一般變更控制項，但停用變更並顯示 i18n 原因；缺少讀取操作時不啟動受保護 query、Provider 或即時連線。
-
-## 限制、失敗與安全
-
-clone_failed、衝突與不支援 provider 需明確顯示；不得產生兩份同一 canonical resource。
-
-## 原始碼依據
-
-- `frontend/src/features/marketplace/`
-- `workspace-manager/app/modules/marketplace/user_copy.py`
-- `packages/aileron-marketplace-core/`
-
-## 相關架構與 API
-
-- [version-control](/architecture/overview/version-control)
-- [manager-api](/api/manager-api)
+刪除應用中心 Plugin 不會執行 remote cleanup、CLI uninstall 或 User Copy cleanup。若 CLI 使用的 Git repository 已找不到該 Plugin，後續安裝會由 CLI 自然回報錯誤。

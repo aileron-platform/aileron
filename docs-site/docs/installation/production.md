@@ -25,7 +25,7 @@ Manager schema、Runtime telemetry、Workspace CRD／Operator 與 Frontend 必�
 - [ ] OIDC provider 的 redirect URI、audience 與 issuer 已更新為正式網域與正式 client
 - [ ] `VITE_` 開頭的環境變數不含機密資訊
 - [ ] 未掛載 Docker Socket（使用 Kubernetes 模式）
-- [ ] 已接受目前 Chart 的限制：內建 PostgreSQL 連線尚未啟用 TLS，且不支援 external database；若組織要求資料庫傳輸加密，正式部署須先補齊該契約
+- [ ] 已依[外部資料服務](./external-data-services.md)完成專用 database、非 superuser 權限、Redis logical connection、TLS trust 與 rotation 設定
 
 ### 建議項目
 
@@ -74,7 +74,7 @@ bootstrap:
 `bootstrap.admin.subject` 只建立 Manager 本地 admin snapshot；provider credential、群組與
 登入政策由外部 OIDC provider 管理。
 
-正式部署的 OIDC 與本地 admin snapshot 契約請見[外部 OIDC 安裝](./oidc.md)。
+正式部署的 OIDC、Identity Plane 與本地 admin snapshot 契約請見[OIDC 與 Identity Plane 安裝](./oidc.md)。
 `bootstrap.admin.enabled=true` 時，`install` 與 `upgrade` 都必須等候 snapshot bootstrap Job
 成功；Job 不建立 provider 帳號、不處理密碼，也不把 provider credential 寫入 Pod arguments
 或環境變數。
@@ -135,7 +135,7 @@ TLS Secret 必須已存在於共同的 Runtime namespace，且憑證涵蓋 Platf
 若憑證由雲端 Ingress controller 管理，改用 `tlsMode: controllerManaged` 並保持
 `tlsSecretName: ""`；其餘憑證引用放在 provider annotations 或 IngressClass policy。
 
-使用外部 OIDC provider 時，請確認 provider 的正式 issuer 與 client：
+使用 `externalOidc` 模式時，請確認 provider 的正式 issuer 與 client：
 
 ```yaml
 oidc:
@@ -151,8 +151,9 @@ oidc:
 - 定期掃描映像漏洞（Trivy、Snyk 等）
 
 使用 built-in TURN 時，Coturn 位於獨立的 `coturn.namespace`。同一個
-`global.imagePullSecrets` 名稱必須同時存在於 Runtime 與 Coturn namespace；完整流程請見
-[Kubernetes 快速安裝 — 準備 namespace 與 Secrets](./kubernetes.md#1-準備-namespace-與-secrets)。
+`global.imagePullSecrets` 名稱必須同時存在於 Runtime 與 Coturn namespace。RKE2 HomeLab
+必須透過 [Kubernetes 安裝 — `prepare-cluster`](./kubernetes.md#prepare-cluster) 準備，不得
+手動建立副本。
 
 ```yaml
 global:
@@ -328,7 +329,7 @@ kubectl get deploy -n workspace-system \
 查看 workspace 預設資源是否已寫入 platform config：
 
 ```bash
-kubectl get configmap aileron-aileron-platform-config -n workspace-system \
+kubectl get configmap aileron-platform-config -n workspace-system \
   -o jsonpath='{.data.RUNTIME_K8S_RUNTIME_RESOURCES}{"\n"}{.data.RUNTIME_K8S_BROWSER_RESOURCES}{"\n"}{.data.RUNTIME_K8S_CANVAS_RESOURCES}{"\n"}'
 ```
 
@@ -343,32 +344,34 @@ kubectl get configmap aileron-aileron-platform-config -n workspace-system \
 | Knowledge Base | 20-100Gi | ReadWriteMany | Manager 寫入、多個 Runtime 以 `subPath` 唯讀掛載 |
 | Manager state | 20-50Gi | ReadWriteOnce | Marketplace registry 與其他 Manager 持久狀態 |
 
-## 外部服務邊界
+## Identity service 邊界
 
-當前 chart 直接管理 PostgreSQL 與 Redis，但不部署或管理 OIDC provider。Manager 的 OIDC
-issuer、audience 與 timeout 只由正式 `oidc.*` values 設定。
+核心 `helm/aileron` chart 管理平台 PostgreSQL 與 Redis，但不部署或管理 OIDC provider。
+選用 `bundledKeycloak` 時，Installer 以獨立 `helm/aileron-identity` release 管理 Keycloak 與
+Identity PostgreSQL；選用 `externalOidc` 時則完全不安裝 Identity Plane。Manager 的 OIDC
+issuer 與 client 只由兩種 adapter 的標準投影設定。
 
-外部 OIDC、企業 SSO 與 LDAP-backed provider 目前均由 `oidc.issuerUrl` 支援；provider 的
-credential、LDAP 設定與備份由 provider 運維流程負責，不以未受管的 env override 取代正式
-OIDC values。
+兩種模式都不得用未受管的 environment override 取代正式 OIDC values。企業 LDAP 若未來由
+Bundled Keycloak 串接，只屬 Keycloak User Federation；Aileron 不取得 LDAP 設定或 credential。
 
 ## 備份策略
 
 ### 資料庫備份
 
-```bash
-# PostgreSQL 備份
-kubectl exec -n workspace-system statefulset/aileron-aileron-postgres -- \
-  pg_dump -U postgres aileron > backup-$(date +%Y%m%d).sql
+平台與身分 database 都必須納入定期備份與還原演練。`postgres.enabled=true` 時，備份工具使用
+chart 管理的 credential Secret 與 CA；`postgres.enabled=false` 時，由外部資料服務營運者依
+provider 的 snapshot／PITR／`pg_dump` 契約執行。備份作業不得假設可取得 `postgres`
+superuser，也不得把 credential 寫入命令列或備份檔名。每次升級前必須取得可還原的備份並記錄
+restore drill 證據。
 
-# 定期備份（搭配 CronJob）
-```
+### Identity provider 備份
 
-### OIDC provider 備份
-
-依 provider 的正式備份與 restore contract 保存 issuer 設定、client registration、signing
-key rotation metadata 與 LDAP federation（若有）。Aileron 不提供 provider-specific admin
-API，也不保存 provider database 或 realm backup。
+Bundled Keycloak 使用 `aileron-identity` 的明確 backup／restore operation 保存 Identity
+PostgreSQL 與 realm；兩者不可同時啟用，也不會在一般 install 時隱含 restore。External OIDC
+則依 provider 自身的正式備份契約處理。Aileron Core 不提供 provider-specific admin API。
+Identity chart 會擁有備份 PVC；HomeLab profile 使用 `aileron-nfs-rwx-retain`、
+`ReadWriteMany`。正式還原驗證須執行 `identity-installation/backup_restore_smoke.py` 的真實
+dump／restore 流程，並提供完全相符的 destructive confirmation；Helm render 不構成還原證據。
 
 ### Workspace 資料備份
 
@@ -431,9 +434,7 @@ helm diff upgrade aileron helm/aileron \
   -f "${PLATFORM_VALUES}" \
   -f values-production.yaml
 
-# 2. 備份
-kubectl exec -n workspace-system statefulset/aileron-aileron-postgres -- \
-  pg_dump -U postgres aileron > pre-upgrade-backup.sql
+# 2. 依外部資料服務或內建 PostgreSQL 的正式 runbook 建立可還原備份
 
 # 3. 執行升級
 kubectl apply -f helm/aileron/crds/

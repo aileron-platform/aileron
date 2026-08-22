@@ -12,7 +12,7 @@ import {
 } from '@/shared/components/file-workbench';
 import { FileViewerWorkbench, useFileViewerTabs } from '@/shared/components/file-workbench/viewer-entry';
 import type { FileViewerWorkbenchAdapter } from '@/shared/components/file-workbench/viewer-entry';
-import type { MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
+import type { MarketplaceTargetClient } from '@/features/marketplace/model/marketplaceTypes';
 import { EmptyState } from '@/shared/components/ui/empty-state';
 import { LoadingSpinner } from '@/shared/components/ui/loading-spinner';
 import {
@@ -38,7 +38,7 @@ export interface MarketplaceDetailFilesRenderSurface {
 
 interface MarketplaceDetailFilesSectionProps {
   mode: 'package' | 'skills';
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   packageId: string;
   rootLabel?: string;
   renderSurface?: (surface: MarketplaceDetailFilesRenderSurface) => React.ReactNode;
@@ -46,7 +46,7 @@ interface MarketplaceDetailFilesSectionProps {
 
 export const MarketplaceDetailFilesSection: React.FC<MarketplaceDetailFilesSectionProps> = ({
   mode,
-  provider,
+  targetClient,
   packageId,
   rootLabel,
   renderSurface,
@@ -58,7 +58,7 @@ export const MarketplaceDetailFilesSection: React.FC<MarketplaceDetailFilesSecti
     identityKey,
     session,
   } = useMarketplaceResourceSession({
-    provider,
+    targetClient,
     packageId,
     resourceType: `detail-${mode}`,
   }, '');
@@ -76,8 +76,8 @@ export const MarketplaceDetailFilesSection: React.FC<MarketplaceDetailFilesSecti
       'detail-tree',
       () => (
         mode === 'skills'
-          ? listSkillTree(provider, packageId)
-          : listPackageFilesTree(provider, packageId)
+          ? listSkillTree(targetClient, packageId)
+          : listPackageFilesTree(targetClient, packageId)
       ),
       {
         onSuccess: (nextNodes) => {
@@ -88,7 +88,7 @@ export const MarketplaceDetailFilesSection: React.FC<MarketplaceDetailFilesSecti
         },
       },
     );
-  }, [identityGeneration, mode, packageId, provider, session]);
+  }, [identityGeneration, mode, packageId, targetClient, session]);
 
   React.useEffect(() => {
     void loadTree();
@@ -100,12 +100,12 @@ export const MarketplaceDetailFilesSection: React.FC<MarketplaceDetailFilesSecti
       `detail-content:${path}`,
       () => (
         mode === 'skills'
-          ? loadSkillFile(provider, packageId, path)
-          : loadPackageFile(provider, packageId, path)
+          ? loadSkillFile(targetClient, packageId, path)
+          : loadPackageFile(targetClient, packageId, path)
       ),
     );
     return resource.content;
-  }, [identityGeneration, mode, packageId, provider, session]);
+  }, [identityGeneration, mode, packageId, targetClient, session]);
 
   if (loadError) {
     return <MarketplaceResourceLoadError onRetry={() => { void loadTree(); }} />;

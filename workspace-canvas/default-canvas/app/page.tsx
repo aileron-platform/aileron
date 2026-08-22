@@ -1,47 +1,98 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { resolveLocale, translations } from "./i18n";
 
 function DefaultPageContent() {
   const searchParams = useSearchParams();
-  const t = translations[resolveLocale(searchParams.get("lang"))];
+  const locale = resolveLocale(searchParams.get("lang"));
+  const t = translations[locale];
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
+  useEffect(() => {
+    type CanvasTheme = "light" | "dark";
+    type AileronWindow = Window & { aileron?: { theme?: CanvasTheme } };
+    const applyTheme = (theme: CanvasTheme) => {
+      const isDark = theme === "dark";
+      document.documentElement.classList.toggle("dark", isDark);
+      document.body.classList.toggle("dark", isDark);
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+    };
+    const handleThemeChange = (event: Event) => {
+      const theme = (event as CustomEvent<{ theme?: CanvasTheme }>).detail?.theme;
+      if (theme) applyTheme(theme);
+    };
+    const currentTheme = (window as AileronWindow).aileron?.theme;
+    if (currentTheme) applyTheme(currentTheme);
+    window.addEventListener("aileron:themechange", handleThemeChange);
+    return () => window.removeEventListener("aileron:themechange", handleThemeChange);
+  }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center max-w-md px-6">
-        <div className="mb-6">
-          <svg
-            className="mx-auto h-16 w-16 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-            />
-          </svg>
+    <main className="canvas-shell">
+      <div className="canvas-grid" aria-hidden="true" />
+      <div className="canvas-orbit canvas-orbit-one" aria-hidden="true" />
+      <div className="canvas-orbit canvas-orbit-two" aria-hidden="true" />
+
+      <section className="canvas-board" aria-labelledby="canvas-title">
+        <header className="canvas-hero">
+          <div>
+            <p className="canvas-eyebrow">{t.eyebrow}</p>
+            <h1 id="canvas-title">{t.title}</h1>
+            <p className="canvas-description">{t.description}</p>
+          </div>
+          <div className="canvas-status">
+            <span aria-hidden="true" />
+            {t.status}
+          </div>
+        </header>
+
+        <div className="canvas-workbench">
+          <ol className="canvas-steps">
+            <li>
+              <span className="step-index">01</span>
+              <div>
+                <h2>{t.outcomeLabel}</h2>
+                <p>{t.outcomeDescription}</p>
+              </div>
+            </li>
+            <li>
+              <span className="step-index">02</span>
+              <div>
+                <h2>{t.contentLabel}</h2>
+                <p>{t.contentDescription}</p>
+              </div>
+            </li>
+            <li>
+              <span className="step-index">03</span>
+              <div>
+                <h2>{t.syncLabel}</h2>
+                <p>{t.syncDescription}</p>
+              </div>
+            </li>
+          </ol>
+
+          <aside className="canvas-specimen" aria-label={t.promptLabel}>
+            <div className="specimen-header">
+              <span>{t.promptLabel}</span>
+              <span>{t.promptType}</span>
+            </div>
+            <blockquote>{t.promptExample}</blockquote>
+          </aside>
         </div>
-        <h1 className="text-2xl font-semibold text-gray-700 mb-4">
-          {t.title}
-        </h1>
-        <p className="text-gray-500 mb-6">
-          {t.descBefore}{" "}
-          <code className="bg-gray-200 px-1 rounded">/workspace</code>{" "}
-          {t.descAfter}
-        </p>
-        <div className="bg-gray-100 rounded-lg p-4 text-left text-sm text-gray-600">
-          <p className="font-medium mb-2">{t.quickStart}</p>
-          <code className="block bg-gray-200 px-3 py-2 rounded text-xs">
-            npx create-next-app@latest /workspace --typescript --tailwind
-          </code>
-        </div>
-      </div>
-    </div>
+
+        <footer className="canvas-footer">
+          <span className="footer-mark" aria-hidden="true">A</span>
+          <p>{t.footer}</p>
+          <span className="footer-coordinate" aria-hidden="true">00° / 00°</span>
+        </footer>
+      </section>
+    </main>
   );
 }
 

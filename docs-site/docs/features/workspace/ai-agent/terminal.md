@@ -32,7 +32,7 @@ Terminal session、連線與 tab 是不同概念；同一 session 的連線共�
 
 - `frontend/src/features/workspace/features/container-management/`
 - `workspace-runtime/app/modules/internal/router.py`
-- `terminal-service/`
+- `workspace-terminal/`
 
 ## 相關架構與 API
 

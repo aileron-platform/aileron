@@ -21,7 +21,7 @@ describe('workspaceProviderModel', () => {
       fileTreeShowHiddenEntries: true,
     });
 
-    expandedNavigationItems.push('openspec');
+    expandedNavigationItems.push('reports');
     expect(preferences.expandedNavigationItems).toEqual(['file-management', 'codex']);
   });
 

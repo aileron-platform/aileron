@@ -20,7 +20,6 @@ describe('MarketplaceCenterHeaderActions', () => {
     render(
       <MarketplaceCenterHeaderActions
         permissions={{
-          canImport: true,
           canEdit: true,
           canManageRegistry: true,
         }}
@@ -46,7 +45,6 @@ describe('MarketplaceCenterHeaderActions', () => {
     render(
       <MarketplaceCenterHeaderActions
         permissions={{
-          canImport: false,
           canEdit: false,
           canManageRegistry: false,
         }}

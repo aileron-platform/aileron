@@ -31,18 +31,20 @@ require_line 'workspace-runtime-$workspace_id:3002'
 require_line 'workspace-runtime-$workspace_id:3004'
 require_line 'workspace-browser-$workspace_id:6080'
 require_line 'workspace-canvas-$workspace_id:3003'
-require_line 'location ^~ /draw/'
-require_line 'proxy_pass http://drawio:8080;'
-require_line 'proxy_set_header X-Forwarded-Prefix /draw;'
+require_line 'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/runtime/.+"'
+require_line 'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/browser/.+"'
+require_line 'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/canvas/.*"'
+require_line 'location ^~ /api/v1/connectivity-evidence'
+require_line 'proxy_pass http://connectivity-evidence-gateway:8083;'
 require_line 'location = /_aileron_workspace_gateway_authorize'
 require_line 'proxy_pass http://workspace-manager:3001/api/v1/workspaces/gateway/authorize;'
 require_line 'proxy_set_header X-Aileron-Workspace-Id $workspace_id;'
 require_line 'proxy_set_header Cookie "aileron_session=$cookie_aileron_workspace_gateway_session";'
 require_count 4 'auth_request /_aileron_workspace_gateway_authorize;'
-require_count 3 'proxy_set_header Authorization $http_authorization;'
+require_count 4 'proxy_set_header Authorization $http_authorization;'
 require_count 3 'proxy_set_header Authorization "";'
 require_count 1 'proxy_set_header Cookie $http_cookie;'
-require_count 4 'proxy_set_header Cookie "";'
+require_count 5 'proxy_set_header Cookie "";'
 require_count 5 'proxy_set_header Proxy-Authorization "";'
 require_count 5 'proxy_set_header X-API-Key "";'
 require_count 5 'proxy_set_header X-CSRF-Token "";'
@@ -82,8 +84,20 @@ response="$(wget -qO- \
   exit 1
 }
 
-drawio_response="$(wget -qO- "http://127.0.0.1:8082/draw/diagram")"
-[ "${drawio_response}" = "/draw/diagram|/draw" ] || {
-  echo "Draw.io same-origin gateway failed: ${drawio_response}" >&2
+root_response="$(wget -qO- \
+  --header='Cookie: aileron_workspace_gateway_session=opaque-session' \
+  "http://127.0.0.1:8082/workspaces/${workspace_id}/canvas/?lang=zh-TW")"
+
+[ "${root_response}" = "|||||/workspaces/${workspace_id}/canvas" ] || {
+  echo "Canvas root gateway routing failed: ${root_response}" >&2
+  exit 1
+}
+
+connectivity_response="$(wget -qO- \
+  --header='Authorization: Bearer host-agent-token' \
+  --header='Cookie: manager-session-must-not-leak' \
+  "http://127.0.0.1:8082/api/v1/connectivity-evidence")"
+[ "${connectivity_response}" = "/api/v1/connectivity-evidence|Bearer host-agent-token|" ] || {
+  echo "Connectivity evidence gateway routing failed: ${connectivity_response}" >&2
   exit 1
 }

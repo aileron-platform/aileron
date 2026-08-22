@@ -4,10 +4,31 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SkillsPage from './SkillsPage';
 import type { AgentSelectedFile } from '../../model/documents';
 
-const { useWorkspaceMock, getSkillMock, updateSkillMock } = vi.hoisted(() => ({
+interface TestWorkbenchState {
+  documents: AgentSelectedFile[];
+  activeTabId: string | null;
+  contents: Record<string, string>;
+  originalContents: Record<string, string>;
+}
+
+const {
+  useWorkspaceMock,
+  createAgentSettingsApiMock,
+  getSkillMock,
+  getSkillBlobMock,
+  getCodexFileMock,
+  getCodexFileBlobMock,
+  updateSkillMock,
+  updateCodexFileMock,
+} = vi.hoisted(() => ({
   useWorkspaceMock: vi.fn(),
+  createAgentSettingsApiMock: vi.fn(),
   getSkillMock: vi.fn(),
+  getSkillBlobMock: vi.fn(),
+  getCodexFileMock: vi.fn(),
+  getCodexFileBlobMock: vi.fn(),
   updateSkillMock: vi.fn(),
+  updateCodexFileMock: vi.fn(),
 }));
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -21,10 +42,7 @@ vi.mock('../../../../providers/WorkspaceProvider', () => ({
 }));
 
 vi.mock('../../api/agentSettingsApi', () => ({
-  createAgentSettingsApi: () => ({
-    getSkill: getSkillMock,
-    updateSkill: updateSkillMock,
-  }),
+  createAgentSettingsApi: createAgentSettingsApiMock,
 }));
 
 vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
@@ -39,7 +57,10 @@ vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
     activeTabId: string | null;
     onTabsChange: (next: { id: string; name: string; content: string; originalContent: string; isModified: boolean }[]) => void;
     onActiveTabChange: (next: string | null) => void;
-    adapter: { saveFile?: (path: string, content: string) => Promise<void> };
+    adapter: {
+      readBlob?: (path: string) => Promise<Blob>;
+      saveFile?: (path: string, content: string) => Promise<void>;
+    };
   }) => {
     const activeTab = tabs.find(tab => tab.id === activeTabId) ?? null;
     return (
@@ -78,6 +99,13 @@ vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
             </button>
             <button
               type="button"
+              aria-label={`preview-${activeTab.id}`}
+              onClick={() => void adapter.readBlob?.(activeTab.id)}
+            >
+              preview
+            </button>
+            <button
+              type="button"
               aria-label={`close-${activeTab.id}`}
               onClick={() => onTabsChange(tabs.filter(tab => tab.id !== activeTab.id))}
             >
@@ -90,23 +118,44 @@ vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
   },
   useManagedDocumentWorkbenchTabs: (options: {
     adapter: {
-      getKey: (document: { path: string }) => string;
-      getName: (document: { path: string }) => string;
-      readFile: (document: { path: string }) => Promise<string>;
-      saveFile?: (document: { path: string }, content: string) => Promise<void>;
-      isWritable?: (document: { path: string }) => boolean;
+      getKey: (document: AgentSelectedFile) => string;
+      getName: (document: AgentSelectedFile) => string;
+      readFile: (document: AgentSelectedFile) => Promise<string>;
+      readBlob?: (document: AgentSelectedFile) => Promise<Blob>;
+      saveFile?: (document: AgentSelectedFile, content: string) => Promise<void>;
+      isWritable?: (document: AgentSelectedFile) => boolean;
     };
+    initialState?: TestWorkbenchState;
+    onStateChange?: (state: TestWorkbenchState) => void;
   }) => {
-    const [documents, setDocuments] = React.useState<Array<{ path: string }>>([]);
-    const [activeTabId, setActiveTabId] = React.useState<string | null>(null);
-    const [contents, setContents] = React.useState<Record<string, string>>({});
-    const [originalContents, setOriginalContents] = React.useState<Record<string, string>>({});
+    const onStateChange = options.onStateChange;
+    const [documents, setDocuments] = React.useState<AgentSelectedFile[]>(() => [
+      ...(options.initialState?.documents ?? []),
+    ]);
+    const [activeTabId, setActiveTabId] = React.useState<string | null>(() => (
+      options.initialState?.activeTabId ?? null
+    ));
+    const [contents, setContents] = React.useState<Record<string, string>>(() => ({
+      ...(options.initialState?.contents ?? {}),
+    }));
+    const [originalContents, setOriginalContents] = React.useState<Record<string, string>>(() => ({
+      ...(options.initialState?.originalContents ?? {}),
+    }));
+
+    React.useLayoutEffect(() => {
+      onStateChange?.({
+        documents,
+        activeTabId,
+        contents,
+        originalContents,
+      });
+    }, [activeTabId, contents, documents, onStateChange, originalContents]);
 
     const getDocumentByPath = React.useCallback((path: string) => (
       documents.find(document => options.adapter.getKey(document) === path)
     ), [documents, options.adapter]);
 
-    const openDocument = React.useCallback((document: { path: string }) => {
+    const openDocument = React.useCallback((document: AgentSelectedFile) => {
       const path = options.adapter.getKey(document);
       setDocuments(prev => (prev.some(item => options.adapter.getKey(item) === path) ? prev : [...prev, document]));
       setActiveTabId(path);
@@ -143,6 +192,13 @@ vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
 
     const adapter = {
       readFile: async (path: string) => contents[path] ?? '',
+      readBlob: options.adapter.readBlob
+        ? async (path: string) => {
+            const document = getDocumentByPath(path);
+            if (!document) throw new Error('Managed document not found');
+            return options.adapter.readBlob!(document);
+          }
+        : undefined,
       saveFile: options.adapter.saveFile
         ? async (path: string, content: string) => {
             const document = getDocumentByPath(path);
@@ -171,16 +227,34 @@ vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
   },
 }));
 
-const buildFile = (path: string, scope: AgentSelectedFile['scope'] = 'project'): AgentSelectedFile => ({
+const buildFile = (
+  path: string,
+  scope: AgentSelectedFile['scope'] = 'project',
+  pluginId?: string,
+): AgentSelectedFile => ({
   path,
   scope,
+  pluginId,
 });
 
 describe('SkillsPage multi-tab', () => {
   beforeEach(() => {
     useWorkspaceMock.mockReset();
+    createAgentSettingsApiMock.mockReset();
     getSkillMock.mockReset();
+    getSkillBlobMock.mockReset();
+    getCodexFileMock.mockReset();
+    getCodexFileBlobMock.mockReset();
     updateSkillMock.mockReset();
+    updateCodexFileMock.mockReset();
+    createAgentSettingsApiMock.mockImplementation(() => ({
+      getSkill: getSkillMock,
+      getSkillBlob: getSkillBlobMock,
+      getCodexFile: getCodexFileMock,
+      getCodexFileBlob: getCodexFileBlobMock,
+      updateSkill: updateSkillMock,
+      updateCodexFile: updateCodexFileMock,
+    }));
     useWorkspaceMock.mockReturnValue({
       workspaceRuntime: {
         workspaceId: 'ws-1',
@@ -188,7 +262,13 @@ describe('SkillsPage multi-tab', () => {
       },
     });
     getSkillMock.mockImplementation((_baseUrl: string, _ws: string, path: string) => Promise.resolve({ content: `content of ${path}` }));
+    getSkillBlobMock.mockResolvedValue(new Blob(['image'], { type: 'image/png' }));
+    getCodexFileMock.mockImplementation((_baseUrl: string, _ws: string, _resource: string, _scope: string, path: string) => (
+      Promise.resolve({ content: `content of ${path}` })
+    ));
+    getCodexFileBlobMock.mockResolvedValue(new Blob(['plugin image'], { type: 'image/png' }));
     updateSkillMock.mockResolvedValue({ success: true });
+    updateCodexFileMock.mockResolvedValue({ content: 'saved' });
   });
 
   it('opens a new tab when selectedFile points to an untracked file', async () => {
@@ -247,6 +327,215 @@ describe('SkillsPage multi-tab', () => {
         'project',
       );
     });
+  });
+
+  it('loads project binary previews with the original scoped document path', async () => {
+    render(<SkillsPage selectedFile={buildFile('review assets/logo.png')} />);
+
+    const preview = await screen.findByLabelText('preview-project||review assets/logo.png');
+    fireEvent.click(preview);
+
+    await waitFor(() => {
+      expect(getSkillBlobMock).toHaveBeenCalledWith(
+        'http://runtime.local',
+        'ws-1',
+        'review assets/logo.png',
+        'project',
+      );
+    });
+    expect(getSkillBlobMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'project||review assets/logo.png',
+      expect.anything(),
+    );
+  });
+
+  it('uses generic raw Skills content for Codex project previews', async () => {
+    render(
+      <SkillsPage
+        apiPrefix="codex"
+        selectedFile={buildFile('review/assets/logo.png')}
+      />,
+    );
+
+    fireEvent.click(await screen.findByLabelText('preview-project||review/assets/logo.png'));
+
+    await waitFor(() => {
+      expect(getSkillBlobMock).toHaveBeenCalledWith(
+        'http://runtime.local',
+        'ws-1',
+        'review/assets/logo.png',
+        'project',
+      );
+    });
+    expect(getCodexFileBlobMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves Codex plugin identity when loading a binary preview', async () => {
+    render(
+      <SkillsPage
+        apiPrefix="codex"
+        selectedFile={buildFile('review/SKILL.md', 'plugin', 'demo tools@local')}
+      />,
+    );
+
+    fireEvent.click(await screen.findByLabelText('preview-plugin|demo tools@local|review/SKILL.md'));
+
+    await waitFor(() => {
+      expect(getCodexFileBlobMock).toHaveBeenCalledWith(
+        'http://runtime.local',
+        'ws-1',
+        'skills',
+        'plugin',
+        'review/SKILL.md',
+        'demo tools@local',
+      );
+    });
+    expect(getSkillBlobMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps drafts provider-scoped and clears them when workspace identity changes', async () => {
+    const selectedFile = buildFile('shared/logo.png');
+    let workspaceRuntime = {
+      workspaceId: 'ws-1',
+      runtimeBaseUrl: 'http://runtime.local',
+    };
+    useWorkspaceMock.mockImplementation(() => ({ workspaceRuntime }));
+
+    const claudeRead = vi.fn((_baseUrl: string, workspaceId: string) => (
+      Promise.resolve({ content: `claude content for ${workspaceId}` })
+    ));
+    const claudeSave = vi.fn().mockResolvedValue({ success: true });
+    const openCodeRead = vi.fn((_baseUrl: string, workspaceId: string) => (
+      Promise.resolve({ content: `opencode content for ${workspaceId}` })
+    ));
+    const openCodeSave = vi.fn().mockResolvedValue({ success: true });
+    const codexRead = vi.fn((_baseUrl: string, workspaceId: string) => (
+      Promise.resolve({ content: `codex content for ${workspaceId}` })
+    ));
+    const codexSave = vi.fn().mockResolvedValue({ content: 'codex content' });
+    createAgentSettingsApiMock.mockImplementation((apiPrefix: string) => {
+      if (apiPrefix === 'codex') {
+        return {
+          getCodexFile: codexRead,
+          getSkillBlob: getSkillBlobMock,
+          updateCodexFile: codexSave,
+        };
+      }
+      if (apiPrefix === 'opencode') {
+        return {
+          getSkill: openCodeRead,
+          getSkillBlob: getSkillBlobMock,
+          updateSkill: openCodeSave,
+        };
+      }
+      return {
+        getSkill: claudeRead,
+        getSkillBlob: getSkillBlobMock,
+        updateSkill: claudeSave,
+      };
+    });
+
+    const view = render(
+      <SkillsPage
+        apiPrefix="claude-code"
+        selectedFile={selectedFile}
+      />,
+    );
+
+    const editor = await screen.findByDisplayValue('claude content for ws-1');
+    fireEvent.change(editor, { target: { value: 'unsaved claude content' } });
+
+    view.rerender(
+      <SkillsPage
+        apiPrefix="opencode"
+        selectedFile={selectedFile}
+      />,
+    );
+
+    expect(await screen.findByDisplayValue('opencode content for ws-1')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('unsaved claude content')).not.toBeInTheDocument();
+    expect(claudeSave).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('save'));
+
+    await waitFor(() => expect(openCodeSave).toHaveBeenCalledWith(
+      'http://runtime.local',
+      'ws-1',
+      'shared/logo.png',
+      { content: 'opencode content for ws-1' },
+      'project',
+    ));
+    expect(claudeSave).not.toHaveBeenCalled();
+    expect(codexSave).not.toHaveBeenCalled();
+
+    view.rerender(
+      <SkillsPage
+        apiPrefix="codex"
+        selectedFile={selectedFile}
+      />,
+    );
+
+    expect(await screen.findByDisplayValue('codex content for ws-1')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('unsaved claude content')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('save'));
+
+    await waitFor(() => expect(codexSave).toHaveBeenCalledWith(
+      'http://runtime.local',
+      'ws-1',
+      'skills',
+      'project',
+      'shared/logo.png',
+      'codex content for ws-1',
+    ));
+    expect(claudeSave).not.toHaveBeenCalled();
+    expect(openCodeSave).toHaveBeenCalledTimes(1);
+
+    view.rerender(
+      <SkillsPage
+        apiPrefix="claude-code"
+        selectedFile={selectedFile}
+      />,
+    );
+
+    expect(await screen.findByDisplayValue('unsaved claude content')).toBeInTheDocument();
+    expect(claudeRead).toHaveBeenCalledTimes(1);
+    expect(claudeSave).not.toHaveBeenCalled();
+
+    workspaceRuntime = {
+      workspaceId: 'ws-2',
+      runtimeBaseUrl: 'http://runtime-2.local',
+    };
+    view.rerender(
+      <SkillsPage
+        apiPrefix="claude-code"
+        selectedFile={selectedFile}
+      />,
+    );
+
+    expect(await screen.findByDisplayValue('claude content for ws-2')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('unsaved claude content')).not.toBeInTheDocument();
+    expect(claudeRead).toHaveBeenLastCalledWith(
+      'http://runtime-2.local',
+      'ws-2',
+      'shared/logo.png',
+      'project',
+    );
+
+    workspaceRuntime = {
+      workspaceId: 'ws-1',
+      runtimeBaseUrl: 'http://runtime.local',
+    };
+    view.rerender(
+      <SkillsPage
+        apiPrefix="claude-code"
+        selectedFile={selectedFile}
+      />,
+    );
+
+    expect(await screen.findByDisplayValue('claude content for ws-1')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('unsaved claude content')).not.toBeInTheDocument();
+    expect(claudeRead).toHaveBeenCalledTimes(3);
   });
 
   it('closes a tab and removes it from the open file list', async () => {

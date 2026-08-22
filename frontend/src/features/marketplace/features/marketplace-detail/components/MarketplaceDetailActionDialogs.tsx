@@ -28,8 +28,6 @@ import {
   DialogFooter,
   DialogHeader,
 } from '@/shared/components/ui/dialog';
-import { Input } from '@/shared/components/ui/input';
-import { Label } from '@/shared/components/ui/label';
 import { useI18n } from '@/shared/hooks/useI18n';
 import type { MarketplacePackageDetail } from '@/features/marketplace/model/marketplaceTypes';
 import { deletePackage, exportPackage } from '../../../api/marketplaceApi';
@@ -71,11 +69,11 @@ export const MarketplaceExportDialog: React.FC<
     setErrorCode(null);
     try {
       const archive = await exportPackage({
-        provider: detail.provider,
+        targetClient: detail.targetClient,
+        packageFormat: detail.packageFormat,
         packageId: detail.packageId,
-        revision: detail.revision,
       });
-      downloadBlob(archive, `${detail.provider}-${detail.packageId}.zip`);
+      downloadBlob(archive, `${detail.targetClient}-${detail.packageId}.zip`);
       setStatus('success');
     } catch (error) {
       setErrorCode(
@@ -152,7 +150,6 @@ export const MarketplaceDeleteDialog: React.FC<
   MarketplaceDeleteDialogProps
 > = ({ open, detail, onOpenChange, onDeleted }) => {
   const { t } = useI18n();
-  const [confirmText, setConfirmText] = React.useState('');
   const [status, setStatus] = React.useState<
     'idle' | 'running' | 'success' | 'failed'
   >('idle');
@@ -160,7 +157,6 @@ export const MarketplaceDeleteDialog: React.FC<
 
   React.useEffect(() => {
     if (open) {
-      setConfirmText('');
       setStatus('idle');
       setErrorCode(null);
     }
@@ -171,7 +167,7 @@ export const MarketplaceDeleteDialog: React.FC<
     setErrorCode(null);
     try {
       const result = await deletePackage({
-        provider: detail.provider,
+        targetClient: detail.targetClient,
         packageId: detail.packageId,
         revision: detail.revision,
       });
@@ -224,16 +220,6 @@ export const MarketplaceDeleteDialog: React.FC<
             value={detail.revision}
             monospace
           />
-          <div className="space-y-2">
-            <Label htmlFor="marketplace-delete-confirm">
-              {t('marketplace.delete.fields.confirm', { id: detail.packageId })}
-            </Label>
-            <Input
-              id="marketplace-delete-confirm"
-              value={confirmText}
-              onChange={event => setConfirmText(event.target.value)}
-            />
-          </div>
           {status === 'success' ? (
             <Alert>
               <CheckCircle2 className="h-4 w-4" />
@@ -267,9 +253,7 @@ export const MarketplaceDeleteDialog: React.FC<
                   event.preventDefault();
                   void runDelete();
                 }}
-                disabled={
-                  confirmText !== detail.packageId || status === 'running'
-                }
+                disabled={status === 'running'}
               >
                 {status === 'running' ? (
                   <RefreshCw className="mr-1.5 h-4 w-4 animate-spin" />

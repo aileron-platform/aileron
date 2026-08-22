@@ -25,7 +25,7 @@ Deploy the Manager schema, Runtime telemetry, Workspace CRD and Operator, and Fr
 - [ ] OIDC provider redirect URIs, audience, and issuer use the production domain and client
 - [ ] No environment variable beginning with `VITE_` contains secrets
 - [ ] No Docker socket is mounted; Kubernetes mode is used
-- [ ] The current Chart limitation is accepted: bundled PostgreSQL connections do not yet use TLS and external databases are unsupported. If encrypted database transport is mandatory, production deployment is blocked until that contract is implemented
+- [ ] Dedicated databases, non-superuser permissions, Redis logical connections, TLS trust, and rotation are configured according to [External Data Services](./external-data-services.md)
 
 ### Recommended
 
@@ -75,7 +75,7 @@ bootstrap:
 `bootstrap.admin.subject` creates only the Manager-local administrator snapshot. The provider owns
 credentials, groups, and sign-in policy.
 
-See [External OIDC Installation](./oidc.md) for the production OIDC and local
+See [OIDC and Identity Plane Installation](./oidc.md) for the production OIDC and local
 administrator-snapshot contract. When `bootstrap.admin.enabled=true`, both `install` and `upgrade`
 must wait for the snapshot bootstrap Job to succeed. The Job does not create provider accounts,
 handle passwords, or put provider credentials into Pod arguments or environment variables.
@@ -139,7 +139,7 @@ assume NGINX, AWS, GCP, or Azure. When the cloud Ingress controller manages the
 certificate, use `tlsMode: controllerManaged`, keep `tlsSecretName: ""`, and
 place the certificate reference in provider annotations or IngressClass policy.
 
-With an external OIDC provider, verify the production issuer and client:
+In `externalOidc` mode, verify the production issuer and client:
 
 ```yaml
 oidc:
@@ -157,9 +157,9 @@ oidc:
 
 With built-in TURN and Secret-based Registry authentication, Coturn runs in a
 separate `coturn.namespace`; the selected `global.imagePullSecrets` name must
-exist in both the Runtime and Coturn namespaces. See
-[Kubernetes Quick Installation — Prepare the Namespace and Secrets](./kubernetes.md#1-prepare-the-namespace-and-secrets)
-for the complete procedure.
+exist in both the Runtime and Coturn namespaces. RKE2 HomeLab must prepare them
+through [Kubernetes Installation — `prepare-cluster`](./kubernetes.md#prepare-cluster),
+without manually creating copies.
 
 ```yaml
 global:
@@ -334,7 +334,7 @@ kubectl get deploy -n workspace-system \
 Check whether default Workspace resources were written to the platform configuration:
 
 ```bash
-kubectl get configmap aileron-aileron-platform-config -n workspace-system \
+kubectl get configmap aileron-platform-config -n workspace-system \
   -o jsonpath='{.data.RUNTIME_K8S_RUNTIME_RESOURCES}{"\n"}{.data.RUNTIME_K8S_BROWSER_RESOURCES}{"\n"}{.data.RUNTIME_K8S_CANVAS_RESOURCES}{"\n"}'
 ```
 
@@ -349,32 +349,38 @@ kubectl get configmap aileron-aileron-platform-config -n workspace-system \
 | Knowledge Base | 20–100 Gi | ReadWriteMany | Written by Manager and mounted read-only by multiple Runtimes through `subPath` |
 | Manager state | 20–50 Gi | ReadWriteOnce | Marketplace Registry and other persistent Manager state |
 
-## External-Service Boundary
+## Identity service boundary
 
-The current Chart directly manages PostgreSQL and Redis but neither deploys nor manages an OIDC
-provider. Manager's issuer, audience, and timeouts come only from the formal `oidc.*` values.
+The core `helm/aileron` Chart manages platform PostgreSQL and Redis but does not deploy or manage an
+OIDC provider. In `bundledKeycloak` mode, the installer manages Keycloak and Identity PostgreSQL as
+an independent `helm/aileron-identity` release. In `externalOidc` mode, it installs no Identity
+Plane. Manager's issuer and client settings come only from the standard adapter projection.
 
-External OIDC, enterprise SSO, and LDAP-backed providers are supported through `oidc.issuerUrl`.
-Provider credentials, LDAP settings, and provider backups belong to the provider's operations
-workflow; an unmanaged environment-variable override is not a substitute for the OIDC values.
+Neither mode may replace formal OIDC values with unmanaged environment overrides. If Bundled
+Keycloak later connects to an enterprise LDAP directory, that integration remains inside Keycloak
+User Federation. Aileron receives no LDAP setting or credential.
 
 ## Backup Strategy
 
 ### Database Backup
 
-```bash
-# PostgreSQL backup
-kubectl exec -n workspace-system statefulset/aileron-aileron-postgres -- \
-  pg_dump -U postgres aileron > backup-$(date +%Y%m%d).sql
+Both the platform and Identity databases require scheduled backups and restore drills. With
+`postgres.enabled=true`, backup tooling uses the chart-managed credential Secret and CA. With
+`postgres.enabled=false`, the external data-service operator follows the provider's snapshot, PITR,
+or `pg_dump` contract. A backup operation must not assume access to the `postgres` superuser or put
+credentials in argv or backup filenames. Record recoverable backup and restore-drill evidence before
+every upgrade.
 
-# Schedule regular backups with a CronJob
-```
+### Identity provider backup
 
-### OIDC provider backup
-
-Use the provider's supported backup and restore contract for issuer settings, client registration,
-signing-key rotation metadata, and LDAP federation when present. Aileron does not provide a
-provider-specific administration API and stores no provider database or realm backup.
+Bundled Keycloak uses explicit `aileron-identity` backup and restore operations for Identity
+PostgreSQL and the realm. Backup and restore cannot run together, and a normal install never
+restores implicitly. External OIDC follows its provider's supported backup contract. Aileron Core
+does not provide a provider-specific administration API.
+The Identity chart owns the backup PVC; the HomeLab profile uses `aileron-nfs-rwx-retain` with
+`ReadWriteMany`. Restore acceptance must run the real dump/restore workflow in
+`identity-installation/backup_restore_smoke.py` with an exact destructive confirmation. Helm render
+output is not restore evidence.
 
 ### Workspace Data Backup
 
@@ -439,9 +445,7 @@ helm diff upgrade aileron helm/aileron \
   -f "${PLATFORM_VALUES}" \
   -f values-production.yaml
 
-# 2. Back up
-kubectl exec -n workspace-system statefulset/aileron-aileron-postgres -- \
-  pg_dump -U postgres aileron > pre-upgrade-backup.sql
+# 2. Create a recoverable backup through the external or bundled PostgreSQL runbook
 
 # 3. Upgrade
 kubectl apply -f helm/aileron/crds/

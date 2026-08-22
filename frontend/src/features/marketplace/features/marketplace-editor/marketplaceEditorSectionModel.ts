@@ -1,19 +1,26 @@
-import type { MarketplaceProvider } from '@/features/marketplace/model/marketplaceTypes';
-import { providerEditorTabs, type MarketplaceEditorTab } from './marketplaceEditorTabsModel';
+import type {
+  MarketplaceAuthoringCapability,
+  MarketplaceAuthoringFeature,
+  MarketplacePackageFormat,
+  MarketplaceTargetClient,
+} from '@/features/marketplace/model/marketplaceTypes';
+import { visibleMarketplaceEditorTabs, type MarketplaceEditorTab } from './marketplaceEditorTabsModel';
 
 export const resolveMarketplaceEditorSection = (
-  provider: MarketplaceProvider,
+  capabilities: Record<MarketplaceAuthoringFeature, MarketplaceAuthoringCapability> | null,
   raw: string | undefined,
 ): MarketplaceEditorTab => {
-  const tabs = providerEditorTabs[provider];
+  if (!capabilities) return 'basic';
+  const tabs = visibleMarketplaceEditorTabs(capabilities);
   const match = tabs.find((tab) => tab === raw);
   return match ?? 'basic';
 };
 
 export const buildMarketplaceEditorPath = (args: {
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   packageId: string;
+  packageFormat: MarketplacePackageFormat;
   section: MarketplaceEditorTab;
 }): string => {
-  return `/marketplace/packages/${args.provider}/${args.packageId}/edit/${args.section}`;
+  return `/marketplace/packages/${args.targetClient}/${args.packageId}/edit/${args.section}?packageFormat=${encodeURIComponent(args.packageFormat)}`;
 };

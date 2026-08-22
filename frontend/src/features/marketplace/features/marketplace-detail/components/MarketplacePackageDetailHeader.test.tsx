@@ -14,18 +14,16 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 
 const detail = {
   packageId: 'pkg.test',
-  provider: 'codex',
+  targetClient: 'codex',
   displayName: 'Test package',
   version: '1.2.3',
   category: 'tools',
-  lifecycleStatus: 'ready',
 } as MarketplacePackageDetail;
 
 const permissions: MarketplaceActionPermissions = {
   canEdit: true,
   canDelete: true,
   canExport: true,
-  canImport: true,
   canInstall: true,
   canManageRegistry: true,
 };
@@ -62,9 +60,8 @@ describe('MarketplacePackageDetailHeader', () => {
     expect(screen.getByText('marketplace.center.header.title')).toBeInTheDocument();
     expect(screen.getByText('Test package')).toBeInTheDocument();
     expect(screen.getByText(/marketplace.detail.header.version/)).toBeInTheDocument();
-    expect(screen.getByText(/marketplace.detail.header.provider/)).toBeInTheDocument();
+    expect(screen.getByText(/marketplace.detail.header.targetClient/)).toBeInTheDocument();
     expect(screen.getByText(/marketplace.detail.header.category/)).toBeInTheDocument();
-    expect(screen.getByText('marketplace.lifecycle.ready')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /marketplace.detail.actions.back/ }));
     fireEvent.click(screen.getByRole('button', { name: /marketplace.detail.actions.edit/ }));

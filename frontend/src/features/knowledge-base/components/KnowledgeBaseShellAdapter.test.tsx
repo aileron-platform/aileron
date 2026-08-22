@@ -86,8 +86,6 @@ describe('KnowledgeBaseShellAdapter', () => {
     });
     expect(props.body.navigation?.presentation.responsive).toBe('always');
     expect(props.body.navigator?.presentation.responsive).toBe('always');
-    expect(props.body.navigation?.presentation.chrome).toBe('navigation');
-    expect(props.body.navigator?.presentation.chrome).toBe('navigator-muted');
     const navigatorIcon = props.body.navigator?.presentation.header?.leading;
     expect(navigatorIcon).toMatchObject({
       props: {

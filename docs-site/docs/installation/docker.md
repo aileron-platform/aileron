@@ -27,7 +27,7 @@ title: Docker 模式
 Docker 模式下，root `docker compose` 管理 control plane 與安裝層 TURN readiness stack。Workspace Manager 再透過 Docker API，為每個啟動中的 Workspace 建立獨立 execution plane：
 
 ```text
-Frontend / Manager / external OIDC or development IdP fixture
+Frontend / Manager / external OIDC or bundled Keycloak
                |
        Workspace Manager + Docker API
                |
@@ -46,8 +46,8 @@ host frontend vantage 提供 Browser access 所需的 TURN 路徑證據。
 |------|------|------|
 | **postgres** | `postgres:15-alpine` | 主要平台資料庫 |
 | **redis** | `redis:7-alpine` | 任務佇列 (Celery broker)、結果後端、session 管理 |
-| **openldap** | `osixia/openldap:1.5.0` | 本機帳號生命週期開發用 LDAP 目錄 |
-| **openldap-seed** | `osixia/openldap:1.5.0` | 一次性建立本機 LDAP 測試資料；成功後結束 |
+| **local-oidc-config** | `python:3.12-alpine` | 一次性從 mounted Secret files 產生 Keycloak realm；成功後結束 |
+| **keycloak** | `${PLATFORM_KEYCLOAK_IMAGE}` | `local-oidc` profile 的 native-user OIDC provider 與 Admin Console |
 | **turn-readiness-preflight** | `ailerondocker/workspace-manager:dev` | 驗證 profile、secret bundle、image 與 relay port；失敗時阻止 TURN stack 啟動 |
 | **coturn** | `${COTURN_IMAGE}` | TURN control listener 與 relay UDP range |
 | **connectivity-evidence-gateway** | `${WORKSPACE_OPERATOR_IMAGE}` | 收集 host frontend vantage 的 challenge/evidence |
@@ -56,7 +56,6 @@ host frontend vantage 提供 Browser access 所需的 TURN 路徑證據。
 | **identity-bootstrap** | `ailerondocker/workspace-manager:dev` | 一次性建立本地平台角色與 admin snapshot；不建立 provider 密碼；成功後結束 |
 | **workspace-manager** | `ailerondocker/workspace-manager:dev` | 核心管理服務：Workspace CRUD、權限、生命週期與動態 execution-plane provisioning |
 | **frontend** | `ailerondocker/workspace-ui:dev` | React + Vite 開發伺服器 |
-| **drawio** | `jgraph/drawio` | 內嵌圖表編輯工具 |
 
 這十三個名稱就是 root Compose 的完整 service 清單。Celery worker、Celery Beat 與
 Flower 不是獨立 Compose service，而是由 `workspace-manager` 容器內的 Supervisor
@@ -92,7 +91,7 @@ Flower 不是獨立 Compose service，而是由 `workspace-manager` 容器內的
 | Frontend 與 Canvas npm 套件 | 各自的 `package.json`、`package-lock.json` | 使用 `npm ci` 重現 lockfile |
 | Manager 與 Runtime Python 套件 | 各自的 `pyproject.toml`、`uv.lock` | 使用 frozen lockfile 建置 |
 | Go 模組 | 各自的 `go.mod`、`go.sum` | 由 Go module lock 狀態重現 |
-| PostgreSQL、Redis、OIDC adapter、Draw.io 等執行期服務 image | `docker-compose.yml` 或 Helm values | 與 application build toolchain 分離管理 |
+| PostgreSQL、Redis、OIDC adapter 等執行期服務 image | `docker-compose.yml` 或 Helm values | 與 application build toolchain 分離管理 |
 
 更新工具鏈版號時，只修改 `docker-bake.hcl`，並同步更新 checksum 類欄位。不要在 Dockerfile、Compose、Makefile、shell script 或 `ops.py` 再放一份數字版號。
 
@@ -122,6 +121,7 @@ RKE2 發佈腳本也透過相同 Bake target 解析工具鏈版號，再套用 r
 | `HOST_RUNTIME_HOME_DIR` | `./data/runtime-home` | 每個動態 Runtime 的完整使用者 HOME 儲存根目錄 |
 | `WORKSPACE_OPERATOR_IMAGE` | `ailerondocker/workspace-operator:dev` | Gateway、host agent 與 Browser probe 使用的既有 Operator image |
 | `COTURN_IMAGE` | `ailerondocker/platform-coturn:dev` | Coturn image；必須已存在於本機或由部署者提供 |
+| `PLATFORM_KEYCLOAK_IMAGE` | `ailerondocker/platform-keycloak:dev` | `local-oidc` 使用的自建 immutable Keycloak image |
 | `HOST_TURN_CONFIG_DIR` | `./data/turn-config` | canonical TURN profile 所在的主機目錄 |
 | `HOST_TURN_SECRETS_DIR` | `./data/turn-secrets` | TURN REST、backend/frontend ICE、Coturn、Gateway 與 host agent secret bundle 目錄 |
 | `TURN_CREDENTIAL_REVISION` | `docker-compose-v1` | 本次安裝的 TURN credential revision |
@@ -136,14 +136,16 @@ RKE2 發佈腳本也透過相同 Bake target 解析工具鏈版號，再套用 r
 ### 本機 OIDC Secret
 
 啟用 `local-oidc` profile 時，`${HOST_PLATFORM_SECRETS_DIR}` 必須另含
-`local-admin-password`、`ldap-admin-password`、`ldap-config-password`、
-`ldap-alice-password` 與 `ldap-bob-password`。OpenLDAP 透過 image 原生的 `*_FILE`
-介面讀取 mounted Secret；首次初始化完成後，長期 `slapd` 的 argv 與 environment 不含
-Secret value。Keycloak 直接匯入包含本機緊急管理員的 `aileron` realm，不建立 master
-realm bootstrap administrator，因此不需要額外的 Keycloak admin Secret。
+`keycloak-bootstrap-admin-password` 與 `local-oidc-platform-admin-password`。前者只在
+Keycloak 啟動前建立獨立的 Admin Console administrator，接著從 process environment 清除；
+後者只寫入 mode `0600` 的 realm import，隔離的本機環境預設內容為 `admin123`。
+OIDC client Secret 沿用共用的 `oidc-client-secret`。
 
-`ldap-admin-password` 與 `ldap-config-password` 代表密碼的精確 bytes，不得包含前後空白
-或結尾換行。`local-oidc-config` 會在 OpenLDAP 啟動前驗證此契約，不符合時 fail closed。
+realm 內的 Aileron 平台管理員與 Manager bootstrap snapshot 共用
+`BOOTSTRAP_ADMIN_SUBJECT`、`BOOTSTRAP_ADMIN_USERNAME` 與 `BOOTSTRAP_ADMIN_EMAIL`，
+預設帳號為 `admin`。Keycloak Admin Console administrator 使用獨立的
+`KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME`。所有密碼只允許透過 mounted Secret file 傳入；
+本 profile 不部署 OpenLDAP、LDAP seed 或 LDAP federation。
 
 ### TURN readiness bundle
 
@@ -295,7 +297,8 @@ docker buildx bake --load local
 使用既有 image 啟動，或非破壞性停止並保留資料：
 
 ```bash
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 make down
 ```
 
@@ -308,9 +311,9 @@ make verify-local
 查看日誌：
 
 ```bash
-docker compose logs -f
-docker compose logs -f workspace-manager
-docker compose logs -f connectivity-evidence-gateway connectivity-external-agent coturn
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml logs -f
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml logs -f workspace-manager
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml logs -f connectivity-evidence-gateway connectivity-external-agent coturn
 docker logs -f workspace-runtime-<workspace-id>
 docker logs -f workspace-browser-connectivity-probe-<workspace-id>
 ```
@@ -360,7 +363,8 @@ prune，還可能刪除其他專案的未使用 Docker 資源。執行前確認�
 
 ```bash
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 ```
 
 ## 健康檢查
@@ -385,7 +389,7 @@ root Compose 的 control-plane service 設定了健康檢查：
 | Workspace 生命週期 | Docker container | Pod + internal Service；公開流量經 Frontend gateway |
 | 網路隔離 | Docker bridge network | Cilium Network Policy |
 | 儲存 | Host volume mount | PVC (Persistent Volume Claim) |
-| 認證 | 必要（外部 OIDC 或本機開發 IdP fixture） | 必要（外部 OIDC provider + Ingress TLS） |
+| 認證 | 必要（external OIDC 或 bundled Keycloak） | 必要（external OIDC 或獨立 bundled Keycloak Identity Plane） |
 | 適合場景 | 開發、測試、Demo | 正式環境、多人協作 |
 
 若需要 Kubernetes 部署，請參閱 [Kubernetes 模式](./kubernetes)。

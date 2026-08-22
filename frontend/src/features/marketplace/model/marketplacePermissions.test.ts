@@ -8,7 +8,6 @@ const noPermissions: MarketplaceActionPermissions = {
   canEdit: false,
   canDelete: false,
   canExport: false,
-  canImport: false,
   canInstall: false,
   canManageRegistry: false,
 };
@@ -31,7 +30,6 @@ describe('resolveMarketplacePermissions', () => {
       canEdit: true,
       canDelete: true,
       canExport: true,
-      canImport: true,
       canInstall: true,
       canManageRegistry: true,
     });

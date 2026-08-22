@@ -320,13 +320,17 @@ const common = {
     },
   },
 
-  // Slash Command picker
-  slashCommand: {
+  // Prompt Invocation picker
+  promptInvocation: {
     picker: {
-      title: 'Select Slash Command',
-      description: 'Choose a command from the library to quickly fill in your prompt.',
+      title: 'Select prompt invocation',
+      description: 'Choose a command or Skill to insert into your prompt.',
       searchPlaceholder: 'Search by name, description, or tags...',
-      empty: 'No matching commands',
+      loading: 'Loading prompt invocations…',
+      error: 'Unable to load prompt invocations. Please try again.',
+      degraded: 'Some sources are unavailable. The available items remain selectable.',
+      degradedEmpty: 'No invocations could be loaded from the available sources.',
+      empty: 'No matching prompt invocations',
       scope: {
         all: 'All',
         project: 'Project',

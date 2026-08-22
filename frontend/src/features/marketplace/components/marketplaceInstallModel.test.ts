@@ -6,20 +6,19 @@ import type {
 import {
   getMarketplaceInstallErrorKey,
   getMarketplaceInstallResourceTypeLabelKey,
-  getMarketplacePluginIndexedResourceTypes,
+  getMarketplaceSkippedReasonKey,
+  marketplaceBlockingIssueGroups,
   marketplaceResourceTypeCounts,
 } from './marketplaceInstallModel';
 
 const packageSummary: MarketplacePackageSummary = {
-  provider: 'codex',
+  targetClient: 'codex',
   packageType: 'plugin',
   packageId: 'review-tools',
   displayName: 'Review Tools',
   tags: [],
-  sourceType: 'created',
   indexedResourceNames: [],
   validationSeverity: 'none',
-  lifecycleStatus: 'ready',
   registryPath: 'codex/plugins/review-tools',
   revision: 'revision-1',
   updatedAt: '2026-07-25T00:00:00Z',
@@ -28,7 +27,7 @@ const packageSummary: MarketplacePackageSummary = {
 
 const userCopyPreflight: MarketplaceUserCopyPreflightResult = {
   status: 'ready',
-  provider: 'codex',
+  targetClient: 'codex',
   packageId: 'review-tools',
   workspaceId: 'workspace-1',
   sourceDigest: 'source',
@@ -62,18 +61,50 @@ describe('marketplaceInstallModel', () => {
     ]);
   });
 
+  it('groups blocking issues by their localized reason', () => {
+    expect(marketplaceBlockingIssueGroups({
+      ...userCopyPreflight,
+      status: 'blocked',
+      blockingIssues: [
+        {
+          resourceType: 'skill',
+          resourceId: 'one',
+          sourceLocator: 'skills/one/SKILL.md',
+          targetLocator: '.codex/skills/one',
+          errorCode: 'marketplace.user_copy.target_not_writable',
+        },
+        {
+          resourceType: 'skill',
+          resourceId: 'two',
+          sourceLocator: 'skills/two/SKILL.md',
+          targetLocator: '.codex/skills/two',
+          errorCode: 'marketplace.user_copy.target_not_writable',
+        },
+      ],
+    })).toEqual([{
+      errorCode: 'marketplace.user_copy.target_not_writable',
+      count: 2,
+    }]);
+  });
+
   it('maps one-shot plugin and user-copy operation errors', () => {
     expect(getMarketplaceInstallErrorKey(
       'marketplace.install.runtime_contract_invalid',
     )).toBe('marketplace.install.errors.runtimeContractInvalid');
     expect(getMarketplaceInstallErrorKey(
-      'marketplace.install.package_not_published',
-    )).toBe('marketplace.install.errors.packageNotPublished');
-    expect(getMarketplaceInstallErrorKey(
       'marketplace.user_copy.plan_stale',
     )).toBe('marketplace.install.errors.userCopyPlanStale');
     expect(getMarketplaceInstallErrorKey('unexpected')).toBe(
       'marketplace.install.errors.unknown',
+    );
+  });
+
+  it('maps unsupported package formats to a localized skipped reason', () => {
+    expect(getMarketplaceSkippedReasonKey('format-unsupported')).toBe(
+      'marketplace.install.skipped.reasons.formatUnsupported',
+    );
+    expect(getMarketplaceSkippedReasonKey('unknown')).toBe(
+      'marketplace.install.skipped.reasons.unsupported',
     );
   });
 
@@ -84,12 +115,5 @@ describe('marketplaceInstallModel', () => {
     expect(getMarketplaceInstallResourceTypeLabelKey('claude-code', 'command')).toBe(
       'marketplace.install.resourceTypes.command',
     );
-  });
-
-  it('derives authoring resource hints from package index categories', () => {
-    expect(getMarketplacePluginIndexedResourceTypes({
-      ...packageSummary,
-      indexedResourceNames: ['skills', 'apps', 'mcp', 'hooks', 'prompts'],
-    })).toEqual(['skill', 'app', 'mcp', 'hook']);
   });
 });

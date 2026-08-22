@@ -45,7 +45,7 @@ export const useMarketplaceInstallWorkflow = ({
       return;
     }
     void workflow.send({ type: 'close' });
-  }, [item.packageId, item.provider, open, workflow]);
+  }, [item.packageId, item.targetClient, open, workflow]);
 
   React.useEffect(() => {
     if (open) {

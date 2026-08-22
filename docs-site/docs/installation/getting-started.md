@@ -31,12 +31,14 @@ printf '%s\n' "$agent_token" > data/turn-secrets/host-agent-token
 printf '{"host":"%s"}\n' "$agent_token" > data/turn-secrets/connectivity-agent-tokens.json
 chmod 600 data/turn-config/turn-reachability-profile.json data/turn-secrets/*
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 ```
 
 - `turn-readiness-preflight` 會先驗證 profile、secret bundle、image reference 與 relay port；
   驗證失敗時不會啟動 Coturn、Gateway、host agent 或 Manager。
-- `docker compose up` 與 `docker compose down` 管理 root Compose 的 control-plane 與 TURN
+- 本機流程固定合併 `docker-compose.yml` 與 `docker-compose.bundled-data-services.yml`；
+  `docker compose up` 與 `docker compose down` 管理 root Compose 的 control-plane 與 TURN
   readiness services；Runtime、Browser、Canvas 與 Browser connectivity probe 由 Manager
   依 Workspace 動態管理。
 - `docker-bake.hcl` 是 image 建置參數與工具鏈版號的唯一來源。
@@ -65,7 +67,7 @@ New-Item -ItemType Directory -Force data/turn-config, data/turn-secrets
 Copy-Item contracts/browser-connectivity/turn-reachability-profile.json data/turn-config/turn-reachability-profile.json
 $env:HOST_PROJECT_ROOT = (Get-Location).Path
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml up --remove-orphans --no-build -d
 ```
 
 ### macOS / Linux
@@ -77,7 +79,8 @@ mkdir -p data/turn-config data/turn-secrets
 cp contracts/browser-connectivity/turn-reachability-profile.json data/turn-config/turn-reachability-profile.json
 export HOST_PROJECT_ROOT="$PWD"
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 ```
 
 PowerShell 與 macOS／Linux 都必須另外建立 TURN secret bundle；完整檔名、權限與 token
@@ -90,7 +93,7 @@ PowerShell 與 macOS／Linux 都必須另外建立 TURN secret bundle；完整�
 ## 確認 Control Plane 服務狀態
 
 ```bash
-docker compose ps
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml ps
 ```
 
 建議等到以下服務全部進入 `healthy` 狀態後，再打開前端：
@@ -115,13 +118,13 @@ docker compose ps
 ### Windows PowerShell
 
 ```powershell
-docker compose down --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml down --remove-orphans
 ```
 
 ### macOS / Linux
 
 ```bash
-docker compose down --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml down --remove-orphans
 ```
 
 此操作只停止 root Compose 管理的 control-plane services，並保留 volumes 與持久化平台
@@ -135,9 +138,9 @@ docker compose down --remove-orphans
 | 操作 | 指令 |
 |------|------|
 | 建置完整本機 image | `docker buildx bake --load local` |
-| 啟動 control-plane services | `docker compose up --remove-orphans --no-build -d` |
+| 啟動 control-plane services | `make start` |
 | 非破壞性停止並保留資料 | `make down` |
-| 查看 control-plane logs | `docker compose logs -f` |
+| 查看 control-plane logs | `docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml logs -f` |
 
 本地建置、完整重置、測試重用與查看單一服務日誌等完整指令請見 [Docker 部署 → 常用指令](./docker.md#常用指令)。
 
@@ -170,14 +173,15 @@ make full-reset
 
 ```powershell
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml up --remove-orphans --no-build -d
 ```
 
 ### macOS / Linux
 
 ```bash
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 ```
 
 ## 本地模組開發
@@ -186,7 +190,8 @@ Docker Compose 是 Aileron 預設的本地開發方式。先啟動 control plane
 
 ```bash
 docker buildx bake --load local
-docker compose up --remove-orphans --no-build -d
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml \
+  up --remove-orphans --no-build -d
 ```
 
 平台模組與動態 Runtime 會掛載對應的開發目錄，修改後通常可透過 reload 反映：
@@ -201,9 +206,9 @@ docker compose up --remove-orphans --no-build -d
 若要查看個別服務狀態或追蹤變更是否生效，可搭配：
 
 ```bash
-docker compose ps
-docker compose logs -f workspace-manager
-docker compose logs -f frontend
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml ps
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml logs -f workspace-manager
+docker compose -f docker-compose.yml -f docker-compose.bundled-data-services.yml logs -f frontend
 docker logs -f workspace-runtime-<workspace-id>
 ```
 

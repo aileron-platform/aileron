@@ -50,7 +50,11 @@ COPY management-server/ /canvas-management/
 COPY --from=management-dependencies /canvas-management/node_modules /canvas-management/node_modules
 
 COPY scripts/ /scripts/
-RUN chmod 0755 /scripts/*.sh
+RUN find /opt/canvas-nextjs-template /opt/canvas-default-source /canvas-management /scripts \
+      -type d -exec chmod a+rx {} + \
+    && find /opt/canvas-nextjs-template /opt/canvas-default-source /canvas-management /scripts \
+      -type f -exec chmod a+r {} + \
+    && chmod 0755 /scripts/*.sh
 
 # Build commands use the runtime HOME and npm cache paths as root. Remove those
 # build artifacts so every runtime UID can create its own isolated state.

@@ -23,8 +23,9 @@ import {
 } from '@/shared/components/settings-workflow';
 import type {
   MarketplaceFeatureContentItem,
+  MarketplacePackageFormat,
   MarketplacePackageDetail,
-  MarketplaceProvider,
+  MarketplaceTargetClient,
 } from '@/features/marketplace/model/marketplaceTypes';
 import { downloadBlob } from '../../../utils/downloadBlob';
 import { MarketplaceInfoGridRow } from './MarketplaceInfoGridRow';
@@ -35,7 +36,11 @@ import {
 
 interface MarketplaceBasicInfoPanelProps {
   detail: MarketplacePackageDetail;
-  onOpenVariant: (provider: MarketplaceProvider, packageId: string) => void;
+  onOpenVariant: (
+    targetClient: MarketplaceTargetClient,
+    packageId: string,
+    packageFormat: MarketplacePackageFormat,
+  ) => void;
 }
 
 interface MarketplaceMarkdownDetailPanelProps {
@@ -44,7 +49,7 @@ interface MarketplaceMarkdownDetailPanelProps {
 }
 
 interface MarketplaceHooksWorkflowProps {
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   hooks: MarketplaceFeatureContentItem[];
 }
 
@@ -61,7 +66,7 @@ interface ValidationResultRowProps {
 }
 
 interface MarketplaceHookCardProps {
-  provider: MarketplaceProvider;
+  targetClient: MarketplaceTargetClient;
   entry: MarketplaceHookCardEntry;
 }
 
@@ -103,7 +108,8 @@ const ValidationResultRow: React.FC<ValidationResultRowProps> = ({ severity, sev
 export const MarketplaceBasicInfoPanel: React.FC<MarketplaceBasicInfoPanelProps> = ({ detail, onOpenVariant }) => {
   const { t } = useI18n();
   const siblingVariants = detail.variants.filter(variant => (
-    variant.provider !== detail.provider || variant.packageId !== detail.packageId
+    variant.targetClient !== detail.targetClient
+    || variant.packageFormat !== detail.packageFormat
   ));
 
   return (
@@ -130,7 +136,7 @@ export const MarketplaceBasicInfoPanel: React.FC<MarketplaceBasicInfoPanelProps>
           <CardContent className="space-y-4">
             <MarketplaceInfoGridRow label={t('marketplace.detail.basicInfo.packageId')} value={detail.packageId} monospace />
             <MarketplaceInfoGridRow label={t('marketplace.detail.basicInfo.registryPath')} value={detail.registryPath} monospace />
-            <MarketplaceInfoGridRow label={t('marketplace.detail.basicInfo.provider')} value={<Badge variant="outline">{t(`marketplace.providers.${detail.provider}`)}</Badge>} />
+            <MarketplaceInfoGridRow label={t('marketplace.detail.basicInfo.targetClient')} value={<Badge variant="outline">{t(`marketplace.targetClients.${detail.targetClient}`)}</Badge>} />
             <MarketplaceInfoGridRow label={t('marketplace.detail.basicInfo.version')} value={<Badge variant="secondary">{detail.version ?? t('marketplace.common.noVersion')}</Badge>} />
             {detail.familyDisplayName || detail.sourceIdentity ? (
               <MarketplaceInfoGridRow
@@ -149,18 +155,23 @@ export const MarketplaceBasicInfoPanel: React.FC<MarketplaceBasicInfoPanelProps>
                 value={(
                   <div className="flex flex-wrap gap-2">
                     {detail.variants.map(variant => {
-                      const isCurrent = variant.provider === detail.provider && variant.packageId === detail.packageId;
+                      const isCurrent = variant.targetClient === detail.targetClient
+                        && variant.packageFormat === detail.packageFormat;
                       return (
                         <Button
-                          key={`${variant.provider}:${variant.packageId}`}
+                          key={`${variant.targetClient}:${variant.packageFormat}`}
                           type="button"
                           variant={isCurrent ? 'secondary' : 'outline'}
                           size="sm"
                           className="h-7 px-2 text-xs"
                           disabled={isCurrent}
-                          onClick={() => onOpenVariant(variant.provider, variant.packageId)}
+                          onClick={() => onOpenVariant(
+                            variant.targetClient,
+                            variant.packageId,
+                            variant.packageFormat,
+                          )}
                         >
-                          {t(`marketplace.providers.${variant.provider}`)}
+                          {t(`marketplace.targetClients.${variant.targetClient}`)} · {variant.packageFormat}
                         </Button>
                       );
                     })}
@@ -250,7 +261,7 @@ export const MarketplaceMarkdownDetailPanel: React.FC<MarketplaceMarkdownDetailP
   );
 };
 
-export const MarketplaceHooksWorkflow: React.FC<MarketplaceHooksWorkflowProps> = ({ provider, hooks }) => {
+export const MarketplaceHooksWorkflow: React.FC<MarketplaceHooksWorkflowProps> = ({ targetClient, hooks }) => {
   const { t } = useI18n();
   const { toast } = useToast();
   const hookCardEntries = React.useMemo(
@@ -282,13 +293,13 @@ export const MarketplaceHooksWorkflow: React.FC<MarketplaceHooksWorkflowProps> =
       contentClassName="space-y-4 p-4"
     >
       {hookCardEntries.map(entry => (
-        <MarketplaceHookCard key={entry.id} provider={provider} entry={entry} />
+        <MarketplaceHookCard key={entry.id} targetClient={targetClient} entry={entry} />
       ))}
     </SettingsWorkflowShell>
   );
 };
 
-const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, entry }) => {
+const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ targetClient, entry }) => {
   const { t } = useI18n();
   const { hook } = entry;
 
@@ -301,7 +312,7 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, ent
           </div>
 
           <HookCard
-            provider={provider}
+            provider={targetClient}
             hook={{
               event: t(commonHookEventLabelKey(entry.eventName)),
               description: t(commonHookEventDescriptionKey(entry.eventName)),

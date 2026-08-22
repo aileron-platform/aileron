@@ -185,6 +185,95 @@ describe('ApiClient', () => {
     }
   });
 
+  it('preserves Runtime operation metadata from a FastAPI detail envelope', async () => {
+    const operationStatus = {
+      isActive: true,
+      operation: 'changes.numstat',
+      actorDisplayName: 'Another user',
+      startedAt: '2026-08-12T08:15:30+00:00',
+      blockingScope: 'common_repository',
+      stale: false,
+      retryable: true,
+      progressCurrent: 2,
+      progressTotal: 5,
+      phase: 'reading-index',
+      cancellable: true,
+      cancelRequested: false,
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        detail: {
+          errorCode: 'VC_OPERATION_IN_PROGRESS',
+          messageKey: 'VC_OPERATION_IN_PROGRESS',
+          blockingScope: 'common_repository',
+          operationStatus,
+          stale: false,
+          canForceUnlock: false,
+        },
+      }), { status: 409 }),
+    );
+
+    await expect(new ApiClient().get('/version-control/changes/numstat'))
+      .rejects.toMatchObject({
+        status: 409,
+        errorCode: 'VC_OPERATION_IN_PROGRESS',
+        messageKey: 'VC_OPERATION_IN_PROGRESS',
+        blockingScope: 'common_repository',
+        operationStatus,
+        stale: false,
+        canForceUnlock: false,
+      });
+  });
+
+  it.each([
+    ['string retryable', { retryable: 'true' }],
+    ['nested retryable', { retryable: { value: true } }],
+  ])('does not trust malformed Runtime operation metadata: %s', async (_label, override) => {
+    const operationStatus = {
+      isActive: true,
+      operation: 'changes.numstat',
+      actorDisplayName: null,
+      startedAt: '2026-08-12T08:15:30+00:00',
+      blockingScope: 'working_tree_target',
+      stale: false,
+      retryable: true,
+      progressCurrent: 0,
+      progressTotal: 0,
+      phase: '',
+      cancellable: false,
+      cancelRequested: false,
+      ...override,
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        detail: {
+          errorCode: 'VC_OPERATION_IN_PROGRESS',
+          messageKey: 'VC_OPERATION_IN_PROGRESS',
+          blockingScope: 'not-a-scope',
+          operationStatus,
+          stale: 'false',
+          canForceUnlock: 1,
+        },
+      }), { status: 409 }),
+    );
+
+    let caught: unknown;
+    try {
+      await new ApiClient().get('/version-control/changes/numstat');
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ApiError);
+    expect(caught).toMatchObject({
+      messageKey: 'VC_OPERATION_IN_PROGRESS',
+      blockingScope: undefined,
+      operationStatus: undefined,
+      stale: undefined,
+      canForceUnlock: undefined,
+    });
+  });
+
   it('reissues an Execution Grant once after a runtime generation mismatch', async () => {
     const grants = vi.fn()
       .mockResolvedValueOnce('stale-grant')
@@ -232,6 +321,70 @@ describe('ApiClient', () => {
       errorCode: 'WORKSPACE_RUNTIME_INSTANCE_MISMATCH',
     });
     expect(grants).toHaveBeenCalledTimes(2);
+  });
+
+  it('reissues an Execution Grant once for a Blob request after a generation mismatch', async () => {
+    const grants = vi.fn()
+      .mockResolvedValueOnce('stale-blob-grant')
+      .mockResolvedValueOnce('fresh-blob-grant');
+    const rejectGrant = vi.fn().mockReturnValue(true);
+    registerExecutionGrantProvider(grants);
+    registerExecutionGrantRejectionHandler(rejectGrant);
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        detail: { errorCode: 'WORKSPACE_RUNTIME_ACCESS_REVISION_MISMATCH' },
+      }), { status: 423 }))
+      .mockResolvedValueOnce(new Response('fresh image', {
+        status: 200,
+        headers: { 'Content-Type': 'image/png' },
+      }));
+    const client = new ApiClient({
+      baseUrl: 'https://runtime.example/api/v1',
+      executionAudience: 'workspace-runtime',
+      unauthorizedBehavior: 'propagate',
+    });
+
+    const blob = await client.getBlob('/skills/content?path=logo.png&raw=true');
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBe(new Blob(['fresh image']).size);
+    expect(blob.type).toBe('image/png');
+    expect(rejectGrant).toHaveBeenCalledTimes(1);
+    expect(grants).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer fresh-blob-grant' }),
+    }));
+  });
+
+  it('does not retry a Blob execution-grant rejection more than once', async () => {
+    const grants = vi.fn()
+      .mockResolvedValueOnce('stale-blob-grant')
+      .mockResolvedValueOnce('still-stale-blob-grant');
+    const rejectGrant = vi.fn().mockReturnValue(true);
+    registerExecutionGrantProvider(grants);
+    registerExecutionGrantRejectionHandler(rejectGrant);
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        detail: { errorCode: 'WORKSPACE_RUNTIME_ACCESS_REVISION_MISMATCH' },
+      }), { status: 423 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        detail: { errorCode: 'WORKSPACE_RUNTIME_INSTANCE_MISMATCH' },
+      }), { status: 423 }));
+    const client = new ApiClient({
+      baseUrl: 'https://runtime.example/api/v1',
+      executionAudience: 'workspace-runtime',
+      unauthorizedBehavior: 'propagate',
+    });
+
+    await expect(client.getBlob('/skills/content?path=logo.png&raw=true'))
+      .rejects.toMatchObject({
+        status: 423,
+        errorCode: 'WORKSPACE_RUNTIME_INSTANCE_MISMATCH',
+      });
+    expect(rejectGrant).toHaveBeenCalledTimes(1);
+    expect(grants).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('adds the selected language without overriding an explicit header', async () => {

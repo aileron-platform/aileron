@@ -1,11 +1,10 @@
 import React from 'react';
-import { Plus, RefreshCcw, Settings, Upload } from 'lucide-react';
+import { Download, Plus, RefreshCcw, Settings } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
 
 interface MarketplaceCenterHeaderActionsProps {
   permissions: {
-    canImport: boolean;
     canEdit: boolean;
     canManageRegistry: boolean;
   };
@@ -26,9 +25,9 @@ export const MarketplaceCenterHeaderActions: React.FC<MarketplaceCenterHeaderAct
 
   return (
     <div className="flex items-center gap-2">
-      {permissions.canImport ? (
+      {permissions.canEdit ? (
         <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={onImport}>
-          <Upload className="h-3.5 w-3.5 mr-1" />
+          <Download className="h-3.5 w-3.5 mr-1" />
           {t('marketplace.center.actions.import')}
         </Button>
       ) : null}

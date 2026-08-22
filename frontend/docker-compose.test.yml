@@ -1,21 +1,31 @@
 services:
   frontend-test:
-    image: ailerondocker/workspace-ui:dev
-    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        SOURCE_REVISION: ${AILERON_SOURCE_REVISION:-development}
+        NODE_IMAGE: node:24.18.0-alpine@sha256:4ba75f835bb8802193e4c114572113d4b26f95f6f094f4b5229d2a77773e0afc
+        NPM_VERSION: "12.0.1"
+    image: ${AILERON_FRONTEND_TEST_IMAGE:-ailerondocker/workspace-ui-suite:development}
+    platform: linux/amd64
     working_dir: /app
     volumes:
-      - .:/app
-      - /app/node_modules
-      - ../contracts:/contracts:ro
-    command: npm run test:run
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/contracts:/contracts:ro
+    command:
+      - /bin/sh
+      - -ec
+      - npm run test:install-script-policy && timeout -s TERM -k 10 900 npm run test:run && npm run test:acceptance-script
 
   frontend-playwright-test:
     build:
       context: .
       dockerfile: Dockerfile.playwright
       args:
-        PLAYWRIGHT_IMAGE: ${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.61.1-noble}
+        PLAYWRIGHT_IMAGE: ${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright@sha256:cf0daee9b994042e011bc29f20cdff1a9f682a039b43fcd738f7d8a9d3bcd9d6}
+        NPM_VERSION: "12.0.1"
     image: ailerondocker/workspace-ui-playwright:test
+    platform: linux/amd64
     working_dir: /app
     ipc: host
     environment:
@@ -27,7 +37,8 @@ services:
     command: npm run test:e2e
 
   frontend-nginx-gateway-test:
-    image: nginx:alpine
+    image: nginx:alpine@sha256:1d40e3eb3bf4f138de1d67193f2aa5309fcaf343eb5ffadbf5e9439de1eb1ebb
+    platform: linux/amd64
     depends_on:
       frontend-nginx-gateway-mock:
         condition: service_started
@@ -37,14 +48,15 @@ services:
     command: ["/bin/sh", "/workspace/nginx-gateway.test.sh"]
 
   frontend-nginx-gateway-mock:
-    image: nginx:alpine
+    image: nginx:alpine@sha256:1d40e3eb3bf4f138de1d67193f2aa5309fcaf343eb5ffadbf5e9439de1eb1ebb
+    platform: linux/amd64
     volumes:
       - ./tests/nginx-gateway-mock.conf:/etc/nginx/nginx.conf:ro
     networks:
       default:
         aliases:
           - workspace-manager
-          - drawio
+          - connectivity-evidence-gateway
           - workspace-runtime-11111111-1111-4111-8111-111111111111
           - workspace-browser-11111111-1111-4111-8111-111111111111
           - workspace-canvas-11111111-1111-4111-8111-111111111111
