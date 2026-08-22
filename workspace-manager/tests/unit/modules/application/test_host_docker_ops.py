@@ -185,6 +185,36 @@ def test_full_reset_command_returns_nonzero_when_workspace_container_remains(
 
 
 @pytest.mark.unit
+def test_clean_data_directories_removes_broken_symlinks_and_nested_placeholders(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A broken symlink satisfies neither is_file() nor is_dir().
+
+    Skipping it left residue that full-reset then rejected, and a recursive
+    name match kept vendored README files a stale workspace had written.
+    """
+
+    postgres_dir = tmp_path / "data" / "postgres"
+    (postgres_dir / "nested").mkdir(parents=True)
+    (postgres_dir / "README.md").write_text("keep", encoding="utf-8")
+    (postgres_dir / ".gitkeep").write_text("", encoding="utf-8")
+    (postgres_dir / "nested" / "README.md").write_text("drop", encoding="utf-8")
+    (postgres_dir / "nested" / "data.bin").write_text("drop", encoding="utf-8")
+    (postgres_dir / "nested" / "broken-link").symlink_to(
+        postgres_dir / "missing-target"
+    )
+
+    monkeypatch.setattr(ops, "DATA_DIRS", ("data/postgres",))
+    ops.clean_data_directories(tmp_path)
+
+    remaining = sorted(
+        path.relative_to(postgres_dir).as_posix() for path in postgres_dir.rglob("*")
+    )
+    assert remaining == [".gitkeep", "README.md"]
+    assert ops.list_data_residuals(tmp_path) == []
+
+
+@pytest.mark.unit
 def test_full_reset_command_returns_nonzero_when_required_data_remains(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -195,11 +225,13 @@ def test_full_reset_command_returns_nonzero_when_required_data_remains(
 
     postgres_dir = tmp_path / "data" / "postgres"
     postgres_dir.mkdir(parents=True)
-    (postgres_dir / "broken-link").symlink_to(postgres_dir / "missing-target")
+    (postgres_dir / "PG_VERSION").write_text("15\n", encoding="utf-8")
 
     monkeypatch.setattr(ops, "ensure_docker_available", lambda: None)
     monkeypatch.setattr(ops, "run_command", fake_run_command)
     monkeypatch.setattr(ops, "compose_down", lambda _repo_root: None)
+    # Simulate a cleanup that could not remove everything it was asked to.
+    monkeypatch.setattr(ops, "clean_data_directories", lambda _repo_root: 1)
     monkeypatch.setattr(ops, "clean_temp_directories", lambda _repo_root: 0)
     monkeypatch.setattr(
         "sys.argv",
@@ -297,7 +329,7 @@ def test_compose_up_uses_prebuilt_images_and_removes_project_orphans(
 
     monkeypatch.setattr(ops, "stream_command", fake_stream_command)
     monkeypatch.setattr(
-        ops, "ensure_host_storage_directories", lambda *_args, **_kwargs: None
+        ops, "bootstrap_local_inputs", lambda *_args, **_kwargs: None
     )
 
     ops.compose_up(repo_root, detach=True, env={"TEST_ENV": "1"})
