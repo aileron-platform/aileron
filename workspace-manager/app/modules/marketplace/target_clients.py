@@ -523,7 +523,6 @@ class MarketplaceManifestAdapter(BaseMarketplaceTargetClientAdapter):
             "target_client": self.target_client,
             "packageFormat": self.package_format,
             "packageId": package_id,
-            "version": str(manifest.get("version") or "1.0.0"),
             "displayName": str(
                 manifest.get("displayName")
                 or manifest.get("display_name")
@@ -957,9 +956,6 @@ class ClaudeCodeMarketplaceAdapter(MarketplaceManifestAdapter):
                     "target_client": self.target_client,
                     "packageFormat": self.package_format,
                     "packageId": package_id,
-                    "version": str(
-                        entry.get("version") or manifest.get("version") or "1.0.0"
-                    ),
                     "displayName": str(
                         entry.get("displayName")
                         or entry.get("display_name")
@@ -1147,9 +1143,6 @@ class CodexMarketplaceAdapter(MarketplaceManifestAdapter):
                     "target_client": self.target_client,
                     "packageFormat": artifact_adapter.package_format,
                     "packageId": package_id,
-                    "version": str(
-                        entry.get("version") or manifest.get("version") or "1.0.0"
-                    ),
                     "displayName": str(
                         entry.get("displayName")
                         or entry.get("display_name")
@@ -1335,7 +1328,6 @@ class AgentPluginMarketplaceAdapter(BaseMarketplaceTargetClientAdapter):
             "target_client": self.target_client,
             "packageFormat": self.package_format,
             "packageId": package_id,
-            "version": str(manifest.get("version") or "1.0.0"),
             "displayName": str(manifest.get("name") or package_id),
             "sourcePath": ".",
             "duplicate": False,

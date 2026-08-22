@@ -62,7 +62,7 @@ def _create_package_scaffold(
 ) -> None:
     manifest_path = adapter.manifest_path(package_path)
     manifest = {"name": request.package_id}
-    if request.target_client == "codex":
+    if "codex" in request.target_clients:
         manifest.update(
             {
                 "version": "0.1.0",
