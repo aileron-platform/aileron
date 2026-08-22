@@ -166,11 +166,11 @@ def test_document_mutations_return_canonical_identity(
         "commands",
         MarketplaceDocumentMutationRequest(
             revision=created.revision,
-            path="prompts/review.md",
+            path="commands/review.md",
             content="# Review\n",
         ),
     )
-    assert created_document.path == "prompts/review.md"
+    assert created_document.path == "commands/review.md"
     assert created_document.revision != created.revision
     assert created_document.owner_file_path is None
     assert created_document.base_entry_fingerprint is None
@@ -182,11 +182,11 @@ def test_document_mutations_return_canonical_identity(
         "commands",
         MarketplaceDocumentRenameRequest(
             revision=created_document.revision,
-            previous_path="prompts/review.md",
-            next_path="prompts/team-review.md",
+            previous_path="commands/review.md",
+            next_path="commands/team-review.md",
         ),
     )
-    assert moved_document.path == "prompts/team-review.md"
+    assert moved_document.path == "commands/team-review.md"
     assert moved_document.revision != created_document.revision
 
     deleted_document = marketplace_workflows.remove_document(
@@ -196,10 +196,10 @@ def test_document_mutations_return_canonical_identity(
         "commands",
         MarketplaceDocumentRemoveRequest(
             revision=moved_document.revision,
-            path="prompts/team-review.md",
+            path="commands/team-review.md",
         ),
     )
-    assert deleted_document.path == "prompts/team-review.md"
+    assert deleted_document.path == "commands/team-review.md"
     assert deleted_document.revision != moved_document.revision
     assert deleted_document.base_entry_fingerprint is None
 
