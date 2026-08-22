@@ -16,7 +16,6 @@ from urllib.parse import urlsplit
 import jsonschema
 import yaml
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_DIRECTORY = REPOSITORY_ROOT / "contracts/platform-configuration"
 SCHEMA_PATH = CONTRACT_DIRECTORY / "schema.json"
@@ -26,6 +25,7 @@ VECTORS_PATH = CONTRACT_DIRECTORY / "conformance-vectors.json"
 ENV_EXAMPLE_PATH = REPOSITORY_ROOT / ".env.example"
 ROOT_COMPOSE_PATH = REPOSITORY_ROOT / "docker-compose.yml"
 HELM_VALUES_PATH = REPOSITORY_ROOT / "helm/aileron/values.yaml"
+HELM_VALUES_SCHEMA_PATH = REPOSITORY_ROOT / "helm/aileron/values.schema.json"
 
 ORIGIN_DIAGNOSTIC = (
     "platformPublicOrigin: must be an exact origin without path, query, "
@@ -116,7 +116,9 @@ def format_schema_error(prefix: str, error: jsonschema.ValidationError) -> str:
 
 def validate_json_schema(document: Any, schema: Any, prefix: str) -> list[str]:
     validator = jsonschema.Draft202012Validator(schema)
-    errors = sorted(validator.iter_errors(document), key=lambda item: list(item.absolute_path))
+    errors = sorted(
+        validator.iter_errors(document), key=lambda item: list(item.absolute_path)
+    )
     return [format_schema_error(prefix, error) for error in errors]
 
 
@@ -129,7 +131,9 @@ def validate_schema_definition(schema: Any, prefix: str) -> list[str]:
 
 
 def validate_contract_data(contract: dict[str, Any]) -> list[str]:
-    diagnostics = validate_json_schema(contract, load_json(SCHEMA_PATH), "contract schema")
+    diagnostics = validate_json_schema(
+        contract, load_json(SCHEMA_PATH), "contract schema"
+    )
     if diagnostics:
         return diagnostics
 
@@ -162,7 +166,10 @@ def validate_contract_data(contract: dict[str, Any]) -> list[str]:
             mapping["secretNameValuesPath"],
             mapping["secretKeyValuesPath"],
         )
-        if logical_name in seen_secret_logical_names or logical_name in seen_logical_names:
+        if (
+            logical_name in seen_secret_logical_names
+            or logical_name in seen_logical_names
+        ):
             diagnostics.append(f"duplicate installation owner: {logical_name}")
         if mapping_key in seen_secret_mappings:
             diagnostics.append(
@@ -183,9 +190,7 @@ def validate_contract_data(contract: dict[str, Any]) -> list[str]:
             template = item["mapping"][f"{adapter}Template"]
             actual_inputs = set(TEMPLATE_INPUT_PATTERN.findall(template))
             if actual_inputs != expected_inputs:
-                diagnostics.append(
-                    f"invalid {adapter} derived inputs: {logical_name}"
-                )
+                diagnostics.append(f"invalid {adapter} derived inputs: {logical_name}")
 
     seen_outputs: set[tuple[str, str]] = set()
     expected_disposition = {
@@ -274,8 +279,7 @@ def validate_contract_data(contract: dict[str, Any]) -> list[str]:
             )
         if secret_file["logicalName"] not in secret_logical_names:
             diagnostics.append(
-                "unknown Helm Secret logical name: "
-                f"{secret_file['logicalName']}"
+                "unknown Helm Secret logical name: " f"{secret_file['logicalName']}"
             )
         if secret_file_key in seen_secret_files:
             diagnostics.append(
@@ -306,19 +310,45 @@ def has_mapping_path(document: Any, mapping_path: str) -> bool:
     return True
 
 
+def has_schema_mapping_path(schema: dict[str, Any], mapping_path: str) -> bool:
+    current: Any = schema
+    for segment in mapping_path.split("."):
+        while isinstance(current, dict) and "$ref" in current:
+            reference = current["$ref"]
+            if not isinstance(reference, str) or not reference.startswith("#/"):
+                return False
+            current = schema
+            for reference_segment in reference.removeprefix("#/").split("/"):
+                if not isinstance(current, dict) or reference_segment not in current:
+                    return False
+                current = current[reference_segment]
+        properties = current.get("properties") if isinstance(current, dict) else None
+        if not isinstance(properties, dict) or segment not in properties:
+            return False
+        current = properties[segment]
+    return True
+
+
 def validate_helm_mappings(contract: dict[str, Any]) -> list[str]:
     values = load_yaml(HELM_VALUES_PATH)
+    values_schema = load_json(HELM_VALUES_SCHEMA_PATH)
     diagnostics: list[str] = []
     for item in contract["installationInputs"]:
         mapping_path = item["mapping"].get("helmValuesPath")
-        if mapping_path is not None and not has_mapping_path(values, mapping_path):
+        if (
+            mapping_path is not None
+            and not has_mapping_path(values, mapping_path)
+            and not has_schema_mapping_path(values_schema, mapping_path)
+        ):
             diagnostics.append(
                 f"unknown Helm values mapping: {item['logicalName']} -> {mapping_path}"
             )
     for item in contract["helmSecretReferences"]:
         for mapping_name in ("secretNameValuesPath", "secretKeyValuesPath"):
             mapping_path = item["mapping"][mapping_name]
-            if not has_mapping_path(values, mapping_path):
+            if not has_mapping_path(
+                values, mapping_path
+            ) and not has_schema_mapping_path(values_schema, mapping_path):
                 diagnostics.append(
                     "unknown Helm Secret values mapping: "
                     f"{item['logicalName']} -> {mapping_path}"
@@ -605,7 +635,11 @@ def secret_volume_files(
         for source in secret_sources:
             secret_name = source.get("secretName", source.get("name"))
             items = source.get("items")
-            if not isinstance(secret_name, str) or not isinstance(items, list) or not items:
+            if (
+                not isinstance(secret_name, str)
+                or not isinstance(items, list)
+                or not items
+            ):
                 diagnostics.append(
                     f"unclassified whole Helm Secret volume: {deployment_suffix}."
                     f"{container.get('name', '<unknown>')}.{mount.get('name', '<unknown>')}"
@@ -624,8 +658,7 @@ def secret_volume_files(
                     path = str(PurePosixPath(str(mount.get("mountPath", ""))))
                 else:
                     path = str(
-                        PurePosixPath(str(mount.get("mountPath", "")))
-                        / relative_path
+                        PurePosixPath(str(mount.get("mountPath", ""))) / relative_path
                     )
                 if path in files:
                     diagnostics.append(
@@ -734,7 +767,11 @@ def validate_helm_rendered_documents(
         for item in adapter["secretFiles"]
     }
     actual_secret_files: dict[tuple[str, str, str], tuple[str, str]] = {}
-    for (suffix, container_name), (_, pod_spec, container) in rendered_deployments.items():
+    for (suffix, container_name), (
+        _,
+        pod_spec,
+        container,
+    ) in rendered_deployments.items():
         files, file_diagnostics = secret_volume_files(suffix, container, pod_spec)
         diagnostics.extend(file_diagnostics)
         for path, source in files.items():
@@ -839,7 +876,9 @@ def normalize_adapter_parity(
 def parse_env_file(path: Path) -> tuple[dict[str, str], list[str]]:
     values: dict[str, str] = {}
     diagnostics: list[str] = []
-    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for line_number, raw_line in enumerate(
+        path.read_text(encoding="utf-8").splitlines(), 1
+    ):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
@@ -870,7 +909,9 @@ def validate_env_inputs(path: Path, contract: dict[str, Any]) -> list[str]:
     return diagnostics
 
 
-def normalize_environment(service: str, raw_environment: Any) -> tuple[dict[str, Any], list[str]]:
+def normalize_environment(
+    service: str, raw_environment: Any
+) -> tuple[dict[str, Any], list[str]]:
     diagnostics: list[str] = []
     if raw_environment is None:
         return {}, diagnostics
@@ -967,12 +1008,16 @@ def lint_environment(
             and (service, name) not in allowed_plaintext_secrets
         ):
             diagnostics.append(f"plaintext secret environment: {name}")
-        if is_file_reference_name(name) and (not isinstance(value, str) or not value.strip()):
+        if is_file_reference_name(name) and (
+            not isinstance(value, str) or not value.strip()
+        ):
             diagnostics.append(f"empty secret file reference: {service}.{name}")
     return diagnostics
 
 
-def compose_services(document: Any, path: Path) -> tuple[dict[str, dict[str, Any]], list[str]]:
+def compose_services(
+    document: Any, path: Path
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
     if not isinstance(document, dict) or not isinstance(document.get("services"), dict):
         return {}, [f"Compose document must define services: {path}"]
     return document["services"], []
@@ -1199,7 +1244,9 @@ def evaluate_vector(vector: dict[str, Any]) -> list[str]:
     if kind == "contract-mutation":
         contract = copy.deepcopy(load_json(CONTRACT_PATH))
         if vector["mutation"] == "duplicate-first-output":
-            contract["composeOutputs"].append(copy.deepcopy(contract["composeOutputs"][0]))
+            contract["composeOutputs"].append(
+                copy.deepcopy(contract["composeOutputs"][0])
+            )
             return validate_contract_data(contract)
         if vector["mutation"] == "restore-old-oidc-helm-mapping":
             oidc_issuer = next(
@@ -1215,9 +1262,9 @@ def evaluate_vector(vector: dict[str, Any]) -> list[str]:
                 for item in contract["derivedLogicalOutputs"]
                 if item["logicalName"] == "oidcCallbackUrl"
             )
-            callback["mapping"]["helmTemplate"] = (
-                "{platformPublicOrigin}/oauth2/callback"
-            )
+            callback["mapping"][
+                "helmTemplate"
+            ] = "{platformPublicOrigin}/oauth2/callback"
             _, parity_diagnostics = normalize_adapter_parity(
                 contract,
                 "https://platform.example.test:8443",
@@ -1271,7 +1318,9 @@ def validate_vector(vector_id: str) -> int:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Validate platform configuration contracts")
+    parser = argparse.ArgumentParser(
+        description="Validate platform configuration contracts"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     vector_parser = subparsers.add_parser("validate-vector")

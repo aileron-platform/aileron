@@ -1,0 +1,45 @@
+services:
+  deployment-contract-test:
+    build:
+      context: ../../..
+      dockerfile: scripts/test/deploy/Dockerfile
+      args:
+        SOURCE_REVISION: ${AILERON_SOURCE_REVISION:-development}
+    image: ${AILERON_DEPLOYMENT_CONTRACT_TEST_IMAGE:-ailerondocker/deployment-contract-test:development}
+    platform: linux/amd64
+    working_dir: /repo
+    volumes:
+      - ${AILERON_SUITE_SOURCE_ROOT:-../../..}:/repo:ro
+    command:
+      - python
+      - -m
+      - pytest
+      - -q
+      - -p
+      - no:cacheprovider
+      - scripts/test/deploy
+      - identity-installation/tests
+      - contracts/identity-installation/tests
+
+  reset-contract-test:
+    build:
+      context: ../../..
+      dockerfile: scripts/test/deploy/Dockerfile
+      args:
+        SOURCE_REVISION: ${AILERON_SOURCE_REVISION:-development}
+    image: ${AILERON_DEPLOYMENT_CONTRACT_TEST_IMAGE:-ailerondocker/deployment-contract-test:development}
+    platform: linux/amd64
+    working_dir: /repo
+    volumes:
+      - ${AILERON_SUITE_SOURCE_ROOT:-../../..}:/repo:ro
+    command:
+      - python
+      - -m
+      - pytest
+      - -q
+      - -p
+      - no:cacheprovider
+      - scripts/test/deploy/test_collect_reset_inventory.py
+      - scripts/test/deploy/test_reset_plan.py
+      - scripts/test/deploy/test_deployment_stage_contract.py
+      - scripts/test/deploy/test_ensure_installation_namespaces.py

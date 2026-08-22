@@ -23,6 +23,7 @@ spec:
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
       securityContext:
         runAsNonRoot: true
         seccompProfile:

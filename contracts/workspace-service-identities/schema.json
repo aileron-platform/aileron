@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aileron.dev/contracts/workspace-service-identities/schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "identities", "vectors"],
+  "properties": {
+    "contractVersion": {"const": "1"},
+    "identities": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["identity", "serviceComponent", "port"],
+        "properties": {
+          "identity": {"enum": ["runtime", "terminal", "browser", "canvas"]},
+          "serviceComponent": {"type": "string", "pattern": "^workspace-[a-z]+$"},
+          "port": {"type": "integer", "minimum": 1, "maximum": 65535}
+        }
+      }
+    },
+    "vectors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workspaceId", "namespace", "expected"],
+        "properties": {
+          "workspaceId": {"type": "string", "minLength": 1},
+          "namespace": {"type": "string", "minLength": 1},
+          "expected": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["runtime", "terminal", "browser", "canvas"],
+            "properties": {
+              "runtime": {"$ref": "#/$defs/resolvedIdentity"},
+              "terminal": {"$ref": "#/$defs/resolvedIdentity"},
+              "browser": {"$ref": "#/$defs/resolvedIdentity"},
+              "canvas": {"$ref": "#/$defs/resolvedIdentity"}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "resolvedIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["serviceName", "fqdn", "port", "url"],
+      "properties": {
+        "serviceName": {"type": "string", "minLength": 1},
+        "fqdn": {"type": "string", "pattern": "\\.svc\\.cluster\\.local$"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "url": {"type": "string", "pattern": "^http://"}
+      }
+    }
+  }
+}

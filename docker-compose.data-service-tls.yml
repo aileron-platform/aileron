@@ -1,0 +1,31 @@
+services:
+  data-service-preflight:
+    environment:
+      GENERAL_REDIS_CA_FILE: /etc/aileron/data-service-ca/redis-general/ca.crt
+      JOB_QUEUE_REDIS_CA_FILE: /etc/aileron/data-service-ca/redis-job-queue/ca.crt
+      JOB_RESULT_REDIS_CA_FILE: /etc/aileron/data-service-ca/redis-job-result/ca.crt
+    volumes:
+      - "${HOST_PLATFORM_DATABASE_CA_CERT_FILE:?HOST_PLATFORM_DATABASE_CA_CERT_FILE must be set}:/etc/aileron/data-service-ca/platform-database/ca.crt:ro"
+      - "${HOST_REDIS_GENERAL_CA_CERT_FILE:?HOST_REDIS_GENERAL_CA_CERT_FILE must be set}:/etc/aileron/data-service-ca/redis-general/ca.crt:ro"
+      - "${HOST_REDIS_JOB_QUEUE_CA_CERT_FILE:?HOST_REDIS_JOB_QUEUE_CA_CERT_FILE must be set}:/etc/aileron/data-service-ca/redis-job-queue/ca.crt:ro"
+      - "${HOST_REDIS_JOB_RESULT_CA_CERT_FILE:?HOST_REDIS_JOB_RESULT_CA_CERT_FILE must be set}:/etc/aileron/data-service-ca/redis-job-result/ca.crt:ro"
+
+  platform-schema-bootstrap:
+    volumes:
+      - "${HOST_PLATFORM_DATABASE_CA_CERT_FILE:?HOST_PLATFORM_DATABASE_CA_CERT_FILE must be set}:/etc/aileron/data-service-ca/platform-database/ca.crt:ro"
+
+  identity-bootstrap:
+    volumes:
+      - "${HOST_PLATFORM_DATABASE_CA_CERT_FILE:?HOST_PLATFORM_DATABASE_CA_CERT_FILE must be set}:/etc/aileron/data-service-ca/platform-database/ca.crt:ro"
+
+  workspace-manager:
+    environment:
+      REDIS_CA_CERT_FILE: /etc/aileron/data-service-ca/redis-general/ca.crt
+      CELERY_BROKER_CA_CERT_FILE: /etc/aileron/data-service-ca/redis-job-queue/ca.crt
+      CELERY_RESULT_BACKEND_CA_CERT_FILE: /etc/aileron/data-service-ca/redis-job-result/ca.crt
+      HOST_PLATFORM_DATABASE_CA_CERT_FILE: ${HOST_PLATFORM_DATABASE_CA_CERT_FILE:?HOST_PLATFORM_DATABASE_CA_CERT_FILE must be set}
+    volumes:
+      - "${HOST_PLATFORM_DATABASE_CA_CERT_FILE:?HOST_PLATFORM_DATABASE_CA_CERT_FILE must be set}:/etc/aileron/data-service-ca/platform-database/ca.crt:ro"
+      - "${HOST_REDIS_GENERAL_CA_CERT_FILE:?HOST_REDIS_GENERAL_CA_CERT_FILE must be set}:/etc/aileron/data-service-ca/redis-general/ca.crt:ro"
+      - "${HOST_REDIS_JOB_QUEUE_CA_CERT_FILE:?HOST_REDIS_JOB_QUEUE_CA_CERT_FILE must be set}:/etc/aileron/data-service-ca/redis-job-queue/ca.crt:ro"
+      - "${HOST_REDIS_JOB_RESULT_CA_CERT_FILE:?HOST_REDIS_JOB_RESULT_CA_CERT_FILE must be set}:/etc/aileron/data-service-ca/redis-job-result/ca.crt:ro"

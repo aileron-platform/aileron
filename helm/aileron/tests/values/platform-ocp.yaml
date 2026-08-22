@@ -22,11 +22,17 @@ kubernetes:
     managerStateSize: 1Gi
 
 frontend:
-  enabled: false
+  enabled: true
+  dnsResolver: dns-default.openshift-dns.svc.cluster.local
 postgres:
   enabled: false
+platformDatabase: {revision: platform-database-v1}
 redis:
   enabled: false
+  connections:
+    general: {urlSecretName: platform-redis-general, urlSecretKey: url, revision: redis-general-v1}
+    jobQueue: {urlSecretName: platform-redis-job-queue, urlSecretKey: url, revision: redis-job-queue-v1}
+    jobResult: {urlSecretName: platform-redis-job-result, urlSecretKey: url, revision: redis-job-result-v1}
 ingress:
   enabled: false
 oidc:

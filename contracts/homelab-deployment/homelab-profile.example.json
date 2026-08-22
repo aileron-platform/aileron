@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "aileron-homelab-profile/v1",
+  "profileId": "rke2-207",
+  "context": "rke",
+  "installationIntent": "newInstallation",
+  "registry": {
+    "host": "harbor.rke.soez.tw",
+    "project": "library"
+  },
+  "endpoints": {
+    "platformUrl": "https://aileron.apps.rke.soez.tw",
+    "turnUrl": "turn:turn.apps.rke.soez.tw:3478"
+  },
+  "identity": {
+    "mode": "bundledKeycloak",
+    "issuerUrl": "https://keycloak.apps.rke.soez.tw/realms/aileron",
+    "adminConsoleUrl": "https://keycloak-admin.apps.rke.soez.tw/admin/master/console/",
+    "clientId": "aileron-frontend"
+  },
+  "acceptance": {
+    "loginMode": "breakGlass",
+    "loginDriver": {
+      "kind": "keycloak"
+    }
+  },
+  "privateInputs": {
+    "kubeconfig": "/root/aileron-private/source/kubeconfig",
+    "backendExecutionProfile": "/root/aileron-private/source/backend-execution-profile.json",
+    "harborDockerconfig": "/root/aileron-private/source/docker/config.json",
+    "registryCa": "/root/aileron-private/source/registry-ca.crt",
+    "appsTlsCertificate": "/root/aileron-private/source/apps-tls.crt",
+    "appsTlsPrivateKey": "/root/aileron-private/source/apps-tls.key",
+    "appsTlsCa": "/root/aileron-private/source/apps-ca.crt",
+    "oidcCa": "/root/aileron-private/source/oidc-ca.crt",
+    "identityTlsCertificate": "/root/aileron-private/source/identity-tls.crt",
+    "identityTlsPrivateKey": "/root/aileron-private/source/identity-tls.key",
+    "externalOidcClientSecret": null,
+    "oidcLoginUsername": null,
+    "oidcLoginPassword": null,
+    "coreDataServiceValues": null,
+    "identityDataServiceValues": null,
+    "platformDatabaseUrl": null,
+    "platformDatabaseCa": null,
+    "redisGeneralUrl": null,
+    "redisJobQueueUrl": null,
+    "redisJobResultUrl": null,
+    "redisGeneralCa": null,
+    "redisJobQueueCa": null,
+    "redisJobResultCa": null,
+    "identityDatabaseUsername": null,
+    "identityDatabasePassword": null,
+    "identityDatabaseCa": null
+  }
+}

@@ -1,0 +1,91 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aileron-identity-postgres
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: aileron-identity-postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aileron-identity-postgres
+        app.kubernetes.io/part-of: aileron-identity
+    spec:
+      automountServiceAccountToken: false
+      {{- include "aileron-identity.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        fsGroup: 70
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 70
+        runAsNonRoot: true
+        runAsUser: 70
+        {{- with .Values.postgres.storage.mountRootSupplementalGroup }}
+        supplementalGroups:
+          - {{ . }}
+        {{- end }}
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: "{{ .Values.images.postgres.repository }}@{{ .Values.images.postgres.digest }}"
+          imagePullPolicy: {{ .Values.images.postgres.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.database | quote }}
+            - name: POSTGRES_USER_FILE
+              value: /run/secrets/identity-postgres/username
+            - name: POSTGRES_PASSWORD_FILE
+              value: /run/secrets/identity-postgres/password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "pg_isready -U \"$(cat ${POSTGRES_USER_FILE})\" -d \"${POSTGRES_DB}\""]
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsGroup: 70
+            runAsNonRoot: true
+            runAsUser: 70
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-secret
+              mountPath: /run/secrets/identity-postgres
+              readOnly: true
+            - name: runtime-socket
+              mountPath: /var/run/postgresql
+            - name: runtime-tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: aileron-identity-postgres
+        - name: postgres-secret
+          secret:
+            secretName: {{ .Values.secrets.postgres.name }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.secrets.postgres.usernameKey }}
+                path: username
+              - key: {{ .Values.secrets.postgres.passwordKey }}
+                path: password
+        - name: runtime-socket
+          emptyDir: {}
+        - name: runtime-tmp
+          emptyDir: {}
+{{- end }}

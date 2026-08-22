@@ -1,0 +1,22 @@
+{
+  "_comment": "NON-RUNNABLE EXAMPLE: replace every REPLACE_WITH value, remove this field, canonicalize the JSON, and store the installation-owned file outside the repository with mode 0600.",
+  "schemaVersion": "aileron-backend-execution-profile/v1",
+  "executionNamespace": "aileron-backend-attestor-system",
+  "namespaceOwner": "aileron-installer",
+  "imagePullSecret": "harbor-rke-creds",
+  "nfsMountRoots": [
+    {
+      "server": "REPLACE_WITH_PINNED_NFS_IP",
+      "path": "/REPLACE_WITH_APPROVED_NFS_ROOT"
+    }
+  ],
+  "localPathNodes": [
+    {
+      "hostname": "REPLACE_WITH_LIVE_NODE_HOSTNAME",
+      "nodeUid": "REPLACE_WITH_LIVE_NODE_UID",
+      "mountRoots": [
+        "/REPLACE_WITH_APPROVED_LOCAL_PATH_ROOT"
+      ]
+    }
+  ]
+}

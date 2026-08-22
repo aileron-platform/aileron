@@ -19,6 +19,7 @@ class ProductConfigTest(unittest.TestCase):
             "E2E_RUN_ID": "run-1",
             "E2E_STORAGE_MODE": storage_mode,
             "PRODUCT_MANAGER_URL": "http://manager:3001",
+            "PRODUCT_PLATFORM_PUBLIC_ORIGIN": "https://aileron.example.test",
             "PRODUCT_OIDC_ADAPTER_URL": "https://oidc-fixture:8443",
             "PRODUCT_OIDC_ISSUER_URL": "https://oidc-fixture:8443",
             "PRODUCT_OIDC_CLIENT_ID": "aileron-manager",
@@ -59,15 +60,27 @@ class ProductConfigTest(unittest.TestCase):
         context.settings = SimpleNamespace(
             manager_url="http://manager:3001",
             namespace="test-ns",
+            oidc_discovery_url="https://oidc-fixture/.well-known/openid-configuration",
         )
         context.http = Mock()
-        context.http.get.return_value = httpx.Response(
+        context.http.get.side_effect = lambda url: httpx.Response(
             200,
-            json={"status": "healthy"},
+            json=(
+                {"status": "healthy"}
+                if url == "http://manager:3001/health"
+                else {
+                    "aileron_test_provider": "provider-neutral-non-keycloak",
+                    "issuer": "https://oidc-fixture",
+                    "authorization_endpoint": "https://oidc-fixture/authorize",
+                }
+            ),
         )
         context.db = Mock()
         context.cluster = Mock()
         context._provision_test_actors = Mock()
+        context.users = {}
+        context.sessions = {}
+        context.external_oidc_observation = {}
         return context
 
     def test_prerequisites_preflight_discovery_v1_endpoint_slices(self) -> None:
@@ -117,6 +130,42 @@ class ProductConfigTest(unittest.TestCase):
             {"runtime": "http://runtime:3002"},
         )
 
+    def test_execution_grant_refreshes_runtime_instance_fence(self) -> None:
+        context = ProductContext.__new__(ProductContext)
+        context.workspace_id = "workspace-id"
+        context.runtime_instance_id = "stale-instance-id"
+        context.refresh_generation = Mock(
+            side_effect=lambda: setattr(
+                context,
+                "runtime_instance_id",
+                "10000000-0000-4000-8000-000000000002",
+            )
+        )
+        context.request_actor = Mock(
+            return_value=Mock(
+                status_code=200,
+                json=Mock(return_value={"grant": "signed-grant"}),
+            )
+        )
+
+        grant = context.execution_grant(
+            "owner",
+            audience="workspace-runtime",
+            actions=["agent"],
+        )
+
+        self.assertEqual(grant, "signed-grant")
+        context.refresh_generation.assert_called_once_with()
+        context.request_actor.assert_called_once_with(
+            "owner",
+            "POST",
+            "/workspaces/workspace-id/execution-grants",
+            json={
+                "runtimeInstanceId": "10000000-0000-4000-8000-000000000002",
+                "audience": "workspace-runtime",
+                "actions": ["agent"],
+            },
+        )
     def test_manager_request_refreshes_an_expired_actor_session_once(self) -> None:
         context = ProductContext.__new__(ProductContext)
         context.manager = Mock()
@@ -178,6 +227,130 @@ class ProductConfigTest(unittest.TestCase):
             "owner",
             "POST",
             "/workspaces",
+        )
+
+    def test_logout_reads_the_canonical_snake_case_provider_url(self) -> None:
+        context = ProductContext.__new__(ProductContext)
+        context.sessions = {"owner": ("session-1", "csrf-1")}
+        context.manager = Mock()
+        context.manager.request.return_value = httpx.Response(
+            200,
+            json={"provider_logout_url": "https://oidc-fixture/logout"},
+        )
+        context.settings = SimpleNamespace(
+            manager_url="http://manager:3001",
+            oidc_issuer_url="https://oidc-fixture",
+        )
+        context.http = Mock()
+        context.http.get.side_effect = [httpx.Response(204), httpx.Response(401)]
+
+        context.verify_logout()
+
+        context.manager.request.assert_called_once_with(
+            "owner",
+            "POST",
+            "/api/v1/oauth2/logout",
+        )
+        self.assertEqual(
+            context.http.get.call_args_list,
+            [
+                call("https://oidc-fixture/logout"),
+                call(
+                    "http://manager:3001/api/v1/oauth2/session",
+                    headers={"Cookie": "aileron_session=session-1"},
+                ),
+            ],
+        )
+
+    @patch("product_conformance.context.time.sleep")
+    def test_logout_retries_transient_transport_failures(self, sleep: Mock) -> None:
+        context = ProductContext.__new__(ProductContext)
+        context.sessions = {"owner": ("session-1", "csrf-1")}
+        context.manager = Mock()
+        context.manager.request.side_effect = [
+            httpx.ConnectError("manager restarting"),
+            httpx.Response(
+                200,
+                json={"provider_logout_url": "https://oidc-fixture/logout"},
+            ),
+        ]
+        context.settings = SimpleNamespace(
+            manager_url="http://manager:3001",
+            oidc_issuer_url="https://oidc-fixture",
+        )
+        context.http = Mock()
+        context.http.get.side_effect = [
+            httpx.ConnectError("provider restarting"),
+            httpx.Response(204),
+            httpx.ConnectError("manager restarting"),
+            httpx.Response(401),
+        ]
+
+        context.verify_logout()
+
+        self.assertEqual(context.manager.request.call_count, 2)
+        self.assertEqual(context.http.get.call_count, 4)
+        self.assertEqual(sleep.call_count, 3)
+
+    def test_workspace_shares_resolve_current_target_contract(self) -> None:
+        context = ProductContext.__new__(ProductContext)
+        context.workspace_id = "workspace-id"
+        context.users = {
+            "editor": SimpleNamespace(email="editor@example.test"),
+            "reader": SimpleNamespace(email="reader@example.test"),
+        }
+        context.share_ids = {}
+        context.sessions = {"editor": ("editor-session", "editor-csrf")}
+        context.request_owner = Mock(
+            side_effect=[
+                httpx.Response(200, json={"items": [{"id": "editor-id"}]}),
+                httpx.Response(201, json={"id": "editor-share"}),
+                httpx.Response(200, json={"items": [{"id": "reader-id"}]}),
+                httpx.Response(201, json={"id": "reader-share"}),
+            ]
+        )
+
+        shares = context.establish_workspace_shares()
+
+        self.assertEqual(
+            context.request_owner.call_args_list,
+            [
+                call(
+                    "GET",
+                    "/workspaces/workspace-id/share-candidate-users",
+                    params={"query": "editor@example.test", "limit": 8},
+                ),
+                call(
+                    "POST",
+                    "/workspaces/workspace-id/shares",
+                    json={
+                        "targetType": "user",
+                        "targetId": "editor-id",
+                        "role": "manager",
+                    },
+                ),
+                call(
+                    "GET",
+                    "/workspaces/workspace-id/share-candidate-users",
+                    params={"query": "reader@example.test", "limit": 8},
+                ),
+                call(
+                    "POST",
+                    "/workspaces/workspace-id/shares",
+                    json={
+                        "targetType": "user",
+                        "targetId": "reader-id",
+                        "role": "reader",
+                    },
+                ),
+            ],
+        )
+        self.assertEqual(shares["editor"], "editor-share")
+        self.assertEqual(shares["reader"], "reader-share")
+        self.assertEqual(shares["collaborator"], "editor-share")
+        self.assertEqual(
+            context.sessions["collaborator"],
+            ("editor-session", "editor-csrf"),
         )
 
 

@@ -36,56 +36,19 @@
       ]
     }
   ],
-  "components": {
-    "org.keycloak.storage.UserStorageProvider": [
-      {
-        "name": "openldap",
-        "providerId": "ldap",
-        "config": {
-          "enabled": ["true"],
-          "priority": ["0"],
-          "fullSyncPeriod": ["-1"],
-          "changedSyncPeriod": ["-1"],
-          "cachePolicy": ["DEFAULT"],
-          "editMode": ["READ_ONLY"],
-          "syncRegistrations": ["false"],
-          "vendor": ["other"],
-          "usernameLDAPAttribute": ["uid"],
-          "rdnLDAPAttribute": ["uid"],
-          "uuidLDAPAttribute": ["entryUUID"],
-          "userObjectClasses": ["inetOrgPerson", "organizationalPerson"],
-          "connectionUrl": ["ldap://openldap:389"],
-          "usersDn": ["ou=people,dc=aileron,dc=local"],
-          "authType": ["simple"],
-          "bindDn": ["cn=admin,dc=aileron,dc=local"],
-          "bindCredential": ["__LDAP_BIND_CREDENTIAL__"],
-          "searchScope": ["1"],
-          "useTruststoreSpi": ["ldapsOnly"],
-          "connectionPooling": ["true"],
-          "pagination": ["true"],
-          "importEnabled": ["true"],
-          "customUserSearchFilter": ["(!(pwdAccountLockedTime=*))"],
-          "allowKerberosAuthentication": ["false"],
-          "debug": ["false"],
-          "useKerberosForPasswordAuthentication": ["false"],
-          "trustEmail": ["false"]
-        }
-      }
-    ]
-  },
   "users": [
     {
-      "id": "__LOCAL_ADMIN_SUBJECT__",
-      "username": "__LOCAL_ADMIN_USERNAME__",
+      "id": "__PLATFORM_ADMIN_SUBJECT__",
+      "username": "__PLATFORM_ADMIN_USERNAME__",
       "enabled": true,
-      "email": "__LOCAL_ADMIN_EMAIL__",
+      "email": "__PLATFORM_ADMIN_EMAIL__",
       "emailVerified": true,
       "firstName": "Aileron",
       "lastName": "Administrator",
       "credentials": [
         {
           "type": "password",
-          "value": "__LOCAL_ADMIN_PASSWORD__",
+          "value": "__PLATFORM_ADMIN_PASSWORD__",
           "temporary": false
         }
       ]

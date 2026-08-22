@@ -16,6 +16,76 @@ REPO_ROOT = Path(__file__).resolve().parents[5]
 
 
 class InstallProductStackTest(unittest.TestCase):
+    def test_installation_transaction_does_not_mutate_assertion_key_identity(
+        self,
+    ) -> None:
+        source = (PRODUCT_DIR / "verify-installation-transaction.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn("runtimeAssertions.activeKid", source)
+        self.assertIn(".metadata.uid != $previous", source)
+        self.assertIn('.type == "Ready" and .status == "True"', source)
+        self.assertIn('run_transaction_driver "prepare-transaction-workspace"', source)
+        self.assertIn('run_transaction_driver "cleanup-transaction-workspace"', source)
+        self.assertLess(
+            source.index('run_transaction_driver "prepare-transaction-workspace"'),
+            source.index("runtime_deployment="),
+        )
+        self.assertLess(
+            source.index('run_transaction_driver "cleanup-transaction-workspace"'),
+            source.index('helm rollback "${release}"'),
+        )
+
+        hook = (PRODUCT_DIR / "product-conformance-hook.sh").read_text(
+            encoding="utf-8"
+        )
+        run_position = hook.index('"${script_dir}/run-product-conformance.sh"')
+        delete_position = hook.index("delete job product-conformance")
+        transaction_position = hook.index("verify-installation-transaction.sh")
+        self.assertLess(run_position, delete_position)
+        self.assertLess(delete_position, transaction_position)
+
+        k3s_runner = (
+            REPO_ROOT / "scripts/test/kubernetes/run-kubernetes-conformance-e2e.sh"
+        ).read_text(encoding="utf-8")
+        self.assertLess(
+            k3s_runner.rfind("\ndelete_workspace_and_assert_absence\n"),
+            k3s_runner.rfind("\nassert_product_hook\n"),
+        )
+
+    def test_k3s_operator_and_product_driver_share_the_platform_origin(self) -> None:
+        expected = "https://aileron.example.test"
+        k3s_runner = (
+            REPO_ROOT / "scripts/test/kubernetes/run-kubernetes-conformance-e2e.sh"
+        ).read_text(encoding="utf-8")
+        product_runner = (PRODUCT_DIR / "run-product-conformance.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(f"value: {expected}", k3s_runner)
+        self.assertIn(f"value: {expected}", product_runner)
+
+    def test_product_driver_uses_the_installed_platform_database_secret(self) -> None:
+        product_runner = (PRODUCT_DIR / "run-product-conformance.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn("postgresql://postgres:postgres@", product_runner)
+        self.assertEqual(product_runner.count("name: aileron-platform-secrets"), 1)
+        self.assertEqual(product_runner.count("key: database-url"), 1)
+
+    def test_external_tls_uses_short_cn_and_complete_service_san(self) -> None:
+        source = (PRODUCT_DIR / "install-product-stack.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(source.count("openssl req -config /dev/null"), 2)
+        self.assertIn("basicConstraints=critical,CA:TRUE", source)
+        self.assertIn("basicConstraints=critical,CA:FALSE", source)
+        self.assertIn('-subj "/CN=external-${service}"', source)
+        self.assertIn("subjectAltName=DNS:%s", source)
+        self.assertNotIn('-subj "/CN=${service_host}"', source)
+
     def _render(
         self,
         storage_mode: str,
@@ -30,6 +100,7 @@ class InstallProductStackTest(unittest.TestCase):
         runtime_home_provisioner: str = "kubernetes.io/no-provisioner",
         runtime_home_binding_mode: str = "Immediate",
         runtime_home_reclaim_policy: str = "Retain",
+        data_service_mode: str = "bundled",
         expected_returncode: int = 0,
     ) -> dict[str, str]:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -58,6 +129,8 @@ class InstallProductStackTest(unittest.TestCase):
                           *runtime-home-preparer.yaml) cp "$source_file" "$CAPTURE_DIR/runtime-home-preparer.yaml" ;;
                           *keygen-job.yaml) cp "$source_file" "$CAPTURE_DIR/keygen-job.yaml" ;;
                           *external-oidc-fixture.yaml) cp "$source_file" "$CAPTURE_DIR/oidc-fixture.yaml" ;;
+                          *external-data-services.yaml) cp "$source_file" "$CAPTURE_DIR/external-data-services.yaml" ;;
+                          *platform-data-service-secrets.yaml) cp "$source_file" "$CAPTURE_DIR/platform-data-service-secrets.yaml" ;;
                         esac
                         ;;
                       create)
@@ -75,6 +148,9 @@ class InstallProductStackTest(unittest.TestCase):
                       get)
                         printf '%s\n' "$*" >> "$CAPTURE_DIR/kubectl-get.txt"
                         case "$*" in
+                          *'get job product-assertion-keygen'*'Complete'*)
+                            printf '%s' True
+                            ;;
                           *'get pvc knowledge-bases-pvc'*'status.phase'*)
                             printf '%s' Bound
                             ;;
@@ -155,6 +231,7 @@ class InstallProductStackTest(unittest.TestCase):
                 "REDIS_IMAGE": redis_image,
                 "POSTGRES_IMAGE": postgres_image,
                 "IMAGE_PULL_SECRET_NAME": "harbor-pull",
+                "PRODUCT_DATA_SERVICE_MODE": data_service_mode,
             }
             if storage_mode == "static-nfs":
                 environment["NFS_SERVER"] = "nfs-server"
@@ -208,6 +285,18 @@ class InstallProductStackTest(unittest.TestCase):
                 ),
                 "oidc_fixture": (capture_dir / "oidc-fixture.yaml").read_text(
                     encoding="utf-8"
+                ),
+                "external_data_services": (
+                    (capture_dir / "external-data-services.yaml").read_text(
+                        encoding="utf-8"
+                    )
+                    if (capture_dir / "external-data-services.yaml").exists()
+                    else ""
+                ),
+                "platform_data_service_secrets": (
+                    (capture_dir / "platform-data-service-secrets.yaml").read_text(
+                        encoding="utf-8"
+                    )
                 ),
                 "operator_env": (capture_dir / "operator-set-env.txt").read_text(
                     encoding="utf-8"
@@ -661,6 +750,14 @@ class InstallProductStackTest(unittest.TestCase):
             "RUNTIME_HOME_STORAGE_ACCESS_MODE=" '"${runtime_home_storage_access_mode}"',
             hook,
         )
+        self.assertIn(
+            'data_service_mode="${PRODUCT_DATA_SERVICE_MODE:-bundled}"',
+            hook,
+        )
+        self.assertIn(
+            'PRODUCT_DATA_SERVICE_MODE="${data_service_mode}"',
+            hook,
+        )
         for source, local_name, default in (
             ("E2E_SHARED_STORAGE_SIZE", "shared_storage_size", "1Gi"),
             ("E2E_RWO_STORAGE_SIZE", "rwo_storage_size", "1Gi"),
@@ -706,6 +803,81 @@ class InstallProductStackTest(unittest.TestCase):
                 rendered["helm"],
             )
             self.assertIn(f"{values_path}.tag=", rendered["helm"])
+
+    def test_external_data_services_use_non_chart_tls_endpoints(self) -> None:
+        rendered = self._render("dynamic", data_service_mode="external")
+
+        external = rendered["external_data_services"]
+        self.assertIn("name: workspace-e2e-run-1-data", external)
+        self.assertIn("name: external-postgres", external)
+        self.assertIn("name: external-redis", external)
+        self.assertIn("ssl=on", external)
+        self.assertIn("--tls-port", external)
+        self.assertIn("--tls-auth-clients", external)
+        self.assertIn(
+            '"--sni", "external-redis.workspace-e2e-run-1-data.svc.cluster.local"',
+            external,
+        )
+        self.assertIn('"-h", "127.0.0.1"', external)
+        self.assertIn("platform_login", external)
+        self.assertIn("CREATEROLE INHERIT NOREPLICATION", external)
+        self.assertIn("GRANT pg_signal_backend", external)
+        resources = list(yaml.safe_load_all(external))
+        claims = {
+            resource["metadata"]["name"]: resource
+            for resource in resources
+            if resource["kind"] == "PersistentVolumeClaim"
+        }
+        self.assertEqual(
+            set(claims), {"external-postgres-data", "external-redis-data"}
+        )
+        deployments = {
+            resource["metadata"]["name"]: resource
+            for resource in resources
+            if resource["kind"] == "Deployment"
+        }
+        for service in ("external-postgres", "external-redis"):
+            data_volume = next(
+                volume
+                for volume in deployments[service]["spec"]["template"]["spec"][
+                    "volumes"
+                ]
+                if volume["name"] == "data"
+            )
+            self.assertEqual(
+                data_volume["persistentVolumeClaim"]["claimName"],
+                f"{service}-data",
+            )
+            self.assertNotIn("emptyDir", data_volume)
+
+        secrets = rendered["platform_data_service_secrets"]
+        self.assertIn("sslmode=verify-full", secrets)
+        self.assertIn(
+            "sslrootcert=/etc/aileron/data-service-ca/platform-database/ca.crt",
+            secrets,
+        )
+        self.assertEqual(secrets.count("rediss://"), 3)
+        self.assertIn("name: product-platform-database-ca", secrets)
+        self.assertIn("name: product-redis-general-ca", secrets)
+        self.assertIn("name: product-redis-job-queue-ca", secrets)
+        self.assertIn("name: product-redis-job-result-ca", secrets)
+
+        for expected in (
+            "postgres.enabled=false",
+            "platformDatabase.caSecretName=product-platform-database-ca",
+            "redis.enabled=false",
+            "redis.connections.general.urlSecretName=product-redis-general",
+            "redis.connections.jobQueue.urlSecretName=product-redis-job-queue",
+            "redis.connections.jobResult.urlSecretName=product-redis-job-result",
+        ):
+            self.assertIn(expected, rendered["helm"])
+        self.assertIn("--set postgres.enabled=false", rendered["helm"])
+        self.assertIn("--set redis.enabled=false", rendered["helm"])
+        self.assertIn(
+            "platformPublicOrigin=https://aileron.example.test", rendered["helm"]
+        )
+        self.assertNotIn("workspaceManager.env", rendered["helm"])
+        self.assertNotIn("oidc.discoveryUrl", rendered["helm"])
 
     def test_static_nfs_rejects_unsafe_inherited_mount_option(self) -> None:
         rendered = self._render(

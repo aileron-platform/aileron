@@ -1,0 +1,19 @@
+services:
+  compose-e2e-test:
+    build:
+      context: ../../..
+      dockerfile: scripts/test/compose-e2e/Dockerfile.acceptance
+      args:
+        DOCKER_CLI_IMAGE: docker:27-cli@sha256:f56779b4e86550493153cc8642c9c8e40b5d934e43cb5b4ea463aea5245c5c01
+        SOURCE_REVISION: ${AILERON_SOURCE_REVISION:-development}
+    image: ${AILERON_COMPOSE_E2E_TEST_IMAGE:-ailerondocker/compose-e2e-test:development}
+    platform: linux/amd64
+    working_dir: /repo
+    environment:
+      COMPOSE_E2E_HOST_REPO_ROOT: ${AILERON_SUITE_SOURCE_ROOT:?AILERON_SUITE_SOURCE_ROOT must be set}
+      COMPOSE_E2E_SOURCE_REVISION: ${AILERON_SOURCE_REVISION:?AILERON_SOURCE_REVISION must be set}
+      COMPOSE_E2E_STATE_PARENT: /tmp/aileron-compose-e2e
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${AILERON_SUITE_SOURCE_ROOT:?AILERON_SUITE_SOURCE_ROOT must be set}:/repo:ro
+      - /tmp/aileron-compose-e2e:/tmp/aileron-compose-e2e

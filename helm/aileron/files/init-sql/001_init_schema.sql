@@ -31,17 +31,17 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-COMMENT ON TABLE users IS '用戶基本資料表';
-COMMENT ON COLUMN users.id IS '用戶唯一識別碼';
+COMMENT ON TABLE users IS 'User profile records';
+COMMENT ON COLUMN users.id IS 'Unique user identifier';
 COMMENT ON COLUMN users.username IS 'Provider profile display identifier';
 COMMENT ON COLUMN users.email IS 'Provider profile email snapshot';
 COMMENT ON COLUMN users.oidc_issuer IS 'Canonical OIDC issuer';
 COMMENT ON COLUMN users.oidc_subject IS 'Canonical OIDC subject';
-COMMENT ON COLUMN users.display_name IS '用戶顯示名稱';
-COMMENT ON COLUMN users.avatar_url IS '用戶頭像圖片 URL';
-COMMENT ON COLUMN users.first_name IS '用戶名字';
-COMMENT ON COLUMN users.last_name IS '用戶姓氏';
-COMMENT ON COLUMN users.is_active IS '帳號是否啟用狀態';
+COMMENT ON COLUMN users.display_name IS 'User display name';
+COMMENT ON COLUMN users.avatar_url IS 'User avatar image URL';
+COMMENT ON COLUMN users.first_name IS 'User first name';
+COMMENT ON COLUMN users.last_name IS 'User last name';
+COMMENT ON COLUMN users.is_active IS 'Whether the user account is active';
 COMMENT ON COLUMN users.identity_enabled IS 'Identity provider enabled snapshot';
 COMMENT ON COLUMN users.sync_status IS 'Local identity snapshot sync status';
 COMMENT ON COLUMN users.platform_role IS 'Single Aileron platform role';
@@ -49,8 +49,8 @@ COMMENT ON COLUMN users.role_status IS 'Platform role validation status';
 COMMENT ON COLUMN users.role_issues IS 'Canonical platform role validation issues';
 COMMENT ON COLUMN users.recent_workspace_id IS 'Most recently selected workspace ID';
 COMMENT ON COLUMN users.last_synced_at IS 'Latest identity snapshot sync time';
-COMMENT ON COLUMN users.created_at IS '帳號建立時間';
-COMMENT ON COLUMN users.updated_at IS '帳號最後更新時間';
+COMMENT ON COLUMN users.created_at IS 'Account creation timestamp';
+COMMENT ON COLUMN users.updated_at IS 'Account last update timestamp';
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_users_oidc_principal
 ON users(oidc_issuer, oidc_subject)
@@ -75,17 +75,17 @@ CREATE TABLE IF NOT EXISTS user_settings (
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-COMMENT ON TABLE user_settings IS '用戶個人設定表';
-COMMENT ON COLUMN user_settings.id IS '設定唯一識別碼';
-COMMENT ON COLUMN user_settings.user_id IS '所屬用戶ID';
-COMMENT ON COLUMN user_settings.claude_auth_key IS 'Claude API 認證金鑰';
-COMMENT ON COLUMN user_settings.claude_selected_model IS '用戶選擇的 Claude 模型';
-COMMENT ON COLUMN user_settings.git_user_name IS 'Git 配置的用戶名稱';
-COMMENT ON COLUMN user_settings.git_user_email IS 'Git 配置的用戶郵箱';
-COMMENT ON COLUMN user_settings.ssh_private_key IS 'SSH 私鑰內容';
-COMMENT ON COLUMN user_settings.ssh_public_key IS 'SSH 公鑰內容';
-COMMENT ON COLUMN user_settings.general_settings IS '一般設定（JSON格式）';
-COMMENT ON COLUMN user_settings.additional_settings IS '其他擴展設定（JSON格式，包含 Claude Code OAuth tokens）';
+COMMENT ON TABLE user_settings IS 'User preference records';
+COMMENT ON COLUMN user_settings.id IS 'Unique settings identifier';
+COMMENT ON COLUMN user_settings.user_id IS 'Owning user identifier';
+COMMENT ON COLUMN user_settings.claude_auth_key IS 'Claude API authentication key';
+COMMENT ON COLUMN user_settings.claude_selected_model IS 'Claude model selected by the user';
+COMMENT ON COLUMN user_settings.git_user_name IS 'Git user name';
+COMMENT ON COLUMN user_settings.git_user_email IS 'Git user email';
+COMMENT ON COLUMN user_settings.ssh_private_key IS 'SSH private key content';
+COMMENT ON COLUMN user_settings.ssh_public_key IS 'SSH public key content';
+COMMENT ON COLUMN user_settings.general_settings IS 'General settings stored as JSON';
+COMMENT ON COLUMN user_settings.additional_settings IS 'Additional settings stored as JSON, including Claude Code OAuth tokens';
 
 -- Table: workspaces
 CREATE TABLE IF NOT EXISTS workspaces (
@@ -303,21 +303,21 @@ CREATE TABLE IF NOT EXISTS workspaces (
     )
 );
 
-COMMENT ON TABLE workspaces IS '開發工作區配置表';
-COMMENT ON COLUMN workspaces.id IS '工作區唯一識別碼';
-COMMENT ON COLUMN workspaces.owner_id IS '工作區擁有者用戶 ID';
-COMMENT ON COLUMN workspaces.name IS '工作區名稱';
-COMMENT ON COLUMN workspaces.description IS '工作區描述';
-COMMENT ON COLUMN workspaces.git_url IS 'Git 儲存庫 URL';
-COMMENT ON COLUMN workspaces.branch IS 'Git 分支名稱';
-COMMENT ON COLUMN workspaces.runtime IS '運行時環境類型';
-COMMENT ON COLUMN workspaces.env_vars IS '環境變數配置（JSON陣列）';
-COMMENT ON COLUMN workspaces.setup_script IS '工作區初始化腳本';
-COMMENT ON COLUMN workspaces.runtime_container_id IS '運行時容器 ID';
-COMMENT ON COLUMN workspaces.runtime_internal_url IS '容器內部通信 URL';
-COMMENT ON COLUMN workspaces.runtime_internal_port IS '容器內部監聽端口';
-COMMENT ON COLUMN workspaces.runtime_status IS '容器運行狀態';
-COMMENT ON COLUMN workspaces.runtime_last_seen IS '容器最後活動時間';
+COMMENT ON TABLE workspaces IS 'Development workspace configuration records';
+COMMENT ON COLUMN workspaces.id IS 'Unique workspace identifier';
+COMMENT ON COLUMN workspaces.owner_id IS 'Workspace owner user identifier';
+COMMENT ON COLUMN workspaces.name IS 'Workspace name';
+COMMENT ON COLUMN workspaces.description IS 'Workspace description';
+COMMENT ON COLUMN workspaces.git_url IS 'Git repository URL';
+COMMENT ON COLUMN workspaces.branch IS 'Git branch name';
+COMMENT ON COLUMN workspaces.runtime IS 'Runtime environment type';
+COMMENT ON COLUMN workspaces.env_vars IS 'Environment variable configuration stored as a JSON array';
+COMMENT ON COLUMN workspaces.setup_script IS 'Workspace initialization script';
+COMMENT ON COLUMN workspaces.runtime_container_id IS 'Runtime container identifier';
+COMMENT ON COLUMN workspaces.runtime_internal_url IS 'Runtime container internal communication URL';
+COMMENT ON COLUMN workspaces.runtime_internal_port IS 'Runtime container internal listening port';
+COMMENT ON COLUMN workspaces.runtime_status IS 'Runtime container status';
+COMMENT ON COLUMN workspaces.runtime_last_seen IS 'Runtime container last activity timestamp';
 COMMENT ON COLUMN workspaces.knowledge_base_mount_active_revision IS 'Last-known-good knowledge base mount revision';
 COMMENT ON COLUMN workspaces.knowledge_base_mount_desired_revision IS 'Desired knowledge base mount revision';
 COMMENT ON COLUMN workspaces.knowledge_base_mount_observed_revision IS 'Observed knowledge base mount revision';
@@ -333,35 +333,35 @@ COMMENT ON COLUMN workspaces.browser_instance_id IS 'Browser workload generation
 COMMENT ON COLUMN workspaces.canvas_instance_id IS 'Canvas workload generation ID';
 COMMENT ON COLUMN workspaces.runtime_control_instance_id IS 'Generation authorized for Runtime control requests';
 COMMENT ON COLUMN workspaces.runtime_control_token_hash IS 'SHA-256 digest of the generation-scoped Runtime control token';
-COMMENT ON COLUMN workspaces.canvas_container_id IS 'Canvas 容器 ID';
-COMMENT ON COLUMN workspaces.canvas_status IS 'Canvas 容器運行狀態';
-COMMENT ON COLUMN workspaces.canvas_created_at IS 'Canvas 容器建立時間';
-COMMENT ON COLUMN workspaces.canvas_last_seen IS 'Canvas 容器最後活動時間';
-COMMENT ON COLUMN workspaces.canvas_internal_url IS 'Canvas 容器內部通信 URL';
-COMMENT ON COLUMN workspaces.canvas_internal_port IS 'Canvas render server 內部端口（預設 3003）';
-COMMENT ON COLUMN workspaces.canvas_api_internal_port IS 'Canvas 管理 API 內部端口（預設 3013）';
-COMMENT ON COLUMN workspaces.canvas_type IS 'Canvas 最近偵測類型（html / nextjs / default）';
-COMMENT ON COLUMN workspaces.canvas_manifest_status IS 'Canvas manifest 狀態（missing / valid / invalid）';
-COMMENT ON COLUMN workspaces.canvas_last_sync_at IS 'Canvas 最近同步時間';
-COMMENT ON COLUMN workspaces.canvas_last_reset_at IS 'Canvas 最近 reset 時間';
+COMMENT ON COLUMN workspaces.canvas_container_id IS 'Canvas container identifier';
+COMMENT ON COLUMN workspaces.canvas_status IS 'Canvas container status';
+COMMENT ON COLUMN workspaces.canvas_created_at IS 'Canvas container creation timestamp';
+COMMENT ON COLUMN workspaces.canvas_last_seen IS 'Canvas container last activity timestamp';
+COMMENT ON COLUMN workspaces.canvas_internal_url IS 'Canvas container internal communication URL';
+COMMENT ON COLUMN workspaces.canvas_internal_port IS 'Canvas render server internal port, default 3003';
+COMMENT ON COLUMN workspaces.canvas_api_internal_port IS 'Canvas management API internal port, default 3013';
+COMMENT ON COLUMN workspaces.canvas_type IS 'Most recently detected Canvas type: html, nextjs, or default';
+COMMENT ON COLUMN workspaces.canvas_manifest_status IS 'Canvas manifest status: missing, valid, or invalid';
+COMMENT ON COLUMN workspaces.canvas_last_sync_at IS 'Canvas last synchronization timestamp';
+COMMENT ON COLUMN workspaces.canvas_last_reset_at IS 'Canvas last reset timestamp';
 COMMENT ON COLUMN workspaces.terminal_internal_url IS 'Manager-only Terminal drain URL';
-COMMENT ON COLUMN workspaces.provisioner IS '工作區佈建模式（docker / kubernetes）';
-COMMENT ON COLUMN workspaces.target_namespace IS 'Kubernetes 模式下目標部署 namespace';
+COMMENT ON COLUMN workspaces.provisioner IS 'Workspace provisioning mode: docker or kubernetes';
+COMMENT ON COLUMN workspaces.target_namespace IS 'Target deployment namespace in Kubernetes mode';
 COMMENT ON COLUMN workspaces.workspace_firewall_egress_mode IS 'Workspace external egress mode';
 COMMENT ON COLUMN workspaces.workspace_firewall_allowed_domains IS 'Workspace exact hostname allowlist';
 COMMENT ON COLUMN workspaces.browser_firewall_egress_mode IS 'Browser external egress mode';
 COMMENT ON COLUMN workspaces.browser_firewall_allowed_domains IS 'Browser exact hostname allowlist';
-COMMENT ON COLUMN workspaces.preferred_cli IS '偏好的命令行介面';
-COMMENT ON COLUMN workspaces.agentic_tools IS '工作區啟用的 Agentic CLI 工具清單（claude-code / codex / opencode）';
-COMMENT ON COLUMN workspaces.fallback_enabled IS '是否啟用 AI 模型備援機制';
-COMMENT ON COLUMN workspaces.workspace_path IS '工作區在容器中的路徑';
-COMMENT ON COLUMN workspaces.browser_container_id IS 'Browser 容器 ID';
-COMMENT ON COLUMN workspaces.browser_status IS 'Browser 容器運行狀態';
-COMMENT ON COLUMN workspaces.browser_created_at IS 'Browser 容器建立時間';
-COMMENT ON COLUMN workspaces.browser_last_seen IS 'Browser 容器最後活動時間';
-COMMENT ON COLUMN workspaces.browser_webrtc_internal_url IS 'Browser WebRTC (neko) 容器內部通信 URL';
-COMMENT ON COLUMN workspaces.browser_webrtc_internal_port IS 'Browser WebRTC (neko) 內部端口（預設 6080）';
-COMMENT ON COLUMN workspaces.browser_cdp_internal_port IS 'Browser CDP 內部端口（預設 9223）';
+COMMENT ON COLUMN workspaces.preferred_cli IS 'Preferred command-line interface';
+COMMENT ON COLUMN workspaces.agentic_tools IS 'Agentic CLI tools enabled for the workspace: claude-code, codex, or opencode';
+COMMENT ON COLUMN workspaces.fallback_enabled IS 'Whether AI model fallback is enabled';
+COMMENT ON COLUMN workspaces.workspace_path IS 'Workspace path inside the container';
+COMMENT ON COLUMN workspaces.browser_container_id IS 'Browser container identifier';
+COMMENT ON COLUMN workspaces.browser_status IS 'Browser container status';
+COMMENT ON COLUMN workspaces.browser_created_at IS 'Browser container creation timestamp';
+COMMENT ON COLUMN workspaces.browser_last_seen IS 'Browser container last activity timestamp';
+COMMENT ON COLUMN workspaces.browser_webrtc_internal_url IS 'Browser WebRTC (Neko) container internal communication URL';
+COMMENT ON COLUMN workspaces.browser_webrtc_internal_port IS 'Browser WebRTC (Neko) internal port, default 6080';
+COMMENT ON COLUMN workspaces.browser_cdp_internal_port IS 'Browser CDP internal port, default 9223';
 -- Table: workspace_shares
 CREATE TABLE IF NOT EXISTS workspace_shares (
     id varchar(64) PRIMARY KEY,
@@ -542,24 +542,24 @@ CREATE TABLE IF NOT EXISTS automation_jobs (
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-COMMENT ON TABLE automation_jobs IS '自動化任務配置表';
-COMMENT ON COLUMN automation_jobs.id IS '自動化任務唯一識別碼';
-COMMENT ON COLUMN automation_jobs.name IS '自動化任務名稱';
-COMMENT ON COLUMN automation_jobs.description IS '自動化任務描述';
-COMMENT ON COLUMN automation_jobs.workspace_id IS '所屬工作區 ID';
-COMMENT ON COLUMN automation_jobs.creator_user_id IS '任務建立者用戶 ID';
-COMMENT ON COLUMN automation_jobs.prompt IS '任務提示或內容';
-COMMENT ON COLUMN automation_jobs.status IS '任務狀態（active, paused, completed）';
-COMMENT ON COLUMN automation_jobs.trigger IS '觸發條件（cron, manual, webhook, at, every）';
-COMMENT ON COLUMN automation_jobs.schedule IS '排程表達式（使用系統時區）';
-COMMENT ON COLUMN automation_jobs.exact IS '是否精準依排程執行，不套用分散抖動';
+COMMENT ON TABLE automation_jobs IS 'Automation job configuration records';
+COMMENT ON COLUMN automation_jobs.id IS 'Unique automation job identifier';
+COMMENT ON COLUMN automation_jobs.name IS 'Automation job name';
+COMMENT ON COLUMN automation_jobs.description IS 'Automation job description';
+COMMENT ON COLUMN automation_jobs.workspace_id IS 'Owning workspace identifier';
+COMMENT ON COLUMN automation_jobs.creator_user_id IS 'Job creator user identifier';
+COMMENT ON COLUMN automation_jobs.prompt IS 'Job prompt or content';
+COMMENT ON COLUMN automation_jobs.status IS 'Job status: active, paused, or completed';
+COMMENT ON COLUMN automation_jobs.trigger IS 'Trigger type: cron, manual, webhook, at, or every';
+COMMENT ON COLUMN automation_jobs.schedule IS 'Schedule expression evaluated in the system time zone';
+COMMENT ON COLUMN automation_jobs.exact IS 'Whether the schedule runs exactly without distributed jitter';
 COMMENT ON COLUMN automation_jobs.agentic_tool IS 'Agentic tool ID';
 COMMENT ON COLUMN automation_jobs.model IS 'Agent model ID';
 COMMENT ON COLUMN automation_jobs.agent_config IS 'Typed agent configuration';
 COMMENT ON COLUMN automation_jobs.worktree_key IS 'Deterministic worktree identity';
 COMMENT ON COLUMN automation_jobs.worktree_branch IS 'Deterministic worktree branch';
 COMMENT ON COLUMN automation_jobs.notification_config IS 'Typed notification configuration';
-COMMENT ON COLUMN automation_jobs.next_run_at IS '下次計劃執行時間';
+COMMENT ON COLUMN automation_jobs.next_run_at IS 'Next scheduled execution timestamp';
 COMMENT ON COLUMN automation_jobs.deleted_at IS 'Soft deletion time';
 
 -- Table: automation_executions
@@ -612,13 +612,13 @@ CREATE TABLE IF NOT EXISTS workspace_runtime_logs (
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-COMMENT ON TABLE workspace_runtime_logs IS '工作區 Runtime 佈建日誌';
-COMMENT ON COLUMN workspace_runtime_logs.id IS '日誌唯一識別碼';
-COMMENT ON COLUMN workspace_runtime_logs.workspace_id IS '所屬工作區 ID';
-COMMENT ON COLUMN workspace_runtime_logs.stage IS '佈建階段';
-COMMENT ON COLUMN workspace_runtime_logs.message IS '日誌訊息';
-COMMENT ON COLUMN workspace_runtime_logs.log_metadata IS '日誌元數據（JSON格式）';
-COMMENT ON COLUMN workspace_runtime_logs.created_at IS '日誌建立時間';
+COMMENT ON TABLE workspace_runtime_logs IS 'Workspace Runtime provisioning logs';
+COMMENT ON COLUMN workspace_runtime_logs.id IS 'Unique log identifier';
+COMMENT ON COLUMN workspace_runtime_logs.workspace_id IS 'Owning workspace identifier';
+COMMENT ON COLUMN workspace_runtime_logs.stage IS 'Provisioning stage';
+COMMENT ON COLUMN workspace_runtime_logs.message IS 'Log message';
+COMMENT ON COLUMN workspace_runtime_logs.log_metadata IS 'Log metadata stored as JSON';
+COMMENT ON COLUMN workspace_runtime_logs.created_at IS 'Log creation timestamp';
 
 -- Table: workspace_firewall_sync_commands
 CREATE TABLE IF NOT EXISTS workspace_firewall_sync_commands (
@@ -767,14 +767,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_workspace_runtime_jobs_running_component_op
     ON workspace_runtime_jobs (workspace_id, target_component)
     WHERE status = 'running' AND target_component IS NOT NULL;
 
-COMMENT ON TABLE workspace_runtime_jobs IS '工作區 Runtime 背景任務排程';
-COMMENT ON COLUMN workspace_runtime_jobs.id IS '任務唯一識別碼';
-COMMENT ON COLUMN workspace_runtime_jobs.workspace_id IS '所屬工作區 ID';
-COMMENT ON COLUMN workspace_runtime_jobs.operation IS '操作類型';
+COMMENT ON TABLE workspace_runtime_jobs IS 'Workspace Runtime background job schedule';
+COMMENT ON COLUMN workspace_runtime_jobs.id IS 'Unique job identifier';
+COMMENT ON COLUMN workspace_runtime_jobs.workspace_id IS 'Owning workspace identifier';
+COMMENT ON COLUMN workspace_runtime_jobs.operation IS 'Operation type';
 COMMENT ON COLUMN workspace_runtime_jobs.target_component IS 'Target component for component-scoped reconciliation';
-COMMENT ON COLUMN workspace_runtime_jobs.strategy IS '執行策略';
-COMMENT ON COLUMN workspace_runtime_jobs.status IS '任務狀態';
-COMMENT ON COLUMN workspace_runtime_jobs.retries IS '重試次數';
+COMMENT ON COLUMN workspace_runtime_jobs.strategy IS 'Execution strategy';
+COMMENT ON COLUMN workspace_runtime_jobs.status IS 'Job status';
+COMMENT ON COLUMN workspace_runtime_jobs.retries IS 'Retry count';
 COMMENT ON COLUMN workspace_runtime_jobs.target_revision IS 'Desired revision fenced by this job';
 COMMENT ON COLUMN workspace_runtime_jobs.target_runtime_instance_id IS 'Execution-plane generation fenced by this job';
 COMMENT ON COLUMN workspace_runtime_jobs.correlation_id IS 'Current attempt correlation ID';
@@ -786,9 +786,9 @@ COMMENT ON COLUMN workspace_runtime_jobs.claim_token IS 'Current worker fencing 
 COMMENT ON COLUMN workspace_runtime_jobs.claim_expires_at IS 'Worker claim lease expiry';
 COMMENT ON COLUMN workspace_runtime_jobs.last_heartbeat_at IS 'Most recent claim heartbeat';
 COMMENT ON COLUMN workspace_runtime_jobs.dispatch_attempts IS 'Broker dispatch attempt count';
-COMMENT ON COLUMN workspace_runtime_jobs.scheduled_at IS '計劃執行時間';
-COMMENT ON COLUMN workspace_runtime_jobs.started_at IS '實際開始時間';
-COMMENT ON COLUMN workspace_runtime_jobs.finished_at IS '完成時間';
+COMMENT ON COLUMN workspace_runtime_jobs.scheduled_at IS 'Scheduled execution timestamp';
+COMMENT ON COLUMN workspace_runtime_jobs.started_at IS 'Actual start timestamp';
+COMMENT ON COLUMN workspace_runtime_jobs.finished_at IS 'Completion timestamp';
 COMMENT ON COLUMN workspace_runtime_jobs.error_code IS 'Stable failure code';
 
 -- Table: marketplace_activities
@@ -797,10 +797,30 @@ CREATE TABLE IF NOT EXISTS marketplace_activities (
     actor_user_id varchar(128) NOT NULL,
     operation_id varchar(64),
     workspace_id varchar(64) REFERENCES workspaces(id) ON DELETE SET NULL,
-    provider varchar(32) CHECK (
-        provider IS NULL OR provider IN ('claude-code', 'codex')
+    workspace_id_snapshot varchar(64),
+    package_format varchar(32) CHECK (
+        package_format IS NULL OR package_format IN (
+            'codex-native', 'claude-native', 'agent-plugin/1.0.0'
+        )
+    ),
+    target_client varchar(32) CHECK (
+        target_client IS NULL OR target_client IN ('claude-code', 'codex')
     ),
     package_id varchar(255),
+    catalog_plugin_id varchar(1024),
+    release_revision varchar(64),
+    profile_digest varchar(64),
+    projection_digest varchar(64),
+    materialization_digest varchar(64),
+    projected_count integer,
+    skipped_count integer,
+    conflict_count integer,
+    created_count integer,
+    merged_count integer,
+    unchanged_count integer,
+    overwritten_count integer,
+    target_locators jsonb NOT NULL DEFAULT '[]'::jsonb,
+    diagnostic_codes jsonb NOT NULL DEFAULT '[]'::jsonb,
     action varchar(32) NOT NULL CHECK (
         action IN ('install', 'copy', 'import', 'delete')
     ),
@@ -808,6 +828,7 @@ CREATE TABLE IF NOT EXISTS marketplace_activities (
         status IN ('succeeded', 'failed')
     ),
     marketplace_id varchar(64),
+    source_id varchar(255),
     error_code varchar(128),
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -816,6 +837,27 @@ CREATE INDEX IF NOT EXISTS ix_marketplace_activities_workspace_created
     ON marketplace_activities (workspace_id, created_at, id);
 CREATE INDEX IF NOT EXISTS ix_marketplace_activities_actor_created
     ON marketplace_activities (actor_user_id, created_at, id);
+
+CREATE TABLE IF NOT EXISTS marketplace_command_results (
+    id varchar(64) PRIMARY KEY,
+    activity_id varchar(64) NOT NULL REFERENCES marketplace_activities(id) ON DELETE CASCADE,
+    operation_id varchar(64) NOT NULL,
+    sequence integer NOT NULL,
+    stage varchar(32) NOT NULL,
+    argv_display varchar(4096) NOT NULL,
+    exit_code integer,
+    started_at timestamp with time zone NOT NULL,
+    ended_at timestamp with time zone NOT NULL,
+    stdout text,
+    stderr text,
+    stdout_original_byte_count integer NOT NULL,
+    stderr_original_byte_count integer NOT NULL,
+    truncated boolean NOT NULL DEFAULT false,
+    CONSTRAINT uq_marketplace_command_results_sequence UNIQUE (activity_id, sequence)
+);
+
+CREATE INDEX IF NOT EXISTS ix_marketplace_command_results_operation
+    ON marketplace_command_results (operation_id, sequence);
 
 -- =====================================================
 -- AI Chat Thread Tables

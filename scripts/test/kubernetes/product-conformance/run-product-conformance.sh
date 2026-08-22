@@ -10,6 +10,7 @@ output="${PRODUCT_CAPABILITIES_OUTPUT:?PRODUCT_CAPABILITIES_OUTPUT is required}"
 image_pull_policy="${IMAGE_PULL_POLICY:-Never}"
 image_pull_secret_name="${IMAGE_PULL_SECRET_NAME:-}"
 storage_mode="${E2E_STORAGE_MODE:?E2E_STORAGE_MODE is required}"
+data_service_mode="${PRODUCT_DATA_SERVICE_MODE:-bundled}"
 service_account="product-conformance"
 fullname="${release}-aileron"
 job_name="product-conformance"
@@ -37,6 +38,31 @@ case "${storage_mode}" in
     ;;
   *)
     printf 'E2E_STORAGE_MODE must be static-nfs or dynamic\n' >&2
+    exit 1
+    ;;
+esac
+
+postgres_dsn_env="            - name: PRODUCT_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: aileron-platform-secrets
+                  key: database-url"
+
+case "${data_service_mode}" in
+  bundled)
+    postgres_ca_mount=""
+    postgres_ca_volume=""
+    ;;
+  external)
+    postgres_ca_mount="            - name: platform-database-ca
+              mountPath: /etc/aileron/data-service-ca/platform-database
+              readOnly: true"
+    postgres_ca_volume="        - name: platform-database-ca
+          secret:
+            secretName: product-platform-database-ca"
+    ;;
+  *)
+    printf 'PRODUCT_DATA_SERVICE_MODE must be bundled or external\n' >&2
     exit 1
     ;;
 esac
@@ -84,6 +110,8 @@ ${job_image_pull_secrets_block}
               value: ${run_id}
             - name: PRODUCT_MANAGER_URL
               value: http://${fullname}-workspace-manager:3001
+            - name: PRODUCT_PLATFORM_PUBLIC_ORIGIN
+              value: https://aileron.example.test
             - name: PRODUCT_OIDC_ADAPTER_URL
               value: https://${fullname}-oidc-fixture:8443
             - name: PRODUCT_OIDC_ISSUER_URL
@@ -92,8 +120,7 @@ ${job_image_pull_secrets_block}
               value: aileron-manager
             - name: SSL_CERT_FILE
               value: /etc/aileron/oidc-ca/ca.crt
-            - name: PRODUCT_POSTGRES_DSN
-              value: postgresql://postgres:postgres@${fullname}-postgres:5432/aileron
+${postgres_dsn_env}
             - name: PRODUCT_REPORT_PATH
               value: /evidence/product-report.json
             - name: PRODUCT_HELM_RELEASE
@@ -122,12 +149,14 @@ ${nfs_env}
             - name: oidc-ca
               mountPath: /etc/aileron/oidc-ca
               readOnly: true
+${postgres_ca_mount}
       volumes:
         - name: evidence
           emptyDir: {}
         - name: oidc-ca
           secret:
             secretName: external-oidc-tls
+${postgres_ca_volume}
 EOF
 
 kube delete job "${job_name}" -n "${namespace}" --ignore-not-found --wait=true >/dev/null

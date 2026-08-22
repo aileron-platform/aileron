@@ -1,0 +1,82 @@
+{{- if .Values.ingress.public.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aileron-identity
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+  {{- with .Values.ingress.public.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.public.className }}
+  tls:
+    - hosts: [{{ .Values.ingress.public.hostname | quote }}]
+      secretName: {{ .Values.ingress.public.tlsSecretName }}
+  rules:
+    - host: {{ .Values.ingress.public.hostname | quote }}
+      http:
+        paths:
+          - path: /realms/master/protocol/openid-connect
+            pathType: Prefix
+            backend:
+              service:
+                name: aileron-identity-keycloak
+                port:
+                  name: http
+          - path: /realms/master/login-actions
+            pathType: Prefix
+            backend:
+              service:
+                name: aileron-identity-keycloak
+                port:
+                  name: http
+          - path: /realms/{{ .Values.realm }}
+            pathType: Prefix
+            backend:
+              service:
+                name: aileron-identity-keycloak
+                port:
+                  name: http
+          - path: /resources
+            pathType: Prefix
+            backend:
+              service:
+                name: aileron-identity-keycloak
+                port:
+                  name: http
+{{- end }}
+{{- if .Values.ingress.admin.enabled }}
+---
+{{- if not .Values.ingress.admin.allowedCidrs }}
+{{- fail "ingress.admin.allowedCidrs must be non-empty when the admin ingress is enabled" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aileron-identity-admin
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ join "," .Values.ingress.admin.allowedCidrs | quote }}
+    {{- with .Values.ingress.admin.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.admin.className }}
+  tls:
+    - hosts: [{{ .Values.ingress.admin.hostname | quote }}]
+      secretName: {{ .Values.ingress.admin.tlsSecretName }}
+  rules:
+    - host: {{ .Values.ingress.admin.hostname | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: aileron-identity-keycloak
+                port:
+                  name: http
+{{- end }}

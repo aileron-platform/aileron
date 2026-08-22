@@ -1,0 +1,4 @@
+{{- $expectedIssuer := printf "https://%s/realms/%s" .Values.ingress.public.hostname .Values.realm -}}
+{{- if ne .Values.issuerUrl $expectedIssuer -}}
+{{- fail (printf "issuerUrl must equal the public Identity hostname and realm: %s" $expectedIssuer) -}}
+{{- end -}}

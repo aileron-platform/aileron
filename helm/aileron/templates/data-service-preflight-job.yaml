@@ -1,0 +1,189 @@
+{{- $platformDatabaseCASecretName := "" }}
+{{- $platformDatabaseCASecretKey := "" }}
+{{- if not .Values.postgres.enabled }}
+{{- $platformDatabaseCASecretName = .Values.platformDatabase.caSecretName | default "" | trim }}
+{{- $platformDatabaseCASecretKey = .Values.platformDatabase.caSecretKey | default "" | trim }}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aileron.fullname" . }}-data-service-preflight
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-service-preflight
+  {{- if not .Values.postgres.enabled }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade,pre-rollback
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  {{- end }}
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentPodLabels" (dict "component" "data-service-preflight" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+        {{- with .Values.kubernetes.platformStorageGid }}
+        fsGroup: {{ . }}
+        fsGroupChangePolicy: OnRootMismatch
+        {{- end }}
+      containers:
+        - name: data-service-preflight
+          image: {{ include "aileron.imageReference" (dict "name" "workspaceManager.image" "image" .Values.workspaceManager.image "production" .Values.security.requireStrongSecrets) | quote }}
+          imagePullPolicy: {{ .Values.workspaceManager.image.pullPolicy }}
+          {{- if .Values.postgres.enabled }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              attempts=0
+              until /workspace-manager/.venv/bin/python /opt/aileron/data-service-preflight.py; do
+                attempts=$((attempts + 1))
+                if [ "${attempts}" -ge 150 ]; then
+                  echo "bundled data-service preflight did not become ready" >&2
+                  exit 1
+                fi
+                sleep 2
+              done
+          {{- else }}
+          command:
+            - /workspace-manager/.venv/bin/python
+            - /opt/aileron/data-service-preflight.py
+          {{- end }}
+          env:
+            - name: PREFLIGHT_SCOPE
+              value: {{ printf "%s:%s" .Release.Namespace .Release.Name | quote }}
+            - name: PLATFORM_DATABASE_MODE
+              value: {{ ternary "bundled" "external" .Values.postgres.enabled | quote }}
+            - name: PLATFORM_DATABASE_URL_FILE
+              value: /run/secrets/aileron/database-url
+            - name: GENERAL_REDIS_URL_FILE
+              value: /run/secrets/aileron-redis/general-url
+            - name: JOB_QUEUE_REDIS_URL_FILE
+              value: /run/secrets/aileron-redis/job-queue-url
+            - name: JOB_RESULT_REDIS_URL_FILE
+              value: /run/secrets/aileron-redis/job-result-url
+            {{- if not .Values.redis.enabled }}
+            {{- with .Values.redis.connections.general.caSecretName }}
+            - name: GENERAL_REDIS_CA_FILE
+              value: /etc/aileron/data-service-ca/redis-general/ca.crt
+            {{- end }}
+            {{- with .Values.redis.connections.jobQueue.caSecretName }}
+            - name: JOB_QUEUE_REDIS_CA_FILE
+              value: /etc/aileron/data-service-ca/redis-job-queue/ca.crt
+            {{- end }}
+            {{- with .Values.redis.connections.jobResult.caSecretName }}
+            - name: JOB_RESULT_REDIS_CA_FILE
+              value: /etc/aileron/data-service-ca/redis-job-result/ca.crt
+            {{- end }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.workspaceManager.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: preflight-script
+              mountPath: /opt/aileron
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: platform-database-url
+              mountPath: /run/secrets/aileron
+              readOnly: true
+            {{- if ne $platformDatabaseCASecretName "" }}
+            - name: platform-database-ca
+              mountPath: /etc/aileron/data-service-ca/platform-database
+              readOnly: true
+            {{- end }}
+            - name: redis-connection-urls
+              mountPath: /run/secrets/aileron-redis
+              readOnly: true
+            {{- if not .Values.redis.enabled }}
+            {{- range $name, $connection := dict "redis-general" .Values.redis.connections.general "redis-job-queue" .Values.redis.connections.jobQueue "redis-job-result" .Values.redis.connections.jobResult }}
+            {{- if $connection.caSecretName }}
+            - name: {{ $name }}-ca
+              mountPath: /etc/aileron/data-service-ca/{{ $name }}
+              readOnly: true
+            {{- end }}
+            {{- end }}
+            {{- end }}
+      volumes:
+        - name: preflight-script
+          configMap:
+            name: {{ include "aileron.fullname" . }}-data-service-preflight
+            defaultMode: 0555
+        - name: tmp
+          emptyDir: {}
+        - name: platform-database-url
+          secret:
+            secretName: {{ .Values.platformSecrets.existingSecretName }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.platformSecrets.databaseUrlKey }}
+                path: database-url
+        {{- if ne $platformDatabaseCASecretName "" }}
+        - name: platform-database-ca
+          secret:
+            secretName: {{ $platformDatabaseCASecretName }}
+            defaultMode: 0444
+            items:
+              - key: {{ $platformDatabaseCASecretKey }}
+                path: ca.crt
+        {{- end }}
+        - name: redis-connection-urls
+          projected:
+            defaultMode: 0440
+            sources:
+              {{- if .Values.redis.enabled }}
+              - configMap:
+                  name: {{ include "aileron.fullname" . }}-redis-connections
+                  items:
+                    - key: general-url
+                      path: general-url
+                    - key: job-queue-url
+                      path: job-queue-url
+                    - key: job-result-url
+                      path: job-result-url
+              {{- else }}
+              - secret:
+                  name: {{ .Values.redis.connections.general.urlSecretName }}
+                  items:
+                    - key: {{ .Values.redis.connections.general.urlSecretKey }}
+                      path: general-url
+              - secret:
+                  name: {{ .Values.redis.connections.jobQueue.urlSecretName }}
+                  items:
+                    - key: {{ .Values.redis.connections.jobQueue.urlSecretKey }}
+                      path: job-queue-url
+              - secret:
+                  name: {{ .Values.redis.connections.jobResult.urlSecretName }}
+                  items:
+                    - key: {{ .Values.redis.connections.jobResult.urlSecretKey }}
+                      path: job-result-url
+              {{- end }}
+        {{- if not .Values.redis.enabled }}
+        {{- range $name, $connection := dict "redis-general" .Values.redis.connections.general "redis-job-queue" .Values.redis.connections.jobQueue "redis-job-result" .Values.redis.connections.jobResult }}
+        {{- if $connection.caSecretName }}
+        - name: {{ $name }}-ca
+          secret:
+            secretName: {{ $connection.caSecretName }}
+            defaultMode: 0444
+            items:
+              - key: {{ $connection.caSecretKey }}
+                path: ca.crt
+        {{- end }}
+        {{- end }}
+        {{- end }}

@@ -126,7 +126,7 @@ class ExternalOidcFixtureClient:
             200,
             operation=f"bootstrap Manager session for {username}",
         )
-        csrf = bootstrap.json().get("csrfToken") or bootstrap.json().get("csrf_token")
+        csrf = bootstrap.json().get("csrf_token")
         if not isinstance(csrf, str) or not csrf:
             raise AssertionError(f"Manager BFF did not issue CSRF state for {username}")
         return cookie, csrf
@@ -140,10 +140,12 @@ class ManagerClient:
         http: httpx.Client,
         *,
         base_url: str,
+        public_origin: str,
         sessions: dict[str, tuple[str, str]],
     ) -> None:
         self.http = http
         self.base_url = base_url.rstrip("/")
+        self.public_origin = public_origin
         self.sessions = sessions
 
     def request(
@@ -163,6 +165,7 @@ class ManagerClient:
         headers["Cookie"] = f"aileron_session={session[0]}"
         if method.upper() not in {"GET", "HEAD", "OPTIONS"}:
             headers["X-CSRF-Token"] = session[1]
+            headers["Origin"] = self.public_origin
         return self.http.request(
             method,
             f"{self.base_url}{normalized_path}",

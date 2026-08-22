@@ -1,0 +1,14 @@
+{{- if .Values.redis.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aileron.fullname" . }}-redis-connections
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis-connections
+data:
+  general-url: {{ printf "redis://%s-redis:%d/0" (include "aileron.fullname" .) (int .Values.redis.service.port) | quote }}
+  job-queue-url: {{ printf "redis://%s-redis:%d/0" (include "aileron.fullname" .) (int .Values.redis.service.port) | quote }}
+  job-result-url: {{ printf "redis://%s-redis:%d/1" (include "aileron.fullname" .) (int .Values.redis.service.port) | quote }}
+{{- end }}

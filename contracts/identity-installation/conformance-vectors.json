@@ -1,0 +1,74 @@
+[
+  {
+    "name": "valid bundled Keycloak",
+    "valid": true,
+    "profile": {
+      "mode": "bundledKeycloak",
+      "bundledKeycloak": {
+        "chartPath": "helm/aileron-identity",
+        "releaseName": "aileron-identity",
+        "namespace": "aileron-identity-system",
+        "issuerUrl": "https://identity.example.test/realms/aileron",
+        "clientId": "aileron-manager",
+        "clientSecretRef": {"name": "aileron-oidc-client", "key": "client-secret"},
+        "caSecretRef": {"name": "aileron-oidc-ca", "key": "ca.crt"}
+      }
+    }
+  },
+  {
+    "name": "valid external OIDC",
+    "valid": true,
+    "profile": {
+      "mode": "externalOidc",
+      "externalOidc": {
+        "issuerUrl": "https://authentik.example.test/application/o/aileron/",
+        "clientId": "aileron-manager",
+        "clientSecretRef": {"name": "external-oidc-client", "key": "client-secret"},
+        "caSecretRef": {"name": "external-oidc-ca", "key": "ca.crt"}
+      }
+    }
+  },
+  {
+    "name": "reject both modes",
+    "valid": false,
+    "profile": {
+      "mode": "bundledKeycloak",
+      "bundledKeycloak": {
+        "chartPath": "helm/aileron-identity",
+        "releaseName": "aileron-identity",
+        "namespace": "aileron-identity-system",
+        "issuerUrl": "https://identity.example.test/realms/aileron",
+        "clientId": "aileron-manager",
+        "clientSecretRef": {"name": "aileron-oidc-client", "key": "client-secret"},
+        "caSecretRef": {"name": "aileron-oidc-ca", "key": "ca.crt"}
+      },
+      "externalOidc": {
+        "issuerUrl": "https://authentik.example.test/application/o/aileron/",
+        "clientId": "aileron-manager",
+        "clientSecretRef": {"name": "external-oidc-client", "key": "client-secret"},
+        "caSecretRef": {"name": "external-oidc-ca", "key": "ca.crt"}
+      }
+    }
+  },
+  {
+    "name": "reject missing selected adapter",
+    "valid": false,
+    "profile": {"mode": "externalOidc"}
+  },
+  {
+    "name": "reject core chart as identity owner",
+    "valid": false,
+    "profile": {
+      "mode": "bundledKeycloak",
+      "bundledKeycloak": {
+        "chartPath": "helm/aileron",
+        "releaseName": "aileron-identity",
+        "namespace": "aileron-identity-system",
+        "issuerUrl": "https://identity.example.test/realms/aileron",
+        "clientId": "aileron-manager",
+        "clientSecretRef": {"name": "aileron-oidc-client", "key": "client-secret"},
+        "caSecretRef": {"name": "aileron-oidc-ca", "key": "ca.crt"}
+      }
+    }
+  }
+]

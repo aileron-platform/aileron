@@ -1,0 +1,9 @@
+ARG DOCKER_CLI_IMAGE=docker:27-cli@sha256:f56779b4e86550493153cc8642c9c8e40b5d934e43cb5b4ea463aea5245c5c01
+FROM ${DOCKER_CLI_IMAGE}
+
+ARG SOURCE_REVISION=development
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
+
+COPY --chmod=0555 scripts/test/compose-e2e/run.sh /usr/local/bin/aileron-compose-e2e
+
+ENTRYPOINT ["/usr/local/bin/aileron-compose-e2e"]

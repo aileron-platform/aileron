@@ -7,7 +7,16 @@ chart_dir="helm/aileron"
 runtime_namespace="workspace-system"
 turn_test_secret="external-turn-ice"
 work_dir="$(mktemp -d)"
-trap 'rm -rf "${work_dir}"' EXIT HUP INT TERM
+active_nginx_config=
+
+cleanup() {
+  if [ -n "${active_nginx_config}" ] && command -v nginx >/dev/null 2>&1; then
+    nginx -s stop -c "${active_nginx_config}" >/dev/null 2>&1 || true
+  fi
+  rm -rf "${work_dir}"
+}
+
+trap cleanup EXIT HUP INT TERM
 
 fail() {
   echo "Helm platform assertion failed: $*" >&2
@@ -15,28 +24,85 @@ fail() {
 }
 
 assert_contains() {
-  file="$1"
-  pattern="$2"
-  description="$3"
-  grep -Fq -- "${pattern}" "${file}" || fail "${description}"
+  assertion_file="$1"
+  assertion_pattern="$2"
+  assertion_description="$3"
+  grep -Fq -- "${assertion_pattern}" "${assertion_file}" || fail "${assertion_description}"
 }
 
 assert_absent() {
-  file="$1"
-  pattern="$2"
-  description="$3"
-  if grep -Fq -- "${pattern}" "${file}"; then
-    fail "${description}"
+  assertion_file="$1"
+  assertion_pattern="$2"
+  assertion_description="$3"
+  if grep -Fq -- "${assertion_pattern}" "${assertion_file}"; then
+    fail "${assertion_description}"
   fi
 }
 
 assert_minimum_count() {
-  file="$1"
-  pattern="$2"
-  minimum="$3"
-  description="$4"
-  count="$(grep -Fc -- "${pattern}" "${file}" || true)"
-  [ "${count}" -ge "${minimum}" ] || fail "${description}: found ${count}, expected at least ${minimum}"
+  assertion_file="$1"
+  assertion_pattern="$2"
+  assertion_minimum="$3"
+  assertion_description="$4"
+  assertion_count="$(grep -Fc -- "${assertion_pattern}" "${assertion_file}" || true)"
+  [ "${assertion_count}" -ge "${assertion_minimum}" ] || fail "${assertion_description}: found ${assertion_count}, expected at least ${assertion_minimum}"
+}
+
+assert_exact_count() {
+  assertion_file="$1"
+  assertion_pattern="$2"
+  assertion_expected="$3"
+  assertion_description="$4"
+  assertion_count="$(grep -Fc -- "${assertion_pattern}" "${assertion_file}" || true)"
+  [ "${assertion_count}" -eq "${assertion_expected}" ] || fail "${assertion_description}: found ${assertion_count}, expected ${assertion_expected}"
+}
+
+ensure_nginx() {
+  if command -v nginx >/dev/null 2>&1; then
+    return
+  fi
+  command -v apk >/dev/null 2>&1 || fail "nginx is required for rendered configuration validation"
+  apk add --no-cache nginx >/dev/null 2>&1 || fail "could not install nginx for rendered configuration validation"
+}
+
+validate_frontend_nginx_config() {
+  validation_config="$1"
+  validation_platform="$2"
+  validation_root="${work_dir}/${validation_platform}-frontend-root"
+  validation_port=$((18000 + ($$ % 1000)))
+
+  mkdir -p "${validation_root}"
+  printf '%s\n' 'aileron-workspace-spa-root' > "${validation_root}/index.html"
+  chmod 755 "${work_dir}"
+  chmod 755 "${validation_root}"
+  sed -i -E 's#resolver [^;]+ valid=10s ipv6=off;#resolver 127.0.0.1 valid=10s ipv6=off;#' "${validation_config}"
+  sed -i -E 's#[A-Za-z0-9.-]+-workspace-manager\.[A-Za-z0-9.-]+\.svc\.cluster\.local#127.0.0.1#g' "${validation_config}"
+  sed -i "s/listen       8082;/listen       ${validation_port};/" "${validation_config}"
+  sed -i "s#root   /tmp/aileron-html;#root   ${validation_root};#g" "${validation_config}"
+  nginx -t -c "${validation_config}" >/dev/null
+  nginx -T -c "${validation_config}" >/dev/null
+
+  [ "${validation_platform}" = default ] || return 0
+
+  nginx -c "${validation_config}"
+  active_nginx_config="${validation_config}"
+  sleep 0.2
+  validation_failure=
+  validation_workspace_id=11111111-1111-4111-8111-111111111111
+  for validation_suffix in runtime runtime/ browser browser/ canvas canvas/; do
+    if validation_response="$(wget -qO- "http://127.0.0.1:${validation_port}/workspaces/${validation_workspace_id}/${validation_suffix}")"; then
+      if [ "${validation_response}" != 'aileron-workspace-spa-root' ]; then
+        validation_failure="Workspace SPA root /${validation_suffix} returned an unexpected response"
+        break
+      fi
+    else
+      validation_failure="Workspace SPA root /${validation_suffix} was intercepted by a gateway location"
+      break
+    fi
+  done
+  nginx -s stop -c "${validation_config}" >/dev/null
+  active_nginx_config=
+  [ -z "${validation_failure}" ] || fail "${validation_platform}: ${validation_failure}"
 }
 
 assert_render_fails() {
@@ -60,11 +126,11 @@ assert_render_fails() {
 }
 
 assert_yaml() {
-  file="$1"
-  expression="$2"
-  description="$3"
-  if ! yq eval-all -e "${expression}" "${file}" >/dev/null; then
-    fail "${description}"
+  assertion_file="$1"
+  assertion_expression="$2"
+  assertion_description="$3"
+  if ! yq eval-all -e "${assertion_expression}" "${assertion_file}" >/dev/null; then
+    fail "${assertion_description}"
   fi
 }
 
@@ -113,12 +179,16 @@ assert_identity_provisioning_contract() {
     "identity: Workspace Operator must not receive external OIDC configuration"
   assert_yaml \
     "${file}" \
-    '[select(.kind == "Job" and (.metadata.name | test("-admin-bootstrap$")))] | .[0] as $job | [($job.metadata.namespace == "workspace-system"), ($job.metadata.annotations."helm.sh/hook" == "post-install,post-upgrade"), ($job.metadata.annotations."helm.sh/hook-weight" == "10"), ($job.metadata.annotations."helm.sh/hook-delete-policy" == "before-hook-creation,hook-succeeded"), ($job.spec.template.spec.restartPolicy == "OnFailure"), ($job.spec.template.spec.automountServiceAccountToken == false), ($job.spec.template.spec.securityContext.runAsNonRoot == true)] | all' \
+    '[select(.kind == "Job" and (.metadata.name | test("-admin-bootstrap$")))] | .[0] as $job | [($job.metadata.namespace == "workspace-system"), (($job.metadata.annotations // {}) | has("helm.sh/hook") | not), (($job.spec | has("ttlSecondsAfterFinished")) | not), ($job.spec.template.spec.restartPolicy == "OnFailure"), ($job.spec.template.spec.serviceAccountName | test("-data-service-gate$")), ($job.spec.template.spec.automountServiceAccountToken == true), ($job.spec.template.spec.securityContext.runAsNonRoot == true), (($job.spec.template.spec.initContainers | map(select(.name == "wait-for-platform-schema"))) | length == 1)] | all' \
     "identity: administrator bootstrap Job metadata contract is invalid"
   assert_yaml \
     "${file}" \
-    '[select(.kind == "Job" and (.metadata.name | test("-admin-bootstrap$")))] | .[0] as $job | ($job.spec.template.spec.containers) as $containers | ($containers[0].env | map(select(.name == "DATABASE_URL_FILE"))) as $database | ($containers[0].env | map(select(.name == "OIDC_ISSUER_URL"))) as $issuer | ($containers[0].env | map(select(.name == "BOOTSTRAP_ADMIN_SUBJECT"))) as $subject | ($containers[0].env | map(select(.name == "BOOTSTRAP_ADMIN_USERNAME"))) as $username | ($containers[0].env | map(select(.name == "BOOTSTRAP_ADMIN_EMAIL"))) as $email | ($job.spec.template.spec.volumes | map(select(.name == "platform-secrets"))) as $volumes | [ (($containers | length) == 1), ($containers[0].name == "bootstrap-administrator"), ($containers[0].command[2] | contains("/workspace-manager/scripts/bootstrap_admin_user.py")), (($containers[0].command | join(" ") | contains("--subject"))), (($containers[0].command | join(" ") | contains("--password-file")) | not), (($database | length) == 1), ($database[0].value == "/run/secrets/aileron/database-url"), (($issuer | length) == 1), ($issuer[0].valueFrom.configMapKeyRef.key == "OIDC_ISSUER_URL"), ($subject[0].value == "00000000-0000-4000-8000-000000000001"), ($username[0].value == "admin"), ($email[0].value == "admin@aileron.com"), (($containers[0].volumeMounts | map(select(.name == "platform-secrets" and .mountPath == "/run/secrets/aileron" and .readOnly == true)) | length) == 1), (($volumes | length) == 1), ($volumes[0].secret.secretName == "aileron-platform-secrets"), ($volumes[0].secret.items[0].path == "database-url") ] | all' \
+    '[select(.kind == "Job" and (.metadata.name | test("-admin-bootstrap$")))] | .[0] as $job | ($job.spec.template.spec.containers) as $containers | ($containers[0].env | map(select(.name == "DATABASE_URL_FILE"))) as $database | ($containers[0].env | map(select(.name == "OIDC_ISSUER_URL"))) as $issuer | ($containers[0].env | map(select(.name == "BOOTSTRAP_ADMIN_SUBJECT"))) as $subject | ($containers[0].env | map(select(.name == "BOOTSTRAP_ADMIN_USERNAME"))) as $username | ($containers[0].env | map(select(.name == "BOOTSTRAP_ADMIN_EMAIL"))) as $email | ($job.spec.template.spec.volumes | map(select(.name == "platform-secrets"))) as $volumes | [ (($containers | length) == 1), ($containers[0].name == "bootstrap-administrator"), ($containers[0].command[2] | contains("/workspace-manager/scripts/bootstrap_admin_user.py")), (($containers[0].command | join(" ") | contains("--subject"))), (($containers[0].command | join(" ") | contains("--password-file")) | not), (($database | length) == 1), ($database[0].value == "/run/secrets/aileron/database-url"), (($issuer | length) == 1), ($issuer[0].value == "https://login.example.com/realms/aileron"), ($subject[0].value == "00000000-0000-4000-8000-000000000001"), ($username[0].value == "admin"), ($email[0].value == "admin@aileron.com"), (($containers[0].volumeMounts | map(select(.name == "platform-secrets" and .mountPath == "/run/secrets/aileron" and .readOnly == true)) | length) == 1), (($volumes | length) == 1), ($volumes[0].secret.secretName == "aileron-platform-secrets"), ($volumes[0].secret.items[0].path == "database-url") ] | all' \
     "identity: administrator bootstrap container contract is invalid"
+  assert_yaml \
+    "${file}" \
+    '[select(.kind == "Job" and (.metadata.name | test("-admin-bootstrap$")))] | .[0].spec.template.spec.containers[0].env as $env | [($env | map(select(.name == "OIDC_CLIENT_ID" and .value == "aileron-manager")) | length == 1), ($env | map(select(.name == "PLATFORM_PUBLIC_ORIGIN" and .value == "https://aileron.localhost")) | length == 1)] | all' \
+    "identity: administrator bootstrap must receive required application settings"
   assert_yaml \
     "${file}" \
     '[select(.kind == "Job" and (.metadata.name | test("-admin-bootstrap$")))] | .[0].spec.template.spec.containers[0].resources as $resources | [($resources.requests.cpu == "25m"), ($resources.requests.memory == "64Mi"), ($resources.limits.cpu == "250m"), ($resources.limits.memory == "256Mi")] | all' \
@@ -130,6 +200,7 @@ assert_identity_provisioning_contract() {
 assert_platform_service_contract() {
   platform_contract_file="$1"
   platform="$2"
+  expected_dns_resolver="${3:-kube-dns.kube-system.svc.cluster.local}"
   nginx_config="${work_dir}/${platform}-frontend-nginx.conf"
 
   yq eval-all -r \
@@ -142,12 +213,61 @@ assert_platform_service_contract() {
     "${platform}: workload Pod ownership labels are invalid"
   assert_yaml \
     "${platform_contract_file}" \
-    '[select(.kind == "ConfigMap" and (.metadata.name | test("-frontend-nginx$")))] | .[0].data."nginx.conf" as $config | [ ($config | contains("pid /tmp/nginx.pid;")), ($config | contains("root   /tmp/aileron-html;")), ($config | contains("client_body_temp_path /tmp/client_temp;")), ($config | contains("/usr/share/nginx/html") | not) ] | all' \
+    "[select(.kind == \"ConfigMap\" and (.metadata.name | test(\"-frontend-nginx$\")))] | .[0].data.\"nginx.conf\" as \$config | [ (\$config | contains(\"pid /tmp/nginx.pid;\")), (\$config | contains(\"root   /tmp/aileron-html;\")), (\$config | contains(\"client_body_temp_path /tmp/client_temp;\")), (\$config | contains(\"resolver ${expected_dns_resolver} valid=10s ipv6=off;\")), (\$config | contains(\"/usr/share/nginx/html\") | not) ] | all" \
     "${platform}: Frontend Nginx arbitrary-UID paths are invalid"
-  assert_yaml \
-    "${platform_contract_file}" \
-    '[select(.kind == "ConfigMap" and (.metadata.name | test("-frontend-nginx$")))] | .[0].data."nginx.conf" as $config | [($config | contains("/runtime/ws/terminal")), ($config | contains("proxy_pass http://workspace-runtime-$workspace_id.workspace-system.svc.cluster.local:3004;")), ($config | contains("proxy_pass http://workspace-$workspace_component-$workspace_id.workspace-system.svc.cluster.local:$workspace_service_port;"))] | all' \
-    "${platform}: Frontend Nginx terminal route must target the Runtime terminal port"
+  if [ "${platform}" != "ocp" ]; then
+    assert_yaml \
+      "${platform_contract_file}" \
+      '[select(.kind == "Job" and ((.metadata.name // "") | test("-(postgres|admin)-bootstrap$")))] | map(.spec.template.spec.securityContext.fsGroup == 2000 and .spec.template.spec.securityContext.fsGroupChangePolicy == "OnRootMismatch") | all' \
+      "${platform}: bootstrap Jobs must be able to read group-projected Secret files"
+  fi
+  assert_contains \
+    "${nginx_config}" \
+    'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/runtime/ws/terminal(?<gateway_path>/.*)?$"' \
+    "${platform}: Frontend Nginx terminal route is invalid"
+  assert_contains "${nginx_config}" 'proxy_pass http://workspace-runtime-$workspace_id.workspace-system.svc.cluster.local:3004;' "${platform}: terminal route must target the Runtime terminal port"
+  assert_contains \
+    "${nginx_config}" \
+    'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/runtime/.+"' \
+    "${platform}: Runtime proxy route must require a non-empty suffix"
+  assert_contains "${nginx_config}" 'proxy_pass http://workspace-runtime-$workspace_id.workspace-system.svc.cluster.local:3002;' "${platform}: Runtime route upstream is invalid"
+  assert_contains \
+    "${nginx_config}" \
+    'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/browser/.+"' \
+    "${platform}: Browser proxy route must require a non-empty suffix"
+  assert_contains "${nginx_config}" 'rewrite ^/workspaces/[0-9a-f-]+/browser(/.*)$ $1 break;' "${platform}: Browser route rewrite is invalid"
+  assert_contains "${nginx_config}" 'proxy_pass http://workspace-browser-$workspace_id.workspace-system.svc.cluster.local:6080;' "${platform}: Browser route upstream is invalid"
+  assert_contains "${nginx_config}" 'proxy_set_header X-Forwarded-Prefix /workspaces/$workspace_id/browser;' "${platform}: Browser forwarded prefix is invalid"
+  assert_contains \
+    "${nginx_config}" \
+    'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/canvas/.+"' \
+    "${platform}: Canvas proxy route must require a non-empty suffix"
+  assert_contains "${nginx_config}" 'rewrite ^/workspaces/[0-9a-f-]+/canvas(/.*)$ $1 break;' "${platform}: Canvas route rewrite is invalid"
+  assert_contains "${nginx_config}" 'proxy_pass http://workspace-canvas-$workspace_id.workspace-system.svc.cluster.local:3003;' "${platform}: Canvas route upstream is invalid"
+  assert_contains "${nginx_config}" 'proxy_set_header X-Forwarded-Prefix /workspaces/$workspace_id/canvas;' "${platform}: Canvas forwarded prefix is invalid"
+  assert_absent \
+    "${nginx_config}" \
+    'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/runtime/(?<gateway_path>.*)$"' \
+    "${platform}: broad Runtime route can intercept the SPA root"
+  assert_absent \
+    "${nginx_config}" \
+    'location ~ "^/workspaces/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/(browser|canvas)(/.*)?$"' \
+    "${platform}: combined Browser/Canvas route can intercept SPA roots"
+  assert_absent "${nginx_config}" 'rewrite ^/workspaces/[0-9a-f-]+/(browser|canvas)(/.*)?$ $2 break;' "${platform}: component-dependent Browser/Canvas rewrite is forbidden"
+  assert_absent "${nginx_config}" 'proxy_pass http://workspace-$workspace_component-$workspace_id.workspace-system.svc.cluster.local:$workspace_service_port;' "${platform}: component-dependent Browser/Canvas upstream is forbidden"
+  assert_exact_count "${nginx_config}" 'location ~ "^/workspaces/' 4 "${platform}: only four exact Workspace proxy locations may precede the SPA fallback"
+  gateway_count="$(yq eval-all '[select(.kind == "Service" and (.metadata.name | test("-connectivity-evidence-gateway$")))] | length' "${platform_contract_file}")"
+  if [ "${gateway_count}" -eq 1 ]; then
+    assert_yaml \
+      "${platform_contract_file}" \
+      '[select(.kind == "ConfigMap" and (.metadata.name | test("-frontend-nginx$")))] | .[0].data."nginx.conf" as $config | [($config | contains("location ^~ /api/v1/connectivity-evidence")), ($config | contains("proxy_pass http://aileron-connectivity-evidence-gateway.workspace-system.svc.cluster.local:8083;"))] | all' \
+      "${platform}: Frontend Nginx must route public connectivity evidence to the Gateway"
+  else
+    assert_absent \
+      "${nginx_config}" \
+      'location ^~ /api/v1/connectivity-evidence' \
+      "${platform}: Frontend Nginx must not route connectivity evidence when the Gateway is absent"
+  fi
   for directive in \
     'proxy_set_header Host $http_host;' \
     'proxy_set_header X-Forwarded-Host $http_host;' \
@@ -158,13 +278,17 @@ assert_platform_service_contract() {
     'proxy_cache off;' \
     'proxy_read_timeout 3600s;' \
     'proxy_send_timeout 3600s;'; do
-    assert_minimum_count "${nginx_config}" "${directive}" 4 "${platform}: Frontend Nginx same-origin streaming directive is incomplete"
+    assert_minimum_count "${nginx_config}" "${directive}" 5 "${platform}: Frontend Nginx same-origin streaming directive is incomplete"
   done
-  assert_minimum_count "${nginx_config}" 'auth_request /_aileron_workspace_gateway_authorize;' 3 "${platform}: Workspace routes must enforce the Manager authorization gate"
-  assert_minimum_count "${nginx_config}" 'proxy_set_header Authorization $http_authorization;' 3 "${platform}: Manager and Runtime routes must preserve bearer authorization"
-  assert_minimum_count "${nginx_config}" 'proxy_set_header Cookie $http_cookie;' 1 "${platform}: Manager API route must preserve its session cookie"
-  assert_minimum_count "${nginx_config}" 'proxy_set_header Cookie "";' 3 "${platform}: Workspace upstreams must not receive browser cookies"
-  assert_minimum_count "${nginx_config}" 'proxy_set_header Authorization "";' 2 "${platform}: Authorization subrequest and browser workloads must clear bearer credentials"
+  assert_exact_count "${nginx_config}" 'auth_request /_aileron_workspace_gateway_authorize;' 4 "${platform}: all four Workspace routes must enforce the Manager authorization gate"
+  assert_exact_count "${nginx_config}" 'proxy_set_header Authorization $http_authorization;' 3 "${platform}: Manager and Runtime routes must preserve bearer authorization"
+  assert_exact_count "${nginx_config}" 'proxy_set_header Cookie $http_cookie;' 1 "${platform}: only Manager API may receive its session cookie"
+  assert_exact_count "${nginx_config}" 'proxy_set_header Cookie "";' 4 "${platform}: all four Workspace upstreams must clear browser cookies"
+  assert_exact_count "${nginx_config}" 'proxy_set_header Authorization "";' 3 "${platform}: authorization subrequest, Browser, and Canvas must clear bearer credentials"
+  assert_exact_count "${nginx_config}" 'proxy_set_header Proxy-Authorization "";' 5 "${platform}: authorization subrequest and all four Workspace upstreams must clear proxy credentials"
+  assert_exact_count "${nginx_config}" 'proxy_set_header X-API-Key "";' 5 "${platform}: authorization subrequest and all four Workspace upstreams must clear API keys"
+  assert_exact_count "${nginx_config}" 'proxy_set_header X-CSRF-Token "";' 5 "${platform}: authorization subrequest and all four Workspace upstreams must clear CSRF tokens"
+  validate_frontend_nginx_config "${nginx_config}" "${platform}"
   assert_yaml \
     "${platform_contract_file}" \
     '[select(.kind == "Deployment" and ((.metadata.name // "") | test("-frontend$")))] | .[0] as $workload | ($workload.spec.template.spec.containers | map(select(.name == "frontend"))) as $containers | [($workload.spec.template.spec.automountServiceAccountToken == false), ($workload.spec.template.spec.securityContext.runAsNonRoot == true), ($workload.spec.template.spec.securityContext.seccompProfile.type == "RuntimeDefault"), ($workload.spec.template.spec.securityContext | has("runAsUser") | not), ($workload.spec.template.spec.securityContext | has("runAsGroup") | not), (($workload.spec.template.metadata.annotations."checksum/nginx-config" // "") | test("^[0-9a-f]{64}$")), (($containers | length) == 1), ($containers[0].securityContext.allowPrivilegeEscalation == false), ($containers[0].securityContext.readOnlyRootFilesystem == true), (($containers[0].securityContext.capabilities.drop | join(",")) == "ALL"), (($containers[0].volumeMounts | map(select(.name == "nginx-config" and .readOnly == true)) | length) == 1), (($containers[0].volumeMounts | map(select(.name == "tmp" and .mountPath == "/tmp")) | length) == 1), (($workload.spec.template.spec.volumes | map(select(.name == "tmp" and has("emptyDir"))) | length) == 1)] | all' \
@@ -175,8 +299,16 @@ assert_platform_service_contract() {
     "${platform}: Redis restricted-runtime contract is invalid"
   assert_yaml \
     "${platform_contract_file}" \
+    '[select(.kind == "StatefulSet" and (.metadata.name | test("-redis$")))] | .[0].spec.persistentVolumeClaimRetentionPolicy as $policy | [($policy.whenDeleted == "Delete"), ($policy.whenScaled == "Retain")] | all' \
+    "${platform}: Redis uninstall PVC retention contract is invalid"
+  assert_yaml \
+    "${platform_contract_file}" \
     '[select(.kind == "StatefulSet" and (.metadata.name | test("-postgres$")))] | .[0] as $workload | ($workload.spec.template.spec.containers | map(select(.name == "postgres"))) as $containers | [ ($workload.spec.template.spec.automountServiceAccountToken == false), ($workload.spec.template.spec.securityContext.runAsNonRoot == true), ($workload.spec.template.spec.securityContext.seccompProfile.type == "RuntimeDefault"), ($workload.spec.template.spec.securityContext | has("runAsUser") | not), ($workload.spec.template.spec.securityContext | has("runAsGroup") | not), (($containers | length) == 1), ($containers[0].image == "ailerondocker/platform-postgres:latest"), (($containers[0].env | map(select(.name == "POSTGRES_HOST_AUTH_METHOD" or .name == "KEYCLOAK_DATABASE")) | length) == 0), (($containers[0].env | map(select(.name == "POSTGRES_INITDB_ARGS" and .value == "--auth-host=scram-sha-256")) | length) == 1), (($containers[0].env | map(select(.name == "PGDATA" and .value == "/var/lib/postgresql/data/pgdata")) | length) == 1), ($containers[0].securityContext.allowPrivilegeEscalation == false), ($containers[0].securityContext.readOnlyRootFilesystem == true), (($containers[0].securityContext.capabilities.drop | join(",")) == "ALL"), ($containers[0].securityContext | has("runAsUser") | not), (($containers[0].volumeMounts | map(select(.name == "data" and .mountPath == "/var/lib/postgresql/data")) | length) == 1), (($containers[0].volumeMounts | map(select(.name == "init-sql" and .mountPath == "/docker-entrypoint-initdb.d" and .readOnly == true)) | length) == 1), (($containers[0].volumeMounts | map(select(.name == "postgres-run" and .mountPath == "/var/run/postgresql")) | length) == 1), (($containers[0].volumeMounts | map(select(.name == "tmp" and .mountPath == "/tmp")) | length) == 1), (($workload.spec.volumeClaimTemplates | map(select(.metadata.name == "data")) | length) == 1) ] | all' \
     "${platform}: Postgres restricted-runtime contract is invalid"
+  assert_yaml \
+    "${platform_contract_file}" \
+    '[select(.kind == "StatefulSet" and (.metadata.name | test("-postgres$")))] | .[0].spec.persistentVolumeClaimRetentionPolicy as $policy | [($policy.whenDeleted == "Delete"), ($policy.whenScaled == "Retain")] | all' \
+    "${platform}: Postgres uninstall PVC retention contract is invalid"
   assert_absent "${platform_contract_file}" ')\\gexec' "${platform}: PostgreSQL bootstrap SQL must keep psql meta-commands on their own line"
   if [ "${platform}" = "ocp" ]; then
     assert_yaml \
@@ -284,19 +416,24 @@ assert_workspace_platform_contract() {
     "${platform}: Manager existing platform Secret file mounts are invalid"
   assert_yaml \
     "${file}" \
+    'select(.kind == "Deployment" and (.metadata.name | test("-workspace-manager$"))) as $manager | ($manager.spec.template.spec.containers | map(select(.name == "workspace-manager")) | .[0]) as $container | ($container.env | map(select(.name == "REDIS_URL_FILE" or .name == "CELERY_BROKER_URL_FILE" or .name == "CELERY_RESULT_BACKEND_FILE"))) as $file_env | ($manager.spec.template.spec.volumes | map(select(.name == "manager-private-secrets")) | .[0].projected.sources) as $sources | [ (($container.env | map(select(.name == "REDIS_URL" or .name == "CELERY_BROKER_URL" or .name == "CELERY_RESULT_BACKEND")) | length) == 0), (($file_env | length) == 3), (($file_env | map(select(.name == "REDIS_URL_FILE" and .value == "/run/secrets/aileron/redis-general-url")) | length) == 1), (($file_env | map(select(.name == "CELERY_BROKER_URL_FILE" and .value == "/run/secrets/aileron/redis-job-queue-url")) | length) == 1), (($file_env | map(select(.name == "CELERY_RESULT_BACKEND_FILE" and .value == "/run/secrets/aileron/redis-job-result-url")) | length) == 1), (($sources | map(select(.secret.name == "platform-redis-general") | .secret.items[] | select(.key == "url" and .path == "redis-general-url")) | length) == 1), (($sources | map(select(.secret.name == "platform-redis-job-queue") | .secret.items[] | select(.key == "url" and .path == "redis-job-queue-url")) | length) == 1), (($sources | map(select(.secret.name == "platform-redis-job-result") | .secret.items[] | select(.key == "url" and .path == "redis-job-result-url")) | length) == 1), ($manager.spec.template.metadata.annotations."aileron.io/platform-database-revision" == "platform-database-v1"), ($manager.spec.template.metadata.annotations."aileron.io/redis-general-revision" == "redis-general-v1"), ($manager.spec.template.metadata.annotations."aileron.io/redis-job-queue-revision" == "redis-job-queue-v1"), ($manager.spec.template.metadata.annotations."aileron.io/redis-job-result-revision" == "redis-job-result-v1") ] | all' \
+    "${platform}: external Redis URLs must use three independent mounted Secret files"
+  assert_yaml \
+    "${file}" \
     '[select(.kind == "Deployment" or .kind == "Job") | .spec.template.spec.containers[] | .env[]? | select(.name == "DATABASE_URL" or .name == "PLATFORM_DATABASE_URL" or .name == "OIDC_CLIENT_SECRET" or .name == "PLATFORM_OIDC_CLIENT_SECRET" or .name == "TURN_SERVER_USERNAME" or .name == "TURN_SERVER_CREDENTIAL") | select(has("value"))] | length == 0' \
     "${platform}: workload specs contain a managed secret literal"
   assert_yaml \
     "${file}" \
     '[select(.kind == "Deployment" and (.metadata.name | test("-workspace-operator$")))] | .[0].spec.template.spec.containers | [ .[] | select(.name == "workspace-operator") ] | .[0].env | [ .[] | select(.name == "PLATFORM_DATABASE_URL" or .name == "PLATFORM_REDIS_URL" or .name == "PLATFORM_OIDC_CLIENT_SECRET") ] | length == 0' \
-    "${platform}: Operator must not receive platform database, Redis, or client-secret configuration"
+    "${platform}: Operator must not receive platform database URLs, Redis URLs, or client-secret configuration"
 
-  assert_yaml "${file}" '[select(.kind == "Role" and (.metadata.name | test("-workspace-manager$")))] | .[0].rules | length == 4' "${platform}: Manager RBAC rule count is invalid"
+  assert_yaml "${file}" '[select(.kind == "Role" and (.metadata.name | test("-workspace-manager$")))] | .[0].rules | length == 5' "${platform}: Manager RBAC rule count is invalid"
   assert_role_rule "${file}" -workspace-manager '["platform.aileron.io"]' '["workspaces"]' '["get", "create", "patch", "delete"]' "${platform}: Manager Workspace RBAC rule is invalid"
   assert_role_rule "${file}" -workspace-manager '[""]' '["pods"]' '["list"]' "${platform}: Manager Pod RBAC rule is invalid"
   assert_role_rule "${file}" -workspace-manager '[""]' '["persistentvolumeclaims"]' '["get"]' "${platform}: Manager knowledge-base PVC preflight RBAC rule is invalid"
   assert_yaml "${file}" '[select(.kind == "Role" and (.metadata.name | test("-workspace-manager$")))] | .[0].rules | [ .[] | select((.resources | join(",")) == "persistentvolumeclaims") ] as $rules | [ (($rules | length) == 1), (($rules[0].resourceNames | join(",")) == "knowledge-bases-pvc") ] | all' "${platform}: Manager knowledge-base PVC preflight RBAC resourceNames are invalid"
   assert_role_rule "${file}" -workspace-manager '[""]' '["secrets"]' '["create", "patch", "delete"]' "${platform}: Manager Runtime Secret RBAC rule is invalid"
+  assert_role_rule "${file}" -workspace-manager '["batch"]' '["jobs"]' '["get"]' "${platform}: Manager bootstrap gate RBAC rule is invalid"
 
   expected_operator_rules=9
   if [ "${cilium_enabled}" = "true" ]; then
@@ -333,6 +470,8 @@ assert_workspace_platform_contract() {
 }
 
 command -v yq >/dev/null 2>&1 || fail "yq is required for structured YAML assertions"
+ensure_nginx
+command -v wget >/dev/null 2>&1 || fail "wget is required for Workspace SPA root validation"
 ./scripts/test/helm/assert-workspace-storage-crd.sh
 
 assert_yaml \
@@ -357,7 +496,7 @@ assert_absent \
   "Workspace Operator generated RBAC must not include dynamic Ingresses"
 
 assert_render_fails \
-  'Additional property env is not allowed|Additional property extraEnv is not allowed|workspaceOperator.env: Must not validate the schema (not)' \
+  "additional properties|'env'|'extraEnv'|at '/workspaceOperator/env': 'not' failed" \
   'unknown environment surfaces were accepted' \
   --set-string workspaceManager.env.ARBITRARY_UNSUPPORTED_ENV=rejected \
   --set-string 'workspaceManager.extraEnv[0].name=ARBITRARY_UNSUPPORTED_ENV' \
@@ -367,6 +506,24 @@ assert_render_fails \
   'kubernetes.storageVerification.workspaceStorageClassName is required when storage verification is enabled' \
   'storage verification without a disposable Workspace StorageClass was accepted' \
   --set kubernetes.storageVerification.enabled=true
+assert_render_fails \
+  'ciliumEgress|missing property' \
+  'external platform database with Cilium but without an egress destination was accepted' \
+  --values "${chart_dir}/tests/values/platform-eks.yaml" \
+  --set cilium.enabled=true
+assert_render_fails \
+  "allOf|platformDatabase|'not' failed" \
+  'platform database Cilium egress destination was accepted while Cilium was disabled' \
+  --values "${chart_dir}/tests/values/platform-eks.yaml" \
+  --set-string platformDatabase.ciliumEgress.kind=cidrs \
+  --set-string 'platformDatabase.ciliumEgress.values[0]=10.0.0.0/8'
+assert_render_fails \
+  'kind|must be one of' \
+  'unsupported platform database Cilium egress destination was accepted' \
+  --values "${chart_dir}/tests/values/platform-eks.yaml" \
+  --set cilium.enabled=true \
+  --set-string platformDatabase.ciliumEgress.kind=ciliumEntities \
+  --set-string 'platformDatabase.ciliumEgress.values[0]=world'
 assert_render_fails \
   'kubernetes.storageVerification.managerStateStorageClassName is required when storage verification is enabled' \
   'storage verification without a disposable Manager state StorageClass was accepted' \
@@ -385,7 +542,7 @@ assert_render_fails \
   'invalid Manager state verification Kubernetes quantity was accepted' \
   --set-string kubernetes.storageVerification.managerStateSize=invalid
 assert_render_fails \
-  'bootstrap.admin.username|String length must be greater than or equal to 1' \
+  'bootstrap/admin/username|minLength' \
   'administrator bootstrap without a username was accepted' \
   --set-string bootstrap.admin.username=
 assert_render_fails \
@@ -393,7 +550,7 @@ assert_render_fails \
   'administrator bootstrap accepted a whitespace-only username' \
   --set-string 'bootstrap.admin.username=   '
 assert_render_fails \
-  'bootstrap.admin.email|email' \
+  'bootstrap/admin/email|not valid email' \
   'administrator bootstrap accepted an invalid email address' \
   --set-string bootstrap.admin.email=invalid-email
 assert_render_fails \
@@ -416,9 +573,13 @@ assert_render_fails \
   --set turn.enabled=true \
   --set-string turn.credentialRevision=
 assert_render_fails \
-  'Additional property provider is not allowed' \
+  "additional properties 'provider' not allowed" \
   'removed TURN provider inference field was accepted' \
   --set turn.provider=external
+assert_render_fails \
+  'frontend|dnsResolver|pattern' \
+  'Frontend accepted an invalid DNS resolver name' \
+  --set-string 'frontend.dnsResolver=invalid resolver'
 assert_render_fails \
   'connectivityEvidenceGateway.enabled must be true when required frontend vantages are configured' \
   'TURN accepted required frontend evidence without an evidence Gateway' \
@@ -431,11 +592,28 @@ assert_render_fails \
   --set connectivityEvidenceGateway.hostAgent.enabled=true \
   --set-string connectivityEvidenceGateway.hostAgent.vantageId=undeclared
 assert_render_fails \
-  'coturn.enabled requires turn.profile.credentialIssuer.kind=staticSecret' \
-  'bundled static TURN accepted the TURN REST issuer contract' \
+  "turn/profile/credentialIssuer/kind|value must be 'turnRest'" \
+  'TURN accepted the removed static credential issuer contract' \
   --set turn.enabled=true \
-  --set coturn.enabled=true \
-  --set-string turn.profile.credentialIssuer.kind=turnRest
+  --set-string turn.profile.credentialIssuer.kind=staticSecret
+
+external_data_service_tls_file="${work_dir}/external-data-service-tls.yaml"
+helm template aileron "${chart_dir}" \
+  --namespace "${runtime_namespace}" \
+  --values "${chart_dir}/tests/values/data-service-external-tls.yaml" \
+  > "${external_data_service_tls_file}"
+assert_yaml \
+  "${external_data_service_tls_file}" \
+  'select(.kind == "Deployment" and (.metadata.name | test("-workspace-manager$"))) as $manager | ($manager.spec.template.spec.containers | map(select(.name == "workspace-manager")) | .[0]) as $container | ($container.env | map(select(.name == "REDIS_CA_CERT_FILE" or .name == "CELERY_BROKER_CA_CERT_FILE" or .name == "CELERY_RESULT_BACKEND_CA_CERT_FILE"))) as $env | [ (($env | length) == 3), (($env | map(select(.name == "REDIS_CA_CERT_FILE" and .value == "/etc/aileron/data-service-ca/redis-general/ca.crt")) | length) == 1), (($env | map(select(.name == "CELERY_BROKER_CA_CERT_FILE" and .value == "/etc/aileron/data-service-ca/redis-job-queue/ca.crt")) | length) == 1), (($env | map(select(.name == "CELERY_RESULT_BACKEND_CA_CERT_FILE" and .value == "/etc/aileron/data-service-ca/redis-job-result/ca.crt")) | length) == 1), (($container.env | map(select(.name == "RUNTIME_DATABASE_CA_SECRET_NAME" and .value == "platform-database-ca")) | length) == 1), (($container.env | map(select(.name == "RUNTIME_DATABASE_CA_SECRET_KEY" and .value == "ca.pem")) | length) == 1), (($container.env | map(select(.name == "RUNTIME_DATABASE_CA_REVISION" and .value == "platform-database-v1")) | length) == 1), (($container.volumeMounts | map(select(.name | test("^redis-(general|job-queue|job-result)-ca$"))) | length) == 3), (($manager.spec.template.spec.volumes | map(select(.name | test("^redis-(general|job-queue|job-result)-ca$"))) | length) == 3) ] | all' \
+  "external data services: Manager Redis CA mounts are invalid"
+assert_yaml \
+  "${external_data_service_tls_file}" \
+  'select(.kind == "Job" and (.metadata.name | test("-data-service-preflight$"))) as $preflight | ($preflight.spec.template.spec.containers[0]) as $container | [ (($container.env | map(select(.name | test("^(GENERAL|JOB_QUEUE|JOB_RESULT)_REDIS_CA_FILE$"))) | length) == 3), (($container.env | map(select(.name == "PLATFORM_DATABASE_MODE" and .value == "external")) | length) == 1), (($container.volumeMounts | map(select(.name | test("^redis-(general|job-queue|job-result)-ca$"))) | length) == 3), (($preflight.spec.template.spec.volumes | map(select(.name | test("^redis-(general|job-queue|job-result)-ca$"))) | length) == 3) ] | all' \
+  "external data services: preflight Redis CA mounts are invalid"
+assert_yaml \
+  "${external_data_service_tls_file}" \
+  'select(.kind == "Deployment" and (.metadata.name | test("-workspace-operator$"))) | .spec.template.spec.containers[] | select(.name == "workspace-operator") | (.env | map(select(.name == "PLATFORM_DATABASE_CILIUM_EGRESS_JSON" and .value == "{\"kind\":\"namespacePods\",\"namespace\":\"platform-data\",\"podLabels\":{\"app.kubernetes.io/name\":\"postgres\"}}")) | length) == 1' \
+  "external data services: Operator platform database Cilium destination is invalid"
 
 for platform in eks gke aks ocp rke2 native-kubernetes; do
   values_file="${chart_dir}/tests/values/platform-${platform}.yaml"
@@ -449,6 +627,14 @@ for platform in eks gke aks ocp rke2 native-kubernetes; do
     --values "${values_file}" > "${rendered_file}"
 
   assert_workspace_platform_contract "${rendered_file}" "${platform}"
+
+  configured_dns_resolver="$(yq eval '.frontend.dnsResolver // ""' "${values_file}")"
+  if [ -n "${configured_dns_resolver}" ]; then
+    assert_yaml \
+      "${rendered_file}" \
+      "[select(.kind == \"ConfigMap\" and (.metadata.name | test(\"-frontend-nginx$\")))] | .[0].data.\"nginx.conf\" | contains(\"resolver ${configured_dns_resolver} valid=10s ipv6=off;\")" \
+      "${platform}: Frontend DNS resolver fixture did not reach Nginx"
+  fi
 
   workspace_verification_storage_class="$(yq eval '.kubernetes.storageVerification.workspaceStorageClassName' "${values_file}")"
   manager_verification_storage_class="$(yq eval '.kubernetes.storageVerification.managerStateStorageClassName' "${values_file}")"
@@ -571,12 +757,69 @@ identity_rendered_file="${work_dir}/identity-provisioning.yaml"
 helm lint "${chart_dir}" --namespace "${runtime_namespace}"
 helm template aileron "${chart_dir}" \
   --namespace "${runtime_namespace}" > "${identity_rendered_file}"
+assert_yaml \
+  "${identity_rendered_file}" \
+  '[select(.kind == "Service") | .metadata.name] | map(select(. == "aileron-postgres")) | length == 1' \
+  "canonical release: Postgres Service identity is invalid"
+assert_yaml \
+  "${identity_rendered_file}" \
+  '[select(.kind == "Service") | .metadata.name] | map(select(. == "aileron-redis")) | length == 1' \
+  "canonical release: Redis Service identity is invalid"
+assert_yaml \
+  "${identity_rendered_file}" \
+  'select(.kind == "ConfigMap" and .metadata.name == "aileron-redis-connections") as $connections | select(.kind == "Deployment" and .metadata.name == "aileron-workspace-manager") as $manager | ($manager.spec.template.spec.containers | map(select(.name == "workspace-manager")) | .[0]) as $container | ($manager.spec.template.spec.volumes | map(select(.name == "manager-private-secrets")) | .[0].projected.sources) as $sources | [($connections.data."general-url" == "redis://aileron-redis:6379/0"), ($connections.data."job-queue-url" == "redis://aileron-redis:6379/0"), ($connections.data."job-result-url" == "redis://aileron-redis:6379/1"), (($sources | map(select(.configMap.name == "aileron-redis-connections")) | length) == 1), (($container.env | map(select(.name == "REDIS_URL" or .name == "CELERY_BROKER_URL" or .name == "CELERY_RESULT_BACKEND")) | length) == 0)] | all' \
+  "canonical release: bundled Redis must use the shared file-backed connection contract"
+assert_yaml \
+  "${identity_rendered_file}" \
+  '[select(.kind == "Service") | .metadata.name] | map(select(. == "aileron-workspace-manager")) | length == 1' \
+  "canonical release: Workspace Manager Service identity is invalid"
+assert_yaml \
+  "${identity_rendered_file}" \
+  '[select(.kind == "Service") | .metadata.name] | map(select(. == "aileron-frontend")) | length == 1' \
+  "canonical release: Frontend Service identity is invalid"
+assert_yaml \
+  "${identity_rendered_file}" \
+  '[select(.kind == "Service") | .metadata.name] | map(select(test("^aileron-aileron-"))) | length == 0' \
+  "canonical release: duplicate aileron Service identity is present"
+assert_yaml \
+  "${identity_rendered_file}" \
+  'select(.kind == "StatefulSet" and .metadata.name == "aileron-postgres") | .spec.serviceName == "aileron-postgres"' \
+  "canonical release: Postgres serviceName is invalid"
+assert_yaml \
+  "${identity_rendered_file}" \
+  'select(.kind == "Job" and .metadata.name == "aileron-postgres-bootstrap") | . as $job | [($job.metadata.namespace == "workspace-system"), (($job.metadata.annotations // {}) | has("helm.sh/hook") | not), (($job.spec.template.spec.containers[0].env | map(select(.name == "DATABASE_URL_FILE" and .value == "/run/secrets/aileron/database-url"))) | length == 1), (($job.spec.template.spec.containers[0].env | map(select(.name == "PGHOST" or .name == "PGPASSWORD"))) | length == 0), (($job.spec.template.spec.volumes | map(select(.name == "platform-database-url" and .secret.secretName == "aileron-platform-secrets" and .secret.items[0].path == "database-url"))) | length == 1)] | all' \
+  "canonical release: Postgres bootstrap database URL file contract is invalid"
+assert_yaml \
+  "${identity_rendered_file}" \
+  'select(.kind == "Job" and .metadata.name == "aileron-data-service-preflight") | .spec.template.spec.containers[0] | [((.command | join(",")) == "/bin/sh,-ec"), (.args[0] | contains("attempts=0")), (.args[0] | contains("sleep 2")), (.args[0] | contains("data-service-preflight.py")), ((.env | map(select(.name == "PLATFORM_DATABASE_MODE" and .value == "bundled")) | length) == 1)] | all' \
+  "canonical release: bundled data-service preflight must wait for built-in services"
+assert_yaml \
+  "${identity_rendered_file}" \
+  'select(.kind == "Deployment" and .metadata.name == "aileron-workspace-manager") | .spec.template.spec.initContainers as $init | [(($init | length) == 2), (($init | map(select(.name == "wait-for-admin-bootstrap")) | length) == 1), (($init | map(select(.name == "wait-for-platform-schema")) | length) == 1)] | all' \
+  "canonical release: Manager bootstrap gate is missing"
 assert_identity_provisioning_contract "${identity_rendered_file}"
 assert_platform_service_contract "${identity_rendered_file}" default
 assert_document_count "${identity_rendered_file}" Job -storage-verification 0 "default: storage verification must be disabled"
 assert_document_count "${identity_rendered_file}" Ingress -aileron 0 "default: public Ingress must require deployment opt-in"
 assert_document_count "${identity_rendered_file}" ClusterRole -workspace-operator-storageclasses 0 "default: disabled StorageClass dependency must not leave ClusterRole permissions"
 assert_document_count "${identity_rendered_file}" ClusterRoleBinding -workspace-operator-storageclasses 0 "default: disabled StorageClass dependency must not leave a ClusterRoleBinding"
+
+alternate_release_rendered_file="${work_dir}/alternate-release.yaml"
+helm template homelab "${chart_dir}" \
+  --namespace "${runtime_namespace}" > "${alternate_release_rendered_file}"
+assert_yaml \
+  "${alternate_release_rendered_file}" \
+  'select(.kind == "Service" and .metadata.name == "homelab-aileron-postgres") as $service | select(.kind == "StatefulSet" and .metadata.name == "homelab-aileron-postgres") as $postgres | [($service.metadata.name == "homelab-aileron-postgres"), ($postgres.spec.serviceName == "homelab-aileron-postgres")] | all' \
+  "alternate release: rendered resources and internal service references must retain the chart identity"
+
+connectivity_gateway_routing_file="${work_dir}/connectivity-gateway-routing.yaml"
+helm template aileron "${chart_dir}" \
+  --namespace "${runtime_namespace}" \
+  --set turn.enabled=true > "${connectivity_gateway_routing_file}"
+assert_yaml \
+  "${connectivity_gateway_routing_file}" \
+  '[select(.kind == "ConfigMap" and (.metadata.name | test("-frontend-nginx$")))] | .[0].data."nginx.conf" as $config | [($config | contains("location ^~ /api/v1/connectivity-evidence")), ($config | contains("proxy_pass http://aileron-connectivity-evidence-gateway.workspace-system.svc.cluster.local:8083;"))] | all' \
+  "TURN connectivity: Frontend Nginx must route public evidence to the Gateway"
 
 oidc_ca_rendered_file="${work_dir}/oidc-ca.yaml"
 helm template aileron "${chart_dir}" \
@@ -617,14 +860,15 @@ assert_yaml \
 ocp_platform_services_rendered_file="${work_dir}/ocp-platform-services.yaml"
 helm template aileron "${chart_dir}" \
   --namespace "${runtime_namespace}" \
-  --values "${chart_dir}/tests/values/platform-ocp.yaml" \
+  --set kubernetes.platformStorageGid=null \
   --set frontend.enabled=true \
-  --set postgres.enabled=true \
-  --set redis.enabled=true \
-  --set bootstrap.admin.enabled=true \
+  --set-string frontend.dnsResolver=dns-default.openshift-dns.svc.cluster.local \
   > "${ocp_platform_services_rendered_file}"
-assert_platform_service_contract "${ocp_platform_services_rendered_file}" ocp
-assert_identity_provisioning_contract "${ocp_platform_services_rendered_file}" external-oidc-client
+assert_platform_service_contract \
+  "${ocp_platform_services_rendered_file}" \
+  ocp \
+  dns-default.openshift-dns.svc.cluster.local
+assert_identity_provisioning_contract "${ocp_platform_services_rendered_file}" aileron-oidc-client
 assert_absent "${ocp_platform_services_rendered_file}" 'runAsUser:' "ocp: administrator bootstrap must not use a fixed UID"
 assert_absent "${ocp_platform_services_rendered_file}" 'runAsGroup:' "ocp: administrator bootstrap must not use a fixed GID"
 assert_absent "${ocp_platform_services_rendered_file}" 'fsGroup:' "ocp: administrator bootstrap must leave fsGroup to the Project SCC"
@@ -650,7 +894,7 @@ assert_document_count "${external_turn_rendered_file}" Service -connectivity-evi
 assert_document_count "${external_turn_rendered_file}" Secret -connectivity-evidence 0 "external TURN: evidence credentials must be supplied as an existing Secret"
 assert_yaml \
   "${external_turn_rendered_file}" \
-  'select(.kind == "Deployment" and (.metadata.name | test("-workspace-operator$"))) as $operator | ($operator.spec.template.spec.containers | map(select(.name == "workspace-operator")) | .[0].env) as $env | ($env | map(select(.name == "TURN_REACHABILITY_PROFILE_JSON"))) as $profile | ($env | map(select(.name == "TURN_ICE_SERVERS_SECRET_NAME"))) as $secret_name | ($env | map(select(.name == "TURN_BACKEND_ICE_SERVERS_SECRET_KEY"))) as $backend_key | ($env | map(select(.name == "TURN_FRONTEND_ICE_SERVERS_SECRET_KEY"))) as $frontend_key | ($env | map(select(.name == "TURN_CREDENTIAL_REVISION"))) as $revision | [($operator.spec.template.metadata.annotations."checksum/turn-credential-contract" | test("^[0-9a-f]{64}$")), (($profile | length) == 1), (($profile[0].value | from_json | .contractVersion) == "browser-connectivity/v1"), (($profile[0].value | from_json | .backend.urls[0]) == "turn:turn.internal.example:3478"), (($profile[0].value | from_json | .frontend.urls[0]) == "turns:turn.example.com:5349"), (($secret_name | length) == 1), ($secret_name[0].value == "external-turn-ice"), (($backend_key | length) == 1), ($backend_key[0].value == "backend-ice-servers-json"), (($frontend_key | length) == 1), ($frontend_key[0].value == "frontend-ice-servers-json"), (($revision | length) == 1), ($revision[0].value == "credential-v7"), (($env | map(select(.name == "TURN_SERVER_URL" or .name == "TURN_PROVIDER" or .name == "TURN_RELAY_MIN_PORT" or .name == "TURN_RELAY_MAX_PORT")) | length) == 0)] | all' \
+  'select(.kind == "Deployment" and (.metadata.name | test("-workspace-operator$"))) as $operator | ($operator.spec.template.spec.containers | map(select(.name == "workspace-operator")) | .[0].env) as $env | ($env | map(select(.name == "TURN_REACHABILITY_PROFILE_JSON"))) as $profile | ($env | map(select(.name == "TURN_ICE_SERVERS_SECRET_NAME"))) as $secret_name | ($env | map(select(.name == "TURN_BACKEND_ICE_SERVERS_SECRET_KEY"))) as $backend_key | ($env | map(select(.name == "TURN_FRONTEND_ICE_SERVERS_SECRET_KEY"))) as $frontend_key | ($env | map(select(.name == "TURN_CREDENTIAL_REVISION"))) as $revision | [($operator.spec.template.metadata.annotations."checksum/turn-credential-contract" | test("^[0-9a-f]{64}$")), (($profile | length) == 1), (($profile[0].value | from_json | .contractVersion) == "browser-connectivity/v1"), (($profile[0].value | from_json | .backend.urls[0]) == "turn:turn.internal.example:3478"), (($profile[0].value | from_json | .frontend.urls[0]) == "turns:turn.example.com:5349"), (($profile[0].value | from_json | .credentialIssuer.secretRef) == "external-turn-ice"), (($secret_name | length) == 1), ($secret_name[0].value == "external-turn-ice"), (($backend_key | length) == 1), ($backend_key[0].value == "backend-ice-servers-json"), (($frontend_key | length) == 1), ($frontend_key[0].value == "frontend-ice-servers-json"), (($revision | length) == 1), ($revision[0].value == "credential-v7"), (($env | map(select(.name == "TURN_SERVER_URL" or .name == "TURN_PROVIDER" or .name == "TURN_RELAY_MIN_PORT" or .name == "TURN_RELAY_MAX_PORT")) | length) == 0)] | all' \
   "external TURN: Operator must reference pre-rendered ICE server JSON without receiving plaintext credentials"
 assert_yaml \
   "${external_turn_rendered_file}" \
@@ -662,6 +906,7 @@ helm template aileron "${chart_dir}" \
   --namespace "${runtime_namespace}" \
   --set turn.enabled=true \
   --set coturn.enabled=true \
+  --set-string turn.profile.credentialIssuer.kind=turnRest \
   --set ingress.tlsMode=controllerManaged \
   --set-string platformPublicOrigin=https://aileron.apps.example.com \
   > "${builtin_turn_rendered_file}"
@@ -670,14 +915,22 @@ assert_document_count "${builtin_turn_rendered_file}" Service -coturn 1 "built-i
 assert_document_count "${builtin_turn_rendered_file}" ServiceAccount -coturn 1 "built-in TURN: ServiceAccount count is invalid"
 assert_document_count "${builtin_turn_rendered_file}" Secret -turn-ice 0 "built-in TURN: ICE credentials must use an existing Secret"
 assert_document_count "${builtin_turn_rendered_file}" Secret -coturn-auth 0 "built-in TURN: Coturn credentials must use an existing Secret"
-assert_document_count "${builtin_turn_rendered_file}" Namespace aileron-turn-system 1 "built-in TURN: Namespace count is invalid"
+assert_document_count "${builtin_turn_rendered_file}" Namespace aileron-turn-system 0 "built-in TURN: chart must not own the target Namespace"
+assert_yaml \
+  "${builtin_turn_rendered_file}" \
+  '[select(.kind == "Namespace")] | length == 0' \
+  "built-in TURN: chart must not render any Namespace"
 assert_document_count "${builtin_turn_rendered_file}" Deployment -connectivity-evidence-gateway 1 "built-in TURN: evidence Gateway Deployment count is invalid"
 assert_document_count "${builtin_turn_rendered_file}" Service -connectivity-evidence-gateway 1 "built-in TURN: evidence Gateway Service count is invalid"
 assert_document_count "${builtin_turn_rendered_file}" Secret -connectivity-evidence 0 "built-in TURN: evidence credentials must use an existing Secret"
 assert_yaml \
   "${builtin_turn_rendered_file}" \
-  '[.] as $docs | ($docs | map(select(.kind == "Namespace" and .metadata.name == "aileron-turn-system")) | .[0]) as $namespace | ($docs | map(select(.kind == "DaemonSet" and (.metadata.name | test("-coturn$")))) | .[0]) as $coturn | ($docs | map(select(.kind == "Deployment" and (.metadata.name | test("-workspace-operator$")))) | .[0]) as $operator | ($coturn.spec.template.spec.containers | map(select(.name == "coturn")) | .[0]) as $container | ($coturn.spec.template.spec.volumes | map(select(.name == "coturn-auth")) | .[0]) as $auth | ($operator.spec.template.spec.containers | map(select(.name == "workspace-operator")) | .[0].env) as $operator_env | [($namespace.metadata.labels."pod-security.kubernetes.io/enforce" == "privileged"), ($coturn.metadata.namespace == "aileron-turn-system"), ($coturn.spec.template.spec.hostNetwork == true), ($coturn.spec.template.spec.dnsPolicy == "ClusterFirstWithHostNet"), ($coturn.spec.template.spec.securityContext.runAsUser == 65534), ($coturn.spec.template.spec.securityContext.runAsGroup == 65534), (($container.args | join(",")) | contains("min-port=49160")), (($container.args | join(",")) | contains("max-port=49259")), (($container.args | join(",")) | contains("external-ip=$NODE_IP")), (($container.env | map(select(.name == "TURN_USERNAME_FILE" and .value == "/run/secrets/aileron-coturn/username")) | length) == 1), (($container.env | map(select(.name == "TURN_CREDENTIAL_FILE" and .value == "/run/secrets/aileron-coturn/credential")) | length) == 1), (($container.volumeMounts | map(select(.name == "coturn-auth" and .readOnly == true)) | length) == 1), ($auth.secret.secretName == "aileron-coturn-auth"), (($operator_env | map(select(.name == "TURN_REACHABILITY_PROFILE_JSON") | .value | from_json | .backend.relayPortRange.min == 49160) | length) == 1), (($operator_env | map(select(.name == "TURN_ICE_SERVERS_SECRET_NAME" and .value == "aileron-turn-ice")) | length) == 1), (($operator_env | map(select(.name == "TURN_SERVER_URL" or .name == "TURN_RELAY_MIN_PORT" or .name == "TURN_RELAY_MAX_PORT")) | length) == 0)] | all' \
+  '[.] as $docs | ($docs | map(select(.kind == "DaemonSet" and (.metadata.name | test("-coturn$")))) | .[0]) as $coturn | ($docs | map(select(.kind == "Deployment" and (.metadata.name | test("-workspace-operator$")))) | .[0]) as $operator | ($coturn.spec.template.spec.containers | map(select(.name == "coturn")) | .[0]) as $container | ($operator.spec.template.spec.containers | map(select(.name == "workspace-operator")) | .[0].env) as $operator_env | [($coturn.metadata.namespace == "aileron-turn-system"), ($coturn.spec.template.spec.hostNetwork == true), ($coturn.spec.template.spec.dnsPolicy == "ClusterFirstWithHostNet"), ($coturn.spec.template.spec.securityContext.runAsUser == 65534), ($coturn.spec.template.spec.securityContext.runAsGroup == 65534), (($container.args | length) == 1), ($container.args[0] | contains("min-port=49160")), ($container.args[0] | contains("max-port=49259")), ($container.args[0] | contains("external-ip=$NODE_IP")), (($container.env | map(select(.name == "TURN_REST_SHARED_SECRET_FILE" and .value == "/run/secrets/aileron-turn/turn-rest-shared-secret")) | length) == 1), (($container.env | map(select(.name == "TURN_PROBE_USERNAME_FILE" or .name == "TURN_PROBE_CREDENTIAL_FILE")) | length) == 0), (($container.volumeMounts | map(select(.name == "coturn-probe-auth")) | length) == 0), (($operator_env | map(select(.name == "TURN_REACHABILITY_PROFILE_JSON") | .value | from_json | .backend.relayPortRange.min == 49160) | length) == 1), (($operator_env | map(select(.name == "TURN_ICE_SERVERS_SECRET_NAME" and .value == "aileron-turn-ice")) | length) == 1), (($operator_env | map(select(.name == "TURN_SERVER_URL" or .name == "TURN_RELAY_MIN_PORT" or .name == "TURN_RELAY_MAX_PORT")) | length) == 0)] | all' \
   "built-in TURN: DaemonSet, Secret, and Operator contracts are invalid"
+assert_yaml \
+  "${builtin_turn_rendered_file}" \
+  '[select(.kind == "DaemonSet" and (.metadata.name | test("-coturn$")))] | .[0] as $coturn | ($coturn.spec.template.spec.containers | map(select(.name == "coturn")) | .[0]) as $container | ($coturn.spec.template.spec.volumes | map(select(.name == "turn-rest-auth")) | .[0]) as $auth | [($container.args[0] | contains("use-auth-secret")), ($container.args[0] | contains("static-auth-secret=$turn_rest_shared_secret")), (($container.args[0] | contains("user=$probe_username:$probe_credential")) | not), (($container.args[0] | contains("user=$username:$credential")) | not), (($container.env | map(select(.name == "TURN_REST_SHARED_SECRET_FILE" and .value == "/run/secrets/aileron-turn/turn-rest-shared-secret")) | length) == 1), (($container.env | map(select(.name == "TURN_REST_SHARED_SECRET" or .name == "TURN_USERNAME_FILE" or .name == "TURN_CREDENTIAL_FILE")) | length) == 0), (($container.volumeMounts | map(select(.name == "turn-rest-auth" and .readOnly == true)) | length) == 1), ($auth.secret.secretName == "aileron-coturn-auth"), ($auth.secret.items[0].key == "turn-rest-shared-secret")] | all' \
+  "built-in TURN: TURN REST shared secret must remain file-only"
 assert_yaml \
   "${builtin_turn_rendered_file}" \
   '[select((.kind == "DaemonSet" or .kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job") and .spec.template.spec.hostNetwork == true)] | [length == 1, (.[0].kind == "DaemonSet"), (.[0].metadata.name | test("-coturn$"))] | all' \
@@ -727,7 +980,7 @@ helm template aileron "${chart_dir}" \
   --set-string ingress.tlsSecretName=workspace-public-tls > "${tls_rendered_file}"
 assert_yaml \
   "${tls_rendered_file}" \
-  '[select(.kind == "Ingress" and (.metadata.name | test("-aileron$")))] | .[0] as $ingress | [($ingress.spec.tls | length == 1), ($ingress.spec.tls[0].secretName == "workspace-public-tls"), (($ingress.spec.tls[0].hosts | join(",")) == "aileron.localhost")] | all' \
+  '[select(.kind == "Ingress" and .metadata.name == "aileron")] | .[0] as $ingress | [($ingress.spec.tls | length == 1), ($ingress.spec.tls[0].secretName == "workspace-public-tls"), (($ingress.spec.tls[0].hosts | join(",")) == "aileron.localhost")] | all' \
   "platform Ingress TLS contract is invalid"
 assert_yaml \
   "${tls_rendered_file}" \
@@ -744,8 +997,36 @@ helm template aileron "${chart_dir}" \
   > "${gke_controller_managed_routing_file}"
 assert_yaml \
   "${gke_controller_managed_routing_file}" \
-  'select(.kind == "Ingress" and (.metadata.name | test("-aileron$"))) as $ingress | [($ingress.spec | has("ingressClassName") | not), ($ingress.spec | has("tls") | not), ($ingress.metadata.annotations."kubernetes.io/ingress.class" == "gce"), ($ingress.metadata.annotations."ingress.gcp.kubernetes.io/pre-shared-cert" == "aileron-public")] | all' \
+  'select(.kind == "Ingress" and .metadata.name == "aileron") as $ingress | [($ingress.spec | has("ingressClassName") | not), ($ingress.spec | has("tls") | not), ($ingress.metadata.annotations."kubernetes.io/ingress.class" == "gce"), ($ingress.metadata.annotations."ingress.gcp.kubernetes.io/pre-shared-cert" == "aileron-public")] | all' \
   "GKE controller-managed routing contract is invalid"
+
+external_redis_immutable_images_file="${work_dir}/external-redis-immutable-images.yaml"
+helm template aileron "${chart_dir}" \
+  --namespace "${runtime_namespace}" \
+  --values "${chart_dir}/tests/values/platform-rke2.yaml" \
+  --values "${chart_dir}/tests/values/immutable-images.yaml" \
+  --values "${chart_dir}/tests/values/production-routing.yaml" \
+  --set security.requireStrongSecrets=true \
+  --set redis.enabled=false \
+  --set-string redis.image.digest= \
+  --set-string redis.image.tag= \
+  > "${external_redis_immutable_images_file}"
+assert_document_count \
+  "${external_redis_immutable_images_file}" \
+  StatefulSet \
+  -redis \
+  0 \
+  "external Redis mode must not render or validate the bundled Redis image"
+assert_render_fails \
+  "'allOf' failed" \
+  'bundled Redis mode accepted an empty production image digest' \
+  --values "${chart_dir}/tests/values/platform-rke2.yaml" \
+  --values "${chart_dir}/tests/values/immutable-images.yaml" \
+  --values "${chart_dir}/tests/values/production-routing.yaml" \
+  --set security.requireStrongSecrets=true \
+  --set redis.enabled=true \
+  --set-string redis.image.digest= \
+  --set-string redis.image.tag=latest
 
 nginx_upload_routing_file="${work_dir}/nginx-upload-routing.yaml"
 helm template aileron "${chart_dir}" \
@@ -754,7 +1035,7 @@ helm template aileron "${chart_dir}" \
   > "${nginx_upload_routing_file}"
 assert_yaml \
   "${nginx_upload_routing_file}" \
-  'select(.kind == "Ingress" and (.metadata.name | test("-aileron$"))) as $ingress | [(($ingress.metadata.annotations."nginx.ingress.kubernetes.io/proxy-body-size") == "1100m"), (($ingress.metadata.annotations."nginx.ingress.kubernetes.io/proxy-request-buffering") == "off"), (($ingress.metadata.annotations."nginx.ingress.kubernetes.io/proxy-read-timeout") == "3600"), (($ingress.metadata.annotations."nginx.ingress.kubernetes.io/proxy-send-timeout") == "3600")] | all' \
+  'select(.kind == "Ingress" and .metadata.name == "aileron") as $ingress | [(($ingress.metadata.annotations."nginx.ingress.kubernetes.io/proxy-body-size") == "1100m"), (($ingress.metadata.annotations."nginx.ingress.kubernetes.io/proxy-request-buffering") == "off"), (($ingress.metadata.annotations."nginx.ingress.kubernetes.io/proxy-read-timeout") == "3600"), (($ingress.metadata.annotations."nginx.ingress.kubernetes.io/proxy-send-timeout") == "3600")] | all' \
   "NGINX upload and streaming annotations must cover the fixed platform Ingress"
 
 image_pull_secrets_rendered_file="${work_dir}/image-pull-secrets.yaml"
@@ -766,6 +1047,17 @@ assert_yaml \
   "${image_pull_secrets_rendered_file}" \
   '[select(.kind == "Deployment" and (.metadata.name | test("-workspace-operator$")))] | .[0] as $operator | ($operator.spec.template.spec.imagePullSecrets // []) as $pod_secrets | ($operator.spec.template.spec.containers | map(select(.name == "workspace-operator")) | .[0].env | map(select(.name == "WORKSPACE_IMAGE_PULL_SECRET_NAMES"))) as $entries | [ (($pod_secrets | length) == 2), ($pod_secrets[0].name == "harbor-primary"), ($pod_secrets[1].name == "harbor-secondary"), (($entries | length) == 1), ($entries[0].value == "harbor-primary,harbor-secondary") ] | all' \
   "global image pull Secrets were not propagated to the Operator and Workspace workloads"
+
+storage_image_pull_secrets_rendered_file="${work_dir}/storage-image-pull-secrets.yaml"
+helm template aileron "${chart_dir}" \
+  --namespace "${runtime_namespace}" \
+  --values "${chart_dir}/tests/values/platform-rke2.yaml" \
+  --set-string 'global.imagePullSecrets[0].name=harbor-primary' \
+  --set-string 'global.imagePullSecrets[1].name=harbor-secondary' > "${storage_image_pull_secrets_rendered_file}"
+assert_yaml \
+  "${storage_image_pull_secrets_rendered_file}" \
+  '[select(.kind == "Job" and (.metadata.name | test("-storage-verification$")))] | .[0].spec.template.spec.imagePullSecrets as $secrets | [($secrets | length == 2), ($secrets[0].name == "harbor-primary"), ($secrets[1].name == "harbor-secondary")] | all' \
+  "global image pull Secrets were not propagated to the storage verification Job"
 
 managed_registry_rendered_file="${work_dir}/managed-registry-auth.yaml"
 helm template aileron "${chart_dir}" \
@@ -785,7 +1077,10 @@ cilium_rendered_file="${work_dir}/cilium-enabled.yaml"
 helm template aileron "${chart_dir}" \
   --namespace "${runtime_namespace}" \
   --values "${chart_dir}/tests/values/platform-eks.yaml" \
-  --set cilium.enabled=true > "${cilium_rendered_file}"
+  --set cilium.enabled=true \
+  --set-string platformDatabase.ciliumEgress.kind=cidrs \
+  --set-string 'platformDatabase.ciliumEgress.values[0]=10.0.0.0/8' \
+  > "${cilium_rendered_file}"
 assert_workspace_platform_contract \
   "${cilium_rendered_file}" \
   cilium-enabled \

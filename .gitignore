@@ -93,9 +93,11 @@ data/*
 # ─── Superpowers working docs (never commit) ───
 **/docs/superpowers/
 
-# ─── Root-level dot-directories (tooling/cache); .github kept for CI ───
+# ─── Root-level dot-directories (tooling/cache) ───
 /.*/
-!/.github/
+/.github/
+/.superpower/
+/.superpowers/
 
 # >>> ai-developer-hub: managed worktree directory >>>
 /.worktrees/

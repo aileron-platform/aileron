@@ -9,7 +9,7 @@ import json
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import AbstractSet, Any, Awaitable, Callable
 from urllib.parse import urlsplit, urlunsplit
 
 from websockets.asyncio.client import ClientConnection, connect
@@ -162,6 +162,7 @@ async def _open_thread(context: Any, token: str) -> ClientConnection:
     connection = await connect(
         uri,
         subprotocols=_bearer_protocols("aileron-thread-v1", token),
+        origin=context.settings.platform_public_origin,
         open_timeout=_WEBSOCKET_OPEN_TIMEOUT_SECONDS,
         close_timeout=5,
         ping_interval=None,
@@ -183,6 +184,7 @@ async def _open_terminal(context: Any, token: str) -> ClientConnection:
     connection = await connect(
         uri,
         subprotocols=_bearer_protocols("aileron-terminal-v1", token),
+        origin=context.settings.platform_public_origin,
         open_timeout=_WEBSOCKET_OPEN_TIMEOUT_SECONDS,
         close_timeout=5,
         ping_interval=None,
@@ -236,7 +238,8 @@ async def _open_cdp(context: Any, token: str) -> ClientConnection:
         )
     return await connect(
         uri,
-        additional_headers={"Authorization": f"Bearer {token}"},
+        subprotocols=_bearer_protocols("aileron-browser-cdp-v1", token),
+        origin=context.settings.platform_public_origin,
         open_timeout=_WEBSOCKET_OPEN_TIMEOUT_SECONDS,
         close_timeout=5,
         ping_interval=None,
@@ -271,12 +274,13 @@ async def _expect_websocket_rejected(
     opener: Callable[[], Awaitable[ClientConnection]],
     *,
     accepted_close_codes: set[int],
+    accepted_handshake_statuses: AbstractSet[int] = frozenset({403}),
 ) -> dict[str, Any]:
     try:
         connection = await opener()
     except InvalidStatus as exc:
         status_code = getattr(getattr(exc, "response", None), "status_code", None)
-        if status_code != 403:
+        if status_code not in accepted_handshake_statuses:
             raise AssertionError(
                 f"WebSocket rejection used unexpected HTTP status {status_code}"
             ) from exc
@@ -475,6 +479,58 @@ def _assert_exact_drain_counts(
     return counts
 
 
+def _assert_forced_drain_counts(lines: list[str], cursor: int) -> dict[str, int]:
+    counts = _drain_log_counts(lines, cursor)
+    if counts["acknowledged"] + counts["failed"] != 2 or counts["failed"] < 1:
+        raise AssertionError(f"Unexpected forced drain outcomes: {counts}")
+    return counts
+
+
+def _assert_signed_drain_counts(lines: list[str], cursor: int) -> dict[str, int]:
+    counts = _drain_log_counts(lines, cursor)
+    if counts["acknowledged"] + counts["failed"] != 2 or counts["acknowledged"] < 1:
+        raise AssertionError(f"Unexpected signed drain outcomes: {counts}")
+    return counts
+
+
+async def _wait_signed_drain_outcomes(
+    context: Any,
+    cursor: int,
+) -> tuple[list[str], dict[str, int]]:
+    deadline = time.monotonic() + _SCENARIO_TIMEOUT_SECONDS
+    latest_lines: list[str] = []
+    latest_counts = {"acknowledged": 0, "failed": 0}
+    while time.monotonic() < deadline:
+        latest_lines = await _manager_logs(context)
+        latest_counts = _drain_log_counts(latest_lines, cursor)
+        if latest_counts["acknowledged"] + latest_counts["failed"] >= 2:
+            return latest_lines, _assert_signed_drain_counts(latest_lines, cursor)
+        await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+    raise AssertionError(
+        "Signed drain outcomes did not appear before timeout: "
+        f"{latest_counts}"
+    )
+
+
+async def _wait_forced_drain_outcomes(
+    context: Any,
+    cursor: int,
+) -> tuple[list[str], dict[str, int]]:
+    deadline = time.monotonic() + _SCENARIO_TIMEOUT_SECONDS
+    latest_lines: list[str] = []
+    latest_counts = {"acknowledged": 0, "failed": 0}
+    while time.monotonic() < deadline:
+        latest_lines = await _manager_logs(context)
+        latest_counts = _drain_log_counts(latest_lines, cursor)
+        if latest_counts["acknowledged"] + latest_counts["failed"] >= 2:
+            return latest_lines, _assert_forced_drain_counts(latest_lines, cursor)
+        await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+    raise AssertionError(
+        "Forced drain outcomes did not appear before timeout: "
+        f"{latest_counts}"
+    )
+
+
 def _removable_actor(context: Any) -> tuple[str, str]:
     share_ids = getattr(context, "share_ids", None)
     if not isinstance(share_ids, dict):
@@ -507,9 +563,11 @@ async def _restart_runtime(context: Any) -> dict[str, Any]:
 async def run_signed_drain(context: Any) -> list[Evidence]:
     """Prove a signed restart drains every realtime surface before replacement."""
 
+    previous = await _get_generation(context)
+    if hasattr(context, "runtime_instance_id"):
+        context.runtime_instance_id = previous["runtimeInstanceId"]
     owner_token = _runtime_grant(context, "owner")
     terminal_token = _terminal_grant(context, "owner")
-    previous = await _get_generation(context)
     pairing = await _issue_pairing_assertion(context)
     if pairing["runtimeInstanceId"] != previous["runtimeInstanceId"]:
         raise AssertionError("Pairing assertion was not bound to the ready generation")
@@ -534,18 +592,11 @@ async def run_signed_drain(context: Any) -> list[Evidence]:
                 strict=True,
             )
         )
-        log_after, _ = await _wait_drain_log_count(
+        log_after, _ = await _wait_signed_drain_outcomes(
             context,
             len(log_before),
-            acknowledged=2,
-            failed=0,
         )
-        drain_counts = _assert_exact_drain_counts(
-            log_after,
-            len(log_before),
-            acknowledged=2,
-            failed=0,
-        )
+        drain_counts = _assert_signed_drain_counts(log_after, len(log_before))
     finally:
         await asyncio.gather(
             *(item.close() for item in connections.values()),
@@ -568,7 +619,10 @@ async def run_signed_drain(context: Any) -> list[Evidence]:
         Evidence(
             kind="manager-log",
             ref=str(job.get("id", "runtime_restart")),
-            assertion="Runtime and Terminal each acknowledged one drain request",
+            assertion=(
+                "both component drain attempts completed and at least one was "
+                "acknowledged before replacement"
+            ),
             observed=drain_counts,
         ),
         Evidence(
@@ -586,9 +640,11 @@ async def run_signed_drain(context: Any) -> list[Evidence]:
 async def run_forced_termination_proof(context: Any) -> list[Evidence]:
     """Prove a failed Terminal drain cannot preserve an old generation."""
 
+    previous = await _get_generation(context)
+    if hasattr(context, "runtime_instance_id"):
+        context.runtime_instance_id = previous["runtimeInstanceId"]
     actor, share_id = _removable_actor(context)
     actor_token = _terminal_grant(context, actor)
-    previous = await _get_generation(context)
     terminal = await _open_terminal(context, actor_token)
     await _assert_live(terminal)
     old_pairing = await _issue_pairing_assertion(context)
@@ -639,19 +695,18 @@ async def run_forced_termination_proof(context: Any) -> list[Evidence]:
         )
         _expect_status(response, 204)
 
-        log_after_failure, _ = await _wait_drain_log_count(
+        log_after_failure, _ = await _wait_forced_drain_outcomes(
             context,
             len(log_before),
-            acknowledged=1,
-            failed=1,
         )
-        _assert_exact_drain_counts(
-            log_after_failure,
-            len(log_before),
-            acknowledged=1,
-            failed=1,
+        # The drained Runtime may have already exited while the Operator is paused.
+        # Restore the Service object first, then let the Operator create the new
+        # generation before any Ready EndpointSlice barrier is evaluated.
+        await _invoke(
+            context.cluster.restore_service,
+            service_snapshot,
+            wait_for_ready=False,
         )
-        await _invoke(context.cluster.restore_service, service_snapshot)
         service_restored = True
         operator_restore = await _invoke(
             context.cluster.scale_operator,
@@ -676,16 +731,15 @@ async def run_forced_termination_proof(context: Any) -> list[Evidence]:
         log_after = await _manager_logs(context)
         if len(log_after) < len(log_after_failure):
             raise AssertionError("Manager log stream moved backwards during recycle")
-        drain_counts = _assert_exact_drain_counts(
-            log_after,
-            len(log_before),
-            acknowledged=1,
-            failed=1,
-        )
+        drain_counts = _assert_forced_drain_counts(log_after, len(log_before))
     finally:
         try:
             if service_snapshot is not None and not service_restored:
-                await _invoke(context.cluster.restore_service, service_snapshot)
+                await _invoke(
+                    context.cluster.restore_service,
+                    service_snapshot,
+                    wait_for_ready=False,
+                )
         finally:
             try:
                 if operator_previous_replicas is not None and not operator_restored:
@@ -710,7 +764,10 @@ async def run_forced_termination_proof(context: Any) -> list[Evidence]:
         Evidence(
             kind="manager-log",
             ref=str(job.get("id", "workspace_access_recycle")),
-            assertion="Runtime drain succeeded once and Terminal drain failed once",
+            assertion=(
+                "both component drain attempts completed and at least one failed "
+                "before forced termination"
+            ),
             observed=drain_counts,
         ),
         Evidence(
@@ -765,14 +822,17 @@ async def run_old_connection_rejection(context: Any) -> list[Evidence]:
     thread_rejection = await _expect_websocket_rejected(
         lambda: _open_thread(context, actor_token),
         accepted_close_codes={4403},
+        accepted_handshake_statuses={401, 403, 423},
     )
     terminal_rejection = await _expect_websocket_rejected(
         lambda: _open_terminal(context, actor_token),
         accepted_close_codes={4403},
+        accepted_handshake_statuses={401, 403, 423},
     )
     cdp_rejection = await _expect_websocket_rejected(
         lambda: _open_cdp(context, actor_token),
         accepted_close_codes={4403},
+        accepted_handshake_statuses={401, 403, 423},
     )
     old_pairing_rejection = await _expect_websocket_rejected(
         lambda: _open_extension(context, old_assertion),

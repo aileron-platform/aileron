@@ -1,60 +1,4 @@
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: aileron-postgres-dev
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: aileron
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
-    secrets:
-      - postgres-password
-    ports:
-      - "5433:5432"
-    volumes:
-      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/postgres:/var/lib/postgresql/data"
-      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/init-sql:/docker-entrypoint-initdb.d:ro"
-    networks:
-      - aileron-network-dev
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    container_name: aileron-redis-dev
-    restart: unless-stopped
-    ports:
-      - "6382:6379"
-    volumes:
-      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/redis:/data"
-    command:
-      - redis-server
-      - --appendonly
-      - "yes"
-      - --maxmemory
-      - 256mb
-      - --maxmemory-policy
-      - allkeys-lru
-      - --save
-      - "900"
-      - "1"
-      - --save
-      - "300"
-      - "10"
-      - --save
-      - "60"
-      - "10000"
-    networks:
-      - aileron-network-dev
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   coturn:
     image: ${COTURN_IMAGE:?COTURN_IMAGE must be set}
     pull_policy: never
@@ -235,6 +179,53 @@ services:
       - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/runtime-assertions:/output"
     restart: "no"
 
+  data-service-preflight:
+    image: ${WORKSPACE_MANAGER_IMAGE:?WORKSPACE_MANAGER_IMAGE must be set}
+    pull_policy: never
+    command:
+      - /workspace-manager/.venv/bin/python
+      - /opt/aileron/data-service-preflight.py
+    environment:
+      PREFLIGHT_SCOPE: compose:${AILERON_INSTALLATION_ID:?AILERON_INSTALLATION_ID must be set}
+      PLATFORM_DATABASE_URL_FILE: /run/secrets/platform-database-url
+      GENERAL_REDIS_URL_FILE: /run/secrets/redis-general-url
+      JOB_QUEUE_REDIS_URL_FILE: /run/secrets/redis-job-queue-url
+      JOB_RESULT_REDIS_URL_FILE: /run/secrets/redis-job-result-url
+    secrets:
+      - platform-database-url
+      - redis-general-url
+      - redis-job-queue-url
+      - redis-job-result-url
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/workspace-manager:/workspace-manager:ro"
+      - /workspace-manager/.venv
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/helm/aileron/files/data-service-preflight.py:/opt/aileron/data-service-preflight.py:ro"
+    tmpfs:
+      - /tmp
+    networks:
+      - aileron-network-dev
+    restart: "no"
+
+  platform-schema-bootstrap:
+    image: postgres:15-alpine
+    pull_policy: missing
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        database_url=$$(cat /run/secrets/platform-database-url)
+        exec psql --dbname="$${database_url}" --set=ON_ERROR_STOP=1 \
+          --file=/opt/aileron/init/001_init_schema.sql
+    secrets:
+      - platform-database-url
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/init-sql:/opt/aileron/init:ro"
+    networks:
+      - aileron-network-dev
+    depends_on:
+      data-service-preflight:
+        condition: service_completed_successfully
+    restart: "no"
+
   identity-bootstrap:
     image: ${WORKSPACE_MANAGER_IMAGE:?WORKSPACE_MANAGER_IMAGE must be set}
     pull_policy: never
@@ -253,8 +244,7 @@ services:
           --email "$${BOOTSTRAP_ADMIN_EMAIL}"
     environment:
       ENV: development
-      DATABASE_URL: postgresql://postgres@postgres:5432/aileron
-      PGPASSFILE: /run/secrets/postgres-passfile
+      DATABASE_URL_FILE: /run/secrets/platform-database-url
       PLATFORM_PUBLIC_ORIGIN: ${PLATFORM_PUBLIC_ORIGIN:?PLATFORM_PUBLIC_ORIGIN must be set}
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:?OIDC_ISSUER_URL must be set}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?OIDC_CLIENT_ID must be set}
@@ -264,7 +254,7 @@ services:
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?BOOTSTRAP_ADMIN_EMAIL must be set}
       PYTHONPATH: /workspace-manager
     secrets:
-      - postgres-passfile
+      - platform-database-url
       - oidc-client-secret
     volumes:
       - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/workspace-manager:/workspace-manager:ro"
@@ -277,8 +267,8 @@ services:
     depends_on:
       turn-readiness-preflight:
         condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
+      platform-schema-bootstrap:
+        condition: service_completed_successfully
     restart: "no"
 
   workspace-manager:
@@ -291,7 +281,7 @@ services:
     environment:
       ENV: development
       TZ: ${TZ:?TZ must be set}
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL_FILE: /run/secrets/redis-general-url
       DOCKER_NETWORK: aileron-network-dev
       AILERON_INSTALLATION_ID: ${AILERON_INSTALLATION_ID:?AILERON_INSTALLATION_ID must be set}
       BROWSER_CONNECTIVITY_PROBE_IMAGE: ${WORKSPACE_OPERATOR_IMAGE:?WORKSPACE_OPERATOR_IMAGE must be set}
@@ -305,10 +295,11 @@ services:
       TURN_CREDENTIAL_REVISION: ${TURN_CREDENTIAL_REVISION:?TURN_CREDENTIAL_REVISION must be set}
       TURN_CONNECTIVITY_GATEWAY_URL: http://connectivity-evidence-gateway:8083
       TURN_CONNECTIVITY_GATEWAY_INTERNAL_TOKEN_FILE: /run/secrets/gateway-internal-token
-      DATABASE_URL: postgresql://postgres@postgres:5432/aileron
-      PGPASSFILE: /run/secrets/postgres-passfile
+      DATABASE_URL_FILE: /run/secrets/platform-database-url
       HOST_PROJECT_ROOT: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}
       WORKSPACE_RUNTIME_IMAGE: ${WORKSPACE_RUNTIME_IMAGE:?WORKSPACE_RUNTIME_IMAGE must be set}
+      WORKSPACE_BROWSER_IMAGE: ${WORKSPACE_BROWSER_IMAGE:?WORKSPACE_BROWSER_IMAGE must be set}
+      WORKSPACE_CANVAS_IMAGE: ${WORKSPACE_CANVAS_IMAGE:?WORKSPACE_CANVAS_IMAGE must be set}
       HOST_WORKSPACE_RUNTIME_DIR: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/workspace-runtime
       HOST_WORKSPACES_DIR: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/workspace-data
       HOST_WORKSPACE_SCRIPTS_DIR: ${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/workspace-scripts
@@ -326,14 +317,17 @@ services:
       RUNTIME_DATABASE_CREDENTIAL_KEY_FILE: /run/secrets/aileron/runtime-database-credential.key
       RUNTIME_ASSERTION_KID: workspace-manager-ed25519-v1
       RUNTIME_ASSERTION_ISSUER: workspace-manager
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_BROKER_URL_FILE: /run/secrets/redis-job-queue-url
+      CELERY_RESULT_BACKEND_FILE: /run/secrets/redis-job-result-url
       PLATFORM_PUBLIC_ORIGIN: ${PLATFORM_PUBLIC_ORIGIN:?PLATFORM_PUBLIC_ORIGIN must be set}
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:?OIDC_ISSUER_URL must be set}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?OIDC_CLIENT_ID must be set}
       OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc-client-secret
     secrets:
-      - postgres-passfile
+      - platform-database-url
+      - redis-general-url
+      - redis-job-queue-url
+      - redis-job-result-url
       - oidc-client-secret
       - turn-rest-shared-secret
       - turn-frontend-ice-servers.json
@@ -366,10 +360,6 @@ services:
         condition: service_completed_successfully
       turn-readiness-preflight:
         condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:3001/health\", timeout=5)' || exit 1"]
       interval: 30s
@@ -406,23 +396,8 @@ services:
       - host.docker.internal:host-gateway
     depends_on:
       - workspace-manager
-      - drawio
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8082/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  drawio:
-    image: jgraph/drawio
-    container_name: aileron-drawio-dev
-    restart: unless-stopped
-    environment:
-      TZ: ${TZ:?TZ must be set}
-    networks:
-      - aileron-network-dev
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -438,11 +413,7 @@ services:
       BOOTSTRAP_ADMIN_SUBJECT: ${BOOTSTRAP_ADMIN_SUBJECT:?BOOTSTRAP_ADMIN_SUBJECT must be set}
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:?BOOTSTRAP_ADMIN_USERNAME must be set}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?BOOTSTRAP_ADMIN_EMAIL must be set}
-      LDAP_ADMIN_PASSWORD_FILE: /run/secrets/ldap-admin-password
-      LDAP_CONFIG_PASSWORD_FILE: /run/secrets/ldap-config-password
-      LOCAL_ADMIN_PASSWORD_FILE: /run/secrets/local-admin-password
-      LDAP_ALICE_PASSWORD_FILE: /run/secrets/ldap-alice-password
-      LDAP_BOB_PASSWORD_FILE: /run/secrets/ldap-bob-password
+      LOCAL_OIDC_PLATFORM_ADMIN_PASSWORD_FILE: /run/secrets/local-oidc-platform-admin-password
     command:
       - /bin/sh
       - -ec
@@ -450,112 +421,37 @@ services:
         python /local-oidc/prepare.py \
           --template /local-oidc/aileron-realm.template.json \
           --output-dir /generated
-        chown 1000:0 /generated/aileron-realm.json /generated/10-seed-users.ldif
-        chmod 0600 /generated/aileron-realm.json /generated/10-seed-users.ldif
+        chown 1000:0 /generated/aileron-realm.json
+        chmod 0600 /generated/aileron-realm.json
     volumes:
       - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/local-oidc:/local-oidc:ro"
       - local-oidc-generated:/generated
     secrets:
       - oidc-client-secret
-      - ldap-admin-password
-      - ldap-config-password
-      - local-admin-password
-      - ldap-alice-password
-      - ldap-bob-password
-
-  openldap:
-    profiles: ["local-oidc"]
-    image: osixia/openldap:1.5.0
-    container_name: aileron-openldap-dev
-    restart: unless-stopped
-    environment:
-      LDAP_ORGANISATION: Aileron
-      LDAP_DOMAIN: aileron.local
-      LDAP_TLS: "false"
-      LDAP_READONLY_USER: "false"
-      LDAP_ADMIN_PASSWORD_FILE: /run/secrets/ldap-admin-password
-      LDAP_CONFIG_PASSWORD_FILE: /run/secrets/ldap-config-password
-    ports:
-      - "389:389"
-    volumes:
-      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/openldap:/var/lib/ldap"
-      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/openldap-config:/etc/ldap/slapd.d"
-    secrets:
-      - ldap-admin-password
-      - ldap-config-password
-    networks:
-      - aileron-network-dev
-    depends_on:
-      local-oidc-config:
-        condition: service_completed_successfully
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - >-
-          ldapwhoami -x -H ldap://127.0.0.1:389
-          -D "cn=admin,dc=aileron,dc=local"
-          -y /run/secrets/ldap-admin-password >/dev/null 2>&1
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 6m
-
-  openldap-seed:
-    profiles: ["local-oidc"]
-    image: osixia/openldap:1.5.0
-    entrypoint: ["/bin/sh", "-ec"]
-    restart: "no"
-    command:
-      - |
-        if ldapsearch -LLL -x -H ldap://openldap:389 \
-          -D "cn=admin,dc=aileron,dc=local" \
-          -y /run/secrets/ldap-admin-password \
-          -b "ou=people,dc=aileron,dc=local" "(uid=alice)" dn | grep -q '^dn:'; then
-          exit 0
-        fi
-        exec ldapadd -x -H ldap://openldap:389 \
-          -D "cn=admin,dc=aileron,dc=local" \
-          -y /run/secrets/ldap-admin-password \
-          -f /generated/10-seed-users.ldif
-    volumes:
-      - local-oidc-generated:/generated:ro
-    secrets:
-      - ldap-admin-password
-    networks:
-      - aileron-network-dev
-    depends_on:
-      local-oidc-config:
-        condition: service_completed_successfully
-      openldap:
-        condition: service_healthy
+      - local-oidc-platform-admin-password
 
   keycloak:
     profiles: ["local-oidc"]
-    image: quay.io/keycloak/keycloak:25.0.0
+    image: ${PLATFORM_KEYCLOAK_IMAGE:?PLATFORM_KEYCLOAK_IMAGE must be set}
     pull_policy: never
     container_name: aileron-keycloak-local-dev
     restart: unless-stopped
-    command:
-      - start-dev
-      - --import-realm
+    command: ["start-dev", "--import-realm"]
     environment:
-      TZ: ${TZ:?TZ must be set}
       KC_DB: dev-file
-      KC_HOSTNAME: http://localhost:8080
-      KC_HOSTNAME_STRICT: "false"
-      KC_HTTP_ENABLED: "true"
-      KC_HEALTH_ENABLED: "true"
-      KC_METRICS_ENABLED: "false"
+      TZ: ${TZ:?TZ must be set}
+      KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:?KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME must be set}
+      KEYCLOAK_PUBLIC_HOSTNAME: http://localhost:8080
     volumes:
       - keycloak-local-data:/opt/keycloak/data
       - local-oidc-generated:/opt/keycloak/data/import:ro
+    secrets:
+      - keycloak-bootstrap-admin-password
     network_mode: service:workspace-manager
     depends_on:
       workspace-manager:
         condition: service_started
       local-oidc-config:
-        condition: service_completed_successfully
-      openldap-seed:
         condition: service_completed_successfully
     healthcheck:
       test:
@@ -576,22 +472,20 @@ volumes:
   local-oidc-generated:
 
 secrets:
-  postgres-password:
-    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/postgres-password"
-  postgres-passfile:
-    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/postgres-passfile"
+  platform-database-url:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/platform-database-url"
+  redis-general-url:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/redis-general-url"
+  redis-job-queue-url:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/redis-job-queue-url"
+  redis-job-result-url:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/redis-job-result-url"
   oidc-client-secret:
     file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/oidc-client-secret"
-  local-admin-password:
-    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/local-admin-password"
-  ldap-admin-password:
-    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/ldap-admin-password"
-  ldap-config-password:
-    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/ldap-config-password"
-  ldap-alice-password:
-    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/ldap-alice-password"
-  ldap-bob-password:
-    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/ldap-bob-password"
+  keycloak-bootstrap-admin-password:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/keycloak-bootstrap-admin-password"
+  local-oidc-platform-admin-password:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/local-oidc-platform-admin-password"
   coturn-auth-secret:
     file: "${HOST_TURN_SECRETS_DIR:?HOST_TURN_SECRETS_DIR must be set}/coturn-auth-secret"
   connectivity-agent-tokens.json:

@@ -125,6 +125,7 @@ group "default" {
     "workspace-ui",
     "workspace-operator",
     "platform-coturn",
+    "platform-keycloak",
   ]
 }
 
@@ -140,6 +141,7 @@ group "local" {
     "workspace-ui",
     "workspace-operator",
     "platform-coturn",
+    "platform-keycloak",
   ]
 }
 
@@ -153,6 +155,7 @@ group "release" {
     "workspace-manager-kubernetes",
     "workspace-ui-production",
     "workspace-operator-kubernetes",
+    "platform-keycloak-kubernetes",
   ]
 }
 
@@ -184,6 +187,8 @@ group "k3s-e2e" {
     "product-conformance-k3s-e2e",
     "platform-redis-k3s-e2e",
     "platform-postgres-k3s-e2e",
+    "platform-keycloak-k3s-e2e",
+    "nfs-ganesha-k3s-e2e",
     "kubernetes-conformance-probe-k3s-e2e",
     "k3s-node-e2e",
   ]
@@ -275,6 +280,7 @@ target "_workspace-manager-common" {
     UV_VERSION         = UV_VERSION
     SUPERVISOR_VERSION = SUPERVISOR_VERSION
     CODEX_CLI_VERSION  = CODEX_CLI_VERSION
+    RELEASE_TAG        = RELEASE_TAG
   }
 }
 
@@ -393,6 +399,24 @@ target "platform-coturn" {
   tags       = ["${IMAGE_NAMESPACE}/platform-coturn:${LOCAL_TAG}"]
 }
 
+target "platform-keycloak" {
+  context    = "platform/keycloak"
+  dockerfile = "Dockerfile"
+  tags       = ["${IMAGE_NAMESPACE}/platform-keycloak:${LOCAL_TAG}"]
+}
+
+target "platform-keycloak-kubernetes" {
+  context    = "platform/keycloak"
+  dockerfile = "Dockerfile"
+  tags       = ["${IMAGE_NAMESPACE}/platform-keycloak:${RELEASE_TAG}-kubernetes"]
+}
+
+target "platform-keycloak-k3s-e2e" {
+  context    = "platform/keycloak"
+  dockerfile = "Dockerfile"
+  tags       = ["aileron/platform-keycloak:k3s-e2e"]
+}
+
 target "workspace-terminal-test" {
   context    = "workspace-terminal"
   dockerfile = "Dockerfile.ci"
@@ -473,6 +497,12 @@ target "platform-postgres-k3s-e2e" {
   context    = "platform/postgres"
   dockerfile = "Dockerfile"
   tags       = ["aileron/platform-postgres:k3s-e2e"]
+}
+
+target "nfs-ganesha-k3s-e2e" {
+  context    = "."
+  dockerfile = "scripts/test/kubernetes/nfs-ganesha/Dockerfile"
+  tags       = ["aileron/nfs-ganesha:k3s-e2e"]
 }
 
 target "kubernetes-conformance-probe-k3s-e2e" {

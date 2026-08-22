@@ -44,14 +44,8 @@ spec:
               config_file=/tmp/coturn/turnserver.conf
               install -d -m 0700 /tmp/coturn
               umask 077
-              username="$(cat "$TURN_USERNAME_FILE")"
-              credential="$(cat "$TURN_CREDENTIAL_FILE")"
-              probe_username="$(cat "$TURN_PROBE_USERNAME_FILE")"
-              probe_credential="$(cat "$TURN_PROBE_CREDENTIAL_FILE")"
-              test -n "$username"
-              test -n "$credential"
-              test -n "$probe_username"
-              test -n "$probe_credential"
+              turn_rest_shared_secret="$(cat "$TURN_REST_SHARED_SECRET_FILE")"
+              test -n "$turn_rest_shared_secret"
               {
                 printf '%s\n' \
                   'listening-ip=0.0.0.0' \
@@ -61,8 +55,8 @@ spec:
                   'min-port={{ .Values.turn.profile.backend.relayPortRange.min }}' \
                   'max-port={{ .Values.turn.profile.backend.relayPortRange.max }}' \
                   'realm={{ .Values.coturn.realm }}' \
-                  "user=$username:$credential" \
-                  "user=$probe_username:$probe_credential" \
+                  'use-auth-secret' \
+                  "static-auth-secret=$turn_rest_shared_secret" \
                   'fingerprint' \
                   'lt-cred-mech' \
                   'no-cli' \
@@ -74,21 +68,15 @@ spec:
                   'simple-log'
               } > "$config_file"
               chmod 0600 "$config_file"
-              unset username credential probe_username probe_credential
+              unset turn_rest_shared_secret
               exec turnserver -c "$config_file"
           env:
             - name: NODE_IP
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
-            - name: TURN_USERNAME_FILE
-              value: /run/secrets/aileron-coturn/username
-            - name: TURN_CREDENTIAL_FILE
-              value: /run/secrets/aileron-coturn/credential
-            - name: TURN_PROBE_USERNAME_FILE
-              value: /run/secrets/aileron-coturn/probe-username
-            - name: TURN_PROBE_CREDENTIAL_FILE
-              value: /run/secrets/aileron-coturn/probe-credential
+            - name: TURN_REST_SHARED_SECRET_FILE
+              value: /run/secrets/aileron-turn/turn-rest-shared-secret
           ports:
             - name: turn-udp
               containerPort: {{ .Values.coturn.listenerPort }}
@@ -122,27 +110,21 @@ spec:
               add:
                 - NET_BIND_SERVICE
           volumeMounts:
-            - name: coturn-auth
-              mountPath: /run/secrets/aileron-coturn
+            - name: turn-rest-auth
+              mountPath: /run/secrets/aileron-turn
               readOnly: true
             - name: tmp
               mountPath: /tmp
             - name: state
               mountPath: /var/lib/coturn
       volumes:
-        - name: coturn-auth
+        - name: turn-rest-auth
           secret:
             secretName: {{ .Values.coturn.auth.existingSecretName }}
             defaultMode: 0440
             items:
-              - key: {{ .Values.coturn.auth.usernameKey }}
-                path: username
-              - key: {{ .Values.coturn.auth.credentialSecretKey }}
-                path: credential
-              - key: {{ .Values.coturn.auth.probeUsernameKey }}
-                path: probe-username
-              - key: {{ .Values.coturn.auth.probeCredentialKey }}
-                path: probe-credential
+              - key: {{ .Values.coturn.auth.restSharedSecretKey }}
+                path: turn-rest-shared-secret
         - name: tmp
           emptyDir: {}
         - name: state

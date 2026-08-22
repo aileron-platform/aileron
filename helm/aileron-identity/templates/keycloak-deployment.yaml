@@ -1,0 +1,124 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aileron-identity-keycloak
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.keycloak.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: aileron-identity-keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aileron-identity-keycloak
+        app.kubernetes.io/part-of: aileron-identity
+      {{- if not .Values.postgres.enabled }}
+      annotations:
+        aileron.io/identity-database-revision: {{ .Values.postgres.revision | quote }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- include "aileron-identity.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: keycloak
+          image: "{{ .Values.images.keycloak.repository }}@{{ .Values.images.keycloak.digest }}"
+          imagePullPolicy: {{ .Values.images.keycloak.pullPolicy }}
+          args: ["start", "--optimized", "--import-realm"]
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /realms/{{ .Values.realm }}/.well-known/openid-configuration
+              port: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.keycloak.resources | nindent 12 }}
+          volumeMounts:
+            - name: postgres-secret
+              mountPath: /run/secrets/identity-postgres
+              readOnly: true
+            - name: administrator-secret
+              mountPath: /run/secrets/keycloak-bootstrap-admin
+              readOnly: true
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+            - name: public-config
+              mountPath: /opt/aileron/public-config
+              readOnly: true
+            - name: runtime-config
+              mountPath: /opt/keycloak/conf
+            - name: runtime-data-tmp
+              mountPath: /opt/keycloak/data/tmp
+            - name: runtime-transactions
+              mountPath: /opt/keycloak/data/transaction-logs
+            - name: runtime-tmp
+              mountPath: /tmp
+            {{- if .Values.postgres.caSecretName }}
+            - name: identity-database-ca
+              mountPath: /etc/aileron/data-service-ca/identity-database
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: runtime-config
+          emptyDir: {}
+        - name: runtime-data-tmp
+          emptyDir: {}
+        - name: runtime-transactions
+          emptyDir: {}
+        - name: runtime-tmp
+          emptyDir: {}
+        - name: postgres-secret
+          secret:
+            secretName: {{ .Values.secrets.postgres.name }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.secrets.postgres.usernameKey }}
+                path: username
+              - key: {{ .Values.secrets.postgres.passwordKey }}
+                path: password
+        - name: administrator-secret
+          secret:
+            secretName: {{ .Values.secrets.keycloakAdministrator.name }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.secrets.keycloakAdministrator.usernameKey }}
+                path: username
+              - key: {{ .Values.secrets.keycloakAdministrator.passwordKey }}
+                path: password
+        - name: realm-import
+          secret:
+            secretName: {{ .Values.secrets.realmImport.name }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.secrets.realmImport.realmKey }}
+                path: realm.json
+        - name: public-config
+          configMap:
+            name: aileron-identity-keycloak-config
+        {{- if .Values.postgres.caSecretName }}
+        - name: identity-database-ca
+          secret:
+            secretName: {{ .Values.postgres.caSecretName }}
+            defaultMode: 0444
+            items:
+              - key: {{ .Values.postgres.caSecretKey }}
+                path: ca.crt
+        {{- end }}

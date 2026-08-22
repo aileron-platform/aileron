@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -20,6 +21,8 @@ TERMINAL_PORT_NAME = "terminal"
 TERMINAL_SERVICE_PORT = 3004
 DATAPLANE_STABLE_OBSERVATIONS = 3
 ENDPOINT_SLICE_REQUEST_TIMEOUT_SECONDS = (5, 10)
+RUNTIME_UID = 10001
+RUNTIME_GID = 10001
 WORKSPACE_LIFETIME_UID_KEYS = (
     "workspaceCrUid",
     "workspacePvcUid",
@@ -31,16 +34,16 @@ WORKSPACE_STORAGE_MARKER_PATHS = {
 }
 RUNTIME_SECRET_DATA_KEYS = frozenset(
     {
-        "state-database-url",
+        "runtime-database-connection",
         "runtime-control-token",
         "custom-setup.sh",
     }
 )
-RUNTIME_PLATFORM_ENVIRONMENT_CONTRACT_PATH = (
-    Path(__file__).resolve().parents[5]
-    / "contracts"
-    / "platform-configuration"
-    / "runtime-platform-environment.json"
+RUNTIME_PLATFORM_ENVIRONMENT_CONTRACT_PATH = Path(
+    os.environ.get(
+        "PRODUCT_RUNTIME_PLATFORM_ENVIRONMENT_CONTRACT",
+        "/opt/product-conformance/contracts/runtime-platform-environment.json",
+    )
 )
 
 
@@ -116,14 +119,24 @@ def _require_runtime_platform_environment(
 
 def _canonical_runtime_secret_name(workspace_id: str) -> str:
     digest = hashlib.sha256(workspace_id.encode("utf-8")).hexdigest()
-    return f"workspace-runtime-db-{digest[:32]}"
+    return f"workspace-generation-{digest[:16]}"
 
 
-def _workspace_directory_preparer_args(workspace_id: str) -> list[str]:
+def _workspace_storage_preparer_args(workspace_id: str) -> list[str]:
     return [
-        'umask 0007; mkdir -p "$1"; chmod 2770 "$1"',
+        'umask 0007; mkdir -p "$1" "$2"; chmod 2770 "$1" "$2"',
         "--",
         f"/workspaces/{workspace_id}",
+        f"/runtime-homes/{workspace_id}",
+    ]
+
+
+def _workspace_storage_cleanup_args(workspace_id: str) -> list[str]:
+    return [
+        'rm -rf -- "$1" "$2"',
+        "--",
+        f"/workspaces/{workspace_id}",
+        f"/runtime-homes/{workspace_id}",
     ]
 
 
@@ -292,26 +305,86 @@ class ProductCluster:
                 "storageClass": self.storage_class,
             }
 
-        root_pvc = self.core.read_namespaced_persistent_volume_claim(
-            "product-workspaces-root-pvc",
-            self.namespace,
-        )
-        if root_pvc.status is None or root_pvc.status.phase != "Bound":
-            raise AssertionError("Static workspace root PVC is not Bound")
-        if not root_pvc.spec.volume_name:
-            raise AssertionError("Static workspace root PVC has no volume name")
-        root_volume = self.core.read_persistent_volume(root_pvc.spec.volume_name)
-        if root_volume.spec.nfs is None:
-            raise AssertionError("Static workspace root PV is not NFS")
-        if root_volume.spec.nfs.server != self.nfs_server:
-            raise AssertionError("Static workspace root PV NFS server mismatch")
-        mount_options = list(root_volume.spec.mount_options or [])
-        if not mount_options:
-            raise AssertionError("Static workspace root PV has no mount options")
+        runtime_home_pvc_name = f"workspace-runtime-home-pvc-{workspace_id}"
+        storage_specs = []
+        for root_pvc_name, target_pvc_name, root_path, pv_name in (
+            (
+                "product-workspaces-root-pvc",
+                pvc_name,
+                "/workspaces",
+                f"product-workspace-{workspace_id}",
+            ),
+            (
+                "product-runtime-homes-root-pvc",
+                runtime_home_pvc_name,
+                "/runtime-homes",
+                f"product-runtime-home-{workspace_id}",
+            ),
+        ):
+            root_pvc = self.core.read_namespaced_persistent_volume_claim(
+                root_pvc_name,
+                self.namespace,
+            )
+            if root_pvc.status is None or root_pvc.status.phase != "Bound":
+                raise AssertionError(f"Static storage root PVC {root_pvc_name} is not Bound")
+            if not root_pvc.spec.volume_name:
+                raise AssertionError(
+                    f"Static storage root PVC {root_pvc_name} has no volume name"
+                )
+            root_volume = self.core.read_persistent_volume(root_pvc.spec.volume_name)
+            if root_volume.spec.nfs is None:
+                raise AssertionError(f"Static storage root PV {root_pvc_name} is not NFS")
+            if root_volume.spec.nfs.server != self.nfs_server:
+                raise AssertionError(
+                    f"Static storage root PV {root_pvc_name} NFS server mismatch"
+                )
+            mount_options = list(root_volume.spec.mount_options or [])
+            if not mount_options:
+                raise AssertionError(
+                    f"Static storage root PV {root_pvc_name} has no mount options"
+                )
+            target_pvc = self._wait(
+                lambda: self._read_namespaced_pvc(target_pvc_name),
+                lambda item: item is not None,
+                description=f"Workspace PVC {target_pvc_name} visibility",
+                timeout_seconds=180,
+            )
+            requests = (target_pvc.spec.resources.requests or {})
+            requested_storage = requests.get("storage")
+            if requested_storage is None:
+                raise AssertionError(f"Workspace PVC {target_pvc_name} has no storage request")
+            access_modes = list(target_pvc.spec.access_modes or [])
+            if not access_modes:
+                raise AssertionError(f"Workspace PVC {target_pvc_name} has no access modes")
+            storage_class = target_pvc.spec.storage_class_name
+            if not storage_class:
+                raise AssertionError(f"Workspace PVC {target_pvc_name} has no storage class")
+            storage_specs.append(
+                {
+                    "rootPvc": root_pvc_name,
+                    "rootPath": root_path,
+                    "targetPvc": target_pvc_name,
+                    "pv": (
+                        target_pvc.spec.volume_name
+                        if target_pvc.status is not None
+                        and target_pvc.status.phase == "Bound"
+                        and target_pvc.spec.volume_name
+                        else pv_name
+                    ),
+                    "createPv": not (
+                        target_pvc.status is not None
+                        and target_pvc.status.phase == "Bound"
+                        and target_pvc.spec.volume_name
+                    ),
+                    "storage": str(requested_storage),
+                    "accessModes": access_modes,
+                    "storageClass": storage_class,
+                    "mountOptions": mount_options,
+                }
+            )
 
         short_id = workspace_id.split("-", 1)[0]
         pod_name = f"product-workspace-dir-{short_id}"
-        pv_name = f"product-workspace-{workspace_id}"
         self._delete_pod_if_exists(pod_name)
         pod = client.V1Pod(
             metadata=client.V1ObjectMeta(
@@ -334,7 +407,7 @@ class ProductCluster:
                         image=self.driver_image,
                         image_pull_policy=self.image_pull_policy,
                         command=["/bin/sh", "-ec"],
-                        args=_workspace_directory_preparer_args(workspace_id),
+                        args=_workspace_storage_preparer_args(workspace_id),
                         security_context=client.V1SecurityContext(
                             allow_privilege_escalation=False,
                             read_only_root_filesystem=True,
@@ -344,6 +417,10 @@ class ProductCluster:
                             client.V1VolumeMount(
                                 name="workspaces",
                                 mount_path="/workspaces",
+                            ),
+                            client.V1VolumeMount(
+                                name="runtime-homes",
+                                mount_path="/runtime-homes",
                             ),
                             client.V1VolumeMount(name="tmp", mount_path="/tmp"),
                         ],
@@ -355,6 +432,14 @@ class ProductCluster:
                         persistent_volume_claim=(
                             client.V1PersistentVolumeClaimVolumeSource(
                                 claim_name="product-workspaces-root-pvc"
+                            )
+                        ),
+                    ),
+                    client.V1Volume(
+                        name="runtime-homes",
+                        persistent_volume_claim=(
+                            client.V1PersistentVolumeClaimVolumeSource(
+                                claim_name="product-runtime-homes-root-pvc"
                             )
                         ),
                     ),
@@ -379,40 +464,154 @@ class ProductCluster:
             )
         self.core.delete_namespaced_pod(pod_name, self.namespace)
 
-        volume = client.V1PersistentVolume(
-            metadata=client.V1ObjectMeta(
-                name=pv_name,
-                labels={"aileron.io/product-conformance-run": self.run_id},
-            ),
-            spec=client.V1PersistentVolumeSpec(
-                capacity={"storage": "1Gi"},
-                access_modes=["ReadWriteMany"],
-                persistent_volume_reclaim_policy="Retain",
-                storage_class_name=self.storage_class,
-                mount_options=mount_options,
-                claim_ref=client.V1ObjectReference(
-                    api_version="v1",
-                    kind="PersistentVolumeClaim",
-                    namespace=self.namespace,
-                    name=pvc_name,
+        for storage_spec in storage_specs:
+            if not storage_spec["createPv"]:
+                continue
+            volume = client.V1PersistentVolume(
+                metadata=client.V1ObjectMeta(
+                    name=storage_spec["pv"],
+                    labels={"aileron.io/product-conformance-run": self.run_id},
                 ),
-                nfs=client.V1NFSVolumeSource(
-                    server=str(self.nfs_server),
-                    path=f"/workspaces/{workspace_id}",
+                spec=client.V1PersistentVolumeSpec(
+                    capacity={"storage": storage_spec["storage"]},
+                    access_modes=storage_spec["accessModes"],
+                    persistent_volume_reclaim_policy="Retain",
+                    storage_class_name=storage_spec["storageClass"],
+                    mount_options=storage_spec["mountOptions"],
+                    claim_ref=client.V1ObjectReference(
+                        api_version="v1",
+                        kind="PersistentVolumeClaim",
+                        namespace=self.namespace,
+                        name=storage_spec["targetPvc"],
+                    ),
+                    nfs=client.V1NFSVolumeSource(
+                        server=str(self.nfs_server),
+                        path=f'{storage_spec["rootPath"]}/{workspace_id}',
+                    ),
                 ),
-            ),
-        )
-        try:
-            self.core.create_persistent_volume(volume)
-        except ApiException as exc:
-            if exc.status != 409:
-                raise
+            )
+            try:
+                self.core.create_persistent_volume(volume)
+            except ApiException as exc:
+                if exc.status != 409:
+                    raise
         return {
             "mode": "static-nfs",
-            "pv": pv_name,
+            "pv": storage_specs[0]["pv"],
             "pvc": pvc_name,
             "path": f"/workspaces/{workspace_id}",
+            "runtimeHomePv": storage_specs[1]["pv"],
+            "runtimeHomePvc": runtime_home_pvc_name,
+            "runtimeHomePath": f"/runtime-homes/{workspace_id}",
         }
+
+    def delete_workspace_storage(self, workspace_id: str) -> None:
+        """Remove static-NFS directories and PVs after both PVCs are absent."""
+
+        if self.storage_mode == "dynamic":
+            return
+        short_id = workspace_id.split("-", 1)[0]
+        pod_name = f"product-workspace-cleanup-{short_id}"
+        self._delete_pod_if_exists(pod_name)
+        pod = client.V1Pod(
+            metadata=client.V1ObjectMeta(name=pod_name, namespace=self.namespace),
+            spec=client.V1PodSpec(
+                restart_policy="Never",
+                security_context=client.V1PodSecurityContext(
+                    run_as_non_root=True,
+                    run_as_user=RUNTIME_UID,
+                    run_as_group=RUNTIME_GID,
+                    fs_group=self.storage_gid,
+                    fs_group_change_policy="OnRootMismatch",
+                    seccomp_profile=client.V1SeccompProfile(type="RuntimeDefault"),
+                ),
+                containers=[
+                    client.V1Container(
+                        name="cleanup",
+                        image=self.driver_image,
+                        image_pull_policy=self.image_pull_policy,
+                        command=["/bin/sh", "-ec"],
+                        args=_workspace_storage_cleanup_args(workspace_id),
+                        security_context=client.V1SecurityContext(
+                            allow_privilege_escalation=False,
+                            read_only_root_filesystem=True,
+                            capabilities=client.V1Capabilities(drop=["ALL"]),
+                        ),
+                        volume_mounts=[
+                            client.V1VolumeMount(
+                                name="workspaces", mount_path="/workspaces"
+                            ),
+                            client.V1VolumeMount(
+                                name="runtime-homes", mount_path="/runtime-homes"
+                            ),
+                            client.V1VolumeMount(name="tmp", mount_path="/tmp"),
+                        ],
+                    )
+                ],
+                volumes=[
+                    client.V1Volume(
+                        name="workspaces",
+                        persistent_volume_claim=(
+                            client.V1PersistentVolumeClaimVolumeSource(
+                                claim_name="product-workspaces-root-pvc"
+                            )
+                        ),
+                    ),
+                    client.V1Volume(
+                        name="runtime-homes",
+                        persistent_volume_claim=(
+                            client.V1PersistentVolumeClaimVolumeSource(
+                                claim_name="product-runtime-homes-root-pvc"
+                            )
+                        ),
+                    ),
+                    client.V1Volume(
+                        name="tmp", empty_dir=client.V1EmptyDirVolumeSource()
+                    ),
+                ],
+            ),
+        )
+        self.core.create_namespaced_pod(self.namespace, pod)
+        completed = self._wait(
+            lambda: self.core.read_namespaced_pod(pod_name, self.namespace),
+            lambda item: item.status.phase in {"Succeeded", "Failed"},
+            description=f"workspace storage cleanup {pod_name}",
+            timeout_seconds=180,
+        )
+        if completed.status.phase != "Succeeded":
+            logs = self.core.read_namespaced_pod_log(pod_name, self.namespace)
+            raise AssertionError(f"Workspace storage cleanup failed: {logs[:1000]!r}")
+        self.core.delete_namespaced_pod(pod_name, self.namespace)
+
+        pv_names = (
+            f"product-workspace-{workspace_id}",
+            f"product-runtime-home-{workspace_id}",
+        )
+        for pv_name in pv_names:
+            try:
+                self.core.delete_persistent_volume(pv_name)
+            except ApiException as exc:
+                if exc.status != 404:
+                    raise
+
+        def remaining_pvs() -> list[str]:
+            remaining = []
+            for pv_name in pv_names:
+                try:
+                    self.core.read_persistent_volume(pv_name)
+                except ApiException as exc:
+                    if exc.status == 404:
+                        continue
+                    raise
+                remaining.append(pv_name)
+            return remaining
+
+        self._wait(
+            remaining_pvs,
+            lambda remaining: not remaining,
+            description=f"workspace PV deletion {workspace_id}",
+            timeout_seconds=180,
+        )
 
     def wait_workspace_ready(
         self,
@@ -560,6 +759,16 @@ class ProductCluster:
         )
         return identity
 
+    def get_ready_component_pod_uids(self, workspace_id: str) -> dict[str, str]:
+        """Read the physical Ready Pod identities for every Workspace component."""
+
+        return {
+            component: str(
+                self._workspace_component_pod(workspace_id, component).metadata.uid
+            )
+            for component in ("runtime", "browser", "canvas")
+        }
+
     @staticmethod
     def _workspace_component_label(component: str) -> str:
         if component not in {"runtime", "browser", "canvas"}:
@@ -636,7 +845,7 @@ class ProductCluster:
             "browser": browser_image,
             "canvas": canvas_image,
         }
-        platform_secret_name = f"{self.release}-aileron-secrets"
+        platform_secret_name = "aileron-platform-secrets"
         workload_service_account_name = f"workspace-workload-{workspace_id}"
         workload_service_account = self.core.read_namespaced_service_account(
             workload_service_account_name,
@@ -754,8 +963,8 @@ class ProductCluster:
             ),
             "AILERON_KB_MOUNT_REVISION": str(runtime_spec.get("mountRevision")),
             "AILERON_WORKTREE_SUBDIR": worktree_subdir,
-            "AILERON_RUNTIME_STATE_DATABASE_URL_FILE": (
-                "/etc/aileron/runtime-secrets/state-database-url"
+            "AILERON_RUNTIME_DATABASE_CONNECTION_FILE": (
+                "/etc/aileron/runtime-secrets/runtime-database-connection"
             ),
             "AILERON_RUNTIME_CONTROL_TOKEN_FILE": (
                 "/etc/aileron/runtime-secrets/runtime-control-token"
@@ -767,17 +976,21 @@ class ProductCluster:
             "AILERON_RUNTIME_ASSERTION_ISSUER": FORMAL_RUNTIME_ASSERTION_ISSUER,
             "AILERON_BROWSER_SERVICE_NAME": f"workspace-browser-{workspace_id}",
             "AILERON_BROWSER_WEBRTC_INTERNAL_URL": (
-                f"http://workspace-browser-{workspace_id}:6080"
+                f"http://workspace-browser-{workspace_id}."
+                f"{self.namespace}.svc.cluster.local:6080"
             ),
             "AILERON_BROWSER_CDP_URL": (
-                f"http://workspace-browser-{workspace_id}:9223"
+                f"http://workspace-browser-{workspace_id}."
+                f"{self.namespace}.svc.cluster.local:9223"
             ),
             "AILERON_CANVAS_SERVICE_NAME": f"workspace-canvas-{workspace_id}",
             "AILERON_CANVAS_INTERNAL_URL": (
-                f"http://workspace-canvas-{workspace_id}:3003"
+                f"http://workspace-canvas-{workspace_id}."
+                f"{self.namespace}.svc.cluster.local:3003"
             ),
             "AILERON_CANVAS_API_URL": (
-                f"http://workspace-canvas-{workspace_id}:3013"
+                f"http://workspace-canvas-{workspace_id}."
+                f"{self.namespace}.svc.cluster.local:3013"
             ),
         }
         observed_static_runtime_values = {
@@ -802,7 +1015,6 @@ class ProductCluster:
             "CANVAS_CONTAINER_NAME",
             "CANVAS_INTERNAL_URL",
             "CANVAS_API_URL",
-            "RUNTIME_STATE_DATABASE_URL",
             "RUNTIME_CONTROL_TOKEN",
         )
         self._require_environment_absent(
@@ -843,7 +1055,7 @@ class ProductCluster:
             for item in (runtime_secret_volume.secret.items or [])
         }
         expected_runtime_secret_items = {
-            ("state-database-url", "state-database-url"),
+            ("runtime-database-connection", "runtime-database-connection"),
             ("runtime-control-token", "runtime-control-token"),
         }
         if observed_runtime_secret_items != expected_runtime_secret_items:
@@ -988,8 +1200,8 @@ class ProductCluster:
             "runtimeEnvironment": observed_runtime_values,
             "runtimeForbiddenEnvironmentAbsent": list(forbidden_runtime_environment),
             "runtimeScopedSecretFiles": {
-                "stateDatabase": observed_runtime_values[
-                    "AILERON_RUNTIME_STATE_DATABASE_URL_FILE"
+                "databaseConnection": observed_runtime_values[
+                    "AILERON_RUNTIME_DATABASE_CONNECTION_FILE"
                 ],
                 "controlToken": observed_runtime_values[
                     "AILERON_RUNTIME_CONTROL_TOKEN_FILE"
@@ -1404,7 +1616,12 @@ class ProductCluster:
             raise
         return snapshot
 
-    def restore_service(self, snapshot: ServiceSnapshot) -> None:
+    def restore_service(
+        self,
+        snapshot: ServiceSnapshot,
+        *,
+        wait_for_ready: bool = True,
+    ) -> None:
         self.core.patch_namespaced_service(
             snapshot.name,
             self.namespace,
@@ -1449,6 +1666,8 @@ class ProductCluster:
             raise AssertionError(
                 "Restored Runtime Service terminal port does not match its snapshot"
             )
+        if not wait_for_ready:
+            return
         self._wait_for_endpoint_slice_port(
             snapshot.name,
             expected_port=snapshot.terminal_target_port,

@@ -7,6 +7,9 @@ metadata:
     {{- include "aileron.labels" . | nindent 4 }}
 spec:
   serviceName: {{ include "aileron.fullname" . }}-redis
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Delete
+    whenScaled: Retain
   replicas: 1
   selector:
     matchLabels:

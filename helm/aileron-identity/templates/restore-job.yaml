@@ -1,0 +1,97 @@
+{{- if .Values.restore.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: aileron-identity-restore
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade,post-rollback
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aileron-identity-restore
+        platform.aileron.dev/identity-data-operation: restore
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      {{- include "aileron-identity.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        fsGroup: {{ .Values.backup.storage.mountRootSupplementalGroup | default 70 }}
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 70
+        runAsNonRoot: true
+        runAsUser: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: restore
+          image: "{{ .Values.images.postgres.repository }}@{{ .Values.images.postgres.digest }}"
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsGroup: 70
+            runAsNonRoot: true
+            runAsUser: 70
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              umask 077
+              username=$(cat /run/secrets/identity-postgres/username)
+              password=$(cat /run/secrets/identity-postgres/password)
+              printf '*:*:*:%s:%s\n' "$username" "$password" > /runtime/pgpass
+              unset password
+              export PGPASSFILE=/runtime/pgpass
+              until pg_isready --dbname="$DATABASE_URL" --username="$username"; do sleep 2; done
+              exec pg_restore --username="$username" --clean --if-exists --no-owner --dbname="$DATABASE_URL" /backup/identity.dump
+          env:
+            - name: DATABASE_URL
+              value: {{ include "aileron-identity.databaseLibpqUrl" . | quote }}
+          volumeMounts:
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+            - name: postgres-secret
+              mountPath: /run/secrets/identity-postgres
+              readOnly: true
+            - name: runtime
+              mountPath: /runtime
+            - name: runtime-tmp
+              mountPath: /tmp
+            {{- if .Values.postgres.caSecretName }}
+            - name: identity-database-ca
+              mountPath: /etc/aileron/data-service-ca/identity-database
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: backup
+          persistentVolumeClaim:
+            claimName: {{ .Values.backup.claimName }}
+        - name: postgres-secret
+          secret:
+            secretName: {{ .Values.secrets.postgres.name }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.secrets.postgres.usernameKey }}
+                path: username
+              - key: {{ .Values.secrets.postgres.passwordKey }}
+                path: password
+        - name: runtime
+          emptyDir: {}
+        - name: runtime-tmp
+          emptyDir: {}
+        {{- if .Values.postgres.caSecretName }}
+        - name: identity-database-ca
+          secret:
+            secretName: {{ .Values.postgres.caSecretName }}
+            defaultMode: 0444
+            items:
+              - key: {{ .Values.postgres.caSecretKey }}
+                path: ca.crt
+        {{- end }}
+{{- end }}

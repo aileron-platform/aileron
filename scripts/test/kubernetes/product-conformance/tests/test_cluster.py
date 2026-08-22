@@ -2,7 +2,10 @@
 
 import unittest
 
-from product_conformance.cluster import _workspace_directory_preparer_args
+from product_conformance.cluster import (
+    _workspace_storage_cleanup_args,
+    _workspace_storage_preparer_args,
+)
 
 
 class ProductClusterTest(unittest.TestCase):
@@ -10,11 +13,25 @@ class ProductClusterTest(unittest.TestCase):
         workspace_id = "11111111-1111-4111-8111-111111111111"
 
         self.assertEqual(
-            _workspace_directory_preparer_args(workspace_id),
+            _workspace_storage_preparer_args(workspace_id),
             [
-                'umask 0007; mkdir -p "$1"; chmod 2770 "$1"',
+                'umask 0007; mkdir -p "$1" "$2"; chmod 2770 "$1" "$2"',
                 "--",
                 f"/workspaces/{workspace_id}",
+                f"/runtime-homes/{workspace_id}",
+            ],
+        )
+
+    def test_workspace_storage_cleanup_targets_both_workspace_directories(self) -> None:
+        workspace_id = "11111111-1111-4111-8111-111111111111"
+
+        self.assertEqual(
+            _workspace_storage_cleanup_args(workspace_id),
+            [
+                'rm -rf -- "$1" "$2"',
+                "--",
+                f"/workspaces/{workspace_id}",
+                f"/runtime-homes/{workspace_id}",
             ],
         )
 

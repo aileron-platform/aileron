@@ -105,9 +105,29 @@ spec:
                               type: string
                     runtimeSecretName:
                       type: string
-                      minLength: 1
-                      maxLength: 253
-                      pattern: '^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*$'
+                      minLength: 37
+                      maxLength: 37
+                      pattern: '^workspace-generation-[0-9a-f]{16}$'
+                    databaseTrust:
+                      type: object
+                      required:
+                        - secretName
+                        - secretKey
+                        - revision
+                      properties:
+                        secretName:
+                          type: string
+                          minLength: 1
+                          maxLength: 253
+                          pattern: '^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*$'
+                        secretKey:
+                          type: string
+                          minLength: 1
+                          maxLength: 253
+                        revision:
+                          type: string
+                          minLength: 1
+                          maxLength: 128
                     desiredState:
                       type: string
                       enum:

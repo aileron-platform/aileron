@@ -16,7 +16,7 @@ class ConformanceReportTest(unittest.TestCase):
     def test_exact_product_capability_keys_are_fail_closed(self) -> None:
         report = ConformanceReport(run_id="run-1", namespace="test")
 
-        self.assertEqual(len(CAPABILITY_KEYS), 12)
+        self.assertEqual(len(CAPABILITY_KEYS), 13)
         self.assertEqual(tuple(report.capabilities), CAPABILITY_KEYS)
         self.assertFalse(report.passed)
         self.assertTrue(
@@ -43,7 +43,7 @@ class ConformanceReportTest(unittest.TestCase):
                 [Evidence(kind="api", ref="api", assertion="checked", observed=None)],
             )
 
-    def test_report_passes_only_after_all_twelve_assertions(self) -> None:
+    def test_report_passes_only_after_all_thirteen_assertions(self) -> None:
         report = ConformanceReport(run_id="run-1", namespace="test")
         evidence = [
             Evidence(

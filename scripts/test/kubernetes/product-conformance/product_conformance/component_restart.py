@@ -22,21 +22,53 @@ async def _invoke(function: Callable[..., Any], *args: Any, **kwargs: Any) -> An
     return result
 
 
-async def component_snapshot(context: Any) -> dict[str, Any]:
-    """Read the CR identities and DB/CR component revision fences."""
-
+async def _read_component_snapshot(context: Any) -> dict[str, Any]:
     workspace_id = getattr(context, "workspace_id", None)
     if not isinstance(workspace_id, str) or not workspace_id:
         raise AssertionError("Product context has no workspace_id")
+    await _invoke(
+        context.cluster.wait_workspace_ready,
+        workspace_id,
+        timeout_seconds=2,
+    )
     generation = await _invoke(context.cluster.get_generation, workspace_id)
+    ready_pod_uids = await _invoke(
+        context.cluster.get_ready_component_pod_uids,
+        workspace_id,
+    )
     workspace = await _invoke(context.db.get_workspace, workspace_id)
     if not isinstance(generation, dict) or not isinstance(workspace, dict):
         raise AssertionError("Component restart snapshot is incomplete")
+    if workspace.get("runtime_status") != "running":
+        raise AssertionError(
+            "Workspace runtime is not eligible for a component operation: "
+            f"status={workspace.get('runtime_status')!r}"
+        )
+    if workspace.get("knowledge_base_mount_sync_status") != "ready":
+        raise AssertionError(
+            "Workspace mount state is not eligible for a component operation: "
+            f"status={workspace.get('knowledge_base_mount_sync_status')!r}"
+        )
+    active_jobs = [
+        row
+        for row in await _invoke(context.db.list_jobs, workspace_id)
+        if row.get("status") in {"queued", "running"}
+    ]
+    if active_jobs:
+        raise AssertionError(
+            "Workspace still has active durable jobs: "
+            f"{[(row.get('id'), row.get('status')) for row in active_jobs]!r}"
+        )
 
     pod_uids = generation.get("podUids")
     cr_revisions = generation.get("componentRevisions")
     if not isinstance(pod_uids, dict) or set(pod_uids) != set(COMPONENTS):
         raise AssertionError("Component Pod UID snapshot is incomplete")
+    if ready_pod_uids != pod_uids:
+        raise AssertionError(
+            "Workspace CR status does not match physical Ready Pod identities: "
+            f"status={pod_uids!r}, pods={ready_pod_uids!r}"
+        )
     if not isinstance(cr_revisions, dict) or set(cr_revisions) != set(COMPONENTS):
         raise AssertionError("Component CR revision snapshot is incomplete")
 
@@ -69,11 +101,64 @@ async def component_snapshot(context: Any) -> dict[str, Any]:
     runtime_instance_id = generation.get("runtimeInstanceId")
     if not isinstance(runtime_instance_id, str) or not runtime_instance_id:
         raise AssertionError("Runtime instance identity is missing")
+    database_runtime_instance_id = workspace.get("runtime_instance_id")
+    if database_runtime_instance_id != runtime_instance_id:
+        raise AssertionError(
+            "Manager DB runtime instance does not match the Ready Workspace CR: "
+            f"database={database_runtime_instance_id!r}, cr={runtime_instance_id!r}"
+        )
     return {
         "runtimeInstanceId": runtime_instance_id,
         "podUids": dict(pod_uids),
         "revisions": revisions,
     }
+
+
+async def component_snapshot(
+    context: Any,
+    *,
+    timeout_seconds: float = 120,
+    poll_interval_seconds: float = 1,
+    stability_samples: int = 3,
+) -> dict[str, Any]:
+    """Wait for a stable DB, CR, and physical Pod component fence snapshot."""
+
+    if timeout_seconds < 0:
+        raise ValueError("timeout_seconds must not be negative")
+    if poll_interval_seconds < 0:
+        raise ValueError("poll_interval_seconds must not be negative")
+    if stability_samples < 1:
+        raise ValueError("stability_samples must be positive")
+
+    deadline = time.monotonic() + timeout_seconds
+    stable_snapshot: dict[str, Any] | None = None
+    stable_count = 0
+    last_error: AssertionError | None = None
+    while True:
+        try:
+            snapshot = await _read_component_snapshot(context)
+        except AssertionError as exc:
+            last_error = exc
+            stable_snapshot = None
+            stable_count = 0
+        else:
+            last_error = None
+            if snapshot == stable_snapshot:
+                stable_count += 1
+            else:
+                stable_snapshot = snapshot
+                stable_count = 1
+            if stable_count >= stability_samples:
+                return snapshot
+
+        if time.monotonic() >= deadline:
+            if last_error is not None:
+                raise last_error
+            raise AssertionError(
+                "Workspace component identities did not remain stable for "
+                f"{stability_samples} consecutive samples"
+            )
+        await asyncio.sleep(poll_interval_seconds)
 
 
 def assert_component_restart(

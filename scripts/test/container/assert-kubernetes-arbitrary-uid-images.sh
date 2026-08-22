@@ -84,6 +84,8 @@ assert_frontend_uid() {
       grep -qi "<html" /tmp/index.html
       kill "${nginx_pid}"
       wait "${nginx_pid}" || true
+      /docker-entrypoint.sh true
+      test -f /tmp/aileron-html/index.html
     '
 }
 
@@ -374,22 +376,7 @@ assert_startup_contracts() {
 }
 
 assert_publication_contract() {
-  workflow=/repo/.github/workflows/docker-publish.yml
   chart_values=/repo/helm/aileron/values.yaml
-
-  # These are literal workflow shell expressions, not assertions to expand here.
-  # shellcheck disable=SC2016
-  for required in \
-    'name: Publish Service Multi-Arch Manifests' \
-    'name: Publish Runtime Multi-Arch Manifests' \
-    'docker buildx imagetools create' \
-    '"${target}-amd64"' \
-    '"${target}-arm64"' \
-    'tag_suffix: -kubernetes' \
-    'name: workspace-operator'; do
-    grep -Fq "${required}" "${workflow}" ||
-      fail "Docker publication workflow is missing contract: ${required}"
-  done
 
   manager_values="$(sed -n '/^workspaceManager:/,/^[^[:space:]]/p' "${chart_values}")"
   operator_values="$(sed -n '/^workspaceOperator:/,/^[^[:space:]]/p' "${chart_values}")"
@@ -420,11 +407,6 @@ assert_publication_contract() {
     fail "Helm Canvas repository does not reference the published image"
   printf '%s\n' "${canvas_image_values}" | grep -Fq 'tag: latest-kubernetes-amd64' ||
     fail "Helm Canvas tag does not reference a published Kubernetes image"
-  awk '
-    previous ~ /- name: workspace-canvas$/ && /tag_suffix: -kubernetes$/ { count++ }
-    { previous = $0 }
-    END { exit count >= 2 ? 0 : 1 }
-  ' "${workflow}" || fail "Docker publication workflow is missing Canvas Kubernetes images"
 }
 
 assert_storage_identity_transition() {

@@ -1,0 +1,43 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "aileron.fullname" . }}-data-service-gate
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-service-gate
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "aileron.fullname" . }}-data-service-gate
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-service-gate
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    resourceNames:
+      - {{ include "aileron.fullname" . }}-data-service-preflight
+      - {{ include "aileron.fullname" . }}-postgres-bootstrap
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "aileron.fullname" . }}-data-service-gate
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-service-gate
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "aileron.fullname" . }}-data-service-gate
+    namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "aileron.fullname" . }}-data-service-gate
+{{- end }}

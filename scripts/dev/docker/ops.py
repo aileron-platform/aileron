@@ -278,8 +278,10 @@ def list_workspace_containers(repo_root: Path) -> list[DockerContainer]:
             continue
         container_id, name, workspace_id, workload = parts
         expected_prefix = WORKSPACE_CONTAINER_PREFIXES.get(workload)
-        if not workspace_id or expected_prefix is None or not name.startswith(
-            expected_prefix
+        if (
+            not workspace_id
+            or expected_prefix is None
+            or not name.startswith(expected_prefix)
         ):
             continue
         containers.append(
@@ -314,12 +316,22 @@ def stop_and_remove_containers(
 
 def compose_down(repo_root: Path, *, env: dict[str, str] | None = None) -> None:
     compose_file = repo_root / "docker-compose.yml"
-    if not compose_file.is_file():
+    bundled_file = repo_root / "docker-compose.bundled-data-services.yml"
+    if not compose_file.is_file() or not bundled_file.is_file():
         print_warning("未找到 docker-compose.yml，跳過 compose down。")
         return
     print_info("停止 docker compose 服務...")
     stream_command(
-        ["docker", "compose", "down", "--remove-orphans"],
+        [
+            "docker",
+            "compose",
+            "-f",
+            str(compose_file),
+            "-f",
+            str(bundled_file),
+            "down",
+            "--remove-orphans",
+        ],
         cwd=repo_root,
         env=env,
         action="docker compose down",
@@ -356,10 +368,21 @@ def compose_up(
     env: dict[str, str],
 ) -> None:
     compose_file = repo_root / "docker-compose.yml"
-    if not compose_file.is_file():
+    bundled_file = repo_root / "docker-compose.bundled-data-services.yml"
+    if not compose_file.is_file() or not bundled_file.is_file():
         raise OpsError("未找到 docker-compose.yml，無法啟動 compose stack。")
     ensure_host_storage_directories(repo_root, env)
-    command = ["docker", "compose", "up", "--remove-orphans", "--no-build"]
+    command = [
+        "docker",
+        "compose",
+        "-f",
+        str(compose_file),
+        "-f",
+        str(bundled_file),
+        "up",
+        "--remove-orphans",
+        "--no-build",
+    ]
     if detach:
         command.append("-d")
     print_info("啟動 docker compose 服務...")

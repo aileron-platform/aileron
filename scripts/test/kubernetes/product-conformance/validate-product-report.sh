@@ -11,6 +11,7 @@ jq -e '
     (.capabilities | keys | sort)
     == ([
       "managerApiLifecycle",
+      "externalOidcAuthorizationCodeJit",
       "durableJobs",
       "rapidConsecutiveMutations",
       "reconcileFailureRetry",

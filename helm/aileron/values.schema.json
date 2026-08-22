@@ -26,7 +26,7 @@
     "platformSecrets": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["existingSecretName", "databaseUrlKey", "runtimeDatabaseCredentialKey", "postgresUsernameKey", "postgresPasswordKey"],
+      "required": ["existingSecretName", "databaseUrlKey", "runtimeDatabaseCredentialKey"],
       "properties": {
         "existingSecretName": { "$ref": "#/definitions/kubernetesName" },
         "databaseUrlKey": { "$ref": "#/definitions/secretDataKey" },
@@ -34,6 +34,27 @@
         "postgresUsernameKey": { "$ref": "#/definitions/secretDataKey" },
         "postgresPasswordKey": { "$ref": "#/definitions/secretDataKey" }
       }
+    },
+    "platformDatabase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision"],
+      "properties": {
+        "revision": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "caSecretName": { "$ref": "#/definitions/kubernetesName" },
+        "caSecretKey": { "$ref": "#/definitions/secretDataKey" },
+        "ciliumEgress": { "$ref": "#/definitions/platformDatabaseCiliumEgress" }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["caSecretName"] },
+          "then": { "required": ["caSecretKey"] }
+        },
+        {
+          "if": { "required": ["caSecretKey"] },
+          "then": { "required": ["caSecretName"] }
+        }
+      ]
     },
     "global": {
       "type": "object",
@@ -206,10 +227,14 @@
     "frontend": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "replicaCount", "image", "service", "resources"],
+      "required": ["enabled", "replicaCount", "dnsResolver", "image", "service", "resources"],
       "properties": {
         "enabled": { "type": "boolean" },
         "replicaCount": { "type": "integer", "minimum": 0 },
+        "dnsResolver": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*$"
+        },
         "image": {
           "$ref": "#/definitions/imageReference"
         },
@@ -381,6 +406,7 @@
     "postgres": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["enabled", "image", "persistence", "service", "auth", "resources"],
       "properties": {
         "enabled": { "type": "boolean" },
         "runAsUser": { "type": ["integer", "null"], "minimum": 1 },
@@ -412,6 +438,7 @@
     "redis": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["enabled", "image", "persistence", "service", "resources", "args"],
       "properties": {
         "enabled": { "type": "boolean" },
         "image": {
@@ -429,6 +456,16 @@
           }
         },
         "resources": { "type": "object" },
+        "connections": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["general", "jobQueue", "jobResult"],
+          "properties": {
+            "general": { "$ref": "#/definitions/redisConnectionReference" },
+            "jobQueue": { "$ref": "#/definitions/redisConnectionReference" },
+            "jobResult": { "$ref": "#/definitions/redisConnectionReference" }
+          }
+        },
         "args": {
           "type": "array",
           "items": { "type": "string" }
@@ -620,17 +657,11 @@
           "additionalProperties": false,
           "required": [
             "existingSecretName",
-            "usernameKey",
-            "credentialSecretKey",
-            "probeUsernameKey",
-            "probeCredentialKey"
+            "restSharedSecretKey"
           ],
           "properties": {
             "existingSecretName": { "$ref": "#/definitions/kubernetesName" },
-            "usernameKey": { "$ref": "#/definitions/secretDataKey" },
-            "credentialSecretKey": { "$ref": "#/definitions/secretDataKey" },
-            "probeUsernameKey": { "$ref": "#/definitions/secretDataKey" },
-            "probeCredentialKey": { "$ref": "#/definitions/secretDataKey" }
+            "restSharedSecretKey": { "$ref": "#/definitions/secretDataKey" }
           }
         },
         "nodeSelector": {
@@ -648,7 +679,110 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "postgres": {
+            "properties": { "enabled": { "enum": [true] } },
+            "required": ["enabled"]
+          }
+        },
+        "required": ["postgres"]
+      },
+      "then": {
+        "properties": {
+          "platformSecrets": {
+            "required": ["postgresUsernameKey", "postgresPasswordKey"]
+          }
+        },
+        "not": { "required": ["platformDatabase"] }
+      },
+      "else": {
+        "required": ["platformDatabase"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "redis": {
+            "properties": { "enabled": { "enum": [false] } },
+            "required": ["enabled"]
+          }
+        },
+        "required": ["redis"]
+      },
+      "then": {
+        "properties": {
+          "redis": { "required": ["connections"] }
+        }
+      },
+      "else": {
+        "properties": {
+          "redis": { "not": { "required": ["connections"] } }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "postgres": {
+            "properties": {"enabled": {"const": false}},
+            "required": ["enabled"]
+          },
+          "cilium": {
+            "properties": {"enabled": {"const": true}},
+            "required": ["enabled"]
+          }
+        },
+        "required": ["postgres", "cilium"]
+      },
+      "then": {
+        "properties": {
+          "platformDatabase": {"required": ["ciliumEgress"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cilium": {
+            "properties": {"enabled": {"const": false}},
+            "required": ["enabled"]
+          }
+        },
+        "required": ["cilium"]
+      },
+      "then": {
+        "properties": {
+          "platformDatabase": {"not": {"required": ["ciliumEgress"]}}
+        }
+      }
+    }
+  ],
   "definitions": {
+    "redisConnectionReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["urlSecretName", "urlSecretKey", "revision"],
+      "properties": {
+        "revision": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "urlSecretName": { "$ref": "#/definitions/kubernetesName" },
+        "urlSecretKey": { "$ref": "#/definitions/secretDataKey" },
+        "caSecretName": { "$ref": "#/definitions/kubernetesName" },
+        "caSecretKey": { "$ref": "#/definitions/secretDataKey" }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["caSecretName"] },
+          "then": { "required": ["caSecretKey"] }
+        },
+        {
+          "if": { "required": ["caSecretKey"] },
+          "then": { "required": ["caSecretName"] }
+        }
+      ]
+    },
     "positiveGoDuration": {
       "type": "string",
       "pattern": "^[1-9][0-9]*(?:ms|s|m)$"
@@ -783,7 +917,7 @@
           "properties": {
             "kind": {
               "type": "string",
-              "enum": ["turnRest", "staticSecret"]
+              "enum": ["turnRest"]
             },
             "ttlSeconds": {
               "type": "integer",
@@ -886,6 +1020,57 @@
           }
         }
       }
+    },
+    "platformDatabaseCiliumEgress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["cidrs", "fqdns", "namespacePods"]},
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "namespace": {"$ref": "#/definitions/kubernetesName"},
+        "podLabels": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"type": "string", "minLength": 1}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"enum": ["cidrs", "fqdns"]}}},
+          "then": {
+            "required": ["values"],
+            "not": {"anyOf": [{"required": ["namespace"]}, {"required": ["podLabels"]}]}
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "fqdns"}}},
+          "then": {
+            "properties": {
+              "values": {
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "namespacePods"}}},
+          "then": {
+            "required": ["namespace", "podLabels"],
+            "not": {"required": ["values"]}
+          }
+        }
+      ]
     },
     "positiveKubernetesQuantity": {
       "type": "string",

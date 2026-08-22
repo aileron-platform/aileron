@@ -24,6 +24,14 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  assert_file="$1"
+  assert_forbidden="$2"
+  if grep -Fq -- "${assert_forbidden}" "${assert_file}"; then
+    fail "${assert_file} contains forbidden text ${assert_forbidden}"
+  fi
+}
+
 trap cleanup EXIT HUP INT TERM
 
 test_platform_wrapper() {
@@ -604,5 +612,45 @@ test_cleanup_finalizes_workspaces_before_namespace_delete
 test_cleanup_wait_observes_timeout_boundary
 test_cleanup_absence_requires_successful_api_response
 test_product_runtime_home_storage_forwarding
+
+runner="${repo_root}/scripts/test/kubernetes/run-kubernetes-conformance-e2e.sh"
+assert_contains "${runner}" 'name: AILERON_PLATFORM_PUBLIC_ORIGIN'
+assert_contains "${runner}" 'name: AILERON_MANAGER_INTERNAL_URL'
+assert_contains "${runner}" 'name: CILIUM_ENABLED'
+assert_contains "${runner}" 'name: workspace-operator-storageclasses-${run_id}'
+assert_contains "${runner}" 'resources: ["storageclasses"]'
+assert_contains "${runner}" 'verbs: ["get"]'
+assert_contains "${runner}" '-l "aileron.io/test-run-id=${run_id}"'
+assert_contains "${runner}" 'workspace_browser_image="'
+assert_contains "${runner}" 'resolve_product_workload_image "${BROWSER_IMAGE:?BROWSER_IMAGE is required}"'
+assert_contains "${runner}" 'image: ${workspace_browser_image}'
+assert_contains "${runner}" 'aileron.io/component-instance-id: ${instance_1}'
+product_runner="${repo_root}/scripts/test/kubernetes/product-conformance/run-product-conformance.sh"
+assert_contains "${product_runner}" 'data_service_mode="${PRODUCT_DATA_SERVICE_MODE:-bundled}"'
+assert_contains "${product_runner}" 'name: aileron-platform-secrets'
+assert_contains "${product_runner}" 'key: database-url'
+assert_contains "${product_runner}" 'mountPath: /etc/aileron/data-service-ca/platform-database'
+assert_contains "${product_runner}" 'secretName: product-platform-database-ca'
+product_hook="${repo_root}/scripts/test/kubernetes/product-conformance/product-conformance-hook.sh"
+transaction_verifier="${repo_root}/scripts/test/kubernetes/product-conformance/verify-installation-transaction.sh"
+identity_lifecycle_verifier="${repo_root}/scripts/test/kubernetes/product-conformance/verify-identity-external-lifecycle.sh"
+assert_contains "${product_hook}" 'verify-installation-transaction.sh'
+assert_contains "${product_hook}" 'IDENTITY_DESTRUCTIVE_CONFIRMATION="${E2E_NAMESPACE}-identity/identity/restore/${E2E_RUN_ID}"'
+assert_contains "${transaction_verifier}" 'helm upgrade "${release}"'
+assert_contains "${transaction_verifier}" 'helm rollback "${release}"'
+assert_contains "${transaction_verifier}" 'helm uninstall "${release}"'
+assert_contains "${transaction_verifier}" 'wait_for_release_objects_absent'
+assert_contains "${transaction_verifier}" 'chart-managed release objects remain after uninstall'
+assert_contains "${transaction_verifier}" 'DROP SCHEMA ${marker_schema} CASCADE'
+assert_not_contains "${transaction_verifier}" 'cat > "${output}" <<EOF'
+assert_contains "${transaction_verifier}" "printf 'mode\\tinitial_revision"
+assert_contains "${identity_lifecycle_verifier}" 'mountOptions:'
+assert_contains "${identity_lifecycle_verifier}" '    - vers=4.2'
+assert_contains "${identity_lifecycle_verifier}" '    - hard'
+assert_contains "${identity_lifecycle_verifier}" '    - timeo=600'
+assert_contains "${identity_lifecycle_verifier}" '    - retrans=2'
+assert_contains "${identity_lifecycle_verifier}" 'kube delete job aileron-identity-restore -n "${identity_namespace}"'
+assert_not_contains "${identity_lifecycle_verifier}" 'cat > "${output}" <<EOF'
+assert_contains "${identity_lifecycle_verifier}" "printf 'login\\tbackup"
 
 printf 'Conformance hardening assertions passed\n'

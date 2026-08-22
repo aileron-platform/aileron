@@ -1,0 +1,34 @@
+postgres:
+  enabled: false
+platformDatabase:
+  revision: platform-database-v1
+  caSecretName: platform-database-ca
+  caSecretKey: ca.pem
+  ciliumEgress:
+    kind: namespacePods
+    namespace: platform-data
+    podLabels:
+      app.kubernetes.io/name: postgres
+cilium:
+  enabled: true
+redis:
+  enabled: false
+  connections:
+    general:
+      revision: redis-general-v1
+      urlSecretName: platform-redis-general
+      urlSecretKey: url
+      caSecretName: platform-redis-general-ca
+      caSecretKey: ca.pem
+    jobQueue:
+      revision: redis-job-queue-v1
+      urlSecretName: platform-redis-job-queue
+      urlSecretKey: url
+      caSecretName: platform-redis-job-queue-ca
+      caSecretKey: ca.pem
+    jobResult:
+      revision: redis-job-result-v1
+      urlSecretName: platform-redis-job-result
+      urlSecretKey: url
+      caSecretName: platform-redis-job-result-ca
+      caSecretKey: ca.pem

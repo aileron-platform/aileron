@@ -28,11 +28,12 @@ instance_3="10000000-0000-4000-8000-000000000003"
 instance_4="10000000-0000-4000-8000-000000000004"
 instance_5="10000000-0000-4000-8000-000000000005"
 instance_6="10000000-0000-4000-8000-000000000006"
-runtime_secret_name="$(printf 'workspace-runtime-db-%.32s' "${workspace_digest}")"
+runtime_secret_name="$(printf 'workspace-generation-%.16s' "${workspace_digest}")"
 
 operator_image="${OPERATOR_IMAGE:?OPERATOR_IMAGE is required}"
 manager_image="${MANAGER_IMAGE:?MANAGER_IMAGE is required}"
 workload_probe_image="${WORKLOAD_PROBE_IMAGE:?WORKLOAD_PROBE_IMAGE is required}"
+workspace_browser_image="${workload_probe_image}"
 workload_probe_image_file="${WORKLOAD_PROBE_IMAGE_FILE:-}"
 product_workload_images_file="${PRODUCT_WORKLOAD_IMAGES_FILE:-}"
 image_pull_policy="${IMAGE_PULL_POLICY:-Never}"
@@ -449,6 +450,32 @@ subjects:
     name: workspace-operator
     namespace: ${namespace}
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workspace-operator-storageclasses-${run_id}
+  labels:
+    aileron.io/test-run-id: ${run_id}
+rules:
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workspace-operator-storageclasses-${run_id}
+  labels:
+    aileron.io/test-run-id: ${run_id}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: workspace-operator-storageclasses-${run_id}
+subjects:
+  - kind: ServiceAccount
+    name: workspace-operator
+    namespace: ${namespace}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -485,6 +512,12 @@ ${operator_fs_group}
               value: knowledge-bases-pvc
             - name: BROWSER_CREDENTIAL_KEYRING_FILE
               value: /etc/aileron/browser-credentials/keyring.json
+            - name: AILERON_PLATFORM_PUBLIC_ORIGIN
+              value: https://aileron.example.test
+            - name: AILERON_MANAGER_INTERNAL_URL
+              value: http://workspace-manager.${namespace}.svc.cluster.local:3001
+            - name: CILIUM_ENABLED
+              value: "false"
             - name: WORKSPACE_STORAGE_CLASS_NAME
               value: ${storage_class}
             - name: WORKSPACE_STORAGE_SIZE
@@ -539,7 +572,7 @@ create_runtime_secrets() {
     >/dev/null
   kube create secret generic "${runtime_secret_name}" \
     -n "${namespace}" \
-    --from-literal='state-database-url=postgresql://runtime_e2e:runtime_e2e@postgres.invalid:5432/runtime_e2e' \
+    --from-literal='runtime-database-connection=postgresql://runtime_e2e:runtime_e2e@postgres.invalid:5432/runtime_e2e' \
     --from-literal='runtime-control-token=e2e-generation-scoped-opaque-control-token' \
     --from-literal='custom-setup.sh=:' \
     >/dev/null
@@ -645,6 +678,8 @@ EOF
     /state/uploads \
     /state/marketplace \
     >> "${artifact_dir}/manager-storage-paths.txt"
+  # Expand the positional parameter inside the Manager writer Pod.
+  # shellcheck disable=SC2016
   kube exec -n "${namespace}" manager-writer -- /bin/sh -ec \
     'printf "%s\n" "$1" > /state/.aileron-rwo-persistence' \
     -- "rwo-state-${run_id}"
@@ -973,7 +1008,7 @@ spec:
     desiredState: Running
     instanceId: ${instance_1}
     revision: 1
-    image: ${workload_probe_image}
+    image: ${workspace_browser_image}
     resources:
       requests:
         cpu: 500m
@@ -1438,6 +1473,7 @@ metadata:
     aileron.io/component: workspace-runtime
   annotations:
     aileron.io/component-revision: "1"
+    aileron.io/component-instance-id: ${instance_1}
     aileron.io/runtime-instance-id: ${instance_1}
 spec:
   restartPolicy: Never
@@ -1535,7 +1571,6 @@ runtime_scoped_secrets_isolated() {
               or . == "REDIS_URL"
               or . == "INTERNAL_API_TOKEN"
               or . == "MANAGER_CONTROL_ASSERTION"
-              or . == "RUNTIME_STATE_DATABASE_URL"
               or . == "RUNTIME_CONTROL_TOKEN"
               or . == "MANAGER_URL"
               or . == "PLATFORM_MANAGER_URL"
@@ -1544,8 +1579,8 @@ runtime_scoped_secrets_isolated() {
         and ([.spec.template.spec.containers[]
           | select(.name == "runtime")
           | .env[]?
-          | select(.name == "AILERON_RUNTIME_STATE_DATABASE_URL_FILE")][0].value
-            == "/etc/aileron/runtime-secrets/state-database-url")
+          | select(.name == "AILERON_RUNTIME_DATABASE_CONNECTION_FILE")][0].value
+            == "/etc/aileron/runtime-secrets/runtime-database-connection")
         and ([.spec.template.spec.containers[]
           | select(.name == "runtime")
           | .env[]?
@@ -1562,7 +1597,7 @@ runtime_scoped_secrets_isolated() {
               secretName: $secret_name,
               defaultMode: 288,
               items: [
-                {key: "state-database-url", path: "state-database-url", mode: 288},
+                {key: "runtime-database-connection", path: "runtime-database-connection", mode: 288},
                 {key: "runtime-control-token", path: "runtime-control-token", mode: 288}
               ]
             })
@@ -1586,7 +1621,7 @@ assert_runtime_scoped_secrets_isolated() {
         .spec.template.spec.containers[]
         | select(.name == "runtime")
         | .env[]?
-        | select(.name == "AILERON_RUNTIME_STATE_DATABASE_URL_FILE" or .name == "AILERON_RUNTIME_CONTROL_TOKEN_FILE")
+        | select(.name == "AILERON_RUNTIME_DATABASE_CONNECTION_FILE" or .name == "AILERON_RUNTIME_CONTROL_TOKEN_FILE")
         | {name, path: .value}
       ] | sort),
       runtimeScopedSecretVolume: ([
@@ -1952,9 +1987,42 @@ assert_product_hook() {
   REDIS_IMAGE="${REDIS_IMAGE:?REDIS_IMAGE is required}" \
   POSTGRES_IMAGE="${POSTGRES_IMAGE:?POSTGRES_IMAGE is required}" \
   PRODUCT_DRIVER_IMAGE="${PRODUCT_DRIVER_IMAGE:?PRODUCT_DRIVER_IMAGE is required}" \
+  PRODUCT_DATA_SERVICE_MODE="${PRODUCT_DATA_SERVICE_MODE:-bundled}" \
   PRODUCT_CAPABILITIES_OUTPUT="${capabilities_output}" \
     "${hook}" > "${artifact_dir}/product-conformance.log" 2>&1
   [ -s "${capabilities_output}" ] || fail "product conformance hook did not write capabilities"
+  transaction_output="${capabilities_output%.json}-installation-transaction.tsv"
+  [ -s "${transaction_output}" ] || \
+    fail "product conformance hook did not write installation transaction evidence"
+  expected_data_service_mode="${PRODUCT_DATA_SERVICE_MODE:-bundled}"
+  awk -F '\t' -v mode="${expected_data_service_mode}" '
+    NR == 2 && $1 == mode && $5 == "true" &&
+      ((mode == "external" && $6 == "true" && $7 == "true" &&
+        $8 == "true" && $9 == "true" && $10 == "true" && $11 == "true" &&
+        $12 == "true" && $13 == "true" && $14 == "true") ||
+       (mode == "bundled" && $6 == "not-applicable" &&
+        $7 == "not-applicable" && $8 == "not-applicable" &&
+        $9 == "not-applicable" && $10 == "not-applicable" &&
+        $11 == "not-applicable" && $12 == "not-applicable" &&
+        $13 == "not-applicable" && $14 == "not-applicable")) {
+      found = 1
+    }
+    END {exit !found}
+  ' "${transaction_output}" || fail "product installation transaction evidence is invalid"
+  if [ "${expected_data_service_mode}" = "external" ]; then
+    identity_output="${capabilities_output%.json}-identity-external-lifecycle.tsv"
+    [ -s "${identity_output}" ] || \
+      fail "product conformance hook did not write external Identity lifecycle evidence"
+    awk -F '\t' '
+      NR == 2 && NF == 7 {
+        for (field = 1; field <= 7; field++) {
+          if ($field != "true") exit 1
+        }
+        found = 1
+      }
+      END {exit !found}
+    ' "${identity_output}" || fail "external Identity lifecycle evidence is invalid"
+  fi
   "${repo_root}/scripts/test/kubernetes/product-conformance/validate-product-report.sh" \
     "${capabilities_output}" || fail "product conformance evidence contract is invalid"
   product_lifecycle_verified="true"
@@ -2092,6 +2160,10 @@ EOF
 }
 
 cleanup_workspaces_absent() {
+  if ! kube get customresourcedefinition \
+    workspaces.platform.aileron.io >/dev/null 2>&1; then
+    return 0
+  fi
   cleanup_workspaces="$(
     kube get workspaces.platform.aileron.io -n "${namespace}" -o name 2>/dev/null
   )" || return 1
@@ -2177,6 +2249,10 @@ cleanup() {
     if [ "${namespace_created}" = "true" ]; then
       cleanup_test_namespace
     fi
+    if [ "${PRODUCT_DATA_SERVICE_MODE:-bundled}" = "external" ]; then
+      kube delete namespace "${namespace}-data" \
+        --ignore-not-found --wait=false >/dev/null 2>&1
+    fi
     if [ "${storage_mode}" = "static-nfs" ]; then
       kube delete pv \
         "conformance-knowledge-bases-${run_id}" \
@@ -2195,6 +2271,9 @@ cleanup() {
       --ignore-not-found >/dev/null 2>&1
     kube delete clusterrole,clusterrolebinding \
       -l "aileron.io/product-conformance-run=${run_id}" \
+      --ignore-not-found --wait=false >/dev/null 2>&1
+    kube delete clusterrole,clusterrolebinding \
+      -l "aileron.io/test-run-id=${run_id}" \
       --ignore-not-found --wait=false >/dev/null 2>&1
     WORKSPACE_CRD_MANIFEST="${repo_root}/helm/aileron/crds/platform.aileron.io_workspaces.yaml" \
     WORKSPACE_CRD_ARTIFACT_DIR="${artifact_dir}" \
@@ -2266,6 +2345,9 @@ select_nodes
 create_namespace
 copy_image_pull_secret
 resolve_workload_probe_image
+workspace_browser_image="$(
+  resolve_product_workload_image "${BROWSER_IMAGE:?BROWSER_IMAGE is required}"
+)"
 resolve_storage_identity
 setup_storage
 create_runtime_secrets
@@ -2354,8 +2436,8 @@ generation_watch_process_verified="true"
 assert_runtime_mount runbook fixture-v2
 record_generation access-recycle "${instance_6}" 4 1
 assert_openshift_admission
-assert_product_hook
 delete_workspace_and_assert_absence
+assert_product_hook
 
 result="passed"
 log "Operator storage, read-only mount, cross-node RWX, and generation fencing suite passed"

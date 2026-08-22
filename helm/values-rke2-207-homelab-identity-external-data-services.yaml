@@ -1,0 +1,14 @@
+postgres:
+  enabled: false
+  jdbcUrl: jdbc:postgresql://postgres.identity-data.svc.cluster.local:5432/aileron_identity?sslmode=verify-full
+  revision: homelab-identity-database-v1
+  caSecretName: aileron-identity-database-ca
+  caSecretKey: ca.crt
+
+networkPolicy:
+  externalDatabaseEgress:
+    mode: selector
+    namespaceLabels:
+      kubernetes.io/metadata.name: identity-data
+    podLabels:
+      app.kubernetes.io/name: postgres

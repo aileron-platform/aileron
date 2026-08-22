@@ -11,7 +11,6 @@ from uuid import uuid4
 
 from kubernetes.client.rest import ApiException
 from websockets.asyncio.client import ClientConnection, connect
-from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from .api import require_status
 from .cluster import WORKSPACE_LIFETIME_UID_KEYS
@@ -305,6 +304,8 @@ async def start_stop_restart(context: ProductContext) -> list[Evidence]:
             )
         )
         previous = restarted
+
+    context.refresh_generation()
 
     return [
         Evidence(
@@ -618,33 +619,16 @@ def _bearer_protocols(protocol: str, token: str) -> list[str]:
     return [protocol, f"bearer.{encoded.decode('ascii')}"]
 
 
-async def _expect_unavailable_websocket(
+async def _expect_available_websocket(
     opener: Callable[[], Awaitable[ClientConnection]],
-    *,
-    expected_handshake_status: int,
 ) -> dict[str, Any]:
+    connection = await opener()
     try:
-        connection = await opener()
-    except InvalidStatus as exc:
-        status = getattr(getattr(exc, "response", None), "status_code", None)
-        if status != expected_handshake_status:
-            raise AssertionError(
-                f"Manager outage rejection used HTTP {status}, "
-                f"expected {expected_handshake_status}"
-            ) from exc
-        return {"rejected": True, "handshakeStatus": status}
-
-    try:
-        await asyncio.wait_for(connection.recv(), timeout=_WEBSOCKET_TIMEOUT_SECONDS)
-    except ConnectionClosed as exc:
-        if exc.code != 4503:
-            raise AssertionError(
-                f"Manager outage rejection used WebSocket {exc.code}, expected 4503"
-            ) from exc
-        return {"rejected": True, "closeCode": exc.code, "reason": exc.reason}
+        pong = await connection.ping()
+        await asyncio.wait_for(pong, timeout=_WEBSOCKET_TIMEOUT_SECONDS)
+        return {"accepted": True}
     finally:
         await connection.close()
-    raise AssertionError("Realtime socket opened while Manager was unavailable")
 
 
 async def _scale_manager(context: ProductContext, replicas: int) -> dict[str, int]:
@@ -692,7 +676,8 @@ async def _scale_manager(context: ProductContext, replicas: int) -> dict[str, in
 async def action_gate(context: ProductContext) -> list[Evidence]:
     """Prove role/action policy, generation fencing, and Manager fail-closed behavior."""
 
-    generation = _generation(context)
+    generation = await component_snapshot(context)
+    context.runtime_instance_id = generation["runtimeInstanceId"]
     instance_id = generation["runtimeInstanceId"]
     matrix: dict[str, dict[str, int]] = {}
     for actor in ("owner", "editor", "reader"):
@@ -724,43 +709,46 @@ async def action_gate(context: ProductContext) -> list[Evidence]:
     if _workspace_error_code(stale_response) != "WORKSPACE_RUNTIME_INSTANCE_MISMATCH":
         raise AssertionError("Stale Runtime instance did not use the stable fence code")
 
-    manager_scale = await _scale_manager(context, 0)
-    restored = False
     owner_token = context.execution_grant(
         "owner",
         audience="workspace-runtime",
-        actions=["runtime_read", "runtime_write", "browser_automation"],
+        actions=["runtime_read", "runtime_write", "agent", "browser_automation"],
     )
     owner_terminal_token = context.execution_grant(
         "owner",
         audience="workspace-terminal",
         actions=["terminal"],
     )
+    manager_scale = await _scale_manager(context, 0)
+    restored = False
     runtime_url = context.workspace_service_urls["runtime"]
     terminal_url = context.workspace_service_urls["terminal"]
     try:
-        thread = await _expect_unavailable_websocket(
+        thread = await _expect_available_websocket(
             lambda: connect(
                 _ws_url(runtime_url, "/api/v1/threads/events"),
                 subprotocols=_bearer_protocols("aileron-thread-v1", owner_token),
+                origin=context.settings.platform_public_origin,
                 open_timeout=_WEBSOCKET_TIMEOUT_SECONDS,
                 ping_interval=None,
             ),
-            expected_handshake_status=403,
         )
-        cdp = await _expect_unavailable_websocket(
+        cdp = await _expect_available_websocket(
             lambda: connect(
                 _ws_url(
                     runtime_url,
                     "/api/v1/client-browser-relay/cdp/manager-outage",
                 ),
-                additional_headers={"Authorization": f"Bearer {owner_token}"},
+                subprotocols=_bearer_protocols(
+                    "aileron-browser-cdp-v1",
+                    owner_token,
+                ),
+                origin=context.settings.platform_public_origin,
                 open_timeout=_WEBSOCKET_TIMEOUT_SECONDS,
                 ping_interval=None,
             ),
-            expected_handshake_status=403,
         )
-        terminal = await _expect_unavailable_websocket(
+        terminal = await _expect_available_websocket(
             lambda: connect(
                 _ws_url(
                     terminal_url,
@@ -770,10 +758,10 @@ async def action_gate(context: ProductContext) -> list[Evidence]:
                     "aileron-terminal-v1",
                     owner_terminal_token,
                 ),
+                origin=context.settings.platform_public_origin,
                 open_timeout=_WEBSOCKET_TIMEOUT_SECONDS,
                 ping_interval=None,
             ),
-            expected_handshake_status=503,
         )
         await _scale_manager(context, manager_scale["previousReplicas"] or 1)
         restored = True
@@ -808,7 +796,10 @@ async def action_gate(context: ProductContext) -> list[Evidence]:
         Evidence(
             kind="control-plane-outage",
             ref=context.cluster.manager_deployment_name,
-            assertion="Thread, CDP, and Terminal reject new sockets without Manager",
+            assertion=(
+                "Thread, CDP, and Terminal validate signed grants locally while "
+                "Manager is unavailable"
+            ),
             observed={
                 "scale": manager_scale,
                 "thread": thread,

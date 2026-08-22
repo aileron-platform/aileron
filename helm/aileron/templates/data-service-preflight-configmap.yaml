@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aileron.fullname" . }}-data-service-preflight
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-service-preflight-script
+  {{- if not .Values.postgres.enabled }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade,pre-rollback
+    "helm.sh/hook-weight": "-30"
+    "helm.sh/hook-delete-policy": before-hook-creation
+  {{- end }}
+data:
+  data-service-preflight.py: |
+{{ .Files.Get "files/data-service-preflight.py" | indent 4 }}

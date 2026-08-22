@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aileron.dev/contracts/platform-configuration/data-service-preflight.schema.json",
+  "title": "Aileron Data Service Preflight Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "postgresPermissionContract",
+    "activeSessionTermination",
+    "managerImplementationVerification",
+    "runtimeDsnContract",
+    "preflightDag"
+  ],
+  "properties": {
+    "$schema": {"type": "string"},
+    "contractVersion": {"const": "1"},
+    "postgresPermissionContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixtureImages", "platformLogin", "versions"],
+      "properties": {
+        "fixtureImages": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["15", "16"],
+          "properties": {
+            "15": {"type": "string", "pattern": "^postgres:15-alpine@sha256:[a-f0-9]{64}$"},
+            "16": {"type": "string", "pattern": "^postgres:16-alpine@sha256:[a-f0-9]{64}$"}
+          }
+        },
+        "platformLogin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["superuser", "databaseOwner", "createRole", "createDatabaseRoleAttribute", "databaseCreatePrivilege", "signalBackend", "terminationAuthority"],
+          "properties": {
+            "superuser": {"const": false},
+            "databaseOwner": {"const": true},
+            "createRole": {"const": true},
+            "createDatabaseRoleAttribute": {"const": false},
+            "databaseCreatePrivilege": {"const": true},
+            "signalBackend": {"const": true},
+            "terminationAuthority": {"type": "string", "minLength": 1}
+          }
+        },
+        "versions": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {"$ref": "#/$defs/versionEvidence"}
+        }
+      }
+    },
+    "activeSessionTermination": {"$ref": "#/$defs/evidence"},
+    "managerImplementationVerification": {"$ref": "#/$defs/evidence"},
+    "runtimeDsnContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["queryAllowlist", "driverAdapter", "unsupportedParameters"],
+      "properties": {
+        "queryAllowlist": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {
+            "enum": [
+              "connect_timeout",
+              "ssl_max_protocol_version",
+              "ssl_min_protocol_version",
+              "sslmode",
+              "sslrootcert",
+              "target_session_attrs"
+            ]
+          }
+        },
+        "driverAdapter": {"type": "string", "minLength": 1},
+        "unsupportedParameters": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "preflightDag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external", "bundled"],
+      "properties": {
+        "external": {"$ref": "#/$defs/dag"},
+        "bundled": {"$ref": "#/$defs/dag"}
+      }
+    }
+  },
+  "$defs": {
+    "sqlEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sql", "result"],
+      "properties": {
+        "sql": {"type": "string", "minLength": 1},
+        "result": {"type": "string", "minLength": 1},
+        "sqlstate": {"type": "string", "pattern": "^[0-9A-Z]{5}$"}
+      }
+    },
+    "versionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "major",
+        "observedVersion",
+        "createdRoleState",
+        "requiredMembershipSql",
+        "successfulSql",
+        "failedSql",
+        "extensions",
+        "cleanup"
+      ],
+      "properties": {
+        "major": {"enum": [15, 16]},
+        "observedVersion": {"type": "string", "pattern": "^(15|16)\\.[0-9]+$"},
+        "createdRoleState": {"type": "string", "minLength": 1},
+        "requiredMembershipSql": {"type": "array", "minItems": 2, "items": {"type": "string"}},
+        "successfulSql": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sqlEvidence"}},
+        "failedSql": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sqlEvidence"}},
+        "extensions": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/sqlEvidence"}},
+        "cleanup": {"$ref": "#/$defs/evidence"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result", "evidence"],
+      "properties": {
+        "result": {"type": "string", "minLength": 1},
+        "evidence": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+      }
+    },
+    "dag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modeSelector", "resources", "workloadGate"],
+      "properties": {
+        "modeSelector": {"type": "string", "minLength": 1},
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "phase", "weight", "visibility", "waitsFor"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "phase": {"type": "string", "minLength": 1},
+              "weight": {"type": ["integer", "null"]},
+              "visibility": {"type": "string", "minLength": 1},
+              "waitsFor": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
+        "workloadGate": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

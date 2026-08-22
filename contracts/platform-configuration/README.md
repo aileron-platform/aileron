@@ -5,6 +5,7 @@
 - `schema.json`：定義契約 catalog 的結構、Owner、來源類型與允許的處置。
 - `contract.json`：列出根 `.env` 安裝輸入、Helm Secret name/key reference、Compose container output env、跨 Adapter 衍生輸出，以及逐項盤點後移除或移回服務預設的項目。
 - `conformance-vectors.json`：定義公開 validator CLI 的合法與非法案例。
+- `data-service-preflight.json`：記錄 PG15／PG16 非 superuser 權限實測與 bundled／external preflight DAG；由同名 schema 驗證。
 
 ## 輸入與輸出邊界
 

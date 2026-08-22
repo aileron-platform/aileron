@@ -359,15 +359,6 @@
       "sensitive": false
     },
     {
-      "routeTemplate": "/api/v1/threads/{thread_id}/cancel",
-      "methods": [
-        "POST"
-      ],
-      "action": "agent",
-      "matchPriority": 3018,
-      "sensitive": false
-    },
-    {
       "routeTemplate": "/api/v1/threads/{thread_id}/submit",
       "methods": [
         "POST"
@@ -401,6 +392,15 @@
       ],
       "action": "agent",
       "matchPriority": 3017,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/threads/{thread_id}/stop",
+      "methods": [
+        "POST"
+      ],
+      "action": "agent",
+      "matchPriority": 3016,
       "sensitive": false
     },
     {
@@ -1267,15 +1267,6 @@
       "sensitive": false
     },
     {
-      "routeTemplate": "/api/v1/drawio/save",
-      "methods": [
-        "POST"
-      ],
-      "action": "runtime_write",
-      "matchPriority": 2015,
-      "sensitive": false
-    },
-    {
       "routeTemplate": "/api/v1/files/paste",
       "methods": [
         "POST"
@@ -1301,6 +1292,33 @@
       ],
       "action": "runtime_write",
       "matchPriority": 2010,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/cli-settings/claude-code/prompt-invocations",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1056,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/cli-settings/opencode/prompt-invocations",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1053,
+      "sensitive": false
+    },
+    {
+      "routeTemplate": "/api/v1/workspaces/{workspace_id}/cli-settings/codex/prompt-invocations",
+      "methods": [
+        "GET"
+      ],
+      "action": "runtime_read",
+      "matchPriority": 1050,
       "sensitive": false
     },
     {
@@ -1943,15 +1961,6 @@
       "sensitive": false
     },
     {
-      "routeTemplate": "/api/v1/drawio/availability",
-      "methods": [
-        "GET"
-      ],
-      "action": "runtime_read",
-      "matchPriority": 1023,
-      "sensitive": false
-    },
-    {
       "routeTemplate": "/api/v1/files/tree/children",
       "methods": [
         "GET"
@@ -1986,15 +1995,6 @@
       ],
       "action": "runtime_read",
       "matchPriority": 1018,
-      "sensitive": false
-    },
-    {
-      "routeTemplate": "/api/v1/drawio/viewer",
-      "methods": [
-        "GET"
-      ],
-      "action": "runtime_read",
-      "matchPriority": 1017,
       "sensitive": false
     },
     {

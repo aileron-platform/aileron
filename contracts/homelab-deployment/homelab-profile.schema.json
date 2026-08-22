@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://platform.aileron.dev/contracts/homelab-deployment/homelab-profile.schema.json",
+  "title": "Aileron HomeLab deployment profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "profileId",
+    "context",
+    "installationIntent",
+    "registry",
+    "endpoints",
+    "identity",
+    "acceptance",
+    "privateInputs"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "aileron-homelab-profile/v1"},
+    "profileId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9](?:[a-z0-9.-]{0,61}[a-z0-9])?$"
+    },
+    "context": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,252}$"
+    },
+    "installationIntent": {"const": "newInstallation"},
+    "registry": {"$ref": "#/definitions/registry"},
+    "endpoints": {"$ref": "#/definitions/endpoints"},
+    "identity": {
+      "oneOf": [
+        {"$ref": "#/definitions/bundledIdentity"},
+        {"$ref": "#/definitions/externalIdentity"}
+      ]
+    },
+    "acceptance": {"$ref": "#/definitions/acceptance"},
+    "privateInputs": {"$ref": "#/definitions/privateInputs"}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "identity": {"$ref": "#/definitions/bundledIdentity"},
+        "acceptance": {
+          "type": "object",
+          "properties": {
+            "loginMode": {"const": "breakGlass"},
+            "loginDriver": {"$ref": "#/definitions/keycloakLoginDriver"}
+          }
+        },
+        "privateInputs": {
+          "type": "object",
+          "properties": {
+            "identityTlsCertificate": {"$ref": "#/definitions/absolutePrivatePath"},
+            "identityTlsPrivateKey": {"$ref": "#/definitions/absolutePrivatePath"},
+            "externalOidcClientSecret": {"type": "null"},
+            "oidcLoginUsername": {"type": "null"},
+            "oidcLoginPassword": {"type": "null"}
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "identity": {"$ref": "#/definitions/bundledIdentity"},
+        "acceptance": {
+          "type": "object",
+          "properties": {
+            "loginMode": {"const": "files"},
+            "loginDriver": {"$ref": "#/definitions/keycloakLoginDriver"}
+          }
+        },
+        "privateInputs": {
+          "type": "object",
+          "properties": {
+            "identityTlsCertificate": {"$ref": "#/definitions/absolutePrivatePath"},
+            "identityTlsPrivateKey": {"$ref": "#/definitions/absolutePrivatePath"},
+            "externalOidcClientSecret": {"type": "null"},
+            "oidcLoginUsername": {"$ref": "#/definitions/absolutePrivatePath"},
+            "oidcLoginPassword": {"$ref": "#/definitions/absolutePrivatePath"}
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "identity": {"$ref": "#/definitions/externalIdentity"},
+        "acceptance": {
+          "type": "object",
+          "properties": {
+            "loginMode": {"const": "files"},
+            "loginDriver": {"$ref": "#/definitions/formLoginDriver"}
+          }
+        },
+        "privateInputs": {
+          "type": "object",
+          "properties": {
+            "identityTlsCertificate": {"type": "null"},
+            "identityTlsPrivateKey": {"type": "null"},
+            "externalOidcClientSecret": {"$ref": "#/definitions/absolutePrivatePath"},
+            "oidcLoginUsername": {"$ref": "#/definitions/absolutePrivatePath"},
+            "oidcLoginPassword": {"$ref": "#/definitions/absolutePrivatePath"},
+            "identityDataServiceValues": {"type": "null"},
+            "identityDatabaseUsername": {"type": "null"},
+            "identityDatabasePassword": {"type": "null"},
+            "identityDatabaseCa": {"type": "null"}
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "absolutePrivatePath": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 4096,
+      "allOf": [
+        {"pattern": "^/\\S(?:.*\\S)?$"},
+        {"not": {"pattern": "[\\u0000-\\u001F\\u007F]"}}
+      ]
+    },
+    "privatePathOrNull": {
+      "oneOf": [
+        {"$ref": "#/definitions/absolutePrivatePath"},
+        {"type": "null"}
+      ]
+    },
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "project"],
+      "properties": {
+        "host": {
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::((?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])))?$"
+        },
+        "project": {
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+        }
+      }
+    },
+    "endpoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platformUrl", "turnUrl"],
+      "properties": {
+        "platformUrl": {
+          "type": "string",
+          "pattern": "^https://(?:\\[[0-9A-Fa-f:]+\\]|[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*)(?::((?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])))?$"
+        },
+        "turnUrl": {
+          "type": "string",
+          "pattern": "^(?:turn|turns):(?:\\[[0-9A-Fa-f:]+\\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)(?::((?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])))?(?:\\?transport=(?:udp|tcp))?$"
+        }
+      }
+    },
+    "bundledIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "issuerUrl", "adminConsoleUrl", "clientId"],
+      "properties": {
+        "mode": {"const": "bundledKeycloak"},
+        "issuerUrl": {"const": "https://keycloak.apps.rke.soez.tw/realms/aileron"},
+        "adminConsoleUrl": {
+          "type": "string",
+          "pattern": "^https://(?:\\[[0-9A-Fa-f:]+\\]|[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*)(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?(?:/[^\\s\\\\?#\\u0000-\\u001F\\u007F]*)?$"
+        },
+        "clientId": {"const": "aileron-frontend"}
+      }
+    },
+    "externalIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "issuerUrl", "clientId"],
+      "properties": {
+        "mode": {"const": "externalOidc"},
+        "issuerUrl": {
+          "type": "string",
+          "pattern": "^https://(?:\\[[0-9A-Fa-f:]+\\]|[A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_])?)(?::(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?/[^/?#\\u0000-\\u001F\\u007F][^?#\\u0000-\\u001F\\u007F]*$"
+        },
+        "clientId": {
+          "type": "string",
+          "minLength": 1,
+          "allOf": [
+            {"pattern": "^\\S"},
+            {"pattern": "\\S$"}
+          ]
+        }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["loginMode", "loginDriver"],
+      "properties": {
+        "loginMode": {"enum": ["breakGlass", "files"]},
+        "loginDriver": {
+          "oneOf": [
+            {"$ref": "#/definitions/keycloakLoginDriver"},
+            {"$ref": "#/definitions/formLoginDriver"}
+          ]
+        }
+      }
+    },
+    "loginSelector": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[^\\s\\u0000-\\u001F\\u007F](?:[^\\u0000-\\u001F\\u007F]*[^\\s\\u0000-\\u001F\\u007F])?$"
+    },
+    "keycloakLoginDriver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"const": "keycloak"}
+      }
+    },
+    "formLoginDriver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "usernameSelector",
+        "passwordSelector",
+        "submitSelector",
+        "errorSelector"
+      ],
+      "properties": {
+        "kind": {"const": "form"},
+        "usernameSelector": {"$ref": "#/definitions/loginSelector"},
+        "passwordSelector": {"$ref": "#/definitions/loginSelector"},
+        "submitSelector": {"$ref": "#/definitions/loginSelector"},
+        "errorSelector": {"$ref": "#/definitions/loginSelector"}
+      }
+    },
+    "privateInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kubeconfig",
+        "backendExecutionProfile",
+        "harborDockerconfig",
+        "registryCa",
+        "appsTlsCertificate",
+        "appsTlsPrivateKey",
+        "appsTlsCa",
+        "oidcCa",
+        "identityTlsCertificate",
+        "identityTlsPrivateKey",
+        "externalOidcClientSecret",
+        "oidcLoginUsername",
+        "oidcLoginPassword",
+        "coreDataServiceValues",
+        "identityDataServiceValues",
+        "platformDatabaseUrl",
+        "platformDatabaseCa",
+        "redisGeneralUrl",
+        "redisJobQueueUrl",
+        "redisJobResultUrl",
+        "redisGeneralCa",
+        "redisJobQueueCa",
+        "redisJobResultCa",
+        "identityDatabaseUsername",
+        "identityDatabasePassword",
+        "identityDatabaseCa"
+      ],
+      "properties": {
+        "kubeconfig": {"$ref": "#/definitions/absolutePrivatePath"},
+        "backendExecutionProfile": {"$ref": "#/definitions/absolutePrivatePath"},
+        "harborDockerconfig": {"$ref": "#/definitions/absolutePrivatePath"},
+        "registryCa": {"$ref": "#/definitions/absolutePrivatePath"},
+        "appsTlsCertificate": {"$ref": "#/definitions/absolutePrivatePath"},
+        "appsTlsPrivateKey": {"$ref": "#/definitions/absolutePrivatePath"},
+        "appsTlsCa": {"$ref": "#/definitions/absolutePrivatePath"},
+        "oidcCa": {"$ref": "#/definitions/absolutePrivatePath"},
+        "identityTlsCertificate": {"$ref": "#/definitions/privatePathOrNull"},
+        "identityTlsPrivateKey": {"$ref": "#/definitions/privatePathOrNull"},
+        "externalOidcClientSecret": {"$ref": "#/definitions/privatePathOrNull"},
+        "oidcLoginUsername": {"$ref": "#/definitions/privatePathOrNull"},
+        "oidcLoginPassword": {"$ref": "#/definitions/privatePathOrNull"},
+        "coreDataServiceValues": {"$ref": "#/definitions/privatePathOrNull"},
+        "identityDataServiceValues": {"$ref": "#/definitions/privatePathOrNull"},
+        "platformDatabaseUrl": {"$ref": "#/definitions/privatePathOrNull"},
+        "platformDatabaseCa": {"$ref": "#/definitions/privatePathOrNull"},
+        "redisGeneralUrl": {"$ref": "#/definitions/privatePathOrNull"},
+        "redisJobQueueUrl": {"$ref": "#/definitions/privatePathOrNull"},
+        "redisJobResultUrl": {"$ref": "#/definitions/privatePathOrNull"},
+        "redisGeneralCa": {"$ref": "#/definitions/privatePathOrNull"},
+        "redisJobQueueCa": {"$ref": "#/definitions/privatePathOrNull"},
+        "redisJobResultCa": {"$ref": "#/definitions/privatePathOrNull"},
+        "identityDatabaseUsername": {"$ref": "#/definitions/privatePathOrNull"},
+        "identityDatabasePassword": {"$ref": "#/definitions/privatePathOrNull"},
+        "identityDatabaseCa": {"$ref": "#/definitions/privatePathOrNull"}
+      }
+    }
+  }
+}

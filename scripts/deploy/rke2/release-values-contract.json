@@ -1,0 +1,74 @@
+{
+  "contractVersion": "aileron-release-values/v1",
+  "components": {
+    "platform-coturn": [{"target": "core", "path": ["coturn", "image"]}],
+    "platform-keycloak": [{"target": "identity", "path": ["images", "keycloak"]}],
+    "platform-postgres": [
+      {"target": "core", "path": ["postgres", "image"]},
+      {"target": "identity", "path": ["images", "postgres"]}
+    ],
+    "platform-redis": [{"target": "core", "path": ["redis", "image"]}],
+    "workspace-canvas": [{"target": "core", "path": ["kubernetes", "canvasImage"]}],
+    "workspace-chrome": [{"target": "core", "path": ["kubernetes", "browserImage"]}],
+    "workspace-manager": [{"target": "core", "path": ["workspaceManager", "image"]}],
+    "workspace-operator": [{"target": "core", "path": ["workspaceOperator", "image"]}],
+    "workspace-runtime": [{"target": "core", "path": ["workspaceOperator", "runtimeImage"]}],
+    "workspace-ui": [{"target": "core", "path": ["frontend", "image"]}]
+  },
+  "homeLab": {
+    "core": {
+      "platformPublicOrigin": "https://aileron.apps.rke.soez.tw",
+      "bootstrap": {
+        "admin": {
+          "enabled": true,
+          "subject": "00000000-0000-4000-8000-000000000001",
+          "username": "admin",
+          "email": "admin@aileron.com"
+        }
+      },
+      "postgres": {
+        "enabled": true
+      },
+      "redis": {
+        "enabled": true
+      },
+      "oidc": {
+        "issuerUrl": "https://keycloak.apps.rke.soez.tw/realms/aileron",
+        "clientId": "aileron-frontend",
+        "clientSecretName": "aileron-oidc-client",
+        "clientSecretKey": "client-secret",
+        "caSecretName": "aileron-oidc-ca",
+        "caSecretKey": "ca.crt"
+      }
+    },
+    "identity": {
+      "global": {
+        "imagePullSecrets": [{"name": "harbor-rke-creds"}]
+      },
+      "realm": "aileron",
+      "issuerUrl": "https://keycloak.apps.rke.soez.tw/realms/aileron",
+      "platformCallbackUrl": "https://aileron.apps.rke.soez.tw/api/v1/oauth2/callback",
+      "clientId": "aileron-frontend",
+      "ingress": {
+        "public": {
+          "hostname": "keycloak.apps.rke.soez.tw",
+          "tlsSecretName": "keycloak-apps-tls"
+        }
+      },
+      "postgres": {
+        "enabled": true,
+        "storage": {
+          "size": "10Gi",
+          "storageClassName": "aileron-local-rwo-retain",
+          "mountRootSupplementalGroup": 100
+        }
+      },
+      "networkPolicy": {
+        "enabled": true,
+        "ingressNamespaceLabels": {
+          "kubernetes.io/metadata.name": "kube-system"
+        }
+      }
+    }
+  }
+}

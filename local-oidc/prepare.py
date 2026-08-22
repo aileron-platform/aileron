@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Render local OIDC and LDAP fixtures without persisting secret material."""
+"""Render the local Keycloak realm without persisting source Secret files."""
 
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import os
 import tempfile
@@ -75,23 +74,9 @@ def write_private_text(path: Path, content: str) -> None:
     temporary_path.replace(path)
 
 
-def ldif_password(value: str) -> str:
-    encoded = base64.b64encode(value.encode("utf-8")).decode("ascii")
-    return f"userPassword:: {encoded}"
-
-
 def render(template_path: Path, output_dir: Path) -> None:
     origin = require_environment("PLATFORM_PUBLIC_ORIGIN")
     validate_origin(origin)
-
-    ldap_admin_password = read_secret(
-        "LDAP_ADMIN_PASSWORD_FILE",
-        reject_surrounding_whitespace=True,
-    )
-    read_secret(
-        "LDAP_CONFIG_PASSWORD_FILE",
-        reject_surrounding_whitespace=True,
-    )
 
     replacements = {
         "__PLATFORM_PUBLIC_ORIGIN__": origin,
@@ -99,11 +84,12 @@ def render(template_path: Path, output_dir: Path) -> None:
         "__OIDC_LOGOUT_PATTERN__": f"{origin}/*",
         "__OIDC_CLIENT_ID__": require_environment("OIDC_CLIENT_ID"),
         "__OIDC_CLIENT_SECRET__": read_secret("OIDC_CLIENT_SECRET_FILE"),
-        "__LDAP_BIND_CREDENTIAL__": ldap_admin_password,
-        "__LOCAL_ADMIN_SUBJECT__": require_environment("BOOTSTRAP_ADMIN_SUBJECT"),
-        "__LOCAL_ADMIN_USERNAME__": require_environment("BOOTSTRAP_ADMIN_USERNAME"),
-        "__LOCAL_ADMIN_EMAIL__": require_environment("BOOTSTRAP_ADMIN_EMAIL"),
-        "__LOCAL_ADMIN_PASSWORD__": read_secret("LOCAL_ADMIN_PASSWORD_FILE"),
+        "__PLATFORM_ADMIN_SUBJECT__": require_environment("BOOTSTRAP_ADMIN_SUBJECT"),
+        "__PLATFORM_ADMIN_USERNAME__": require_environment("BOOTSTRAP_ADMIN_USERNAME"),
+        "__PLATFORM_ADMIN_EMAIL__": require_environment("BOOTSTRAP_ADMIN_EMAIL"),
+        "__PLATFORM_ADMIN_PASSWORD__": read_secret(
+            "LOCAL_OIDC_PLATFORM_ADMIN_PASSWORD_FILE"
+        ),
     }
     template = json.loads(template_path.read_text(encoding="utf-8"))
     rendered = replace_tokens(template, replacements)
@@ -111,35 +97,6 @@ def render(template_path: Path, output_dir: Path) -> None:
         output_dir / "aileron-realm.json",
         json.dumps(rendered, ensure_ascii=False, indent=2) + "\n",
     )
-
-    alice_password = read_secret("LDAP_ALICE_PASSWORD_FILE")
-    bob_password = read_secret("LDAP_BOB_PASSWORD_FILE")
-    seed = f"""dn: ou=people,dc=aileron,dc=local
-objectClass: organizationalUnit
-ou: people
-
-dn: uid=alice,ou=people,dc=aileron,dc=local
-objectClass: inetOrgPerson
-objectClass: organizationalPerson
-cn: Alice Aileron
-sn: Aileron
-givenName: Alice
-uid: alice
-mail: alice@example.com
-{ldif_password(alice_password)}
-
-dn: uid=bob,ou=people,dc=aileron,dc=local
-objectClass: inetOrgPerson
-objectClass: organizationalPerson
-cn: Bob Aileron
-sn: Aileron
-givenName: Bob
-uid: bob
-mail: bob@example.com
-{ldif_password(bob_password)}
-"""
-    write_private_text(output_dir / "10-seed-users.ldif", seed)
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare local OIDC runtime fixtures")

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Aileron identity installation profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mode"],
+  "properties": {
+    "mode": {
+      "enum": ["bundledKeycloak", "externalOidc"]
+    },
+    "bundledKeycloak": {
+      "$ref": "#/definitions/bundledKeycloak"
+    },
+    "externalOidc": {
+      "$ref": "#/definitions/externalOidc"
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {"mode": {"const": "bundledKeycloak"}},
+      "required": ["bundledKeycloak"],
+      "not": {"required": ["externalOidc"]}
+    },
+    {
+      "properties": {"mode": {"const": "externalOidc"}},
+      "required": ["externalOidc"],
+      "not": {"required": ["bundledKeycloak"]}
+    }
+  ],
+  "definitions": {
+    "secretRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "key"],
+      "properties": {
+        "name": {"$ref": "#/definitions/kubernetesName"},
+        "key": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"}
+      }
+    },
+    "oidcProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issuerUrl", "clientId", "clientSecretRef", "caSecretRef"],
+      "properties": {
+        "issuerUrl": {"type": "string", "pattern": "^https://[^/]+/.+$"},
+        "clientId": {"type": "string", "minLength": 1},
+        "clientSecretRef": {"$ref": "#/definitions/secretRef"},
+        "caSecretRef": {"$ref": "#/definitions/secretRef"}
+      }
+    },
+    "bundledKeycloak": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chartPath", "releaseName", "namespace", "issuerUrl", "clientId", "clientSecretRef", "caSecretRef"],
+      "properties": {
+        "chartPath": {"const": "helm/aileron-identity"},
+        "releaseName": {"$ref": "#/definitions/kubernetesName"},
+        "namespace": {"$ref": "#/definitions/kubernetesName"},
+        "issuerUrl": {"type": "string", "pattern": "^https://[^/]+/.+$"},
+        "clientId": {"type": "string", "minLength": 1},
+        "clientSecretRef": {"$ref": "#/definitions/secretRef"},
+        "caSecretRef": {"$ref": "#/definitions/secretRef"}
+      }
+    },
+    "externalOidc": {
+      "$ref": "#/definitions/oidcProjection"
+    },
+    "kubernetesName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+    }
+  }
+}

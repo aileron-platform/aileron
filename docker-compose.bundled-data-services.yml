@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: aileron-postgres-dev
+    restart: unless-stopped
+    entrypoint:
+      - /opt/aileron/postgres-secret-entrypoint.sh
+    command:
+      - postgres
+    environment:
+      POSTGRES_DB: aileron
+      POSTGRES_USER: bootstrap_superuser
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-bootstrap-superuser-password
+    secrets:
+      - postgres-bootstrap-superuser-password
+      - postgres-platform-username
+      - postgres-platform-password
+    ports:
+      - "5433:5432"
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/postgres:/var/lib/postgresql/data"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/scripts/compose/postgres-secret-entrypoint.sh:/opt/aileron/postgres-secret-entrypoint.sh:ro"
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/scripts/compose/001_platform_login.sh:/docker-entrypoint-initdb.d/001_platform_login.sh:ro"
+    networks:
+      - aileron-network-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bootstrap_superuser -d aileron"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: aileron-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6382:6379"
+    volumes:
+      - "${HOST_PROJECT_ROOT:?HOST_PROJECT_ROOT must be set}/data/redis:/data"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+      - --save
+      - "900"
+      - "1"
+      - --save
+      - "300"
+      - "10"
+      - --save
+      - "60"
+      - "10000"
+    networks:
+      - aileron-network-dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  data-service-preflight:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+secrets:
+  postgres-bootstrap-superuser-password:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/postgres-bootstrap-superuser-password"
+  postgres-platform-username:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/postgres-platform-username"
+  postgres-platform-password:
+    file: "${HOST_PLATFORM_SECRETS_DIR:?HOST_PLATFORM_SECRETS_DIR must be set}/postgres-platform-password"

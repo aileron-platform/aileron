@@ -49,6 +49,18 @@ services:
     entrypoint: ["/bin/sh", "-ec"]
     command: ["exec sleep 3600"]
 
+  platform-keycloak-image:
+    image: aileron/platform-keycloak:k3s-e2e
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
+  nfs-ganesha-image:
+    image: aileron/nfs-ganesha:k3s-e2e
+    pull_policy: never
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec sleep 3600"]
+
   workspace-probe-image:
     image: aileron/kubernetes-conformance-probe:k3s-e2e
     pull_policy: never
@@ -74,6 +86,10 @@ services:
         condition: service_started
       platform-postgres-image:
         condition: service_started
+      platform-keycloak-image:
+        condition: service_started
+      nfs-ganesha-image:
+        condition: service_started
       workspace-probe-image:
         condition: service_started
     entrypoint: ["/bin/sh", "-ec"]
@@ -96,6 +112,8 @@ services:
           aileron/product-conformance:k3s-e2e \
           aileron/platform-redis:k3s-e2e \
           aileron/platform-postgres:k3s-e2e \
+          aileron/platform-keycloak:k3s-e2e \
+          aileron/nfs-ganesha:k3s-e2e \
           aileron/kubernetes-conformance-probe:k3s-e2e
         docker image inspect \
           --format '{{index .RepoDigests 0}}' \
@@ -105,7 +123,9 @@ services:
         for source_image in \
           aileron/workspace-runtime:k3s-e2e \
           aileron/workspace-chrome:k3s-e2e \
-          aileron/workspace-canvas:k3s-e2e
+          aileron/workspace-canvas:k3s-e2e \
+          aileron/platform-postgres:k3s-e2e \
+          aileron/platform-keycloak:k3s-e2e
         do
           immutable_image="$$(docker image inspect \
             --format '{{index .RepoDigests 0}}' \
@@ -139,30 +159,14 @@ services:
       - image-cache:/images
 
   nfs-server:
-    platform: linux/amd64
-    image: erichough/nfs-server:2.2.1
+    image: aileron/nfs-ganesha:k3s-e2e
+    pull_policy: never
     privileged: true
-    environment:
-      NFS_DISABLE_VERSION_3: "true"
-      NFS_EXPORT_0: >-
-        /exports *(rw,sync,no_subtree_check,root_squash,anonuid=65534,anongid=2000,insecure,fsid=0,crossmnt)
-    entrypoint: ["/usr/bin/env", "bash", "-euc"]
-    command:
-      - |
-        install -d -m 2770 -g 2000 \
-          /exports/knowledge-bases \
-          /exports/manager-state \
-          /exports/runtime-homes \
-          /exports/workspaces \
-          /exports/workspaces/11111111-1111-4111-8111-111111111111 \
-          /exports/runtime-homes/11111111-1111-4111-8111-111111111111
-        exec /usr/local/bin/entrypoint.sh
     healthcheck:
       test:
         - CMD-SHELL
         - >-
-          exportfs -v | grep -q /exports
-          && grep -qx Y /proc/fs/nfsd/v4_end_grace
+          nc -z 127.0.0.1 2049
       interval: 5s
       timeout: 3s
       retries: 30
@@ -191,6 +195,7 @@ services:
         exec k3s server \
           --disable=traefik \
           --disable=servicelb \
+          --kubelet-arg='eviction-hard=memory.available<100Mi,nodefs.available<1%,imagefs.available<1%,nodefs.inodesFree<1%,imagefs.inodesFree<1%,pid.available<1000' \
           --node-name=k3s-server \
           --tls-san=k3s-server \
           --write-kubeconfig-mode=666
@@ -242,7 +247,9 @@ services:
         while [ ! -s /image-source/e2e-images.tar ]; do sleep 1; done
         mkdir -p /var/lib/rancher/k3s/agent/images
         cp /image-source/e2e-images.tar /var/lib/rancher/k3s/agent/images/
-        exec k3s agent --node-name=k3s-agent
+        exec k3s agent \
+          --kubelet-arg='eviction-hard=memory.available<100Mi,nodefs.available<1%,imagefs.available<1%,nodefs.inodesFree<1%,imagefs.inodesFree<1%,pid.available<1000' \
+          --node-name=k3s-agent
     healthcheck:
       test:
         - CMD-SHELL
@@ -292,7 +299,10 @@ services:
       PRODUCT_DRIVER_IMAGE: aileron/product-conformance:k3s-e2e
       REDIS_IMAGE: aileron/platform-redis:k3s-e2e
       POSTGRES_IMAGE: aileron/platform-postgres:k3s-e2e
+      KEYCLOAK_IMAGE: aileron/platform-keycloak:k3s-e2e
       PRODUCT_CONFORMANCE_HOOK: /repo/scripts/test/kubernetes/product-conformance/product-conformance-hook.sh
+      PRODUCT_DATA_SERVICE_MODE: ${PRODUCT_DATA_SERVICE_MODE:-external}
+      PRODUCT_STACK_TRACE: ${PRODUCT_STACK_TRACE:-false}
       OPERATOR_IMAGE: aileron/workspace-operator:k3s-e2e
       NFS_SERVER: nfs-server
       PLATFORM_STORAGE_GID: "2000"

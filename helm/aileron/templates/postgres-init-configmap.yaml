@@ -1,4 +1,3 @@
-{{- if .Values.postgres.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -6,7 +5,12 @@ metadata:
   labels:
     {{- include "aileron.labels" . | nindent 4 }}
     app.kubernetes.io/component: postgres-init
+  {{- if not .Values.postgres.enabled }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade,pre-rollback
+    "helm.sh/hook-weight": "-30"
+    "helm.sh/hook-delete-policy": before-hook-creation
+  {{- end }}
 data:
   001_init_schema.sql: |
 {{ .Files.Get "files/init-sql/001_init_schema.sql" | indent 4 }}
-{{- end }}

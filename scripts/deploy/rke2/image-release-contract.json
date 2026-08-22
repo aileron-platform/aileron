@@ -1,0 +1,34 @@
+{
+  "contractVersion": "aileron-image-release/v1",
+  "publishedComponents": [
+    "platform-coturn",
+    "platform-keycloak",
+    "platform-postgres",
+    "platform-redis",
+    "workspace-canvas",
+    "workspace-chrome",
+    "workspace-manager",
+    "workspace-operator",
+    "workspace-runtime",
+    "workspace-runtime-base-lite",
+    "workspace-ui"
+  ],
+  "optionalPublishedComponents": [
+    "platform-redis"
+  ],
+  "workloadComponents": [
+    "platform-coturn",
+    "platform-keycloak",
+    "platform-postgres",
+    "platform-redis",
+    "workspace-canvas",
+    "workspace-chrome",
+    "workspace-manager",
+    "workspace-operator",
+    "workspace-runtime",
+    "workspace-ui"
+  ],
+  "buildEvidenceComponents": [
+    "workspace-runtime-base-lite"
+  ]
+}

@@ -1,0 +1,88 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: aileron-identity-break-glass-bootstrap
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade,post-rollback
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aileron-identity-break-glass-bootstrap
+        app.kubernetes.io/part-of: aileron-identity
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      {{- include "aileron-identity.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrap
+          image: "{{ .Values.images.keycloak.repository }}@{{ .Values.images.keycloak.digest }}"
+          imagePullPolicy: {{ .Values.images.keycloak.pullPolicy }}
+          args:
+            - bootstrap-principals
+            - {{ .Values.realm | quote }}
+            - http://aileron-identity-keycloak:8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: administrator-secret
+              mountPath: /run/secrets/keycloak-bootstrap-admin
+              readOnly: true
+            - name: break-glass-secret
+              mountPath: /run/secrets/keycloak-break-glass
+              readOnly: true
+            - name: platform-administrator-secret
+              mountPath: /run/secrets/keycloak-platform-admin
+              readOnly: true
+            - name: runtime-tmp
+              mountPath: /tmp
+      volumes:
+        - name: administrator-secret
+          secret:
+            secretName: {{ .Values.secrets.keycloakAdministrator.name }}
+            defaultMode: 0440
+        - name: break-glass-secret
+          secret:
+            secretName: {{ .Values.secrets.breakGlass.name }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.secrets.breakGlass.usernameKey }}
+                path: username
+              - key: {{ .Values.secrets.breakGlass.emailKey }}
+                path: email
+              - key: {{ .Values.secrets.breakGlass.passwordKey }}
+                path: password
+        - name: platform-administrator-secret
+          secret:
+            secretName: {{ .Values.secrets.platformAdministrator.name }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.secrets.platformAdministrator.subjectKey }}
+                path: subject
+              - key: {{ .Values.secrets.platformAdministrator.usernameKey }}
+                path: username
+              - key: {{ .Values.secrets.platformAdministrator.emailKey }}
+                path: email
+              - key: {{ .Values.secrets.platformAdministrator.passwordKey }}
+                path: password
+              - key: {{ .Values.secrets.platformAdministrator.importKey }}
+                path: import.json
+        - name: runtime-tmp
+          emptyDir: {}

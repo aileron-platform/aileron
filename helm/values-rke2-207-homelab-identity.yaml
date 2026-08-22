@@ -1,0 +1,84 @@
+# RKE2 207 HomeLab Identity Plane profile. Deployment automation must override
+# both placeholder digests with immutable digests produced by the same release.
+global:
+  imagePullSecrets:
+    - name: harbor-rke-creds
+
+realm: aileron
+issuerUrl: https://keycloak.apps.rke.soez.tw/realms/aileron
+platformCallbackUrl: https://aileron.apps.rke.soez.tw/api/v1/oauth2/callback
+clientId: aileron-frontend
+
+images:
+  keycloak:
+    repository: harbor.rke.soez.tw/library/platform-keycloak
+    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    pullPolicy: IfNotPresent
+  postgres:
+    repository: harbor.rke.soez.tw/library/platform-postgres
+    digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    pullPolicy: IfNotPresent
+
+secrets:
+  postgres:
+    name: identity-postgres
+    usernameKey: username
+    passwordKey: password
+  keycloakAdministrator:
+    name: keycloak-bootstrap-admin
+    usernameKey: username
+    passwordKey: password
+  breakGlass:
+    name: keycloak-break-glass
+    usernameKey: username
+    emailKey: email
+    passwordKey: password
+  realmImport:
+    name: keycloak-realm-import
+    realmKey: realm.json
+
+postgres:
+  enabled: true
+  database: keycloak
+  storage:
+    size: 10Gi
+    storageClassName: aileron-local-rwo-retain
+    mountRootSupplementalGroup: 100
+  resources: {}
+
+keycloak:
+  replicas: 1
+  resources: {}
+
+ingress:
+  public:
+    enabled: true
+    className: nginx
+    hostname: keycloak.apps.rke.soez.tw
+    tlsSecretName: keycloak-apps-tls
+    annotations: {}
+  admin:
+    enabled: true
+    className: nginx
+    hostname: keycloak-admin.apps.rke.soez.tw
+    tlsSecretName: keycloak-apps-tls
+    allowedCidrs:
+      - 192.168.50.0/24
+    annotations: {}
+
+networkPolicy:
+  enabled: true
+  ingressNamespaceLabels:
+    kubernetes.io/metadata.name: kube-system
+
+backup:
+  enabled: false
+  claimName: aileron-identity-backup
+  storage:
+    size: 10Gi
+    storageClassName: aileron-nfs-rwx-retain
+    accessMode: ReadWriteMany
+    mountRootSupplementalGroup: 100
+
+restore:
+  enabled: false

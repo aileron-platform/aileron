@@ -53,6 +53,11 @@ crd = yaml.safe_load(
 )
 schema = crd["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
 validator = jsonschema.Draft7Validator(schema)
+database_trust_schema = schema["properties"]["spec"]["properties"]["runtime"][
+    "properties"
+]["databaseTrust"]
+assert "properties" in database_trust_schema
+assert "additionalProperties" not in database_trust_schema
 
 workspace = yaml.safe_load(
     (generated_dir / "workspace.yaml").read_text(encoding="utf-8")

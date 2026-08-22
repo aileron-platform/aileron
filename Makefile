@@ -16,6 +16,7 @@
 
 BAKE := docker buildx bake
 COMPOSE := docker compose
+LOCAL_COMPOSE := $(COMPOSE) -f docker-compose.yml -f docker-compose.bundled-data-services.yml
 
 CYAN := \033[0;36m
 GREEN := \033[0;32m
@@ -49,12 +50,12 @@ push-release: ## Push release images with an immutable RELEASE_TAG
 	@$(BAKE) --push release
 
 start: ## Start the local stack from existing images without building
-	@$(COMPOSE) up --remove-orphans --no-build -d
+	@$(LOCAL_COMPOSE) up --remove-orphans --no-build -d
 
 up: build start ## Build once and then start the local stack
 
 down: ## Stop the local stack
-	@$(COMPOSE) down --remove-orphans
+	@$(LOCAL_COMPOSE) down --remove-orphans
 
 full-reset: ## Remove the stack, dynamic workspaces, and local data
 	@python3 scripts/dev/docker/ops.py full-reset

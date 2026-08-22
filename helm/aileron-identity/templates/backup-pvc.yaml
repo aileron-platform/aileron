@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.backup.claimName }}
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+spec:
+  accessModes: [{{ .Values.backup.storage.accessMode | quote }}]
+  {{- if .Values.backup.storage.storageClassName }}
+  storageClassName: {{ .Values.backup.storage.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.storage.size }}

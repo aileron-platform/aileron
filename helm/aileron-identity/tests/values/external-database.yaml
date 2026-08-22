@@ -1,0 +1,14 @@
+postgres:
+  enabled: false
+  jdbcUrl: jdbc:postgresql://identity-db.identity-data.svc.cluster.local:5432/keycloak?sslmode=verify-full
+  revision: identity-database-v1
+  caSecretName: identity-database-ca
+  caSecretKey: ca.crt
+
+networkPolicy:
+  externalDatabaseEgress:
+    mode: selector
+    namespaceLabels:
+      kubernetes.io/metadata.name: identity-data
+    podLabels:
+      app.kubernetes.io/name: postgres

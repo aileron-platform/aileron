@@ -1,0 +1,16 @@
+{{- if not .Values.postgres.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aileron-identity-data-service-preflight
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-service-preflight-script
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade,pre-rollback
+    "helm.sh/hook-weight": "-30"
+    "helm.sh/hook-delete-policy": before-hook-creation
+data:
+  preflight.sh: |
+{{ .Files.Get "files/data-service-preflight.sh" | indent 4 }}
+{{- end }}

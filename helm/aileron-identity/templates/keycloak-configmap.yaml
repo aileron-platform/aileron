@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aileron-identity-keycloak-config
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+data:
+  issuer-url: {{ .Values.issuerUrl | quote }}
+  client-id: {{ .Values.clientId | quote }}
+  platform-callback-url: {{ .Values.platformCallbackUrl | quote }}
+  db-url: {{ include "aileron-identity.databaseJdbcUrl" . | quote }}
+  hostname: {{ printf "https://%s" .Values.ingress.public.hostname | quote }}
+  hostname-admin: {{ printf "https://%s" .Values.ingress.admin.hostname | quote }}

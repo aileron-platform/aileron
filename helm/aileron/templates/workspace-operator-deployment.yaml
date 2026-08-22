@@ -76,6 +76,10 @@ spec:
                 configMapKeyRef:
                   name: {{ include "aileron.fullname" . }}-platform-config
                   key: CILIUM_ENABLED
+            {{- if and (hasKey .Values "platformDatabase") (hasKey .Values.platformDatabase "ciliumEgress") }}
+            - name: PLATFORM_DATABASE_CILIUM_EGRESS_JSON
+              value: {{ .Values.platformDatabase.ciliumEgress | toJson | quote }}
+            {{- end }}
             - name: AILERON_MANAGER_INTERNAL_URL
               value: "http://{{ include "aileron.fullname" . }}-workspace-manager.{{ .Release.Namespace }}.svc.cluster.local:3001"
             - name: AILERON_PLATFORM_PUBLIC_ORIGIN

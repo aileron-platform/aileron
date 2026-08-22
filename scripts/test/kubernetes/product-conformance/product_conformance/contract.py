@@ -9,6 +9,7 @@ from typing import Any, Mapping
 from uuid import UUID
 
 CAPABILITY_KEYS = (
+    "externalOidcAuthorizationCodeJit",
     "managerApiLifecycle",
     "durableJobs",
     "rapidConsecutiveMutations",

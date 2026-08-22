@@ -3,6 +3,22 @@ platformPublicOrigin: https://aileron.apps.example.com
 ingress:
   tlsMode: controllerManaged
 
+redis:
+  enabled: false
+  connections:
+    general:
+      revision: redis-general-v1
+      urlSecretName: platform-redis-general
+      urlSecretKey: url
+    jobQueue:
+      revision: redis-job-queue-v1
+      urlSecretName: platform-redis-job-queue
+      urlSecretKey: url
+    jobResult:
+      revision: redis-job-result-v1
+      urlSecretName: platform-redis-job-result
+      urlSecretKey: url
+
 turn:
   enabled: true
   profile:

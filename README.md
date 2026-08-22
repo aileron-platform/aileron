@@ -2,7 +2,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/aileron-platform/aileron/badge)](https://securityscorecards.dev/viewer/?uri=github.com/aileron-platform/aileron)
 [![License](https://img.shields.io/github/license/aileron-platform/aileron)](https://github.com/aileron-platform/aileron/blob/develop/LICENSE)
 
-[繁體中文](./README.zh-TW.md)
+[Traditional Chinese](./README.zh-TW.md)
 
 > **Standardized AI Agent Workspaces for Enterprise Teams**
 
@@ -60,11 +60,11 @@ Aileron is built to solve both sides of that problem:
 
 ## Agent Support Status
 
-Aileron currently offers the most complete integration for **Claude Code**, while continuing to expand support for other agents.
+Aileron fully supports **Claude Code**, **OpenCode**, and **Codex** as first-class agent engines.
 
-- `Claude Code`: most complete support today
-- `OpenCode`: expanding support
-- `Codex`: expanding support
+- `Claude Code`: fully supported
+- `OpenCode`: fully supported
+- `Codex`: fully supported
 
 ---
 
@@ -77,12 +77,12 @@ Aileron is built on a modern microservices architecture:
 - **Workspace Runtime**: secure containerized execution runtime for agents
 - **Workspace Terminal**: Go-based terminal / WebSocket service
 - **Workspace Operator**: Kubernetes-native dynamic workspace provisioning
-- **Agent Tools**: native integration with Claude Code and related workspace tooling
+- **Agent Tools**: first-class Claude Code, OpenCode, and Codex integrations with related workspace tooling
 - **Infrastructure**:
   - **PostgreSQL**: relational persistence
   - **Redis**: caching and task coordination
   - **OIDC provider**: external identity and access management contract
-  - **Draw.io / Flower**: diagramming and task monitoring
+  - **Flower**: task monitoring
 
 ---
 
@@ -178,23 +178,23 @@ python .\scripts\dev\docker\ops.py down
 python scripts/dev/docker/ops.py down
 ```
 
-`down` 是非破壞性停止：它只停止本機 stack，保留 volumes、PostgreSQL 與 Workspace 持久資料。
+`down` is non-destructive: it stops the local stack while preserving volumes, PostgreSQL data, and persistent Workspace data.
 
-### 完整重置
+### Full Reset
 
-`full-reset` 是唯一可由 host 執行的破壞性重置。它會清除動態 Workspace、平台 volumes，以及 `data/` 下包含 PostgreSQL 在內的本機持久資料；只有確認這些資源均已清除才算完成。
+`full-reset` is the only destructive reset supported from the host. It removes dynamic Workspaces, platform volumes, and local persistent data under `data/`, including PostgreSQL. The reset succeeds only after all required resources have been removed.
 
-macOS / Linux：
+macOS / Linux:
 
 ```bash
 make full-reset
 ```
 
-> **警告：** 不要直接刪除單一 Workspace 的 Pod／Container。Workspace 的永久刪除必須透過 Manager UI 或 API，讓 execution plane、Workspace DB、持久資料與權限由同一個冪等 DELETE 流程收斂。
+> **Warning:** Do not delete an individual Workspace Pod or container directly. Permanently delete a Workspace through the Manager UI or API so the execution plane, Workspace database records, persistent data, and permissions converge through the same idempotent `DELETE` workflow.
 
-### 完整重置後重新啟動
+### Restart After a Full Reset
 
-執行 `full-reset` 後，以標準 host CLI 重新啟動：
+After `full-reset`, restart the platform through the standard host CLI:
 
 #### Windows PowerShell
 
@@ -215,9 +215,8 @@ python scripts/dev/docker/ops.py up --build
 | Service | URL | Username | Password |
 |---|---|---:|---:|
 | Aileron Frontend (bundled adapter bootstrap user) | http://localhost:8082 | admin | admin123 |
-| Optional bundled OIDC adapter admin | http://localhost:8080/admin | admin | admin |
+| Optional bundled OIDC adapter admin | http://localhost:8080/admin | keycloak-admin | `keycloak-bootstrap-admin-password` Secret |
 | Manager API (same origin) | http://localhost:8082/api/v1 | - | - |
-| Draw.io | http://localhost:8083 | - | - |
 
 ---
 
@@ -317,7 +316,7 @@ the stack beyond your local machine, make sure to:
 | Stop services and preserve data | `make down` |
 | Full local reset (destructive) | `make full-reset` |
 
-> `down` 保留資料；`full-reset` 是唯一 host destructive reset。單一 Workspace 必須透過 Manager UI 或 API 永久刪除。
+> `down` preserves data, while `full-reset` is the only destructive host reset. Permanently delete individual Workspaces through the Manager UI or API.
 
 ---
 
@@ -332,7 +331,7 @@ aileron/
 ├── workspace-operator/    # Kubernetes workspace operator
 ├── workspace-chrome/      # Browser integration module
 ├── workspace-canvas/      # Frontend integration module
-├── directory/             # Local LDAP development seed data
+├── local-oidc/            # Docker bundled Keycloak OIDC (no LDAP seed)
 ├── scripts/               # Dev / test / ops scripts
 ├── data/                  # Local persistence (gitignored)
 └── helm/                  # Kubernetes deployment charts

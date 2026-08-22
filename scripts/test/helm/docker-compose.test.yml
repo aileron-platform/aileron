@@ -1,0 +1,12 @@
+services:
+  helm-contract-test:
+    build:
+      context: ../../..
+      dockerfile: scripts/test/helm/Dockerfile
+      args:
+        SOURCE_REVISION: ${AILERON_SOURCE_REVISION:-development}
+    image: ${AILERON_HELM_CONTRACT_TEST_IMAGE:-ailerondocker/helm-contract-test:development}
+    platform: linux/amd64
+    working_dir: /repo
+    volumes:
+      - ${AILERON_SUITE_SOURCE_ROOT:-../../..}:/repo:ro

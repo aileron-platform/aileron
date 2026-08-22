@@ -1,0 +1,131 @@
+{
+  "contractVersion": "aileron-homelab-acceptance/v11",
+  "reportSchemaVersion": "aileron-acceptance-report/v9",
+  "producerExecutable": "scripts/deploy/rke2/acceptance_producer.py",
+  "producerVersion": "6",
+  "commonRequiredReports": [
+    "suites",
+    "offlineOidcConformance",
+    "imageRelease",
+    "cleanReset",
+    "oidcWorkspace",
+    "terminal",
+    "http",
+    "browser",
+    "websocket",
+    "turn",
+    "workspaceLifecycle",
+    "restart",
+    "soak"
+  ],
+  "modeRequiredReports": {
+    "bundledKeycloak": [
+      "identity",
+      "adminDisableLogin"
+    ],
+    "externalOidc": []
+  },
+  "clusterScopedReports": [
+    "suites",
+    "offlineOidcConformance",
+    "imageRelease",
+    "cleanReset",
+    "identity"
+  ],
+  "workspaceScopedReports": [
+    "oidcWorkspace",
+    "terminal",
+    "http",
+    "browser",
+    "websocket",
+    "turn",
+    "workspaceLifecycle",
+    "restart",
+    "soak",
+    "adminDisableLogin"
+  ],
+  "causalRoots": [
+    "suites",
+    "offlineOidcConformance"
+  ],
+  "modeTerminalReports": {
+    "bundledKeycloak": [
+      "adminDisableLogin"
+    ],
+    "externalOidc": [
+      "soak"
+    ]
+  },
+  "causalEdges": [
+    ["suites", "cleanReset"],
+    ["offlineOidcConformance", "cleanReset"],
+    ["cleanReset", "imageRelease"],
+    ["imageRelease", "identity"],
+    ["imageRelease", "oidcWorkspace"],
+    ["identity", "oidcWorkspace"],
+    ["oidcWorkspace", "terminal"],
+    ["oidcWorkspace", "http"],
+    ["oidcWorkspace", "browser"],
+    ["oidcWorkspace", "websocket"],
+    ["oidcWorkspace", "turn"],
+    ["terminal", "workspaceLifecycle"],
+    ["http", "workspaceLifecycle"],
+    ["browser", "workspaceLifecycle"],
+    ["websocket", "workspaceLifecycle"],
+    ["turn", "workspaceLifecycle"],
+    ["workspaceLifecycle", "restart"],
+    ["restart", "soak"],
+    ["soak", "adminDisableLogin"]
+  ],
+  "minimumSoakSeconds": 1800,
+  "soakSampleIntervalSeconds": 60,
+  "maximumSoakSampleGapSeconds": 75,
+  "minimumSoakSamples": 31,
+  "maximumSoakClockDriftMilliseconds": 2000,
+  "maximumReportAgeSeconds": 86400,
+  "requiredProducers": {
+    "cleanReset": "aileron-reset-verifier",
+    "imageRelease": "aileron-release-verifier",
+    "identity": "aileron-identity-verifier",
+    "oidcWorkspace": "aileron-oidc-workspace-probe",
+    "terminal": "aileron-terminal-probe",
+    "http": "aileron-http-probe",
+    "browser": "aileron-browser-ui-probe",
+    "websocket": "aileron-websocket-probe",
+    "turn": "aileron-turn-probe",
+    "workspaceLifecycle": "aileron-workspace-lifecycle-probe",
+    "restart": "aileron-restart-probe",
+    "soak": "aileron-soak-runner",
+    "adminDisableLogin": "aileron-admin-disable-probe",
+    "offlineOidcConformance": "aileron-offline-oidc-conformance",
+    "suites": "aileron-container-suite-verifier"
+  },
+  "requiredNamespaces": [
+    "aileron-identity-system",
+    "aileron-turn-system",
+    "workspace-system"
+  ],
+  "requiredImageComponents": [
+    "platform-coturn",
+    "platform-keycloak",
+    "platform-postgres",
+    "platform-redis",
+    "workspace-canvas",
+    "workspace-chrome",
+    "workspace-manager",
+    "workspace-operator",
+    "workspace-runtime",
+    "workspace-runtime-base-lite",
+    "workspace-ui"
+  ],
+  "requiredSuites": [
+    "docker",
+    "helm",
+    "frontend",
+    "manager",
+    "operator",
+    "identity",
+    "platform-conformance",
+    "kubernetes-hardening"
+  ]
+}

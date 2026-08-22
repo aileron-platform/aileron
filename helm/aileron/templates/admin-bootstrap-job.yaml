@@ -1,4 +1,10 @@
 {{- if .Values.bootstrap.admin.enabled }}
+{{- $platformDatabaseCASecretName := "" }}
+{{- $platformDatabaseCASecretKey := "" }}
+{{- if not .Values.postgres.enabled }}
+{{- $platformDatabaseCASecretName = .Values.platformDatabase.caSecretName | default "" | trim }}
+{{- $platformDatabaseCASecretKey = .Values.platformDatabase.caSecretKey | default "" | trim }}
+{{- end }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -8,24 +14,38 @@ metadata:
     {{- include "aileron.labels" . | nindent 4 }}
     app.kubernetes.io/component: admin-bootstrap
   annotations:
-    "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-weight": "10"
+    {{- if not .Values.postgres.enabled }}
+    "helm.sh/hook": pre-install,pre-upgrade,pre-rollback
+    "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    {{- end }}
 spec:
   backoffLimit: 3
-  ttlSecondsAfterFinished: 600
   template:
     metadata:
       labels:
         {{- include "aileron.componentPodLabels" (dict "component" "admin-bootstrap" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
     spec:
       restartPolicy: OnFailure
+      {{- if .Values.postgres.enabled }}
+      serviceAccountName: {{ include "aileron.fullname" . }}-data-service-gate
+      automountServiceAccountToken: true
+      {{- else }}
       automountServiceAccountToken: false
+      {{- end }}
       {{- include "aileron.imagePullSecrets" . | nindent 6 }}
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+        {{- with .Values.kubernetes.platformStorageGid }}
+        fsGroup: {{ . }}
+        fsGroupChangePolicy: OnRootMismatch
+        {{- end }}
+      {{- if .Values.postgres.enabled }}
+      initContainers:
+        {{- include "aileron.waitForJobInitContainer" (dict "root" . "name" "wait-for-platform-schema" "jobName" (printf "%s-postgres-bootstrap" (include "aileron.fullname" .))) | nindent 8 }}
+      {{- end }}
       containers:
         - name: bootstrap-administrator
           image: {{ include "aileron.imageReference" (dict "name" "workspaceManager.image" "image" .Values.workspaceManager.image "production" .Values.security.requireStrongSecrets) | quote }}
@@ -44,10 +64,11 @@ spec:
             - name: DATABASE_URL_FILE
               value: /run/secrets/aileron/database-url
             - name: OIDC_ISSUER_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "aileron.fullname" . }}-platform-config
-                  key: OIDC_ISSUER_URL
+              value: {{ required "oidc.issuerUrl is required" .Values.oidc.issuerUrl | quote }}
+            - name: OIDC_CLIENT_ID
+              value: {{ .Values.oidc.clientId | quote }}
+            - name: PLATFORM_PUBLIC_ORIGIN
+              value: {{ include "aileron.platformPublicOrigin" . | quote }}
             - name: BOOTSTRAP_ADMIN_SUBJECT
               value: {{ .Values.bootstrap.admin.subject | quote }}
             - name: BOOTSTRAP_ADMIN_USERNAME
@@ -70,6 +91,11 @@ spec:
             - name: platform-secrets
               mountPath: /run/secrets/aileron
               readOnly: true
+            {{- if ne $platformDatabaseCASecretName "" }}
+            - name: platform-database-ca
+              mountPath: /etc/aileron/data-service-ca/platform-database
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
@@ -80,4 +106,13 @@ spec:
             items:
               - key: {{ .Values.platformSecrets.databaseUrlKey }}
                 path: database-url
+        {{- if ne $platformDatabaseCASecretName "" }}
+        - name: platform-database-ca
+          secret:
+            secretName: {{ $platformDatabaseCASecretName }}
+            defaultMode: 0444
+            items:
+              - key: {{ $platformDatabaseCASecretKey }}
+                path: ca.crt
+        {{- end }}
 {{- end }}

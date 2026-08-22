@@ -1,0 +1,21 @@
+{
+  "contractVersion": "1",
+  "identities": [
+    {"identity": "browser", "serviceComponent": "workspace-browser", "port": 6080},
+    {"identity": "canvas", "serviceComponent": "workspace-canvas", "port": 3003},
+    {"identity": "runtime", "serviceComponent": "workspace-runtime", "port": 3002},
+    {"identity": "terminal", "serviceComponent": "workspace-runtime", "port": 3004}
+  ],
+  "vectors": [
+    {
+      "workspaceId": "ws-123",
+      "namespace": "team-a",
+      "expected": {
+        "browser": {"serviceName": "workspace-browser-ws-123", "fqdn": "workspace-browser-ws-123.team-a.svc.cluster.local", "port": 6080, "url": "http://workspace-browser-ws-123.team-a.svc.cluster.local:6080"},
+        "canvas": {"serviceName": "workspace-canvas-ws-123", "fqdn": "workspace-canvas-ws-123.team-a.svc.cluster.local", "port": 3003, "url": "http://workspace-canvas-ws-123.team-a.svc.cluster.local:3003"},
+        "runtime": {"serviceName": "workspace-runtime-ws-123", "fqdn": "workspace-runtime-ws-123.team-a.svc.cluster.local", "port": 3002, "url": "http://workspace-runtime-ws-123.team-a.svc.cluster.local:3002"},
+        "terminal": {"serviceName": "workspace-runtime-ws-123", "fqdn": "workspace-runtime-ws-123.team-a.svc.cluster.local", "port": 3004, "url": "http://workspace-runtime-ws-123.team-a.svc.cluster.local:3004"}
+      }
+    }
+  ]
+}

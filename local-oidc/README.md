@@ -1,15 +1,16 @@
 # 本機 OIDC profile 資產
 
-根 `docker-compose.yml` 的 `local-oidc` profile 使用本目錄的 template 與準備程式，於啟動時把 mounted Secret 檔案轉成 Keycloak realm 與 LDAP seed。產出的檔案只存在 Compose volume，不會寫回 Repository。
+根 `docker-compose.yml` 的 `local-oidc` profile 使用本目錄的 template 與準備程式，於啟動時把 mounted Secret 檔案轉成 Keycloak realm。產出的檔案只存在 Compose volume，不會寫回 Repository。
 
-OpenLDAP 直接使用 `osixia/openldap:1.5.0` 的 `LDAP_ADMIN_PASSWORD_FILE` 與
-`LDAP_CONFIG_PASSWORD_FILE` 介面。該第三方 image 只在首次初始化階段讀取檔案，接著刪除
-startup environment，再啟動長期 `slapd`；repository 不以 wrapper 將 Secret value 傳入
-子程序環境。Keycloak 直接匯入 `aileron` realm；realm 內已有本機緊急管理員，因此不建立
-master realm bootstrap administrator，也不需要 `keycloak-admin-password`。
+此 profile 只啟動 Keycloak。`keycloak-bootstrap-admin-password` 只建立獨立的 Keycloak
+Admin Console 管理員。`aileron` realm 的 Aileron 平台管理員直接使用
+`BOOTSTRAP_ADMIN_SUBJECT`、`BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_EMAIL` 與
+`local-oidc-platform-admin-password`，因此 OIDC subject 與 Manager bootstrap snapshot
+完全一致。隔離的本機環境預設使用 `admin`／`admin123`，應用授權仍由 canonical
+`(issuer, subject)` 平台授權流程管理。
 
-`ldap-admin-password` 與 `ldap-config-password` 代表密碼的精確 bytes，不得包含前後空白
-或結尾換行。`local-oidc-config` 會在 OpenLDAP 啟動前驗證此契約，不符合時 fail closed。
+realm 預設關閉 self-registration，一般原生使用者由 Admin Console 管理。未來若整合 LDAP，
+只能在 Keycloak 內以 User Federation 擴充，不得改變本 profile 的 Aileron OIDC 契約。
 
 啟用方式：
 

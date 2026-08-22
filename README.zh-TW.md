@@ -1,6 +1,6 @@
 # ✈️ Aileron
 
-[English](./README.md)
+[英文版](./README.md)
 
 > **為企業團隊打造的標準化 AI Agent 工作區平台**
 
@@ -12,16 +12,16 @@ Aileron 是一個為企業打造的 AI Agent 工作區平台，協助組織在�
 
 ## 願景
 
-Aileron 目標成為企業導入 AI Agents 的標準工作區編排層，讓組織可以在既有規範與治理框架下，穩定擴展 Agent-driven development。
+Aileron 目標成為企業導入 AI Agent 的標準工作區編排層，讓組織可以在既有規範與治理框架下，穩定擴展由 Agent 驅動的開發流程。
 
 ---
 
-## Demo｜產品畫面
+## 產品展示
 
-| Web Terminal | Agent Login |
+| 網頁終端機 | Agent 登入 |
 |---|---|
 | [![Web Terminal Demo](https://img.youtube.com/vi/7ddBnS7sr0M/hqdefault.jpg)](https://youtu.be/7ddBnS7sr0M) | [![Agent Login Demo](https://img.youtube.com/vi/FAUb1JKzJO8/hqdefault.jpg)](https://youtu.be/FAUb1JKzJO8) |
-| Create Workspace | Marketplace & AI Chat |
+| 建立工作區 | Marketplace 與 AI 對話 |
 | [![Create Workspace Demo](https://img.youtube.com/vi/G8AXGd0_Xwo/hqdefault.jpg)](https://youtu.be/G8AXGd0_Xwo) | [![Marketplace & AI Chat Demo](https://img.youtube.com/vi/pl0H4j07IsU/hqdefault.jpg)](https://youtu.be/pl0H4j07IsU) |
 
 ---
@@ -58,11 +58,11 @@ Aileron 的目標是同時解決這兩個問題：
 
 ## Agent 支援狀態
 
-目前 Aileron 以 **Claude Code** 提供最完整的整合體驗，並持續擴展其他 Agent 能力。
+目前 Aileron 已將 **Claude Code**、**OpenCode** 與 **Codex** 作為第一級 Agent 執行引擎完整支援。
 
-- `Claude Code`：目前最完整
-- `OpenCode`：持續擴充中
-- `Codex`：持續擴充中
+- `Claude Code`：完整支援
+- `OpenCode`：完整支援
+- `Codex`：完整支援
 
 ---
 
@@ -75,12 +75,12 @@ Aileron 採用現代化微服務架構：
 - **Workspace Runtime**：提供 Agent 執行環境的容器化執行層
 - **Workspace Terminal**：Go 實作的終端與 WebSocket 服務
 - **Workspace Operator**：Kubernetes 動態工作區佈建元件
-- **Agent Tools**：整合 Claude Code 與相關工作區工具能力
+- **Agent 工具**：完整整合 Claude Code、OpenCode、Codex 與相關工作區工具能力
 - **Infrastructure**：
   - **PostgreSQL**：關聯式資料儲存
   - **Redis**：快取與任務協調
   - **OIDC Provider**：外部身分與存取控制契約
-  - **Draw.io / Flower**：圖表與任務監控
+  - **Flower**：任務監控
 
 ---
 
@@ -92,7 +92,7 @@ Aileron 採用現代化微服務架構：
 - Docker Compose v2
 - 建議至少 **8GB RAM**
 
-### 正式 Host CLI
+### 正式主機端 CLI
 
 `python scripts/dev/docker/ops.py` 是目前正式的 host-side CLI，作為本機 Docker 操作的跨平台標準入口，用來統一：
 
@@ -107,7 +107,7 @@ python scripts/dev/docker/ops.py --help
 python scripts/dev/docker/ops.py test --help
 ```
 
-### 啟動 Stack
+### 啟動服務
 
 #### Windows PowerShell
 
@@ -127,6 +127,24 @@ python scripts/dev/docker/ops.py up --build
 
 > 首次建置可能需要 **5–10 分鐘**。
 
+### Workspace Runtime 基礎映像選擇
+
+`workspace-runtime` 以較精簡的 `workspace-runtime/base-images/lite` 基礎映像建置。
+
+請先建置基礎映像，再建置 `workspace-runtime`：
+
+```bash
+make build-runtime-base-lite
+make build-workspace-runtime
+```
+
+建置時也可以覆寫標籤：
+
+```bash
+make build-runtime-base-lite RUNTIME_BASE_LITE_TAG=mytag
+make build-workspace-runtime RUNTIME_BASE_LITE_TAG=mytag IMAGE_TAG=mytag
+```
+
 ### 健康檢查
 
 ```bash
@@ -144,7 +162,7 @@ docker compose ps
 
 若 bundled adapter 已啟用但尚未完成初始化，前端可能出現 OIDC 驗證錯誤；請等到 `healthy` 後再登入。使用外部 OIDC 時不需要部署 bundled adapter。
 
-### 停止 Stack
+### 停止服務
 
 #### Windows PowerShell
 
@@ -174,7 +192,7 @@ make full-reset
 
 ### 完整重置後重新啟動
 
-執行 `full-reset` 後，以標準 host CLI 重新啟動：
+執行 `full-reset` 後，以標準主機端 CLI 重新啟動：
 
 #### Windows PowerShell
 
@@ -192,12 +210,11 @@ python scripts/dev/docker/ops.py up --build
 
 ## 服務入口與預設帳號
 
-| 服務 | URL | Username | Password |
+| 服務 | 網址 | 使用者名稱 | 密碼 |
 |---|---|---:|---:|
 | Aileron Frontend（bundled adapter 預設管理員） | http://localhost:8082 | admin | admin123 |
-| 可選 bundled OIDC adapter 管理介面 | http://localhost:8080/admin | admin | admin |
+| 可選 bundled OIDC adapter 管理介面 | http://localhost:8080/admin | keycloak-admin | `keycloak-bootstrap-admin-password` Secret |
 | Manager API（same-origin） | http://localhost:8082/api/v1 | - | - |
-| Draw.io | http://localhost:8083 | - | - |
 
 ---
 
@@ -261,7 +278,7 @@ helm upgrade --install aileron ./helm/aileron \
 - `workspace-manager` Pod 已掛上 `/host/knowledge-bases`
 - operator 建立的 runtime Pod 能透過 `knowledge-bases` volume 掛出 `/knowledge/<alias>`
 
-### Public Domain Routing
+### 公開網域路由
 
 在 Helm values 設定單一精確 `platformPublicOrigin`，並讓該 host 指向 Frontend Ingress。
 同一個 Origin 提供 SPA、`/api/v1/...`、OAuth 與固定
@@ -290,14 +307,14 @@ helm upgrade --install aileron ./helm/aileron \
 
 | 任務 | 指令 |
 |---|---|
-| Start stack | `python scripts/dev/docker/ops.py up` |
-| Rebuild and start stack | `python scripts/dev/docker/ops.py up --build` |
-| View manager logs | `docker compose logs -f workspace-manager` |
-| View runtime logs | `docker compose logs -f workspace-runtime` |
-| Stop services and preserve data | `make down` |
-| Full local reset（破壞性操作） | `make full-reset` |
+| 啟動服務 | `python scripts/dev/docker/ops.py up` |
+| 重新建置並啟動服務 | `python scripts/dev/docker/ops.py up --build` |
+| 查看 Manager 紀錄 | `docker compose logs -f workspace-manager` |
+| 查看 Runtime 紀錄 | `docker compose logs -f workspace-runtime` |
+| 停止服務並保留資料 | `make down` |
+| 完整重置本機環境（破壞性操作） | `make full-reset` |
 
-> `down` 保留資料；`full-reset` 是唯一 host destructive reset。單一 Workspace 必須透過 Manager UI 或 API 永久刪除。
+> `down` 會保留資料；`full-reset` 是唯一可由主機端執行的破壞性重置。單一工作區必須透過 Manager UI 或 API 永久刪除。
 
 ---
 
@@ -305,17 +322,17 @@ helm upgrade --install aileron ./helm/aileron \
 
 ```text
 aileron/
-├── frontend/              # React frontend
-├── workspace-manager/     # Orchestration service (FastAPI)
-├── workspace-runtime/     # Secure agent runtime
-├── workspace-terminal/    # Terminal / WebSocket service
-├── workspace-operator/    # Kubernetes workspace operator
-├── workspace-chrome/      # Browser integration module
-├── workspace-canvas/      # Frontend integration module
-├── directory/             # 本機 LDAP 開發種子資料
-├── scripts/               # Dev / test / ops scripts
-├── data/                  # Local persistence (gitignored)
-└── helm/                  # Kubernetes deployment charts
+├── frontend/              # React 前端
+├── workspace-manager/     # FastAPI 編排服務
+├── workspace-runtime/     # 安全的 Agent 執行環境
+├── workspace-terminal/    # 終端機與 WebSocket 服務
+├── workspace-operator/    # Kubernetes 工作區操作器
+├── workspace-chrome/      # 瀏覽器整合模組
+├── workspace-canvas/      # 前端整合模組
+├── local-oidc/            # Docker 內建 Keycloak OIDC（不含 LDAP seed）
+├── scripts/               # 開發、測試與操作腳本
+├── data/                  # 本機持久資料（不納入 Git）
+└── helm/                  # Kubernetes 部署 Chart
 ```
 
 ---

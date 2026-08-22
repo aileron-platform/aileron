@@ -1,6 +1,12 @@
 {{- if .Values.workspaceManager.enabled }}
 {{- $oidcCASecretName := .Values.oidc.caSecretName | default "" | trim }}
 {{- $oidcCASecretKey := .Values.oidc.caSecretKey | default "ca.crt" | trim }}
+{{- $platformDatabaseCASecretName := "" }}
+{{- $platformDatabaseCASecretKey := "" }}
+{{- if not .Values.postgres.enabled }}
+{{- $platformDatabaseCASecretName = .Values.platformDatabase.caSecretName | default "" | trim }}
+{{- $platformDatabaseCASecretKey = .Values.platformDatabase.caSecretKey | default "" | trim }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,6 +28,17 @@ spec:
       annotations:
         checksum/platform-config: {{ include (print $.Template.BasePath "/platform-configmap.yaml") . | sha256sum }}
         checksum/manager-bootstrap: {{ include (print $.Template.BasePath "/manager-bootstrap-configmap.yaml") . | sha256sum }}
+        {{- if .Values.redis.enabled }}
+        checksum/redis-connections: {{ include (print $.Template.BasePath "/redis-connections-configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- if not .Values.postgres.enabled }}
+        aileron.io/platform-database-revision: {{ .Values.platformDatabase.revision | quote }}
+        {{- end }}
+        {{- if not .Values.redis.enabled }}
+        aileron.io/redis-general-revision: {{ .Values.redis.connections.general.revision | quote }}
+        aileron.io/redis-job-queue-revision: {{ .Values.redis.connections.jobQueue.revision | quote }}
+        aileron.io/redis-job-result-revision: {{ .Values.redis.connections.jobResult.revision | quote }}
+        {{- end }}
         aileron.io/browser-credential-keyring-revision: {{ .Values.browserCredentials.revision | required "browserCredentials.revision is required" | quote }}
     spec:
       serviceAccountName: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" .Values.workspaceManager.serviceAccount "nameSuffix" "workspace-manager") }}
@@ -34,6 +51,13 @@ spec:
         fsGroup: {{ . }}
         fsGroupChangePolicy: OnRootMismatch
         {{- end }}
+      {{- if .Values.postgres.enabled }}
+      initContainers:
+        {{- include "aileron.waitForJobInitContainer" (dict "root" . "name" "wait-for-platform-schema" "jobName" (printf "%s-postgres-bootstrap" (include "aileron.fullname" .))) | nindent 8 }}
+        {{- if .Values.bootstrap.admin.enabled }}
+        {{- include "aileron.waitForJobInitContainer" (dict "root" . "name" "wait-for-admin-bootstrap" "jobName" (printf "%s-admin-bootstrap" (include "aileron.fullname" .))) | nindent 8 }}
+        {{- end }}
+      {{- end }}
       containers:
         - name: workspace-manager
           image: {{ include "aileron.imageReference" (dict "name" "workspaceManager.image" "image" .Values.workspaceManager.image "production" .Values.security.requireStrongSecrets) | quote }}
@@ -150,12 +174,24 @@ spec:
                   key: CILIUM_ENABLED
             - name: FIREWALL_SEED_FILE
               value: /etc/aileron/bootstrap/firewall-seed.json
-            - name: REDIS_URL
-              value: "redis://{{ include "aileron.fullname" . }}-redis:6379/0"
-            - name: CELERY_BROKER_URL
-              value: "redis://{{ include "aileron.fullname" . }}-redis:6379/0"
-            - name: CELERY_RESULT_BACKEND
-              value: "redis://{{ include "aileron.fullname" . }}-redis:6379/1"
+            - name: REDIS_URL_FILE
+              value: /run/secrets/aileron/redis-general-url
+            - name: CELERY_BROKER_URL_FILE
+              value: /run/secrets/aileron/redis-job-queue-url
+            - name: CELERY_RESULT_BACKEND_FILE
+              value: /run/secrets/aileron/redis-job-result-url
+            {{- if and (not .Values.redis.enabled) .Values.redis.connections.general.caSecretName }}
+            - name: REDIS_CA_CERT_FILE
+              value: /etc/aileron/data-service-ca/redis-general/ca.crt
+            {{- end }}
+            {{- if and (not .Values.redis.enabled) .Values.redis.connections.jobQueue.caSecretName }}
+            - name: CELERY_BROKER_CA_CERT_FILE
+              value: /etc/aileron/data-service-ca/redis-job-queue/ca.crt
+            {{- end }}
+            {{- if and (not .Values.redis.enabled) .Values.redis.connections.jobResult.caSecretName }}
+            - name: CELERY_RESULT_BACKEND_CA_CERT_FILE
+              value: /etc/aileron/data-service-ca/redis-job-result/ca.crt
+            {{- end }}
             - name: DATABASE_URL_FILE
               value: /run/secrets/aileron/database-url
             - name: ENV
@@ -175,6 +211,14 @@ spec:
             {{- if ne $oidcCASecretName "" }}
             - name: OIDC_CA_CERT_FILE
               value: /etc/aileron/oidc-ca/ca.crt
+            {{- end }}
+            {{- if ne $platformDatabaseCASecretName "" }}
+            - name: RUNTIME_DATABASE_CA_SECRET_NAME
+              value: {{ $platformDatabaseCASecretName | quote }}
+            - name: RUNTIME_DATABASE_CA_SECRET_KEY
+              value: {{ $platformDatabaseCASecretKey | quote }}
+            - name: RUNTIME_DATABASE_CA_REVISION
+              value: {{ .Values.platformDatabase.revision | quote }}
             {{- end }}
             - name: TZ
               value: Asia/Taipei
@@ -250,6 +294,20 @@ spec:
               mountPath: /etc/aileron/oidc-ca
               readOnly: true
             {{- end }}
+            {{- if ne $platformDatabaseCASecretName "" }}
+            - name: platform-database-ca
+              mountPath: /etc/aileron/data-service-ca/platform-database
+              readOnly: true
+            {{- end }}
+            {{- if not .Values.redis.enabled }}
+            {{- range $name, $connection := dict "redis-general" .Values.redis.connections.general "redis-job-queue" .Values.redis.connections.jobQueue "redis-job-result" .Values.redis.connections.jobResult }}
+            {{- if $connection.caSecretName }}
+            - name: {{ $name }}-ca
+              mountPath: /etc/aileron/data-service-ca/{{ $name }}
+              readOnly: true
+            {{- end }}
+            {{- end }}
+            {{- end }}
       volumes:
         - name: knowledge-bases
           persistentVolumeClaim:
@@ -280,6 +338,33 @@ spec:
                   items:
                     - key: {{ .Values.oidc.clientSecretKey | required "oidc.clientSecretKey is required" }}
                       path: oidc-client-secret
+              {{- if .Values.redis.enabled }}
+              - configMap:
+                  name: {{ include "aileron.fullname" . }}-redis-connections
+                  items:
+                    - key: general-url
+                      path: redis-general-url
+                    - key: job-queue-url
+                      path: redis-job-queue-url
+                    - key: job-result-url
+                      path: redis-job-result-url
+              {{- else }}
+              - secret:
+                  name: {{ .Values.redis.connections.general.urlSecretName }}
+                  items:
+                    - key: {{ .Values.redis.connections.general.urlSecretKey }}
+                      path: redis-general-url
+              - secret:
+                  name: {{ .Values.redis.connections.jobQueue.urlSecretName }}
+                  items:
+                    - key: {{ .Values.redis.connections.jobQueue.urlSecretKey }}
+                      path: redis-job-queue-url
+              - secret:
+                  name: {{ .Values.redis.connections.jobResult.urlSecretName }}
+                  items:
+                    - key: {{ .Values.redis.connections.jobResult.urlSecretKey }}
+                      path: redis-job-result-url
+              {{- end }}
               {{- if and .Values.turn.enabled (eq .Values.turn.profile.credentialIssuer.kind "turnRest") }}
               - secret:
                   name: {{ include "aileron.turnSecretName" . }}
@@ -315,5 +400,27 @@ spec:
             items:
               - key: {{ $oidcCASecretKey }}
                 path: ca.crt
+        {{- end }}
+        {{- if ne $platformDatabaseCASecretName "" }}
+        - name: platform-database-ca
+          secret:
+            secretName: {{ $platformDatabaseCASecretName }}
+            defaultMode: 0444
+            items:
+              - key: {{ $platformDatabaseCASecretKey }}
+                path: ca.crt
+        {{- end }}
+        {{- if not .Values.redis.enabled }}
+        {{- range $name, $connection := dict "redis-general" .Values.redis.connections.general "redis-job-queue" .Values.redis.connections.jobQueue "redis-job-result" .Values.redis.connections.jobResult }}
+        {{- if $connection.caSecretName }}
+        - name: {{ $name }}-ca
+          secret:
+            secretName: {{ $connection.caSecretName }}
+            defaultMode: 0444
+            items:
+              - key: {{ $connection.caSecretKey }}
+                path: ca.crt
+        {{- end }}
+        {{- end }}
         {{- end }}
 {{- end }}

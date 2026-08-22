@@ -1,0 +1,143 @@
+{
+  "$schema": "./data-service-preflight.schema.json",
+  "contractVersion": "1",
+  "postgresPermissionContract": {
+    "fixtureImages": {
+      "15": "postgres:15-alpine@sha256:cae15a3b718f23497a60b7cafdcf205216d7949680972da0584db00fb68bf3e6",
+      "16": "postgres:16-alpine@sha256:075f7ba66bc9b3ce7d6b8b635208ff61cd7cf1a67d71ec530eec5d7ae0cbe571"
+    },
+    "platformLogin": {
+      "superuser": false,
+      "databaseOwner": true,
+      "createRole": true,
+      "createDatabaseRoleAttribute": false,
+      "databaseCreatePrivilege": true,
+      "signalBackend": true,
+      "terminationAuthority": "A usable target-role membership is sufficient; pg_signal_backend is the installation-level alternative and is exercised independently by the fixture."
+    },
+    "versions": [
+      {
+        "major": 15,
+        "observedVersion": "15.18",
+        "createdRoleState": "CREATEROLE creates the role without granting membership to the creator.",
+        "requiredMembershipSql": [
+          "GRANT source_role TO platform_login",
+          "GRANT target_role TO platform_login"
+        ],
+        "successfulSql": [
+          {"sql": "ALTER DATABASE platform_database OWNER TO platform_login", "result": "platform_login is the database owner and has database CREATE"},
+          {"sql": "CREATE ROLE source_role LOGIN", "result": "succeeds with CREATEROLE"},
+          {"sql": "CREATE SCHEMA probe AUTHORIZATION source_role", "result": "succeeds after explicit source membership"},
+          {"sql": "REASSIGN OWNED BY source_role TO target_role", "result": "succeeds after explicit source and target membership"},
+          {"sql": "SELECT pg_terminate_backend(active_source_pid)", "result": "returns true with pg_signal_backend"}
+        ],
+        "failedSql": [
+          {"sql": "CREATE SCHEMA probe AUTHORIZATION source_role", "result": "fails before source membership", "sqlstate": "42501"},
+          {"sql": "REASSIGN OWNED BY source_role TO target_role", "result": "fails before source and target membership", "sqlstate": "42501"},
+          {"sql": "SELECT pg_terminate_backend(active_source_pid)", "result": "fails for a login without target membership or pg_signal_backend", "sqlstate": "42501"}
+        ],
+        "extensions": [
+          {"sql": "SELECT trusted, superuser FROM pg_available_extension_versions WHERE name = 'uuid-ossp'", "result": "available; trusted=true; superuser=true; database owner can install"},
+          {"sql": "SELECT trusted, superuser FROM pg_available_extension_versions WHERE name = 'pgcrypto'", "result": "available; trusted=true; superuser=true; database owner can install"}
+        ],
+        "cleanup": {
+          "result": "complete",
+          "evidence": ["probe roles=0", "probe schemas=0", "extensions restored to their pre-probe state"]
+        }
+      },
+      {
+        "major": 16,
+        "observedVersion": "16.15",
+        "createdRoleState": "CREATEROLE grants ADMIN OPTION automatically, but SET and INHERIT are false when createrole_self_grant is empty.",
+        "requiredMembershipSql": [
+          "GRANT source_role TO platform_login WITH SET TRUE, INHERIT TRUE",
+          "GRANT target_role TO platform_login WITH SET TRUE, INHERIT TRUE"
+        ],
+        "successfulSql": [
+          {"sql": "ALTER DATABASE platform_database OWNER TO platform_login", "result": "platform_login is the database owner and has database CREATE"},
+          {"sql": "CREATE ROLE source_role LOGIN", "result": "succeeds and creates an ADMIN-only membership row"},
+          {"sql": "CREATE SCHEMA probe AUTHORIZATION source_role", "result": "succeeds after SET and INHERIT are explicitly granted"},
+          {"sql": "REASSIGN OWNED BY source_role TO target_role", "result": "succeeds after SET is true for source and target"},
+          {"sql": "SELECT pg_terminate_backend(active_source_pid)", "result": "returns true with pg_signal_backend"}
+        ],
+        "failedSql": [
+          {"sql": "CREATE SCHEMA probe AUTHORIZATION source_role", "result": "fails while the automatic membership has SET=false", "sqlstate": "42501"},
+          {"sql": "REASSIGN OWNED BY source_role TO target_role", "result": "fails while source and target memberships have SET=false", "sqlstate": "42501"},
+          {"sql": "SELECT pg_terminate_backend(active_source_pid)", "result": "fails for a login without target membership or pg_signal_backend", "sqlstate": "42501"}
+        ],
+        "extensions": [
+          {"sql": "SELECT trusted, superuser FROM pg_available_extension_versions WHERE name = 'uuid-ossp'", "result": "available; trusted=true; superuser=true; database owner can install"},
+          {"sql": "SELECT trusted, superuser FROM pg_available_extension_versions WHERE name = 'pgcrypto'", "result": "available; trusted=true; superuser=true; database owner can install"}
+        ],
+        "cleanup": {
+          "result": "complete",
+          "evidence": ["probe roles=0", "probe schemas=0", "extensions restored to their pre-probe state"]
+        }
+      }
+    ]
+  },
+  "activeSessionTermination": {
+    "result": "verified on PostgreSQL 15 and 16",
+    "evidence": [
+      "the source login held a live SQLAlchemy connection and returned SELECT 1 before rotation",
+      "pg_terminate_backend returned true",
+      "a login without pg_signal_backend terminated the source backend after receiving usable source-role membership",
+      "the platform login independently terminated a non-member probe backend through pg_signal_backend",
+      "the same connection raised DBAPIError after termination",
+      "the old backend PID was absent and the target login read the reassigned row"
+    ]
+  },
+  "managerImplementationVerification": {
+    "result": "WorkspaceRuntimeDatabaseService rotation is verified with the required non-superuser platform login on PostgreSQL 15 and 16",
+    "evidence": [
+      "new Runtime roles receive version-aware usable membership before CREATE SCHEMA AUTHORIZATION",
+      "source and target roles receive usable membership before REASSIGN OWNED",
+      "existing Runtime role safety flags are verified before role administration",
+      "existing roles are altered only with role-owner-safe LOGIN, NOINHERIT, and PASSWORD attributes",
+      "the Manager rotation integration test passes without xfail on both pinned fixtures"
+    ]
+  },
+  "runtimeDsnContract": {
+    "queryAllowlist": [
+      "connect_timeout",
+      "ssl_max_protocol_version",
+      "ssl_min_protocol_version",
+      "sslmode",
+      "sslrootcert",
+      "target_session_attrs"
+    ],
+    "driverAdapter": "Runtime removes libpq-only TLS and timeout parameters from the SQLAlchemy URL, maps them to asyncpg connect arguments, and preserves target_session_attrs for asyncpg.",
+    "unsupportedParameters": [
+      "channel_binding",
+      "sslcert",
+      "sslcrl",
+      "sslcrldir",
+      "sslkey"
+    ]
+  },
+  "preflightDag": {
+    "external": {
+      "modeSelector": "postgres.enabled=false",
+      "resources": [
+        {"name": "preflight-script-configmap", "phase": "pre-install,pre-upgrade,pre-rollback hook", "weight": -30, "visibility": "must itself be a hook; a normal ConfigMap is not visible during pre-install or rollback", "waitsFor": []},
+        {"name": "existing-data-service-secrets", "phase": "installation prerequisite", "weight": null, "visibility": "must exist before Helm starts; chart-created Secrets are forbidden", "waitsFor": []},
+        {"name": "external-data-service-preflight", "phase": "pre-install,pre-upgrade,pre-rollback hook", "weight": -20, "visibility": "reads the hook ConfigMap and pre-existing Secret references", "waitsFor": ["preflight-script-configmap", "existing-data-service-secrets"]},
+        {"name": "schema-bootstrap", "phase": "pre-install,pre-upgrade,pre-rollback hook", "weight": -10, "visibility": "runs only after all PostgreSQL, Redis, and Identity probes succeed", "waitsFor": ["external-data-service-preflight"]},
+        {"name": "admin-bootstrap", "phase": "pre-install,pre-upgrade,pre-rollback hook", "weight": 0, "visibility": "database schema is ready", "waitsFor": ["schema-bootstrap"]},
+        {"name": "manager-and-identity-workloads", "phase": "normal resources", "weight": null, "visibility": "Helm creates workloads only after pre-install hooks succeed", "waitsFor": ["schema-bootstrap", "admin-bootstrap"]}
+      ],
+      "workloadGate": "A failed external preflight aborts pre-install before Manager or Identity workloads are created."
+    },
+    "bundled": {
+      "modeSelector": "postgres.enabled=true",
+      "resources": [
+        {"name": "postgres-redis-workloads-and-configmaps", "phase": "normal resources", "weight": null, "visibility": "normal ConfigMaps and Services are visible to normal Jobs", "waitsFor": []},
+        {"name": "bundled-data-service-preflight", "phase": "normal Job", "weight": null, "visibility": "waits for bundled endpoints, then probes and cleans its objects", "waitsFor": ["postgres-redis-workloads-and-configmaps"]},
+        {"name": "schema-bootstrap", "phase": "normal Job with an init gate", "weight": null, "visibility": "waits for the preflight Job Complete condition", "waitsFor": ["bundled-data-service-preflight"]},
+        {"name": "admin-bootstrap", "phase": "normal Job with an init gate", "weight": null, "visibility": "waits for schema bootstrap completion", "waitsFor": ["schema-bootstrap"]},
+        {"name": "manager-and-identity-workloads", "phase": "normal resources with init gates", "weight": null, "visibility": "must not start application containers until required Jobs are Complete", "waitsFor": ["schema-bootstrap", "admin-bootstrap"]}
+      ],
+      "workloadGate": "Post-install hooks cannot provide this gate because Helm --wait can deadlock while workloads wait for hooks that start only after readiness; bundled ordering therefore uses normal Jobs and explicit init gates."
+    }
+  }
+}

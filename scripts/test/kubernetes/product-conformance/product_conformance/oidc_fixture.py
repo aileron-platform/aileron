@@ -103,6 +103,7 @@ class Handler(BaseHTTPRequestHandler):
                     "response_types_supported": ["code"],
                     "subject_types_supported": ["public"],
                     "id_token_signing_alg_values_supported": ["RS256"],
+                    "aileron_test_provider": "provider-neutral-non-keycloak",
                 },
             )
             return

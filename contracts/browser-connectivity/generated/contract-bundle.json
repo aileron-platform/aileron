@@ -961,8 +961,7 @@
           "properties": {
             "kind": {
               "enum": [
-                "turnRest",
-                "staticSecret"
+                "turnRest"
               ]
             },
             "secretRef": {

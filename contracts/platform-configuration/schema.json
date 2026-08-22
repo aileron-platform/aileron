@@ -116,6 +116,13 @@
       "properties": {
         "logicalName": {"type": "string", "pattern": "^[a-z][A-Za-z0-9]*$"},
         "required": {"type": "boolean"},
+        "requiredModes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["bundledPostgres", "externalPostgres", "externalRedis"]
+          }
+        },
         "owner": {"const": "external-secret-owner"},
         "consumer": {"type": "string", "minLength": 1},
         "secret": {"const": true},

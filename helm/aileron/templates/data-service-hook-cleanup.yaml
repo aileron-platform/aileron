@@ -1,0 +1,29 @@
+{{- if not .Values.postgres.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aileron.fullname" . }}-data-service-preflight
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-service-hook-cleanup
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+data: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aileron.fullname" . }}-postgres-init
+  namespace: {{ include "aileron.workspaceRuntimeNamespace" . | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-service-hook-cleanup
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+data: {}
+{{- end }}

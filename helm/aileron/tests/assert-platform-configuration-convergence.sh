@@ -6,7 +6,18 @@ rendered=$(mktemp)
 optional_rendered=$(mktemp)
 invalid_values=$(mktemp)
 nginx_config=$(mktemp)
-trap 'rm -f "$rendered" "$optional_rendered" "$invalid_values" "$nginx_config"' EXIT
+nginx_root=$(mktemp -d)
+nginx_started=false
+
+cleanup() {
+  if [ "$nginx_started" = true ] && command -v nginx >/dev/null 2>&1; then
+    nginx -s stop -c "$nginx_config" >/dev/null 2>&1 || true
+  fi
+  rm -f "$rendered" "$optional_rendered" "$invalid_values" "$nginx_config"
+  rm -rf "$nginx_root"
+}
+
+trap cleanup EXIT
 
 fail() {
   echo "ASSERTION FAILED: $*" >&2
@@ -33,8 +44,17 @@ assert_literal() {
   grep -Fq -- "$literal" "$file" || fail "$file does not contain literal: $literal"
 }
 
+assert_not_literal() {
+  file=$1
+  literal=$2
+  if grep -Fq -- "$literal" "$file"; then
+    fail "$file unexpectedly contains literal: $literal"
+  fi
+}
+
 command -v yq >/dev/null 2>&1 || fail "yq is required"
 command -v nginx >/dev/null 2>&1 || fail "nginx is required"
+command -v wget >/dev/null 2>&1 || fail "wget is required"
 
 helm lint "$chart_dir" --namespace workspace-system >/dev/null
 for values_file in "$chart_dir"/tests/values/*.yaml; do
@@ -119,12 +139,18 @@ assert_contains "$rendered" 'location /api/v1'
 assert_contains "$rendered" 'proxy_pass http://platform-aileron-workspace-manager\.workspace-system\.svc\.cluster\.local:3001'
 assert_literal "$rendered" 'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/runtime/ws/terminal(?<gateway_path>/.*)?$"'
 assert_literal "$rendered" 'proxy_pass http://workspace-runtime-$workspace_id.workspace-system.svc.cluster.local:3004;'
-assert_literal "$rendered" 'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/runtime/(?<gateway_path>.*)$"'
+assert_literal "$rendered" 'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/runtime/.+"'
 assert_literal "$rendered" 'proxy_pass http://workspace-runtime-$workspace_id.workspace-system.svc.cluster.local:3002;'
-assert_literal "$rendered" 'location ~ "^/workspaces/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/(browser|canvas)(/.*)?$"'
-assert_literal "$rendered" 'proxy_pass http://workspace-$workspace_component-$workspace_id.workspace-system.svc.cluster.local:$workspace_service_port;'
-assert_literal "$rendered" 'set $workspace_service_port 6080;'
-assert_literal "$rendered" 'set $workspace_service_port 3003;'
+assert_literal "$rendered" 'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/browser/.+"'
+assert_literal "$rendered" 'rewrite ^/workspaces/[0-9a-f-]+/browser(/.*)$ $1 break;'
+assert_literal "$rendered" 'proxy_pass http://workspace-browser-$workspace_id.workspace-system.svc.cluster.local:6080;'
+assert_literal "$rendered" 'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/canvas/.+"'
+assert_literal "$rendered" 'rewrite ^/workspaces/[0-9a-f-]+/canvas(/.*)$ $1 break;'
+assert_literal "$rendered" 'proxy_pass http://workspace-canvas-$workspace_id.workspace-system.svc.cluster.local:3003;'
+assert_not_literal "$rendered" 'location ~ "^/workspaces/(?<workspace_id>[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/runtime/(?<gateway_path>.*)$"'
+assert_not_literal "$rendered" 'location ~ "^/workspaces/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/(browser|canvas)(/.*)?$"'
+assert_not_literal "$rendered" 'rewrite ^/workspaces/[0-9a-f-]+/(browser|canvas)(/.*)?$ $2 break;'
+assert_not_literal "$rendered" 'proxy_pass http://workspace-$workspace_component-$workspace_id.workspace-system.svc.cluster.local:$workspace_service_port;'
 assert_literal "$rendered" 'location = /_aileron_workspace_gateway_authorize {'
 assert_literal "$rendered" 'proxy_set_header X-Aileron-Workspace-Id $workspace_id;'
 assert_literal "$rendered" 'proxy_set_header Cookie "aileron_session=$cookie_aileron_workspace_gateway_session";'
@@ -138,7 +164,8 @@ assert_contains "$rendered" 'proxy_set_header Cookie \$http_cookie;'
 assert_contains "$rendered" 'proxy_set_header X-Forwarded-Host \$http_host;'
 assert_contains "$rendered" 'proxy_set_header X-Forwarded-Port \$server_port;'
 assert_literal "$rendered" 'proxy_set_header X-Forwarded-Prefix /workspaces/$workspace_id/runtime;'
-assert_literal "$rendered" 'proxy_set_header X-Forwarded-Prefix /workspaces/$workspace_id/$workspace_component;'
+assert_literal "$rendered" 'proxy_set_header X-Forwarded-Prefix /workspaces/$workspace_id/browser;'
+assert_literal "$rendered" 'proxy_set_header X-Forwarded-Prefix /workspaces/$workspace_id/canvas;'
 assert_contains "$rendered" 'proxy_set_header Sec-WebSocket-Protocol \$http_sec_websocket_protocol;'
 assert_contains "$rendered" 'proxy_cache off;'
 assert_contains "$rendered" 'proxy_read_timeout 3600s;'
@@ -147,19 +174,44 @@ assert_contains "$rendered" 'proxy_send_timeout 3600s;'
 yq eval-all -r \
   'select(.kind == "ConfigMap" and (.metadata.name | test("-frontend-nginx$"))) | .data."nginx.conf"' \
   "$rendered" >"$nginx_config"
+[ "$(grep -Fc 'location ~ "^/workspaces/' "$nginx_config")" -eq 4 ] || fail "only the four exact Workspace proxy locations may precede the SPA fallback"
 [ "$(grep -Fc 'proxy_set_header Cookie $http_cookie;' "$nginx_config")" -eq 1 ] || fail "only Manager API may receive the platform Cookie"
-[ "$(grep -Fc 'proxy_set_header Cookie "";' "$nginx_config")" -eq 3 ] || fail "all Workspace upstreams must clear platform Cookies"
-[ "$(grep -Fc 'auth_request /_aileron_workspace_gateway_authorize;' "$nginx_config")" -eq 3 ] || fail "all Workspace routes must pass the Manager authorization gate"
-[ "$(grep -Fc 'proxy_set_header Authorization "";' "$nginx_config")" -eq 2 ] || fail "authorization subrequest and Browser or Canvas must clear platform Authorization"
-[ "$(grep -Fc 'proxy_set_header Proxy-Authorization "";' "$nginx_config")" -eq 4 ] || fail "authorization subrequest and Workspace upstreams must clear proxy credentials"
-[ "$(grep -Fc 'proxy_set_header X-API-Key "";' "$nginx_config")" -eq 4 ] || fail "authorization subrequest and Workspace upstreams must clear platform API keys"
-[ "$(grep -Fc 'proxy_set_header X-CSRF-Token "";' "$nginx_config")" -eq 4 ] || fail "authorization subrequest and Workspace upstreams must clear Manager CSRF tokens"
+[ "$(grep -Fc 'proxy_set_header Cookie "";' "$nginx_config")" -eq 4 ] || fail "all four Workspace upstreams must clear platform Cookies"
+[ "$(grep -Fc 'auth_request /_aileron_workspace_gateway_authorize;' "$nginx_config")" -eq 4 ] || fail "all four Workspace routes must pass the Manager authorization gate"
+[ "$(grep -Fc 'proxy_set_header Authorization "";' "$nginx_config")" -eq 3 ] || fail "authorization subrequest, Browser, and Canvas must clear platform Authorization"
+[ "$(grep -Fc 'proxy_set_header Proxy-Authorization "";' "$nginx_config")" -eq 5 ] || fail "authorization subrequest and all four Workspace upstreams must clear proxy credentials"
+[ "$(grep -Fc 'proxy_set_header X-API-Key "";' "$nginx_config")" -eq 5 ] || fail "authorization subrequest and all four Workspace upstreams must clear platform API keys"
+[ "$(grep -Fc 'proxy_set_header X-CSRF-Token "";' "$nginx_config")" -eq 5 ] || fail "authorization subrequest and all four Workspace upstreams must clear Manager CSRF tokens"
 # The syntax check runs outside Kubernetes, where the cluster DNS service name
 # is intentionally not resolvable. Replace only the temporary rendered copy.
 sed -i 's/resolver kube-dns\.kube-system\.svc\.cluster\.local/resolver 127.0.0.1/' "$nginx_config"
 sed -i -E 's/[A-Za-z0-9.-]+-workspace-manager\.[A-Za-z0-9.-]+\.svc\.cluster\.local/127.0.0.1/g' "$nginx_config"
+nginx_test_port=$((18000 + ($$ % 1000)))
+sed -i "s/listen       8082;/listen       ${nginx_test_port};/" "$nginx_config"
+sed -i "s#root   /tmp/aileron-html;#root   ${nginx_root};#g" "$nginx_config"
+printf '%s\n' 'aileron-workspace-spa-root' >"$nginx_root/index.html"
+chmod 755 "$nginx_root"
 nginx -t -c "$nginx_config"
 nginx -T -c "$nginx_config" >/dev/null
+nginx -c "$nginx_config"
+nginx_started=true
+sleep 0.2
+spa_failure=
+workspace_id=11111111-1111-4111-8111-111111111111
+for spa_suffix in runtime runtime/ browser browser/ canvas canvas/; do
+  if spa_response=$(wget -qO- "http://127.0.0.1:${nginx_test_port}/workspaces/${workspace_id}/${spa_suffix}"); then
+    if [ "$spa_response" != 'aileron-workspace-spa-root' ]; then
+      spa_failure="Workspace SPA root /${spa_suffix} returned an unexpected response"
+      break
+    fi
+  else
+    spa_failure="Workspace SPA root /${spa_suffix} was intercepted by a gateway location"
+    break
+  fi
+done
+nginx -s stop -c "$nginx_config" >/dev/null
+nginx_started=false
+[ -z "$spa_failure" ] || fail "$spa_failure"
 
 # The chart creates no secret material and applications consume existing Secrets as files.
 assert_not_contains "$rendered" '^kind: Secret$|secretKeyRef:|stringData:'
@@ -167,7 +219,7 @@ assert_not_contains "$optional_rendered" '^kind: Secret$|secretKeyRef:|stringDat
 assert_not_contains "$chart_dir/values.yaml" '^[[:space:]]+(password|credential|internalToken|agentTokens|credentialKey):'
 assert_contains "$rendered" 'name: DATABASE_URL_FILE'
 assert_contains "$rendered" 'name: OIDC_CLIENT_SECRET_FILE'
-assert_contains "$optional_rendered" 'name: TURN_CREDENTIAL_FILE'
+assert_contains "$optional_rendered" 'name: TURN_REST_SHARED_SECRET_FILE'
 assert_contains "$optional_rendered" 'name: TURN_FRONTEND_PROBE_ICE_SERVERS_JSON_FILE'
 assert_contains "$optional_rendered" 'name: CONNECTIVITY_AGENT_TOKENS_FILE'
 assert_contains "$optional_rendered" 'name: CONNECTIVITY_GATEWAY_INTERNAL_TOKEN_FILE'

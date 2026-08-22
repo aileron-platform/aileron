@@ -68,11 +68,12 @@ async def setup_manager_api_lifecycle(context: ProductContext) -> list[Evidence]
 
     slug_suffix = re.sub(r"[^a-z0-9]+", "-", context.settings.run_id.lower()).strip("-")
     slug_suffix = slug_suffix[-24:] or "run"
+    workspace_name = f"Product Conformance {slug_suffix}"
     kb_response = context.request_owner(
         "POST",
         "/knowledge-bases",
         json={
-            "name": f"Product Conformance {slug_suffix}",
+            "name": workspace_name,
             "slug": f"product-conformance-{slug_suffix}",
         },
     )
@@ -90,7 +91,6 @@ async def setup_manager_api_lifecycle(context: ProductContext) -> list[Evidence]
             "name": f"Product Conformance {slug_suffix}",
             "description": "Formal product conformance workspace",
             "runtime": "universal",
-            "branch": "main",
             "agenticTools": ["claude-code"],
         },
     )
@@ -100,6 +100,7 @@ async def setup_manager_api_lifecycle(context: ProductContext) -> list[Evidence]
     if not isinstance(workspace_id, str) or not workspace_id:
         raise AssertionError("Created workspace has no id")
     context.workspace_id = workspace_id
+    context.workspace_name = workspace_name
     storage = context.cluster.ensure_workspace_storage(workspace_id)
 
     runtime_job = workspace.get("runtimeJob") or {}
@@ -244,10 +245,14 @@ async def finalize_manager_api_lifecycle(
 ) -> list[Evidence]:
     """Delete through Manager and prove every persisted/cluster artifact absent."""
 
-    if not context.workspace_id:
+    if not context.workspace_id or not context.workspace_name:
         raise AssertionError("No product workspace exists for lifecycle finalization")
     workspace_id = context.workspace_id
-    response = context.request_owner("DELETE", f"/workspaces/{workspace_id}")
+    response = context.request_owner(
+        "DELETE",
+        f"/workspaces/{workspace_id}",
+        json={"confirmationName": context.workspace_name},
+    )
     require_status(response, 202, operation="delete product workspace")
     command = response.json()
     delete_job_id = command.get("jobId")

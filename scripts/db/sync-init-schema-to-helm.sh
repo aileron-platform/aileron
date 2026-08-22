@@ -9,13 +9,13 @@ SOURCE_SQL="$REPO_ROOT/init-sql/001_init_schema.sql"
 TARGET_SQL="$REPO_ROOT/helm/aileron/files/init-sql/001_init_schema.sql"
 
 if [ ! -f "$SOURCE_SQL" ]; then
-  echo "找不到來源 SQL: $SOURCE_SQL" >&2
+  echo "Source SQL not found: $SOURCE_SQL" >&2
   exit 1
 fi
 
 mkdir -p "$(dirname "$TARGET_SQL")"
 cp "$SOURCE_SQL" "$TARGET_SQL"
 
-echo "已同步 init schema:"
+echo "Synchronized init schema:"
 echo "  source: $SOURCE_SQL"
 echo "  target: $TARGET_SQL"

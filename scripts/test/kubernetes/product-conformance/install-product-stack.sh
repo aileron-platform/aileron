@@ -28,6 +28,8 @@ fullname="${release}-aileron"
 work_dir="$(mktemp -d)"
 runtime_home_storage_class="${RUNTIME_HOME_STORAGE_CLASS:-${rwo_storage_class}}"
 runtime_home_storage_access_mode="${RUNTIME_HOME_STORAGE_ACCESS_MODE:-ReadWriteOnce}"
+data_service_mode="${PRODUCT_DATA_SERVICE_MODE:-bundled}"
+data_service_namespace="${PRODUCT_DATA_SERVICE_NAMESPACE:-${namespace}-data}"
 
 trap 'rm -rf "${work_dir}"' EXIT HUP INT TERM
 
@@ -48,12 +50,44 @@ kube() {
   k3s kubectl "$@"
 }
 
+wait_for_job_complete() {
+  job_name="$1"
+  timeout_seconds="$2"
+  attempts="${timeout_seconds}"
+  while [ "${attempts}" -gt 0 ]; do
+    job_complete="$(kube get job "${job_name}" -n "${namespace}" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || true)"
+    [ "${job_complete}" = "True" ] && return 0
+    job_failed="$(kube get job "${job_name}" -n "${namespace}" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || true)"
+    if [ "${job_failed}" = "True" ]; then
+      kube logs "job/${job_name}" -n "${namespace}" --all-containers=true >&2 || true
+      kube describe job "${job_name}" -n "${namespace}" >&2 || true
+      fail "Job ${job_name} failed"
+    fi
+    attempts=$((attempts - 1))
+    sleep 1
+  done
+  kube get pods -n "${namespace}" -l "job-name=${job_name}" -o wide >&2 || true
+  kube describe job "${job_name}" -n "${namespace}" >&2 || true
+  kube logs "job/${job_name}" -n "${namespace}" --all-containers=true >&2 || true
+  fail "timed out waiting for Job ${job_name}"
+}
+
 case "${runtime_home_storage_access_mode}" in
   ReadWriteOnce|ReadWriteMany) ;;
   *)
     fail "RUNTIME_HOME_STORAGE_ACCESS_MODE must be ReadWriteOnce or ReadWriteMany"
     ;;
 esac
+
+case "${data_service_mode}" in
+  bundled|external) ;;
+  *) fail "PRODUCT_DATA_SERVICE_MODE must be bundled or external" ;;
+esac
+case "${data_service_namespace}" in
+  ''|*[!a-z0-9-]*) fail "PRODUCT_DATA_SERVICE_NAMESPACE must be a lowercase DNS label" ;;
+esac
+[ "${#data_service_namespace}" -le 63 ] || \
+  fail "PRODUCT_DATA_SERVICE_NAMESPACE must be at most 63 characters"
 
 case "${storage_mode}" in
   static-nfs)
@@ -205,7 +239,7 @@ metadata:
   namespace: ${namespace}
 rules:
   - apiGroups: [""]
-    resources: ["pods", "pods/log", "services", "persistentvolumeclaims", "secrets"]
+    resources: ["pods", "pods/log", "services", "persistentvolumeclaims", "secrets", "configmaps"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["serviceaccounts"]
@@ -281,6 +315,390 @@ subjects:
 EOF
 kube apply -f "${work_dir}/harness-rbac.yaml" >/dev/null
 
+prepare_platform_secret() {
+  database_host="${fullname}-postgres"
+  database_username="postgres"
+  database_password="product-postgres-password"
+  database_query=""
+  redis_scheme="redis"
+  redis_host="${fullname}-redis"
+  redis_password=""
+
+  if [ "${data_service_mode}" = "external" ]; then
+    command -v openssl >/dev/null 2>&1 || fail "openssl is required for external data-service TLS"
+    database_host="external-postgres.${data_service_namespace}.svc.cluster.local"
+    database_username="platform_login"
+    database_password="platform_password"
+    database_query="?sslmode=verify-full&sslrootcert=/etc/aileron/data-service-ca/platform-database/ca.crt"
+    redis_scheme="rediss"
+    redis_host="external-redis.${data_service_namespace}.svc.cluster.local"
+    redis_password="external_redis_password"
+
+    tls_dir="${work_dir}/data-service-tls"
+    mkdir -p "${tls_dir}"
+    chmod 0700 "${tls_dir}"
+    if ! openssl req -config /dev/null -x509 -newkey rsa:2048 -nodes -days 1 \
+      -subj '/CN=Aileron disposable data-service CA' \
+      -addext 'basicConstraints=critical,CA:TRUE' \
+      -addext 'keyUsage=critical,keyCertSign,cRLSign' \
+      -keyout "${tls_dir}/ca.key" -out "${tls_dir}/ca.crt" \
+      2> "${tls_dir}/ca-error.log"; then
+      cat "${tls_dir}/ca-error.log" >&2
+      fail "failed to generate the disposable data-service CA"
+    fi
+    for service in postgres redis; do
+      service_host="external-${service}.${data_service_namespace}.svc.cluster.local"
+      if ! openssl req -config /dev/null -newkey rsa:2048 -nodes \
+        -subj "/CN=external-${service}" \
+        -keyout "${tls_dir}/${service}.key" \
+        -out "${tls_dir}/${service}.csr" \
+        2> "${tls_dir}/${service}-csr-error.log"; then
+        cat "${tls_dir}/${service}-csr-error.log" >&2
+        fail "failed to generate the disposable ${service} CSR"
+      fi
+      printf 'subjectAltName=DNS:%s\nextendedKeyUsage=serverAuth\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\n' "${service_host}" \
+        > "${tls_dir}/${service}.ext"
+      if ! openssl x509 -req -days 1 -sha256 \
+        -in "${tls_dir}/${service}.csr" \
+        -CA "${tls_dir}/ca.crt" -CAkey "${tls_dir}/ca.key" -CAcreateserial \
+        -extfile "${tls_dir}/${service}.ext" \
+        -out "${tls_dir}/${service}.crt" \
+        2> "${tls_dir}/${service}-sign-error.log"; then
+        cat "${tls_dir}/${service}-sign-error.log" >&2
+        fail "failed to sign the disposable ${service} certificate"
+      fi
+    done
+    chmod 0600 "${tls_dir}"/*.key
+
+    ca_data="$(base64 < "${tls_dir}/ca.crt" | tr -d '\n')"
+    postgres_cert_data="$(base64 < "${tls_dir}/postgres.crt" | tr -d '\n')"
+    postgres_key_data="$(base64 < "${tls_dir}/postgres.key" | tr -d '\n')"
+    redis_cert_data="$(base64 < "${tls_dir}/redis.crt" | tr -d '\n')"
+    redis_key_data="$(base64 < "${tls_dir}/redis.key" | tr -d '\n')"
+    cat > "${work_dir}/external-data-services.yaml" <<EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${data_service_namespace}
+  labels:
+    aileron.io/product-conformance-run: ${resource_suffix}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: external-postgres-tls
+  namespace: ${data_service_namespace}
+type: Opaque
+data:
+  ca.crt: ${ca_data}
+  tls.crt: ${postgres_cert_data}
+  tls.key: ${postgres_key_data}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: external-redis-tls
+  namespace: ${data_service_namespace}
+type: Opaque
+data:
+  ca.crt: ${ca_data}
+  tls.crt: ${redis_cert_data}
+  tls.key: ${redis_key_data}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: external-postgres-init
+  namespace: ${data_service_namespace}
+data:
+  001-platform-login.sql: |
+    CREATE ROLE platform_login WITH LOGIN NOSUPERUSER NOCREATEDB CREATEROLE INHERIT NOREPLICATION NOBYPASSRLS PASSWORD 'platform_password';
+    ALTER DATABASE aileron OWNER TO platform_login;
+    GRANT pg_signal_backend TO platform_login;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: external-postgres-data
+  namespace: ${data_service_namespace}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-postgres
+  namespace: ${data_service_namespace}
+spec:
+  selector:
+    app.kubernetes.io/name: external-postgres
+  ports:
+    - name: postgres
+      port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-postgres
+  namespace: ${data_service_namespace}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: external-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: external-postgres
+    spec:
+      securityContext:
+        fsGroup: 70
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 70
+        runAsNonRoot: true
+        runAsUser: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: ${postgres_image}
+          imagePullPolicy: ${image_pull_policy}
+          args:
+            - -c
+            - ssl=on
+            - -c
+            - ssl_cert_file=/etc/postgres-tls/tls.crt
+            - -c
+            - ssl_key_file=/etc/postgres-tls/tls.key
+            - -c
+            - ssl_ca_file=/etc/postgres-tls/ca.crt
+          env:
+            - name: POSTGRES_DB
+              value: aileron
+            - name: POSTGRES_USER
+              value: bootstrap_superuser
+            - name: POSTGRES_PASSWORD
+              value: bootstrap_password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "bootstrap_superuser", "-d", "aileron"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: tls
+              mountPath: /etc/postgres-tls
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: external-postgres-data
+        - name: init
+          configMap:
+            name: external-postgres-init
+        - name: tls
+          secret:
+            secretName: external-postgres-tls
+            defaultMode: 0440
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: external-redis-data
+  namespace: ${data_service_namespace}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-redis
+  namespace: ${data_service_namespace}
+spec:
+  selector:
+    app.kubernetes.io/name: external-redis
+  ports:
+    - name: rediss
+      port: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-redis
+  namespace: ${data_service_namespace}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: external-redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: external-redis
+    spec:
+      securityContext:
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: ${redis_image}
+          imagePullPolicy: ${image_pull_policy}
+          args:
+            - --port
+            - "0"
+            - --tls-port
+            - "6379"
+            - --tls-cert-file
+            - /etc/redis-tls/tls.crt
+            - --tls-key-file
+            - /etc/redis-tls/tls.key
+            - --tls-ca-cert-file
+            - /etc/redis-tls/ca.crt
+            - --tls-auth-clients
+            - "no"
+            - --requirepass
+            - external_redis_password
+            - --appendonly
+            - "yes"
+            - --maxmemory-policy
+            - noeviction
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "--tls", "--cacert", "/etc/redis-tls/ca.crt", "--sni", "${redis_host}", "-h", "127.0.0.1", "-a", "external_redis_password", "ping"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tls
+              mountPath: /etc/redis-tls
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: external-redis-data
+        - name: tls
+          secret:
+            secretName: external-redis-tls
+            defaultMode: 0440
+EOF
+    kube apply -f "${work_dir}/external-data-services.yaml" >/dev/null
+    kube rollout status deployment/external-postgres \
+      -n "${data_service_namespace}" --timeout=300s >/dev/null
+    kube rollout status deployment/external-redis \
+      -n "${data_service_namespace}" --timeout=300s >/dev/null
+  fi
+
+  redis_auth=""
+  if [ -n "${redis_password}" ]; then
+    redis_auth=":${redis_password}@"
+  fi
+  cat > "${work_dir}/platform-data-service-secrets.yaml" <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aileron-platform-secrets
+  namespace: ${namespace}
+type: Opaque
+stringData:
+  database-url: postgresql://${database_username}:${database_password}@${database_host}:5432/aileron${database_query}
+  runtime-database-credential-key: product-runtime-database-credential-key-v1
+  postgres-username: ${database_username}
+  postgres-password: ${database_password}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: product-redis-general
+  namespace: ${namespace}
+type: Opaque
+stringData:
+  url: ${redis_scheme}://${redis_auth}${redis_host}:6379/0
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: product-redis-job-queue
+  namespace: ${namespace}
+type: Opaque
+stringData:
+  url: ${redis_scheme}://${redis_auth}${redis_host}:6379/1
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: product-redis-job-result
+  namespace: ${namespace}
+type: Opaque
+stringData:
+  url: ${redis_scheme}://${redis_auth}${redis_host}:6379/2
+EOF
+  if [ "${data_service_mode}" = "external" ]; then
+    cat >> "${work_dir}/platform-data-service-secrets.yaml" <<EOF
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: product-platform-database-ca
+  namespace: ${namespace}
+type: Opaque
+data:
+  ca.crt: ${ca_data}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: product-redis-general-ca
+  namespace: ${namespace}
+type: Opaque
+data:
+  ca.crt: ${ca_data}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: product-redis-job-queue-ca
+  namespace: ${namespace}
+type: Opaque
+data:
+  ca.crt: ${ca_data}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: product-redis-job-result-ca
+  namespace: ${namespace}
+type: Opaque
+data:
+  ca.crt: ${ca_data}
+EOF
+  fi
+  kube apply -f "${work_dir}/platform-data-service-secrets.yaml" >/dev/null
+}
+
 if [ "${storage_mode}" = "static-nfs" ]; then
   cat > "${work_dir}/storage-preparer.yaml" <<EOF
 apiVersion: v1
@@ -307,8 +725,10 @@ ${pod_image_pull_secrets_block}
       args:
         - >-
           umask 0007;
-          mkdir -p /manager-state/product/${run_id}/postgres /manager-state/product/${run_id}/redis;
-          chmod 2770 /manager-state/product/${run_id}/postgres /manager-state/product/${run_id}/redis
+          mkdir -p /manager-state/product/${run_id}/postgres /manager-state/product/${run_id}/redis /manager-state/product/${run_id}/identity-backup;
+          chgrp ${storage_gid} /manager-state/product/${run_id}/postgres /manager-state/product/${run_id}/redis /manager-state/product/${run_id}/identity-backup;
+          chmod 2770 /manager-state/product/${run_id}/postgres /manager-state/product/${run_id}/redis;
+          chmod 2770 /manager-state/product/${run_id}/identity-backup
       securityContext:
         allowPrivilegeEscalation: false
         readOnlyRootFilesystem: true
@@ -590,8 +1010,7 @@ ${job_image_pull_secrets_block}
 EOF
 kube delete job product-assertion-keygen -n "${namespace}" --ignore-not-found --wait=true >/dev/null
 kube apply -f "${work_dir}/keygen-job.yaml" >/dev/null
-kube wait --for=condition=Complete job/product-assertion-keygen \
-  -n "${namespace}" --timeout=180s >/dev/null
+wait_for_job_complete product-assertion-keygen 180
 
 oidc_client_secret_file="${work_dir}/external-oidc-client-secret"
 (
@@ -683,9 +1102,18 @@ EOF
 kube apply -f "${work_dir}/external-oidc-fixture.yaml" >/dev/null
 kube rollout status "deployment/${fullname}-oidc-fixture" -n "${namespace}" --timeout=180s >/dev/null
 
+if [ "${PRODUCT_STACK_TRACE:-false}" = "true" ]; then
+  set -x
+fi
+prepare_platform_secret
+if [ "${PRODUCT_STACK_TRACE:-false}" = "true" ]; then
+  set +x
+fi
+
 set -- upgrade --install "${release}" "${repo_root}/helm/aileron" \
   --namespace "${namespace}" \
   --values "${repo_root}/helm/aileron/tests/values/product-conformance.yaml" \
+  --set-string platformPublicOrigin=https://aileron.example.test \
   --set-string kubernetes.workspaceRuntimeNamespace="${namespace}" \
   --set-string kubernetes.workspaceData.size="${shared_storage_size}" \
   --set-string kubernetes.workspaceData.storageClassName="${storage_class}" \
@@ -696,7 +1124,7 @@ set -- upgrade --install "${release}" "${repo_root}/helm/aileron" \
   --set-string kubernetes.knowledgeBases.storageClassName="${storage_class}" \
   --set-string kubernetes.managerState.size="${rwo_storage_size}" \
   --set-string kubernetes.managerState.storageClassName="${rwo_storage_class}" \
-  --set-string kubernetes.platformStorageGid="${storage_gid}" \
+  --set kubernetes.platformStorageGid="${storage_gid}" \
   --set-string workspaceManager.image.repository="${manager_repository}" \
   --set-string workspaceManager.image.digest="${manager_digest}" \
   --set-string workspaceManager.image.tag="${manager_tag}" \
@@ -723,12 +1151,33 @@ set -- upgrade --install "${release}" "${repo_root}/helm/aileron" \
   --set-string postgres.persistence.size="${rwo_storage_size}" \
   --set-string postgres.persistence.storageClassName="${rwo_storage_class}" \
   --set-string oidc.issuerUrl="https://${fullname}-oidc-fixture:8443" \
-  --set-string oidc.discoveryUrl="https://${fullname}-oidc-fixture:8443/.well-known/openid-configuration" \
   --set-string oidc.clientId="aileron-manager" \
   --set-string oidc.clientSecretName="external-oidc-client" \
   --set-string oidc.caSecretName="external-oidc-tls" \
-  --set-string workspaceManager.env.ENV="production" \
   --set-string runtimeAssertions.activeKid="product-conformance-${resource_suffix}"
+if [ "${data_service_mode}" = "external" ]; then
+  set -- "$@" \
+    --set postgres.enabled=false \
+    --set-string platformDatabase.revision=product-platform-database-v1 \
+    --set-string platformDatabase.caSecretName=product-platform-database-ca \
+    --set-string platformDatabase.caSecretKey=ca.crt \
+    --set redis.enabled=false \
+    --set-string redis.connections.general.revision=product-redis-general-v1 \
+    --set-string redis.connections.general.urlSecretName=product-redis-general \
+    --set-string redis.connections.general.urlSecretKey=url \
+    --set-string redis.connections.general.caSecretName=product-redis-general-ca \
+    --set-string redis.connections.general.caSecretKey=ca.crt \
+    --set-string redis.connections.jobQueue.revision=product-redis-job-queue-v1 \
+    --set-string redis.connections.jobQueue.urlSecretName=product-redis-job-queue \
+    --set-string redis.connections.jobQueue.urlSecretKey=url \
+    --set-string redis.connections.jobQueue.caSecretName=product-redis-job-queue-ca \
+    --set-string redis.connections.jobQueue.caSecretKey=ca.crt \
+    --set-string redis.connections.jobResult.revision=product-redis-job-result-v1 \
+    --set-string redis.connections.jobResult.urlSecretName=product-redis-job-result \
+    --set-string redis.connections.jobResult.urlSecretKey=url \
+    --set-string redis.connections.jobResult.caSecretName=product-redis-job-result-ca \
+    --set-string redis.connections.jobResult.caSecretKey=ca.crt
+fi
 if [ -n "${image_pull_secret_name}" ]; then
   set -- "$@" \
     --set-string "global.imagePullSecrets[0].name=${image_pull_secret_name}"
@@ -736,10 +1185,23 @@ fi
 set -- "$@" \
   --wait \
   --timeout 10m
-helm "$@"
+if ! helm "$@"; then
+  kube logs "job/${fullname}-data-service-preflight" -n "${namespace}" \
+    --all-containers=true >&2 || true
+  kube describe job "${fullname}-data-service-preflight" \
+    -n "${namespace}" >&2 || true
+  fail "Helm install or upgrade failed"
+fi
 
-kube rollout status "statefulset/${fullname}-postgres" -n "${namespace}" --timeout=300s >/dev/null
-kube rollout status "statefulset/${fullname}-redis" -n "${namespace}" --timeout=300s >/dev/null
+if [ "${data_service_mode}" = "bundled" ]; then
+  kube rollout status "statefulset/${fullname}-postgres" -n "${namespace}" --timeout=300s >/dev/null
+  kube rollout status "statefulset/${fullname}-redis" -n "${namespace}" --timeout=300s >/dev/null
+else
+  [ -z "$(kube get statefulset "${fullname}-postgres" -n "${namespace}" \
+    --ignore-not-found -o name)" ] || fail "external mode rendered bundled PostgreSQL"
+  [ -z "$(kube get statefulset "${fullname}-redis" -n "${namespace}" \
+    --ignore-not-found -o name)" ] || fail "external mode rendered bundled Redis"
+fi
 kube rollout status "deployment/${fullname}-workspace-manager" -n "${namespace}" --timeout=300s >/dev/null
 
 # The pre-existing E2E Operator remains the sole controller. Point newly

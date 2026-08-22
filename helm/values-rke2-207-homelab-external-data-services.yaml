@@ -1,0 +1,34 @@
+postgres:
+  enabled: false
+
+platformDatabase:
+  revision: homelab-platform-database-v1
+  caSecretName: aileron-platform-database-ca
+  caSecretKey: ca.crt
+  ciliumEgress:
+    kind: namespacePods
+    namespace: platform-data
+    podLabels:
+      app.kubernetes.io/name: postgres
+
+redis:
+  enabled: false
+  connections:
+    general:
+      revision: homelab-redis-general-v1
+      urlSecretName: aileron-external-data-services
+      urlSecretKey: redis-general-url
+      caSecretName: aileron-redis-general-ca
+      caSecretKey: ca.crt
+    jobQueue:
+      revision: homelab-redis-job-queue-v1
+      urlSecretName: aileron-external-data-services
+      urlSecretKey: redis-job-queue-url
+      caSecretName: aileron-redis-job-queue-ca
+      caSecretKey: ca.crt
+    jobResult:
+      revision: homelab-redis-job-result-v1
+      urlSecretName: aileron-external-data-services
+      urlSecretKey: redis-job-result-url
+      caSecretName: aileron-redis-job-result-ca
+      caSecretKey: ca.crt

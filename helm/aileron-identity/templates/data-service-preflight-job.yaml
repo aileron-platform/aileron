@@ -1,0 +1,98 @@
+{{- if not .Values.postgres.enabled }}
+{{- $caSecretName := .Values.postgres.caSecretName | default "" | trim }}
+{{- $caSecretKey := .Values.postgres.caSecretKey | default "" | trim }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: aileron-identity-data-service-preflight
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-service-preflight
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade,pre-rollback
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aileron-identity-data-service-preflight
+        app.kubernetes.io/component: data-service-preflight
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: data-service-preflight
+          image: "{{ .Values.images.postgres.repository }}@{{ .Values.images.postgres.digest }}"
+          imagePullPolicy: {{ .Values.images.postgres.pullPolicy }}
+          command: ["/opt/aileron/preflight.sh"]
+          env:
+            - name: IDENTITY_DATABASE_JDBC_URL
+              value: {{ include "aileron-identity.databaseJdbcUrl" . | quote }}
+            - name: POSTGRES_USERNAME_FILE
+              value: /run/secrets/aileron-identity-database/username
+            - name: POSTGRES_PASSWORD_FILE
+              value: /run/secrets/aileron-identity-database/password
+            - name: POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: preflight-script
+              mountPath: /opt/aileron
+              readOnly: true
+            - name: identity-database-credentials
+              mountPath: /run/secrets/aileron-identity-database
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            {{- if ne $caSecretName "" }}
+            - name: identity-database-ca
+              mountPath: /etc/aileron/data-service-ca/identity-database
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: preflight-script
+          configMap:
+            name: aileron-identity-data-service-preflight
+            defaultMode: 0555
+        - name: identity-database-credentials
+          secret:
+            secretName: {{ .Values.secrets.postgres.name }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.secrets.postgres.usernameKey }}
+                path: username
+              - key: {{ .Values.secrets.postgres.passwordKey }}
+                path: password
+        - name: tmp
+          emptyDir: {}
+        {{- if ne $caSecretName "" }}
+        - name: identity-database-ca
+          secret:
+            secretName: {{ $caSecretName }}
+            defaultMode: 0444
+            items:
+              - key: {{ $caSecretKey }}
+                path: ca.crt
+        {{- end }}
+{{- end }}

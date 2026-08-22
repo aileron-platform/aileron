@@ -1,0 +1,293 @@
+# RKE2 207 HomeLab profile. Immutable image digests and secret-backed identity
+# values are supplied through an external deployment-only values file.
+global:
+  imagePullSecrets:
+    - name: harbor-rke-creds
+  storageClass: ""
+
+security:
+  requireStrongSecrets: true
+
+platformSecrets:
+  existingSecretName: aileron-platform-secrets
+  databaseUrlKey: database-url
+  runtimeDatabaseCredentialKey: runtime-database-credential-key
+  postgresUsernameKey: postgres-username
+  postgresPasswordKey: postgres-password
+
+platformPublicOrigin: https://aileron.apps.rke.soez.tw
+
+ingress:
+  enabled: true
+  className: nginx
+  useDefaultClass: false
+  tlsMode: kubernetesSecret
+  tlsSecretName: aileron-apps-tls
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "1100m"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+
+kubernetes:
+  enabled: true
+  provisioner: kubernetes
+  workspaceRuntimeNamespace: workspace-system
+  platformStorageGid: 100
+  workspaceData:
+    size: 20Gi
+    storageClassName: aileron-nfs-rwx-delete
+  runtimeHome:
+    size: 2Gi
+    accessMode: ReadWriteMany
+    storageClassName: aileron-nfs-rwx-delete
+  knowledgeBases:
+    pvcName: knowledge-bases-pvc
+    size: 20Gi
+    accessModes:
+      - ReadWriteMany
+    storageClassName: aileron-nfs-rwx-retain
+  managerState:
+    pvcName: workspace-manager-state
+    size: 20Gi
+    accessModes:
+      - ReadWriteOnce
+    storageClassName: aileron-local-rwo-retain
+  storageVerification:
+    enabled: true
+    workspaceStorageClassName: aileron-nfs-rwx-delete
+    managerStateStorageClassName: aileron-local-rwo-delete
+    workspaceSize: 1Gi
+    managerStateSize: 1Gi
+  browserImage:
+    repository: harbor.rke.soez.tw/library/workspace-chrome
+    digest: ""
+    tag: REQUIRED_BY_DEPLOYMENT_VALUES
+  canvasImage:
+    repository: harbor.rke.soez.tw/library/workspace-canvas
+    digest: ""
+    tag: REQUIRED_BY_DEPLOYMENT_VALUES
+  workspaceDefaults:
+    runtime:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2000m
+          memory: 3Gi
+    browser:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2000m
+          memory: 2Gi
+    canvas:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 1Gi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+
+runtimeAssertions:
+  issuer: workspace-manager
+  activeKid: workspace-manager-ed25519-v1
+  privateKeySecretName: runtime-assertion-signer
+  privateKeySecretKey: private-key.pem
+  publicKeySetSecretName: runtime-assertion-public-jwks
+  publicKeySetSecretKey: jwks.json
+
+browserCredentials:
+  existingSecretName: browser-credential-keyring
+  key: keyring.json
+  revision: 1
+
+cilium:
+  enabled: true
+
+bootstrap:
+  admin:
+    enabled: true
+    subject: 00000000-0000-4000-8000-000000000001
+    username: admin
+    email: admin@aileron.com
+
+oidc:
+  issuerUrl: https://keycloak.apps.rke.soez.tw/realms/aileron
+  clientSecretName: aileron-oidc-client
+  clientSecretKey: client-secret
+  caSecretName: aileron-oidc-ca
+  caSecretKey: ca.crt
+  clientId: aileron-frontend
+
+firewall:
+  seed:
+    workspace:
+      egressMode: unrestricted
+      allowedDomains: []
+    browser:
+      egressMode: unrestricted
+      allowedDomains: []
+
+frontend:
+  dnsResolver: rke2-coredns-rke2-coredns.kube-system.svc.cluster.local
+  image:
+    repository: harbor.rke.soez.tw/library/workspace-ui
+    digest: ""
+    tag: REQUIRED_BY_DEPLOYMENT_VALUES
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+workspaceManager:
+  image:
+    repository: harbor.rke.soez.tw/library/workspace-manager
+    digest: ""
+    tag: REQUIRED_BY_DEPLOYMENT_VALUES
+    pullPolicy: IfNotPresent
+
+workspaceOperator:
+  runtimeImage:
+    repository: harbor.rke.soez.tw/library/workspace-runtime
+    digest: ""
+    tag: REQUIRED_BY_DEPLOYMENT_VALUES
+  image:
+    repository: harbor.rke.soez.tw/library/workspace-operator
+    digest: ""
+    tag: REQUIRED_BY_DEPLOYMENT_VALUES
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+workspaceRuntimePrepuller:
+  enabled: false
+
+postgres:
+  image:
+    repository: harbor.rke.soez.tw/library/platform-postgres
+    digest: ""
+    tag: REQUIRED_BY_DEPLOYMENT_VALUES
+    pullPolicy: IfNotPresent
+  persistence:
+    storageClassName: aileron-local-rwo-retain
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+redis:
+  image:
+    repository: harbor.rke.soez.tw/library/platform-redis
+    digest: ""
+    tag: REQUIRED_BY_DEPLOYMENT_VALUES
+    pullPolicy: IfNotPresent
+  persistence:
+    storageClassName: aileron-local-rwo-retain
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+turn:
+  enabled: true
+  existingSecretName: aileron-turn-ice
+  backendIceServersKey: backend-ice-servers-json
+  frontendIceServersKey: frontend-ice-servers-json
+  restSharedSecretKey: turn-rest-shared-secret
+  credentialRevision: turn-credentials-v1
+  profile:
+    contractVersion: browser-connectivity/v1
+    policyBackend: cilium
+    backend:
+      urls:
+        - turn:turn.apps.rke.soez.tw:3478
+      controlDestination:
+        kind: ciliumEntities
+        values:
+          - host
+          - remote-node
+      relayDestination:
+        kind: ciliumEntities
+        values:
+          - host
+          - remote-node
+      relayPortRange:
+        min: 49160
+        max: 49259
+    frontend:
+      urls:
+        - turn:turn.apps.rke.soez.tw:3478
+    credentialIssuer:
+      kind: turnRest
+      ttlSeconds: 300
+    evidence:
+      intervalSeconds: 30
+      ttlSeconds: 90
+      requiredFrontendVantages:
+        - host
+
+coturn:
+  enabled: true
+  namespace: aileron-turn-system
+  frontendHost: turn.apps.rke.soez.tw
+  image:
+    repository: harbor.rke.soez.tw/library/platform-coturn
+    digest: ""
+    tag: REQUIRED_BY_DEPLOYMENT_VALUES
+    pullPolicy: IfNotPresent
+  listenerPort: 3478
+  realm: aileron
+  auth:
+    existingSecretName: aileron-coturn-auth
+    restSharedSecretKey: turn-rest-shared-secret
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+connectivityEvidenceGateway:
+  enabled: true
+  installationId: workspace-system.aileron
+  auth:
+    existingSecretName: aileron-connectivity-evidence
+    internalTokenKey: internal-token
+    agentTokensJsonKey: agent-tokens-json
+    probeIceServersJsonKey: probe-ice-servers-json
+    agentTokenKeyPrefix: agent-
+  hostAgent:
+    enabled: true
+    vantageId: host
+    tls:
+      caSecretName: aileron-apps-tls
+      caSecretKey: ca.crt
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi

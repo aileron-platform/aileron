@@ -1,0 +1,95 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: aileron-identity-keycloak
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: aileron-identity-keycloak
+  {{- if and (not .Values.postgres.enabled) (eq .Values.networkPolicy.externalDatabaseEgress.mode "disabled") }}
+  policyTypes: ["Ingress"]
+  {{- else }}
+  policyTypes: ["Ingress", "Egress"]
+  {{- end }}
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.ingressNamespaceLabels | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: aileron-identity-break-glass-bootstrap
+      ports:
+        - protocol: TCP
+          port: 8080
+  {{- if or .Values.postgres.enabled (ne .Values.networkPolicy.externalDatabaseEgress.mode "disabled") }}
+  egress:
+    - to:
+        {{- if .Values.postgres.enabled }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: aileron-identity-postgres
+        {{- else if eq .Values.networkPolicy.externalDatabaseEgress.mode "selector" }}
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.externalDatabaseEgress.namespaceLabels | nindent 14 }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.externalDatabaseEgress.podLabels | nindent 14 }}
+        {{- else if eq .Values.networkPolicy.externalDatabaseEgress.mode "ipBlock" }}
+        - ipBlock:
+            cidr: {{ .Values.networkPolicy.externalDatabaseEgress.cidr | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+  {{- end }}
+{{- if .Values.postgres.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: aileron-identity-postgres
+  labels:
+    {{- include "aileron-identity.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: aileron-identity-postgres
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: aileron-identity-keycloak
+      ports:
+        - protocol: TCP
+          port: 5432
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: aileron-identity-backup
+              platform.aileron.dev/identity-data-operation: backup
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: aileron-identity-restore
+              platform.aileron.dev/identity-data-operation: restore
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
+{{- end }}

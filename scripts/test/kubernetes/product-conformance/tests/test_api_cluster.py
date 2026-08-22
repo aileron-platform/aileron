@@ -16,6 +16,9 @@ from product_conformance.api import (
 )
 from product_conformance.cluster import (
     ProductCluster,
+    RUNTIME_PLATFORM_ENVIRONMENT_CONTRACT_PATH,
+    RUNTIME_GID,
+    RUNTIME_UID,
     _canonical_runtime_secret_name,
     _load_runtime_platform_environment_contract,
     _require_runtime_platform_environment,
@@ -61,6 +64,7 @@ class ManagerClientTest(unittest.TestCase):
             manager = ManagerClient(
                 http,
                 base_url="http://manager:3001",
+                public_origin="https://aileron.example.test",
                 sessions={"owner": ("opaque-session", "csrf-token")},
             )
             response = manager.owner(
@@ -75,6 +79,9 @@ class ManagerClientTest(unittest.TestCase):
             observed[0].headers["Cookie"], "aileron_session=opaque-session"
         )
         self.assertEqual(observed[0].headers["X-CSRF-Token"], "csrf-token")
+        self.assertEqual(
+            observed[0].headers["Origin"], "https://aileron.example.test"
+        )
         self.assertEqual(json.loads(observed[0].content), {"name": "test"})
 
     def test_request_does_not_duplicate_existing_api_prefix(self) -> None:
@@ -88,6 +95,7 @@ class ManagerClientTest(unittest.TestCase):
             manager = ManagerClient(
                 http,
                 base_url="http://manager:3001",
+                public_origin="https://aileron.example.test",
                 sessions={"owner": ("opaque-session", "csrf-token")},
             )
             manager.owner("GET", "/api/v1/workspaces/id/runtime-access")
@@ -130,8 +138,64 @@ class ExternalOidcFixtureClientTest(unittest.TestCase):
         self.assertEqual(user.id, "user-id")
         self.assertEqual(created_user["realm_role"], "admin")
 
+    def test_login_reads_the_canonical_snake_case_csrf_field(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "POST" and request.url.path == "/test/next-login":
+                return httpx.Response(204)
+            if request.url.path == "/api/v1/oauth2/login":
+                return httpx.Response(
+                    302,
+                    headers={"location": "http://oidc-fixture/authorize"},
+                )
+            if request.url.path == "/authorize":
+                return httpx.Response(
+                    302,
+                    headers={
+                        "location": (
+                            "http://manager:3001/api/v1/oauth2/callback"
+                            "?code=code-1&state=state-1"
+                        )
+                    },
+                )
+            if request.url.path == "/api/v1/oauth2/callback":
+                return httpx.Response(
+                    303,
+                    headers={"set-cookie": "aileron_session=session-1; Path=/"},
+                )
+            if request.url.path == "/api/v1/oauth2/session":
+                self.assertEqual(
+                    request.headers["Cookie"],
+                    "aileron_session=session-1",
+                )
+                return httpx.Response(200, json={"csrf_token": "csrf-1"})
+            raise AssertionError(f"Unexpected login request: {request}")
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+            fixture = ExternalOidcFixtureClient(
+                http,
+                base_url="http://oidc-fixture",
+                client_id="aileron-manager",
+            )
+
+            session = fixture.login(
+                manager_url="http://manager:3001",
+                username="e2e-owner",
+            )
+
+        self.assertEqual(session, ("session-1", "csrf-1"))
+
 
 class ProductClusterContractTest(unittest.TestCase):
+    def test_runtime_platform_contract_is_packaged_at_the_runtime_path(self) -> None:
+        self.assertEqual(
+            "/opt/product-conformance/contracts/runtime-platform-environment.json",
+            str(RUNTIME_PLATFORM_ENVIRONMENT_CONTRACT_PATH),
+        )
+        contract = json.loads(
+            RUNTIME_PLATFORM_ENVIRONMENT_CONTRACT_PATH.read_text(encoding="utf-8")
+        )
+        self.assertEqual(1, contract["schemaVersion"])
+
     def test_workspace_component_labels_match_operator_contract(self) -> None:
         self.assertEqual(
             {
@@ -581,9 +645,12 @@ class ProductClusterContractTest(unittest.TestCase):
         )
 
         for replicas in (True, False, -1, 1.5, "1", None):
-            with self.subTest(replicas=replicas), self.assertRaisesRegex(
-                ValueError,
-                "non-negative integer",
+            with (
+                self.subTest(replicas=replicas),
+                self.assertRaisesRegex(
+                    ValueError,
+                    "non-negative integer",
+                ),
             ):
                 cluster.scale_operator(replicas)
 
@@ -915,6 +982,11 @@ class ProductClusterContractTest(unittest.TestCase):
                 ),
             ],
         )
+
+        barriers.reset_mock()
+        core.read_namespaced_service.side_effect = [original]
+        cluster.restore_service(snapshot, wait_for_ready=False)
+        self.assertEqual(barriers.mock_calls, [])
 
     def test_terminal_failure_injection_rolls_back_when_barrier_fails(
         self,
@@ -1251,7 +1323,7 @@ class ProductClusterContractTest(unittest.TestCase):
             _preload_content=False,
             _request_timeout=(5, 10),
             label_selector=(
-                "kubernetes.io/service-name=" "workspace-runtime-workspace-id"
+                "kubernetes.io/service-name=workspace-runtime-workspace-id"
             ),
         )
         response.release_conn.assert_called_once_with()
@@ -1435,13 +1507,12 @@ class ProductClusterContractTest(unittest.TestCase):
         names = {item["name"] for item in contract}
         self.assertNotIn("MANAGER_URL", names)
         self.assertNotIn("BROWSER_CONTAINER_NAME", names)
-        self.assertNotIn("RUNTIME_STATE_DATABASE_URL", names)
-        environment["AILERON_RUNTIME_STATE_DATABASE_URL_FILE"] = client.V1EnvVar(
-            name="AILERON_RUNTIME_STATE_DATABASE_URL_FILE",
+        environment["AILERON_RUNTIME_DATABASE_CONNECTION_FILE"] = client.V1EnvVar(
+            name="AILERON_RUNTIME_DATABASE_CONNECTION_FILE",
             value_from=client.V1EnvVarSource(
                 secret_key_ref=client.V1SecretKeySelector(
                     name="workspace-runtime-secret",
-                    key="state-database-url",
+                    key="runtime-database-connection",
                 )
             ),
         )
@@ -1471,11 +1542,7 @@ class ProductClusterContractTest(unittest.TestCase):
             for port in (0, 65536):
                 with self.subTest(name=item["name"], port=port):
                     invalid_port = dict(environment)
-                    scheme = (
-                        "https"
-                        if item["valueKind"] == "public-origin"
-                        else "http"
-                    )
+                    scheme = "https" if item["valueKind"] == "public-origin" else "http"
                     invalid_port[item["name"]] = client.V1EnvVar(
                         name=item["name"],
                         value=f"{scheme}://service:{port}",
@@ -1510,7 +1577,7 @@ class ProductClusterContractTest(unittest.TestCase):
         from kubernetes import client
 
         valid_data = {
-            "state-database-url": "c3RhdGUtZGF0YWJhc2U=",
+            "runtime-database-connection": "cnVudGltZS1kYXRhYmFzZS1jb25uZWN0aW9u",
             "runtime-control-token": "cnVudGltZS10b2tlbg==",
             "custom-setup.sh": "cHJpbnRmIGNvbmZpZ3VyZWQ=",
         }
@@ -1698,7 +1765,7 @@ class ProductClusterContractTest(unittest.TestCase):
                         sources=[
                             client.V1VolumeProjection(
                                 secret=client.V1SecretProjection(
-                                    name="product-aileron-secrets",
+                                    name="aileron-platform-secrets",
                                     items=[
                                         client.V1KeyToPath(
                                             key="runtime-database-credential-key",
@@ -1715,13 +1782,13 @@ class ProductClusterContractTest(unittest.TestCase):
 
         observed = ProductCluster._require_manager_credential_mount(
             pod_spec,
-            secret_name="product-aileron-secrets",
+            secret_name="aileron-platform-secrets",
         )
 
         self.assertEqual(
             observed,
             {
-                "secretName": "product-aileron-secrets",
+                "secretName": "aileron-platform-secrets",
                 "secretKey": "runtime-database-credential-key",
                 "path": "/run/secrets/aileron/runtime-database-credential.key",
             },
@@ -1749,33 +1816,187 @@ class ProductClusterContractTest(unittest.TestCase):
             discovery=Mock(),
         )
         cluster._delete_pod_if_exists = Mock()  # type: ignore[method-assign]
-        cluster._wait = Mock(  # type: ignore[method-assign]
-            return_value=client.V1Pod(status=client.V1PodStatus(phase="Succeeded"))
-        )
-        core.read_namespaced_persistent_volume_claim.return_value = (
-            client.V1PersistentVolumeClaim(
+        def wait(read, _predicate, *, description: str, timeout_seconds: float):
+            del timeout_seconds
+            if description.startswith("Workspace PVC"):
+                return read()
+            return client.V1Pod(status=client.V1PodStatus(phase="Succeeded"))
+
+        cluster._wait = Mock(side_effect=wait)  # type: ignore[method-assign]
+        def pvc(name: str, _namespace: str):
+            if name == "product-workspaces-root-pvc":
+                return client.V1PersistentVolumeClaim(
+                    spec=client.V1PersistentVolumeClaimSpec(
+                        access_modes=["ReadWriteMany"],
+                        volume_name="product-workspaces-root-run",
+                    ),
+                    status=client.V1PersistentVolumeClaimStatus(phase="Bound"),
+                )
+            if name == "product-runtime-homes-root-pvc":
+                return client.V1PersistentVolumeClaim(
+                    spec=client.V1PersistentVolumeClaimSpec(
+                        access_modes=["ReadWriteMany"],
+                        volume_name="product-runtime-homes-root-run",
+                    ),
+                    status=client.V1PersistentVolumeClaimStatus(phase="Bound"),
+                )
+            if name.startswith("workspace-runtime-home-pvc-"):
+                return client.V1PersistentVolumeClaim(
+                    spec=client.V1PersistentVolumeClaimSpec(
+                        access_modes=["ReadWriteOnce"],
+                        resources=client.V1VolumeResourceRequirements(
+                            requests={"storage": "2Gi"}
+                        ),
+                        storage_class_name="nfs-rwo",
+                    )
+                )
+            return client.V1PersistentVolumeClaim(
                 spec=client.V1PersistentVolumeClaimSpec(
                     access_modes=["ReadWriteMany"],
-                    volume_name="product-workspaces-root-run",
-                ),
-                status=client.V1PersistentVolumeClaimStatus(phase="Bound"),
+                    resources=client.V1VolumeResourceRequirements(
+                        requests={"storage": "1Gi"}
+                    ),
+                    storage_class_name="nfs-rwx",
+                )
             )
-        )
+
+        core.read_namespaced_persistent_volume_claim.side_effect = pvc
         inherited_mount_options = [
             "vers=4.1",
             "hard",
             "timeo=321",
             "retrans=7",
         ]
+        def root_volume(name: str):
+            path = "/runtime-homes" if "runtime-homes" in name else "/workspaces"
+            return client.V1PersistentVolume(
+                spec=client.V1PersistentVolumeSpec(
+                    access_modes=["ReadWriteMany"],
+                    capacity={"storage": "2Gi"},
+                    mount_options=inherited_mount_options,
+                    nfs=client.V1NFSVolumeSource(
+                        path=path,
+                        server="nfs-server",
+                    ),
+                    storage_class_name="nfs-rwx",
+                )
+            )
+
+        core.read_persistent_volume.side_effect = root_volume
+
+        observed = cluster.ensure_workspace_storage(
+            "11111111-1111-4111-8111-111111111111"
+        )
+
+        volumes = [call.args[0] for call in core.create_persistent_volume.call_args_list]
+        self.assertEqual(len(volumes), 2)
+        self.assertEqual(
+            [volume.metadata.name for volume in volumes],
+            [
+                "product-workspace-11111111-1111-4111-8111-111111111111",
+                "product-runtime-home-11111111-1111-4111-8111-111111111111",
+            ],
+        )
+        self.assertEqual(
+            [volume.spec.capacity["storage"] for volume in volumes],
+            ["1Gi", "2Gi"],
+        )
+        self.assertEqual(
+            [volume.spec.access_modes for volume in volumes],
+            [["ReadWriteMany"], ["ReadWriteOnce"]],
+        )
+        self.assertEqual(
+            [volume.spec.storage_class_name for volume in volumes],
+            ["nfs-rwx", "nfs-rwo"],
+        )
+        self.assertTrue(
+            all(volume.spec.mount_options == inherited_mount_options for volume in volumes)
+        )
+        self.assertTrue(
+            all(volume.spec.nfs.server == "nfs-server" for volume in volumes)
+        )
+        preparer = core.create_namespaced_pod.call_args.args[1]
+        self.assertEqual(
+            [mount.mount_path for mount in preparer.spec.containers[0].volume_mounts],
+            ["/workspaces", "/runtime-homes", "/tmp"],
+        )
+        self.assertEqual(observed["mode"], "static-nfs")
+        self.assertEqual(
+            observed["runtimeHomePv"],
+            "product-runtime-home-11111111-1111-4111-8111-111111111111",
+        )
+
+    def test_static_workspace_storage_reuses_already_bound_volume(self) -> None:
+        from kubernetes import client
+
+        core = Mock()
+        cluster = ProductCluster(
+            namespace="test-ns",
+            release="product",
+            run_id="run",
+            driver_image="driver:test",
+            image_pull_policy="Never",
+            storage_class="nfs-rwx",
+            storage_mode="static-nfs",
+            nfs_server="nfs-server",
+            storage_gid=2000,
+            core=core,
+            apps=Mock(),
+            custom=Mock(),
+            discovery=Mock(),
+        )
+        cluster._delete_pod_if_exists = Mock()  # type: ignore[method-assign]
+
+        def wait(read, _predicate, *, description: str, timeout_seconds: float):
+            del timeout_seconds
+            if description.startswith("Workspace PVC"):
+                return read()
+            return client.V1Pod(status=client.V1PodStatus(phase="Succeeded"))
+
+        cluster._wait = Mock(side_effect=wait)  # type: ignore[method-assign]
+
+        def pvc(name: str, _namespace: str):
+            if name in {
+                "product-workspaces-root-pvc",
+                "product-runtime-homes-root-pvc",
+            }:
+                return client.V1PersistentVolumeClaim(
+                    spec=client.V1PersistentVolumeClaimSpec(
+                        access_modes=["ReadWriteMany"],
+                        volume_name=f"{name}-volume",
+                    ),
+                    status=client.V1PersistentVolumeClaimStatus(phase="Bound"),
+                )
+            if name.startswith("workspace-runtime-home-pvc-"):
+                return client.V1PersistentVolumeClaim(
+                    spec=client.V1PersistentVolumeClaimSpec(
+                        access_modes=["ReadWriteOnce"],
+                        resources=client.V1VolumeResourceRequirements(
+                            requests={"storage": "2Gi"}
+                        ),
+                        storage_class_name="nfs-rwo",
+                        volume_name="existing-runtime-home-volume",
+                    ),
+                    status=client.V1PersistentVolumeClaimStatus(phase="Bound"),
+                )
+            return client.V1PersistentVolumeClaim(
+                spec=client.V1PersistentVolumeClaimSpec(
+                    access_modes=["ReadWriteMany"],
+                    resources=client.V1VolumeResourceRequirements(
+                        requests={"storage": "1Gi"}
+                    ),
+                    storage_class_name="nfs-rwx",
+                ),
+                status=client.V1PersistentVolumeClaimStatus(phase="Pending"),
+            )
+
+        core.read_namespaced_persistent_volume_claim.side_effect = pvc
         core.read_persistent_volume.return_value = client.V1PersistentVolume(
             spec=client.V1PersistentVolumeSpec(
                 access_modes=["ReadWriteMany"],
-                capacity={"storage": "1Gi"},
-                mount_options=inherited_mount_options,
-                nfs=client.V1NFSVolumeSource(
-                    path="/workspaces",
-                    server="nfs-server",
-                ),
+                capacity={"storage": "2Gi"},
+                mount_options=["vers=4.1", "hard"],
+                nfs=client.V1NFSVolumeSource(path="/", server="nfs-server"),
                 storage_class_name="nfs-rwx",
             )
         )
@@ -1784,13 +2005,47 @@ class ProductClusterContractTest(unittest.TestCase):
             "11111111-1111-4111-8111-111111111111"
         )
 
-        volume = core.create_persistent_volume.call_args.args[0]
+        volumes = [call.args[0] for call in core.create_persistent_volume.call_args_list]
+        self.assertEqual(len(volumes), 1)
         self.assertEqual(
-            volume.spec.mount_options,
-            inherited_mount_options,
+            volumes[0].metadata.name,
+            "product-workspace-11111111-1111-4111-8111-111111111111",
         )
-        self.assertEqual(volume.spec.nfs.server, "nfs-server")
-        self.assertEqual(observed["mode"], "static-nfs")
+        self.assertEqual(observed["runtimeHomePv"], "existing-runtime-home-volume")
+
+    def test_static_workspace_cleanup_runs_as_runtime_identity(self) -> None:
+        from kubernetes import client
+
+        core = Mock()
+        cluster = ProductCluster(
+            namespace="test-ns",
+            release="product",
+            run_id="run",
+            driver_image="driver:test",
+            image_pull_policy="Never",
+            storage_class="nfs-rwx",
+            storage_mode="static-nfs",
+            nfs_server="nfs-server",
+            storage_gid=2000,
+            core=core,
+            apps=Mock(),
+            custom=Mock(),
+            discovery=Mock(),
+        )
+        cluster._delete_pod_if_exists = Mock()  # type: ignore[method-assign]
+        cluster._wait = Mock(
+            side_effect=[
+                client.V1Pod(status=client.V1PodStatus(phase="Succeeded")),
+                [],
+            ]
+        )  # type: ignore[method-assign]
+
+        cluster.delete_workspace_storage("11111111-1111-4111-8111-111111111111")
+
+        cleanup = core.create_namespaced_pod.call_args.args[1]
+        self.assertEqual(cleanup.spec.security_context.run_as_user, RUNTIME_UID)
+        self.assertEqual(cleanup.spec.security_context.run_as_group, RUNTIME_GID)
+        self.assertEqual(cleanup.spec.security_context.fs_group, 2000)
 
     def test_dynamic_workspace_storage_waits_for_csi_bound_pvc(self) -> None:
         from kubernetes import client

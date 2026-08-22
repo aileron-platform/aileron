@@ -11,6 +11,7 @@ resource_prefix="aileron-platform-contract-${run_suffix}"
 network="${resource_prefix}"
 redis_volume="${resource_prefix}-redis"
 postgres_volume="${resource_prefix}-postgres"
+identity_data_volume="${resource_prefix}-identity-data"
 redis_container="${resource_prefix}-redis"
 postgres_container="${resource_prefix}-postgres"
 
@@ -24,7 +25,10 @@ cleanup() {
     "${postgres_container}" \
     "${redis_container}" >/dev/null 2>&1 || true
   docker network rm "${network}" >/dev/null 2>&1 || true
-  docker volume rm "${postgres_volume}" "${redis_volume}" >/dev/null 2>&1 || true
+  docker volume rm \
+    "${identity_data_volume}" \
+    "${postgres_volume}" \
+    "${redis_volume}" >/dev/null 2>&1 || true
 }
 
 trap cleanup EXIT HUP INT TERM
@@ -184,11 +188,67 @@ assert_postgres_contract() {
     fail "Postgres high-UID restart did not preserve data"
 }
 
+assert_identity_data_operation_storage_contract() {
+  configured_user="$(docker image inspect --format '{{.Config.User}}' "${postgres_image}")"
+  [ "${configured_user}" = "70:70" ] ||
+    fail "Identity data operations require platform-postgres USER 70:70, found '${configured_user}'"
+
+  docker volume create "${identity_data_volume}" >/dev/null
+  docker run --rm \
+    --user 0:0 \
+    --volume "${identity_data_volume}:/backup" \
+    --entrypoint /bin/sh \
+    "${postgres_image}" \
+    -ec '
+      chgrp 70 /backup
+      chmod 2770 /backup
+    '
+
+  docker run --rm \
+    --read-only \
+    --cap-drop ALL \
+    --security-opt no-new-privileges:true \
+    --user 70:70 \
+    --volume "${identity_data_volume}:/backup" \
+    --entrypoint /bin/sh \
+    "${postgres_image}" \
+    -ec '
+      test "$(id -u):$(id -g)" = "70:70"
+      umask 077
+      printf "%s\n" identity-backup-payload > /backup/identity.dump.next
+      mv -f -- /backup/identity.dump.next /backup/identity.dump
+      test ! -e /backup/identity.dump.next
+      test "$(stat -c "%u:%g" /backup/identity.dump)" = "70:70"
+    '
+
+  docker run --rm \
+    --read-only \
+    --cap-drop ALL \
+    --security-opt no-new-privileges:true \
+    --user 70:70 \
+    --volume "${identity_data_volume}:/backup" \
+    --entrypoint /bin/sh \
+    "${postgres_image}" \
+    -ec '
+      test "$(id -u):$(id -g)" = "70:70"
+      test "$(cat /backup/identity.dump)" = identity-backup-payload
+      umask 077
+      printf "%s\n" identity-restore-payload > /backup/identity.restore.next
+      mv -f -- /backup/identity.restore.next /backup/identity.restore
+      test ! -e /backup/identity.restore.next
+      test "$(stat -c "%u:%g" /backup/identity.restore)" = "70:70"
+      test "$(cat /backup/identity.restore)" = identity-restore-payload
+    '
+
+  printf 'Identity backup and restore mounted storage contract passed.\n'
+}
+
 for image in "${redis_image}" "${postgres_image}"; do
   assert_numeric_non_root_user "${image}"
 done
 
 assert_redis_contract
 assert_postgres_contract
+assert_identity_data_operation_storage_contract
 
 printf 'Platform Redis and Postgres image contracts passed.\n'

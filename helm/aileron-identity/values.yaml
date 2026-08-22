@@ -1,0 +1,87 @@
+global:
+  imagePullSecrets: []
+
+realm: aileron
+issuerUrl: https://identity.example.test/realms/aileron
+platformCallbackUrl: https://aileron.example.test/api/v1/oauth2/callback
+clientId: aileron-manager
+
+images:
+  keycloak:
+    repository: ailerondocker/platform-keycloak
+    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    pullPolicy: IfNotPresent
+  postgres:
+    repository: ailerondocker/platform-postgres
+    digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    pullPolicy: IfNotPresent
+
+secrets:
+  postgres:
+    name: identity-postgres
+    usernameKey: username
+    passwordKey: password
+  keycloakAdministrator:
+    name: keycloak-bootstrap-admin
+    usernameKey: username
+    passwordKey: password
+  platformAdministrator:
+    name: keycloak-platform-admin
+    subjectKey: subject
+    usernameKey: username
+    emailKey: email
+    passwordKey: password
+    importKey: import.json
+  breakGlass:
+    name: keycloak-break-glass
+    usernameKey: username
+    emailKey: email
+    passwordKey: password
+  realmImport:
+    name: keycloak-realm-import
+    realmKey: realm.json
+
+postgres:
+  enabled: true
+  database: keycloak
+  storage:
+    size: 10Gi
+    storageClassName: ""
+    mountRootSupplementalGroup: null
+  resources: {}
+
+keycloak:
+  replicas: 1
+  resources: {}
+
+ingress:
+  public:
+    enabled: true
+    className: nginx
+    hostname: identity.example.test
+    tlsSecretName: identity-tls
+    annotations: {}
+  admin:
+    enabled: false
+    className: nginx
+    hostname: identity-admin.example.test
+    tlsSecretName: identity-admin-tls
+    allowedCidrs: []
+    annotations: {}
+
+networkPolicy:
+  enabled: true
+  ingressNamespaceLabels:
+    kubernetes.io/metadata.name: ingress-nginx
+
+backup:
+  enabled: false
+  claimName: aileron-identity-backup
+  storage:
+    size: 10Gi
+    storageClassName: ""
+    accessMode: ReadWriteOnce
+    mountRootSupplementalGroup: null
+
+restore:
+  enabled: false

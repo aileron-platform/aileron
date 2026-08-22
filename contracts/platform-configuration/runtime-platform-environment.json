@@ -32,7 +32,7 @@
       "valuePattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
     },
     {
-      "name": "AILERON_RUNTIME_STATE_DATABASE_URL_FILE",
+      "name": "AILERON_RUNTIME_DATABASE_CONNECTION_FILE",
       "valueKind": "secret-file-path",
       "valuePattern": "^/.+$"
     },

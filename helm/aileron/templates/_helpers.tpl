@@ -6,8 +6,75 @@
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
-{{- printf "%s-%s" .Release.Name (include "aileron.name" .) | trunc 63 | trimSuffix "-" -}}
+{{- $name := include "aileron.name" . -}}
+{{- if contains $name .Release.Name -}}
+{{- .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "aileron.waitForJobInitContainer" -}}
+- name: {{ .name }}
+  image: {{ include "aileron.imageReference" (dict "name" "workspaceManager.image" "image" .root.Values.workspaceManager.image "production" .root.Values.security.requireStrongSecrets) | quote }}
+  imagePullPolicy: {{ .root.Values.workspaceManager.image.pullPolicy }}
+  env:
+    - name: REQUIRED_JOB_NAME
+      value: {{ .jobName | quote }}
+  command:
+    - /bin/sh
+    - -ec
+    - |
+      exec /workspace-manager/.venv/bin/python - <<'PY'
+      import json
+      import os
+      import ssl
+      import time
+      import urllib.error
+      import urllib.request
+      from pathlib import Path
+
+      service_account = Path("/var/run/secrets/kubernetes.io/serviceaccount")
+      namespace = (service_account / "namespace").read_text().strip()
+      token = (service_account / "token").read_text().strip()
+      job_name = os.environ["REQUIRED_JOB_NAME"]
+      url = (
+          "https://kubernetes.default.svc/apis/batch/v1/namespaces/"
+          f"{namespace}/jobs/{job_name}"
+      )
+      context = ssl.create_default_context(cafile=str(service_account / "ca.crt"))
+      while True:
+          request = urllib.request.Request(
+              url,
+              headers={"Authorization": f"Bearer {token}"},
+          )
+          try:
+              with urllib.request.urlopen(
+                  request, context=context, timeout=10
+              ) as response:
+                  job = json.load(response)
+          except urllib.error.HTTPError as error:
+              if error.code == 404:
+                  time.sleep(2)
+                  continue
+              raise
+          conditions = {
+              item.get("type"): item.get("status")
+              for item in job.get("status", {}).get("conditions", [])
+          }
+          if conditions.get("Complete") == "True":
+              break
+          if conditions.get("Failed") == "True":
+              raise RuntimeError(f"Required Job failed: {job_name}")
+          time.sleep(2)
+      PY
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
 {{- end -}}
 
 {{- define "aileron.chart" -}}
@@ -83,8 +150,10 @@ imagePullSecrets:
   (dict "name" "kubernetes.browserImage" "image" .Values.kubernetes.browserImage)
   (dict "name" "kubernetes.canvasImage" "image" .Values.kubernetes.canvasImage)
   (dict "name" "postgres.image" "image" .Values.postgres.image)
-  (dict "name" "redis.image" "image" .Values.redis.image)
 }}
+{{- if .Values.redis.enabled -}}
+{{- $images = append $images (dict "name" "redis.image" "image" .Values.redis.image) -}}
+{{- end -}}
 {{- if and .Values.turn.enabled .Values.coturn.enabled -}}
 {{- $images = append $images (dict "name" "coturn.image" "image" .Values.coturn.image) -}}
 {{- end -}}
@@ -218,7 +287,9 @@ storageClassName: {{ .Values.global.storageClass | quote }}
 {{- end -}}
 
 {{- define "aileron.turnReachabilityProfileJSON" -}}
-{{- toJson .Values.turn.profile -}}
+{{- $profile := deepCopy .Values.turn.profile -}}
+{{- $_ := set $profile.credentialIssuer "secretRef" (include "aileron.turnSecretName" .) -}}
+{{- toJson $profile -}}
 {{- end -}}
 
 {{- define "aileron.validateTurnConfiguration" -}}
@@ -269,8 +340,8 @@ storageClassName: {{ .Values.global.storageClass | quote }}
 {{- fail "coturn.listenerPort must be outside the TURN relay port range" -}}
 {{- end -}}
 {{- if .Values.coturn.enabled -}}
-{{- if eq .Values.turn.profile.credentialIssuer.kind "turnRest" -}}
-{{- fail "coturn.enabled requires turn.profile.credentialIssuer.kind=staticSecret" -}}
+{{- if ne .Values.turn.profile.credentialIssuer.kind "turnRest" -}}
+{{- fail "coturn.enabled requires turn.profile.credentialIssuer.kind=turnRest" -}}
 {{- end -}}
 {{- $coturnNamespace := required "coturn.namespace is required when coturn.enabled=true" .Values.coturn.namespace -}}
 {{- $coturnHost := include "aileron.coturnFrontendHost" . -}}
@@ -313,9 +384,6 @@ storageClassName: {{ .Values.global.storageClass | quote }}
 {{- if not .Values.workspaceManager.enabled -}}
 {{- fail "workspaceManager.enabled must be true when administrator bootstrap is enabled" -}}
 {{- end -}}
-{{- if not .Values.postgres.enabled -}}
-{{- fail "postgres.enabled must be true when administrator bootstrap is enabled" -}}
-{{- end -}}
 {{- $subject := trim (required "bootstrap.admin.subject is required when administrator bootstrap is enabled" .Values.bootstrap.admin.subject) -}}
 {{- $username := trim (required "bootstrap.admin.username is required when administrator bootstrap is enabled" .Values.bootstrap.admin.username) -}}
 {{- $email := trim (required "bootstrap.admin.email is required when administrator bootstrap is enabled" .Values.bootstrap.admin.email) -}}
@@ -337,6 +405,7 @@ storageClassName: {{ .Values.global.storageClass | quote }}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$" $clientSecretName) -}}
 {{- fail "oidc.clientSecretName must be a valid existing Secret name" -}}
 {{- end -}}
+
 {{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._-]*$" $clientSecretKey) -}}
 {{- fail "oidc.clientSecretKey must be a valid Secret data key" -}}
 {{- end -}}

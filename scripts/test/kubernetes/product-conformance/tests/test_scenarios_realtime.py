@@ -10,6 +10,96 @@ from product_conformance import scenarios_realtime
 
 
 class ForcedTerminationScenarioTest(unittest.IsolatedAsyncioTestCase):
+    def test_signed_drain_accepts_one_or_two_acknowledgements(self) -> None:
+        two_acknowledged = [
+            "Workspace component drain acknowledged",
+            "Workspace component drain acknowledged",
+        ]
+        one_acknowledged = [
+            "Workspace component drain acknowledged",
+            "Workspace component drain acknowledgement failed",
+        ]
+
+        self.assertEqual(
+            scenarios_realtime._assert_signed_drain_counts(two_acknowledged, 0),
+            {"acknowledged": 2, "failed": 0},
+        )
+        self.assertEqual(
+            scenarios_realtime._assert_signed_drain_counts(one_acknowledged, 0),
+            {"acknowledged": 1, "failed": 1},
+        )
+
+    def test_signed_drain_rejects_no_acknowledgement_or_extra_outcomes(self) -> None:
+        with self.assertRaisesRegex(AssertionError, "signed drain outcomes"):
+            scenarios_realtime._assert_signed_drain_counts(
+                [
+                    "Workspace component drain acknowledgement failed",
+                    "Workspace component drain acknowledgement failed",
+                ],
+                0,
+            )
+        with self.assertRaisesRegex(AssertionError, "signed drain outcomes"):
+            scenarios_realtime._assert_signed_drain_counts(
+                [
+                    "Workspace component drain acknowledged",
+                    "Workspace component drain acknowledged",
+                    "Workspace component drain acknowledged",
+                ],
+                0,
+            )
+
+    def test_forced_drain_accepts_one_or_two_failed_acknowledgements(self) -> None:
+        one_failed = [
+            "Workspace component drain acknowledged",
+            "Workspace component drain acknowledgement failed",
+        ]
+        two_failed = [
+            "Workspace component drain acknowledgement failed",
+            "Workspace component drain acknowledgement failed",
+        ]
+
+        self.assertEqual(
+            scenarios_realtime._assert_forced_drain_counts(one_failed, 0),
+            {"acknowledged": 1, "failed": 1},
+        )
+        self.assertEqual(
+            scenarios_realtime._assert_forced_drain_counts(two_failed, 0),
+            {"acknowledged": 0, "failed": 2},
+        )
+
+    def test_forced_drain_rejects_no_failure_or_extra_outcomes(self) -> None:
+        with self.assertRaisesRegex(AssertionError, "forced drain outcomes"):
+            scenarios_realtime._assert_forced_drain_counts(
+                [
+                    "Workspace component drain acknowledged",
+                    "Workspace component drain acknowledged",
+                ],
+                0,
+            )
+        with self.assertRaisesRegex(AssertionError, "forced drain outcomes"):
+            scenarios_realtime._assert_forced_drain_counts(
+                [
+                    "Workspace component drain acknowledgement failed",
+                    "Workspace component drain acknowledgement failed",
+                    "Workspace component drain acknowledgement failed",
+                ],
+                0,
+            )
+
+    async def test_revoked_websocket_accepts_unauthorized_handshake(self) -> None:
+        async def rejected_opener():
+            raise scenarios_realtime.InvalidStatus(
+                SimpleNamespace(status_code=401)
+            )
+
+        result = await scenarios_realtime._expect_websocket_rejected(
+            rejected_opener,
+            accepted_close_codes={4403},
+            accepted_handshake_statuses={401, 403, 423},
+        )
+
+        self.assertEqual(result, {"rejected": True, "handshakeStatus": 401})
+
     async def test_operator_pause_wraps_service_failure_injection(self) -> None:
         events: list[str] = []
         cluster = Mock()
@@ -30,8 +120,10 @@ class ForcedTerminationScenarioTest(unittest.IsolatedAsyncioTestCase):
         cluster.patch_terminal_target_port.side_effect = lambda workspace_id, port: (
             events.append(f"service-patch:{workspace_id}:{port}") or service_snapshot
         )
-        cluster.restore_service.side_effect = lambda snapshot: events.append(
-            "service-restore"
+        cluster.restore_service.side_effect = (
+            lambda snapshot, *, wait_for_ready: events.append(
+                f"service-restore:{wait_for_ready}"
+            )
         )
         terminal = Mock()
         terminal.close = AsyncMock(side_effect=lambda: events.append("terminal-close"))
@@ -75,7 +167,7 @@ class ForcedTerminationScenarioTest(unittest.IsolatedAsyncioTestCase):
             _request_owner=AsyncMock(
                 return_value=SimpleNamespace(status_code=204, text="")
             ),
-            _wait_drain_log_count=AsyncMock(
+            _wait_forced_drain_outcomes=AsyncMock(
                 return_value=(
                     ["before", "acknowledged", "failed"],
                     drain_counts,
@@ -84,7 +176,7 @@ class ForcedTerminationScenarioTest(unittest.IsolatedAsyncioTestCase):
             _wait_new_job_succeeded=AsyncMock(side_effect=wait_job),
             _wait_new_generation=AsyncMock(side_effect=wait_generation),
             _wait_closed=AsyncMock(return_value={"code": 1012}),
-            _assert_exact_drain_counts=Mock(return_value=drain_counts),
+            _assert_forced_drain_counts=Mock(return_value=drain_counts),
         ):
             evidence = await scenarios_realtime.run_forced_termination_proof(context)
 
@@ -94,7 +186,7 @@ class ForcedTerminationScenarioTest(unittest.IsolatedAsyncioTestCase):
                 "operator-snapshot",
                 "operator:0",
                 "service-patch:workspace-id:65534",
-                "service-restore",
+                "service-restore:False",
                 "operator:2",
                 "wait-job",
                 "wait-generation",
@@ -109,6 +201,7 @@ class ForcedTerminationScenarioTest(unittest.IsolatedAsyncioTestCase):
             pause_evidence.observed["restore"]["replicas"],
             2,
         )
+
 
     async def test_cleanup_attempts_operator_and_terminal_when_service_restore_fails(
         self,
@@ -134,8 +227,8 @@ class ForcedTerminationScenarioTest(unittest.IsolatedAsyncioTestCase):
             events.append(f"service-patch:{workspace_id}:{port}") or object()
         )
 
-        def fail_restore(snapshot: object) -> None:
-            events.append("service-restore")
+        def fail_restore(snapshot: object, *, wait_for_ready: bool) -> None:
+            events.append(f"service-restore:{wait_for_ready}")
             raise RuntimeError("Service restore failed")
 
         cluster.restore_service.side_effect = fail_restore
@@ -166,7 +259,7 @@ class ForcedTerminationScenarioTest(unittest.IsolatedAsyncioTestCase):
             _request_owner=AsyncMock(
                 return_value=SimpleNamespace(status_code=204, text="")
             ),
-            _wait_drain_log_count=AsyncMock(
+            _wait_forced_drain_outcomes=AsyncMock(
                 side_effect=AssertionError("drain evidence failed")
             ),
         ):
@@ -179,7 +272,7 @@ class ForcedTerminationScenarioTest(unittest.IsolatedAsyncioTestCase):
                 "operator-snapshot",
                 "operator:0",
                 "service-patch:workspace-id:65534",
-                "service-restore",
+                "service-restore:False",
                 "operator:1",
                 "terminal-close",
             ],
@@ -249,6 +342,49 @@ class ForcedTerminationScenarioTest(unittest.IsolatedAsyncioTestCase):
         cluster.patch_terminal_target_port.assert_not_called()
         cluster.restore_service.assert_not_called()
 
+
+class RealtimeOriginContractTest(unittest.IsolatedAsyncioTestCase):
+    async def test_user_websockets_send_the_exact_platform_origin(self) -> None:
+        connection = SimpleNamespace(
+            subprotocol="aileron-thread-v1",
+            close=AsyncMock(),
+            recv=AsyncMock(return_value='{"type":"connected"}'),
+        )
+        context = SimpleNamespace(
+            workspace_id="workspace-id",
+            workspace_service_urls={
+                "runtime": "http://runtime:3002",
+                "terminal": "http://terminal:3004",
+                "browserCdp": "http://runtime:3002/api/v1/client-browser-relay/cdp",
+            },
+            settings=SimpleNamespace(
+                platform_public_origin="https://aileron.example.test"
+            ),
+        )
+
+        with patch.object(
+            scenarios_realtime,
+            "connect",
+            new=AsyncMock(return_value=connection),
+        ) as connect:
+            await scenarios_realtime._open_thread(context, "runtime-grant")
+            connection.subprotocol = "aileron-terminal-v1"
+            await scenarios_realtime._open_terminal(context, "terminal-grant")
+            await scenarios_realtime._open_cdp(context, "runtime-grant")
+
+        self.assertEqual(connect.await_count, 3)
+        for call in connect.await_args_list:
+            self.assertEqual(
+                call.kwargs["origin"],
+                "https://aileron.example.test",
+            )
+        self.assertEqual(
+            connect.await_args_list[2].kwargs["subprotocols"][0],
+            "aileron-browser-cdp-v1",
+        )
+        self.assertNotIn("additional_headers", connect.await_args_list[2].kwargs)
+
+class ForcedTerminationPatchFailureTest(unittest.IsolatedAsyncioTestCase):
     async def test_terminal_patch_failure_still_restores_operator(self) -> None:
         events: list[str] = []
         cluster = Mock()

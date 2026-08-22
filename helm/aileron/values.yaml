@@ -155,6 +155,7 @@ firewall:
 frontend:
   enabled: true
   replicaCount: 1
+  dnsResolver: kube-dns.kube-system.svc.cluster.local
   image:
     repository: ailerondocker/workspace-ui
     digest: ""
@@ -310,7 +311,7 @@ turn:
       urls:
         - "turn:turn.aileron.localhost:3478"
     credentialIssuer:
-      kind: staticSecret
+      kind: turnRest
       ttlSeconds: 300
     evidence:
       intervalSeconds: 30
@@ -331,10 +332,7 @@ coturn:
   realm: aileron
   auth:
     existingSecretName: aileron-coturn-auth
-    usernameKey: username
-    credentialSecretKey: credential
-    probeUsernameKey: probe-username
-    probeCredentialKey: probe-credential
+    restSharedSecretKey: turn-rest-shared-secret
   nodeSelector: {}
   tolerations: []
   resources: {}

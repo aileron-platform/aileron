@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,7 @@ class ProductConfig:
     run_id: str
     release: str
     manager_url: str
+    platform_public_origin: str
     oidc_adapter_url: str
     oidc_issuer_url: str
     oidc_discovery_url: str
@@ -56,11 +58,10 @@ class ProductConfig:
             run_id=_required_env("E2E_RUN_ID"),
             release=os.getenv("PRODUCT_HELM_RELEASE", "product"),
             manager_url=_required_env("PRODUCT_MANAGER_URL").rstrip("/"),
+            platform_public_origin=_required_env("PRODUCT_PLATFORM_PUBLIC_ORIGIN"),
             oidc_adapter_url=_required_env("PRODUCT_OIDC_ADAPTER_URL").rstrip("/"),
             oidc_issuer_url=oidc_issuer_url,
-            oidc_discovery_url=(
-                f"{oidc_issuer_url}/.well-known/openid-configuration"
-            ),
+            oidc_discovery_url=(f"{oidc_issuer_url}/.well-known/openid-configuration"),
             postgres_dsn=_required_env("PRODUCT_POSTGRES_DSN"),
             report_path=Path(
                 os.getenv("PRODUCT_REPORT_PATH", "/evidence/product-report.json")
@@ -114,15 +115,16 @@ class ProductContext:
             base_url=settings.oidc_adapter_url,
             client_id=settings.oidc_client_id,
         )
-        self.tokens: dict[str, str] = {}
         self.sessions: dict[str, tuple[str, str]] = {}
         self.users: dict[str, OidcTestUser] = {}
         self.manager = ManagerClient(
             self.http,
             base_url=settings.manager_url,
+            public_origin=settings.platform_public_origin,
             sessions=self.sessions,
         )
         self.workspace_id = ""
+        self.workspace_name = ""
         self.knowledge_base_ids: dict[str, str] = {}
         self.share_ids: dict[str, str] = {}
         self.runtime_instance_id = ""
@@ -130,6 +132,7 @@ class ProductContext:
         self.lifecycle_start_job_id = ""
         self.workspace_lifetime_uids: dict[str, str] = {}
         self.workspace_storage_markers: dict[str, str] = {}
+        self.external_oidc_observation: dict[str, Any] = {}
 
     def close(self) -> None:
         self.http.close()
@@ -138,9 +141,15 @@ class ProductContext:
         session = self.sessions.get("owner")
         if session is None:
             raise AssertionError("Owner BFF session is unavailable for logout proof")
-        response = self.manager.request("owner", "POST", "/api/v1/oauth2/logout")
+        response = self._retry_transport(
+            lambda: self.manager.request(
+                "owner",
+                "POST",
+                "/api/v1/oauth2/logout",
+            )
+        )
         require_status(response, 200, operation="Manager BFF logout")
-        provider_url = response.json().get("providerLogoutUrl")
+        provider_url = response.json().get("provider_logout_url")
         if not isinstance(provider_url, str) or not provider_url.startswith(
             self.settings.oidc_issuer_url
         ):
@@ -148,13 +157,32 @@ class ProductContext:
                 "Manager logout did not return the external provider endpoint"
             )
         require_status(
-            self.http.get(provider_url), 204, operation="external provider logout"
+            self._retry_transport(lambda: self.http.get(provider_url)),
+            204,
+            operation="external provider logout",
         )
-        expired = self.http.get(
-            f"{self.settings.manager_url}/api/v1/oauth2/session",
-            headers={"Cookie": f"aileron_session={session[0]}"},
+        expired = self._retry_transport(
+            lambda: self.http.get(
+                f"{self.settings.manager_url}/api/v1/oauth2/session",
+                headers={"Cookie": f"aileron_session={session[0]}"},
+            )
         )
         require_status(expired, 401, operation="revoked Manager session")
+
+    @staticmethod
+    def _retry_transport(
+        operation: Callable[[], Any],
+        *,
+        timeout_seconds: float = 120,
+    ) -> Any:
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            try:
+                return operation()
+            except httpx.TransportError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(1)
 
     def assert_prerequisites(self) -> None:
         manager_response = self.http.get(f"{self.settings.manager_url}/health")
@@ -162,6 +190,19 @@ class ProductContext:
         manager_health = manager_response.json()
         if manager_health.get("status") not in {"healthy", "ok"}:
             raise AssertionError(f"Manager health is not ready: {manager_health!r}")
+
+        discovery = require_status(
+            self.http.get(self.settings.oidc_discovery_url),
+            200,
+            operation="external OIDC fixture discovery",
+        ).json()
+        if discovery.get("aileron_test_provider") != "provider-neutral-non-keycloak":
+            raise AssertionError(
+                "product conformance is not connected to the disposable non-Keycloak provider"
+            )
+        authorization_endpoint = discovery.get("authorization_endpoint")
+        if not isinstance(authorization_endpoint, str) or not authorization_endpoint:
+            raise AssertionError("external OIDC fixture has no authorization endpoint")
 
         self.db.ping()
         self.cluster.core.read_namespace(self.settings.namespace)
@@ -174,6 +215,20 @@ class ProductContext:
             }
         )
         self._provision_test_actors()
+        self.external_oidc_observation = {
+            "fixture": discovery["aileron_test_provider"],
+            "issuer": discovery.get("issuer"),
+            "authorizationEndpoint": authorization_endpoint,
+            "callbackPath": "/api/v1/oauth2/callback",
+            "actors": {
+                actor: {
+                    "subject": user.id,
+                    "sessionIssued": actor in self.sessions,
+                    "jitWorkspaceListAccepted": True,
+                }
+                for actor, user in self.users.items()
+            },
+        }
 
     def request_owner(
         self,
@@ -217,11 +272,31 @@ class ProductContext:
     def establish_workspace_shares(self) -> dict[str, str]:
         if not self.workspace_id:
             raise AssertionError("Workspace must exist before shares are created")
-        for actor, role in (("editor", "editor"), ("reader", "reader")):
+        for actor, role in (("editor", "manager"), ("reader", "reader")):
+            candidate_response = self.request_owner(
+                "GET",
+                f"/workspaces/{self.workspace_id}/share-candidate-users",
+                params={"query": self.users[actor].email, "limit": 8},
+            )
+            require_status(
+                candidate_response,
+                200,
+                operation=f"resolve {actor} workspace share candidate",
+            )
+            candidates = candidate_response.json().get("items")
+            if not isinstance(candidates, list) or len(candidates) != 1:
+                raise AssertionError(
+                    f"Expected one workspace share candidate for {actor}"
+                )
+            target_id = candidates[0].get("id")
+            if not isinstance(target_id, str) or not target_id:
+                raise AssertionError(
+                    f"Workspace share candidate id is missing for {actor}"
+                )
             response = self.request_owner(
                 "POST",
                 f"/workspaces/{self.workspace_id}/shares",
-                json={"email": self.users[actor].email, "role": role},
+                json={"targetType": "user", "targetId": target_id, "role": role},
             )
             require_status(
                 response,
@@ -233,7 +308,7 @@ class ProductContext:
                 raise AssertionError(f"Workspace share id is missing for {actor}")
             self.share_ids[actor] = share_id
         self.share_ids["collaborator"] = self.share_ids["editor"]
-        self.tokens["collaborator"] = self.tokens["editor"]
+        self.sessions["collaborator"] = self.sessions["editor"]
         return dict(self.share_ids)
 
     def refresh_generation(self) -> dict[str, Any]:
@@ -253,6 +328,7 @@ class ProductContext:
         audience: str,
         actions: list[str],
     ) -> str:
+        self.refresh_generation()
         response = self.request_actor(
             actor,
             "POST",

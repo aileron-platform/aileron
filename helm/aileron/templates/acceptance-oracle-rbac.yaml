@@ -1,0 +1,45 @@
+{{- if .Values.workspaceManager.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aileron-acceptance-oracle
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aileron-acceptance-oracle
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["aileron-image-release-inventory"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: [{{ printf "%s-frontend" (include "aileron.fullname" .) | quote }}, {{ printf "%s-workspace-operator" (include "aileron.fullname" .) | quote }}]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aileron-acceptance-oracle
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: aileron-acceptance-oracle
+    namespace: {{ .Release.Namespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: aileron-acceptance-oracle
+{{- end }}
