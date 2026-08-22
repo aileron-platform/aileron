@@ -20,6 +20,7 @@ from app.core.api_error import authorization_error_detail
 from app.db import models as db_models
 from app.modules.authorization.dependencies import get_authorization_actor
 from app.modules.marketplace import router as marketplace_router
+from app.modules.marketplace.cli_install import MarketplaceCliInstallError
 from tests.helpers.manager_session import authenticate_client_as
 
 
@@ -33,7 +34,26 @@ def _replace_catalog_packages(
 ) -> None:
     catalog_path = root / "marketplace" / "catalog.json"
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-    catalog["packages"] = packages
+    catalog["packages"] = [
+        {
+            **package,
+            "packageFormat": package.get("packageFormat")
+            or (
+                "claude-native"
+                if package["targetClient"] == "claude-code"
+                else "codex-native"
+            ),
+            "userCopyTargetClient": package.get("userCopyTargetClient")
+            or package["targetClient"],
+            "catalogPluginId": package.get("catalogPluginId")
+            or (
+                f"{catalog['marketplaceId']}/"
+                f"{package.get('packageFormat') or ('claude-native' if package['targetClient'] == 'claude-code' else 'codex-native')}/"
+                f"{package['packageId']}"
+            ),
+        }
+        for package in packages
+    ]
     catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
 
 
@@ -97,7 +117,7 @@ def test_marketplace_registry_init_and_settings_save(test_app):
     codex = json.loads((root / ".agents" / "plugins" / "marketplace.json").read_text())
     assert claude["owner"] == {"name": "Team Maintainer", "email": "team@example.local"}
     assert claude["plugins"] == []
-    assert codex["name"] == "local-marketplace-registry"
+    assert codex["name"] == "aileron-internal"
     assert "owner" not in codex
     assert codex["plugins"] == []
 
@@ -280,14 +300,14 @@ def test_marketplace_package_list_and_detail_scan_registry(test_app):
         root,
         [
             {
-                "provider": "codex",
+                "targetClient": "codex",
                 "packageId": "figma-context",
                 "category": "design",
                 "tags": ["mcp"],
             }
         ],
     )
-    package_root = root / "codex" / "plugins" / "figma-context"
+    package_root = root / "codex" / "plugins" / "codex-native" / "figma-context"
     (package_root / ".codex-plugin").mkdir(parents=True)
     (package_root / "skills" / "review").mkdir(parents=True)
     (package_root / "skills" / "review" / "SKILL.md").write_text(
@@ -310,7 +330,7 @@ def test_marketplace_package_list_and_detail_scan_registry(test_app):
     )
 
     list_response = client.get(
-        "/api/v1/marketplace/packages?provider=codex&features=skills"
+        "/api/v1/marketplace/packages?target_client=codex&features=skills"
     )
 
     assert list_response.status_code == 200
@@ -319,7 +339,9 @@ def test_marketplace_package_list_and_detail_scan_registry(test_app):
     assert listed["items"][0]["packageId"] == "figma-context"
     assert listed["items"][0]["validationSeverity"] == "none"
 
-    detail_response = client.get("/api/v1/marketplace/packages/codex/figma-context")
+    detail_response = client.get(
+        "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native"
+    )
 
     assert detail_response.status_code == 200
     detail = detail_response.json()
@@ -329,13 +351,13 @@ def test_marketplace_package_list_and_detail_scan_registry(test_app):
     assert "packageFiles" not in detail
 
     readme_response = client.get(
-        "/api/v1/marketplace/packages/codex/figma-context/readme"
+        "/api/v1/marketplace/packages/codex/figma-context/readme?packageFormat=codex-native"
     )
     skills_response = client.get(
-        "/api/v1/marketplace/packages/codex/figma-context/skills/tree"
+        "/api/v1/marketplace/packages/codex/figma-context/skills/tree?packageFormat=codex-native"
     )
     mcp_response = client.get(
-        "/api/v1/marketplace/packages/codex/figma-context/mcp-servers"
+        "/api/v1/marketplace/packages/codex/figma-context/mcp-servers?packageFormat=codex-native"
     )
     assert readme_response.json()["content"] == "# Figma Context\n"
     assert skills_response.json()["nodes"][0]["path"] == "skills/review"
@@ -343,11 +365,81 @@ def test_marketplace_package_list_and_detail_scan_registry(test_app):
     assert "server" not in mcp_response.json()[0]
 
 
+def test_same_target_package_formats_are_addressed_as_distinct_variants(test_app):
+    client, _ = test_app
+    assert client.post("/api/v1/marketplace/version-control/init").status_code == 200
+    root = _marketplace_registry_root()
+    _replace_catalog_packages(
+        root,
+        [
+            {
+                "targetClient": "codex",
+                "packageFormat": "codex-native",
+                "packageId": "shared-name",
+            },
+            {
+                "targetClient": "codex",
+                "packageFormat": "agent-plugin/1.0.0",
+                "packageId": "shared-name",
+            },
+        ],
+    )
+    native = root / "codex" / "plugins" / "codex-native" / "shared-name"
+    portable = root / "codex" / "plugins" / "agent-plugin-1.0.0" / "shared-name"
+    (native / ".codex-plugin").mkdir(parents=True)
+    (native / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps(
+            {
+                "name": "shared-name",
+                "version": "1.0.0",
+                "description": "Native build",
+            }
+        ),
+        encoding="utf-8",
+    )
+    portable.mkdir(parents=True)
+    (portable / "plugin.json").write_text(
+        json.dumps(
+            {
+                "$schema": (
+                    "https://agent-plugins.org/schemas/1.0.0/" "plugin.schema.json"
+                ),
+                "name": "shared-name",
+                "version": "2.0.0",
+                "description": "Portable build",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    native_response = client.get(
+        "/api/v1/marketplace/packages/codex/shared-name",
+        params={"packageFormat": "codex-native"},
+    )
+    portable_response = client.get(
+        "/api/v1/marketplace/packages/codex/shared-name",
+        params={"packageFormat": "agent-plugin/1.0.0"},
+    )
+    missing_format = client.get("/api/v1/marketplace/packages/codex/shared-name")
+
+    assert native_response.status_code == 200
+    assert native_response.json()["packageFormat"] == "codex-native"
+    assert native_response.json()["version"] == "1.0.0"
+    assert portable_response.status_code == 200
+    assert portable_response.json()["packageFormat"] == "agent-plugin/1.0.0"
+    assert portable_response.json()["version"] == "2.0.0"
+    assert missing_format.status_code == 400
+
+
 def test_marketplace_package_refresh_endpoint_returns_registry_fingerprint(test_app):
     client, _ = test_app
     response = client.post("/api/v1/marketplace/version-control/init")
     assert response.status_code == 200
     root = _marketplace_registry_root()
+    _replace_catalog_packages(
+        root,
+        [{"targetClient": "codex", "packageId": "figma-context"}],
+    )
     manifest_path = root / ".agents" / "plugins" / "marketplace.json"
     manifest = json.loads(manifest_path.read_text())
     manifest["plugins"] = [
@@ -357,7 +449,7 @@ def test_marketplace_package_refresh_endpoint_returns_registry_fingerprint(test_
         }
     ]
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    package_root = root / "codex" / "plugins" / "figma-context"
+    package_root = root / "codex" / "plugins" / "codex-native" / "figma-context"
     (package_root / ".codex-plugin").mkdir(parents=True)
     (package_root / ".codex-plugin" / "plugin.json").write_text(
         json.dumps({"name": "figma-context", "version": "0.1.0"}),
@@ -377,15 +469,19 @@ def test_marketplace_package_refresh_endpoint_returns_minimal_result(test_app):
     created = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "figma-context",
             "displayName": "Figma Context",
+            "version": "1.0.0",
             "description": "Figma package",
         },
     )
     assert created.status_code == 201, created.text
 
-    response = client.post("/api/v1/marketplace/packages/codex/figma-context/refresh")
+    response = client.post(
+        "/api/v1/marketplace/packages/codex/figma-context/refresh?packageFormat=codex-native"
+    )
 
     assert response.status_code == 200
     assert response.json() == {"refreshed": True}
@@ -396,16 +492,18 @@ def test_marketplace_package_file_conflict_routes_execute_upload_and_paste(test_
     created = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "file-contract",
             "displayName": "File Contract",
+            "version": "1.0.0",
             "description": "Shared file contract",
         },
     )
     assert created.status_code == 201
     revision = created.json()["revision"]
     source = client.post(
-        "/api/v1/marketplace/packages/codex/file-contract/files",
+        "/api/v1/marketplace/packages/codex/file-contract/files?packageFormat=codex-native",
         json={
             "revision": revision,
             "path": "docs/a.txt",
@@ -416,7 +514,7 @@ def test_marketplace_package_file_conflict_routes_execute_upload_and_paste(test_
     assert source.status_code == 200
 
     preflight = client.post(
-        "/api/v1/marketplace/packages/codex/file-contract/files/conflicts/preflight",
+        "/api/v1/marketplace/packages/codex/file-contract/files/conflicts/preflight?packageFormat=codex-native",
         json={
             "operation": "paste",
             "targetPath": "copies",
@@ -425,7 +523,7 @@ def test_marketplace_package_file_conflict_routes_execute_upload_and_paste(test_
         },
     )
     pasted = client.post(
-        "/api/v1/marketplace/packages/codex/file-contract/files/paste",
+        "/api/v1/marketplace/packages/codex/file-contract/files/paste?packageFormat=codex-native",
         json={
             "targetPath": "copies",
             "sources": [{"sourcePath": "docs/a.txt", "entryType": "file"}],
@@ -434,7 +532,7 @@ def test_marketplace_package_file_conflict_routes_execute_upload_and_paste(test_
         },
     )
     uploaded = client.post(
-        "/api/v1/marketplace/packages/codex/file-contract/files/upload",
+        "/api/v1/marketplace/packages/codex/file-contract/files/upload?packageFormat=codex-native",
         data={
             "targetPath": "docs",
             "defaultStrategy": "keep-both",
@@ -446,7 +544,7 @@ def test_marketplace_package_file_conflict_routes_execute_upload_and_paste(test_
     with zipfile.ZipFile(archive_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("inside.txt", "inside")
     archive_upload = client.post(
-        "/api/v1/marketplace/packages/codex/file-contract/files/upload",
+        "/api/v1/marketplace/packages/codex/file-contract/files/upload?packageFormat=codex-native",
         data={
             "targetPath": "docs",
             "defaultStrategy": "cancel",
@@ -460,7 +558,7 @@ def test_marketplace_package_file_conflict_routes_execute_upload_and_paste(test_
         ],
     )
     extracted = client.post(
-        "/api/v1/marketplace/packages/codex/file-contract/files/extract",
+        "/api/v1/marketplace/packages/codex/file-contract/files/extract?packageFormat=codex-native",
         json={
             "archivePath": "docs/sample.zip",
             "targetPath": "extracted",
@@ -497,9 +595,11 @@ def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_ap
     created = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "skill-file-contract",
             "displayName": "Skill File Contract",
+            "version": "1.0.0",
             "description": "Managed skill file contract",
         },
     )
@@ -508,7 +608,7 @@ def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_ap
     skill_base_url = "/api/v1/marketplace/packages/codex/skill-file-contract/skills"
 
     preflight = client.post(
-        f"{skill_base_url}/conflicts/preflight",
+        f"{skill_base_url}/conflicts/preflight?packageFormat=codex-native",
         json={
             "revision": initial_revision,
             "operation": "upload",
@@ -521,7 +621,7 @@ def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_ap
     assert preflight.json() == {"conflicts": [], "total": 1}
 
     uploaded = client.post(
-        f"{skill_base_url}/upload",
+        f"{skill_base_url}/upload?packageFormat=codex-native",
         data={
             "revision": initial_revision,
             "targetPath": "skills/demo",
@@ -550,7 +650,7 @@ def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_ap
     assert "revision" not in uploaded.json()
 
     stale_upload = client.post(
-        f"{skill_base_url}/upload",
+        f"{skill_base_url}/upload?packageFormat=codex-native",
         data={
             "revision": initial_revision,
             "targetPath": "skills/demo",
@@ -561,7 +661,9 @@ def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_ap
     )
     assert stale_upload.status_code == 409
 
-    after_upload = client.get("/api/v1/marketplace/packages/codex/skill-file-contract")
+    after_upload = client.get(
+        "/api/v1/marketplace/packages/codex/skill-file-contract?packageFormat=codex-native"
+    )
     assert after_upload.status_code == 200
     upload_revision = after_upload.json()["revision"]
     assert upload_revision != initial_revision
@@ -570,7 +672,7 @@ def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_ap
     with zipfile.ZipFile(archive_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("archived/SKILL.md", "# Archived")
     archive_upload = client.post(
-        f"{skill_base_url}/upload",
+        f"{skill_base_url}/upload?packageFormat=codex-native",
         data={
             "revision": upload_revision,
             "targetPath": "skills",
@@ -587,12 +689,12 @@ def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_ap
     assert archive_upload.status_code == 200, archive_upload.text
 
     after_archive_upload = client.get(
-        "/api/v1/marketplace/packages/codex/skill-file-contract"
+        "/api/v1/marketplace/packages/codex/skill-file-contract?packageFormat=codex-native"
     )
     archive_revision = after_archive_upload.json()["revision"]
     assert archive_revision != upload_revision
     extract_preflight = client.post(
-        f"{skill_base_url}/conflicts/preflight",
+        f"{skill_base_url}/conflicts/preflight?packageFormat=codex-native",
         json={
             "revision": archive_revision,
             "operation": "extract",
@@ -605,7 +707,7 @@ def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_ap
     assert extract_preflight.json() == {"conflicts": [], "total": 1}
 
     extracted = client.post(
-        f"{skill_base_url}/extract",
+        f"{skill_base_url}/extract?packageFormat=codex-native",
         json={
             "revision": archive_revision,
             "archivePath": "skills/skills.zip",
@@ -631,11 +733,13 @@ def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_ap
         "error": None,
     }
     assert "revision" not in extracted.json()
-    after_extract = client.get("/api/v1/marketplace/packages/codex/skill-file-contract")
+    after_extract = client.get(
+        "/api/v1/marketplace/packages/codex/skill-file-contract?packageFormat=codex-native"
+    )
     assert after_extract.json()["revision"] != archive_revision
 
     paste_preflight = client.post(
-        f"{skill_base_url}/conflicts/preflight",
+        f"{skill_base_url}/conflicts/preflight?packageFormat=codex-native",
         json={
             "revision": after_extract.json()["revision"],
             "operation": "paste",
@@ -645,10 +749,15 @@ def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_ap
         },
     )
     assert paste_preflight.status_code == 400
-    assert client.post(f"{skill_base_url}/paste", json={}).status_code == 404
+    assert (
+        client.post(
+            f"{skill_base_url}/paste?packageFormat=codex-native", json={}
+        ).status_code
+        == 404
+    )
 
     openapi_operation = client.get("/openapi.json").json()["paths"][
-        "/api/v1/marketplace/packages/{provider}/{package_id}/skills/upload"
+        "/api/v1/marketplace/packages/{target_client}/{package_id}/skills/upload"
     ]["post"]
     assert "archiveAction" not in json.dumps(openapi_operation)
     assert "keepArchive" not in json.dumps(openapi_operation)
@@ -710,7 +819,7 @@ def test_marketplace_operation_status_reports_inactive_when_idle(test_app):
     assert body["operation"] is None
 
 
-def test_marketplace_registry_status_endpoint_returns_provider_prefixed_changes(
+def test_marketplace_registry_status_endpoint_returns_target_client_prefixed_changes(
     test_app,
 ):
     client, _ = test_app
@@ -743,13 +852,21 @@ def test_marketplace_registry_status_endpoint_returns_provider_prefixed_changes(
         ),
         encoding="utf-8",
     )
-    readme_path = root / "claude-code" / "plugins" / "review-assistant" / "README.md"
+    readme_path = (
+        root
+        / "claude-code"
+        / "plugins"
+        / "claude-native"
+        / "review-assistant"
+        / "README.md"
+    )
     readme_path.parent.mkdir(parents=True)
     readme_path.write_text("# Review\n", encoding="utf-8")
     claude_plugin_path = (
         root
         / "claude-code"
         / "plugins"
+        / "claude-native"
         / "review-assistant"
         / ".claude-plugin"
         / "plugin.json"
@@ -762,7 +879,7 @@ def test_marketplace_registry_status_endpoint_returns_provider_prefixed_changes(
         [
             "git",
             "add",
-            "claude-code/plugins/review-assistant/.claude-plugin/plugin.json",
+            "claude-code/plugins/claude-native/review-assistant/.claude-plugin/plugin.json",
         ],
         cwd=root,
         check=True,
@@ -783,7 +900,7 @@ def test_marketplace_registry_status_endpoint_returns_provider_prefixed_changes(
         for item in changes["staged"]["items"]
     ] == [
         (
-            "claude-code/plugins/review-assistant/.claude-plugin/plugin.json",
+            "claude-code/plugins/claude-native/review-assistant/.claude-plugin/plugin.json",
             "A",
             "added",
         )
@@ -791,7 +908,7 @@ def test_marketplace_registry_status_endpoint_returns_provider_prefixed_changes(
     assert changes["unstaged"]["items"][0]["path"] == ".agents/plugins/marketplace.json"
     assert (
         changes["untracked"]["items"][0]["path"]
-        == "claude-code/plugins/review-assistant/README.md"
+        == "claude-code/plugins/claude-native/review-assistant/README.md"
     )
     assert changes["staged"]["total"] == 1
     assert status["stagedTotal"] == 1
@@ -1073,21 +1190,23 @@ def test_marketplace_package_list_endpoint_applies_filters_and_pagination(test_a
         root,
         [
             {
-                "provider": "claude-code",
+                "targetClient": "claude-code",
                 "packageId": "review-assistant",
                 "category": "quality",
                 "tags": ["review", "skills"],
             },
             {
-                "provider": "codex",
+                "targetClient": "codex",
                 "packageId": "figma-context",
                 "category": "design",
                 "tags": ["mcp", "commands"],
             },
         ],
     )
-    claude_package = root / "claude-code" / "plugins" / "review-assistant"
-    codex_package = root / "codex" / "plugins" / "figma-context"
+    claude_package = (
+        root / "claude-code" / "plugins" / "claude-native" / "review-assistant"
+    )
+    codex_package = root / "codex" / "plugins" / "codex-native" / "figma-context"
     (claude_package / ".claude-plugin").mkdir(parents=True)
     (codex_package / ".codex-plugin").mkdir(parents=True)
     (claude_package / ".claude-plugin" / "plugin.json").write_text(
@@ -1106,8 +1225,8 @@ def test_marketplace_package_list_endpoint_applies_filters_and_pagination(test_a
     )
 
     paged_response = client.get("/api/v1/marketplace/packages", params={"pageSize": 1})
-    provider_response = client.get(
-        "/api/v1/marketplace/packages", params={"provider": "codex"}
+    target_client_response = client.get(
+        "/api/v1/marketplace/packages", params={"target_client": "codex"}
     )
     category_response = client.get(
         "/api/v1/marketplace/packages", params={"category": "quality"}
@@ -1123,9 +1242,8 @@ def test_marketplace_package_list_endpoint_applies_filters_and_pagination(test_a
     assert paged["pageSize"] == 1
     assert paged["totalPages"] == 2
     assert paged["categories"] == ["design", "quality"]
-    assert paged["sourceTypes"] == ["created"]
     assert paged["validationSeverities"] == ["none"]
-    assert [item["packageId"] for item in provider_response.json()["items"]] == [
+    assert [item["packageId"] for item in target_client_response.json()["items"]] == [
         "figma-context"
     ]
     assert [item["packageId"] for item in category_response.json()["items"]] == [
@@ -1145,22 +1263,24 @@ def test_marketplace_package_create_save_delete_and_export(test_app):
     create_response = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "figma-context",
             "displayName": "Figma Context",
+            "version": "1.0.0",
             "description": "Figma MCP package",
         },
     )
 
     assert create_response.status_code == 201
     created = create_response.json()
-    assert created["provider"] == "codex"
+    assert created["targetClient"] == "codex"
     assert created["packageId"] == "figma-context"
 
     stale_response = client.put(
-        "/api/v1/marketplace/packages/codex/figma-context",
+        "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native",
         json={
-            "provider": "codex",
+            "targetClient": "codex",
             "packageId": "figma-context",
             "revision": "stale",
             "manifest": {
@@ -1174,9 +1294,9 @@ def test_marketplace_package_create_save_delete_and_export(test_app):
     assert stale_response.status_code == 409
 
     save_response = client.put(
-        "/api/v1/marketplace/packages/codex/figma-context",
+        "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native",
         json={
-            "provider": "codex",
+            "targetClient": "codex",
             "packageId": "figma-context",
             "revision": created["revision"],
             "listing": {
@@ -1239,31 +1359,38 @@ def test_marketplace_package_create_save_delete_and_export(test_app):
         "baseEntryFingerprint": None,
     }
     assert saved["revision"] != created["revision"]
-    detail_response = client.get("/api/v1/marketplace/packages/codex/figma-context")
+    detail_response = client.get(
+        "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native"
+    )
     files_response = client.get(
-        "/api/v1/marketplace/packages/codex/figma-context/files/tree"
+        "/api/v1/marketplace/packages/codex/figma-context/files/tree?packageFormat=codex-native"
     )
     assert detail_response.json()["manifestMetadata"]["version"] == "0.2.0"
     assert any(item["path"] == ".mcp.json" for item in files_response.json()["nodes"])
     stale_export_response = client.get(
-        "/api/v1/marketplace/packages/codex/figma-context/export",
-        params={"revision": "stale"},
+        "/api/v1/marketplace/packages/codex/figma-context/export?packageFormat=codex-native",
+        params={"packageFormat": "codex-native", "revision": "stale"},
     )
     assert stale_export_response.status_code == 409
 
     export_response = client.get(
-        "/api/v1/marketplace/packages/codex/figma-context/export",
-        params={"revision": detail_response.json()["revision"]},
+        "/api/v1/marketplace/packages/codex/figma-context/export?packageFormat=codex-native",
+        params={"packageFormat": "codex-native"},
     )
     assert export_response.status_code == 200
     assert export_response.headers["content-type"] == "application/zip"
     with zipfile.ZipFile(BytesIO(export_response.content)) as archive:
         assert ".agents/plugins/marketplace.json" in archive.namelist()
-        assert "plugins/figma-context/.codex-plugin/plugin.json" in archive.namelist()
+        assert (
+            "codex/plugins/codex-native/figma-context/" ".codex-plugin/plugin.json"
+        ) in archive.namelist()
 
     delete_response = client.delete(
-        "/api/v1/marketplace/packages/codex/figma-context",
-        params={"revision": detail_response.json()["revision"]},
+        "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native",
+        params={
+            "packageFormat": "codex-native",
+            "revision": detail_response.json()["revision"],
+        },
     )
     assert delete_response.status_code == 200
     assert delete_response.json()["deleted"] is True
@@ -1273,11 +1400,13 @@ def test_marketplace_package_create_save_delete_and_export(test_app):
     activity = activity_response.json()
     assert activity["total"] == 1
     assert activity["items"][0]["action"] == "delete"
-    assert activity["items"][0]["provider"] == "codex"
+    assert activity["items"][0]["targetClient"] == "codex"
     assert activity["items"][0]["packageId"] == "figma-context"
     assert activity["items"][0]["status"] == "succeeded"
 
-    detail_response = client.get("/api/v1/marketplace/packages/codex/figma-context")
+    detail_response = client.get(
+        "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native"
+    )
     assert detail_response.status_code == 404
 
 
@@ -1286,18 +1415,20 @@ def test_marketplace_package_save_returns_localized_validation_detail(test_app):
     create_response = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "figma-context",
             "displayName": "Figma Context",
+            "version": "1.0.0",
             "description": "Figma MCP package",
         },
     )
     created = create_response.json()
 
     save_response = client.put(
-        "/api/v1/marketplace/packages/codex/figma-context",
+        "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native",
         json={
-            "provider": "codex",
+            "targetClient": "codex",
             "packageId": "figma-context",
             "revision": created["revision"],
             "manifest": {
@@ -1323,6 +1454,10 @@ def test_marketplace_package_export_returns_validation_blocking_detail(test_app)
     response = client.post("/api/v1/marketplace/version-control/init")
     assert response.status_code == 200
     root = _marketplace_registry_root()
+    _replace_catalog_packages(
+        root,
+        [{"targetClient": "codex", "packageId": "broken-plugin"}],
+    )
     manifest_path = root / ".agents" / "plugins" / "marketplace.json"
     manifest = json.loads(manifest_path.read_text())
     manifest["plugins"] = [
@@ -1332,19 +1467,26 @@ def test_marketplace_package_export_returns_validation_blocking_detail(test_app)
         }
     ]
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    package_root = root / "codex" / "plugins" / "broken-plugin" / ".codex-plugin"
+    package_root = (
+        root / "codex" / "plugins" / "codex-native" / "broken-plugin" / ".codex-plugin"
+    )
     package_root.mkdir(parents=True)
     # Corrupt manifest JSON to trigger an error-severity validation result.
     # Missing manifest no longer blocks export because marketplace listings
     # are allowed to declare plugin metadata in lieu of plugin.json.
     (package_root / "plugin.json").write_text("{not valid json", encoding="utf-8")
 
-    detail_response = client.get("/api/v1/marketplace/packages/codex/broken-plugin")
+    detail_response = client.get(
+        "/api/v1/marketplace/packages/codex/broken-plugin?packageFormat=codex-native"
+    )
     assert detail_response.status_code == 200
 
     export_response = client.get(
-        "/api/v1/marketplace/packages/codex/broken-plugin/export",
-        params={"revision": detail_response.json()["revision"]},
+        "/api/v1/marketplace/packages/codex/broken-plugin/export?packageFormat=codex-native",
+        params={
+            "packageFormat": "codex-native",
+            "revision": detail_response.json()["revision"],
+        },
     )
 
     assert export_response.status_code == 400
@@ -1370,19 +1512,19 @@ def test_marketplace_openapi_exposes_plugin_and_user_copy_routes(test_app):
     assert "503" in paths["/api/v1/marketplace/user-copies"]["post"]["responses"]
 
 
-@pytest.mark.parametrize("provider", ("claude-code", "codex"))
+@pytest.mark.parametrize("target_client", ("claude-code", "codex"))
 def test_install_api_serializes_terminal_cli_result(
     test_app,
     monkeypatch,
-    provider: str,
+    target_client: str,
 ) -> None:
     client, _ = test_app
 
     def install(_service, _user_id, payload):
-        assert payload.provider == provider
+        assert payload.target_client == target_client
         return {
             "status": "installed",
-            "provider": provider,
+            "targetClient": target_client,
             "packageId": "review-helper",
             "marketplaceId": "aileron-team-tools",
             "workspaceId": "workspace-1",
@@ -1403,9 +1545,12 @@ def test_install_api_serializes_terminal_cli_result(
     response = client.post(
         "/api/v1/marketplace/plugins/install",
         json={
-            "provider": provider,
+            "targetClient": target_client,
+            "packageFormat": (
+                "claude-native" if target_client == "claude-code" else "codex-native"
+            ),
             "packageId": "review-helper",
-            "revision": "a" * 64,
+            "version": "1.2.3",
             "workspaceId": "workspace-1",
         },
     )
@@ -1414,6 +1559,42 @@ def test_install_api_serializes_terminal_cli_result(
     assert response.json()["stage"] == "completed"
     assert response.json()["exitCode"] == 0
     assert "installationId" not in response.json()
+
+
+def test_install_api_returns_structured_error_context(test_app, monkeypatch) -> None:
+    client, _ = test_app
+
+    def install(_service, _user_id, _payload):
+        raise MarketplaceCliInstallError(
+            "marketplace.workspace.access_denied",
+            http_status=403,
+        )
+
+    monkeypatch.setattr(
+        "app.modules.marketplace.cli_install.MarketplaceCliInstallService.install",
+        install,
+    )
+
+    response = client.post(
+        "/api/v1/marketplace/plugins/install",
+        json={
+            "targetClient": "codex",
+            "packageFormat": "codex-native",
+            "packageId": "review-helper",
+            "version": "1.2.3",
+            "workspaceId": "workspace-1",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == {
+        "errorCode": "marketplace.workspace.access_denied",
+        "message": "You do not have access to manage this workspace",
+        "stage": "authorize",
+        "source": "plugins/codex/codex-native/review-helper/v1.2.3",
+        "destination": "workspace-1",
+        "category": "authorization",
+    }
 
 
 def _marketplace_client_with_roles(
@@ -1499,7 +1680,7 @@ def test_marketplace_rbac_allows_member_read_and_blocks_admin_operations(
     def install(_service, _user_id, payload):
         return {
             "status": "installed",
-            "provider": payload.provider,
+            "targetClient": payload.target_client,
             "packageId": payload.package_id,
             "marketplaceId": "aileron-team-tools",
             "workspaceId": payload.workspace_id,
@@ -1521,9 +1702,11 @@ def test_marketplace_rbac_allows_member_read_and_blocks_admin_operations(
     create_response = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "figma-context",
             "displayName": "Figma Context",
+            "version": "1.0.0",
             "description": "Figma MCP package",
         },
     )
@@ -1547,9 +1730,9 @@ def test_marketplace_rbac_allows_member_read_and_blocks_admin_operations(
     )
     activity_response = client.get("/api/v1/marketplace/activities")
     import_scan_response = client.post(
-        "/api/v1/marketplace/import/scan",
+        "/api/v1/marketplace/imports/scan",
         json={
-            "provider": "codex",
+            "targetClient": "codex",
             "sourceKind": "git",
             "source": "https://example.com/org/repo.git",
         },
@@ -1557,9 +1740,10 @@ def test_marketplace_rbac_allows_member_read_and_blocks_admin_operations(
     install_response = client.post(
         "/api/v1/marketplace/plugins/install",
         json={
-            "provider": "codex",
+            "targetClient": "codex",
+            "packageFormat": "codex-native",
             "packageId": "figma-context",
-            "revision": "a" * 64,
+            "version": "1.2.3",
             "workspaceId": "workspace-1",
         },
     )
@@ -1672,25 +1856,31 @@ def test_marketplace_rbac_uses_local_member_role_for_permissions(
         root,
         [
             {
-                "provider": "codex",
+                "targetClient": "codex",
                 "packageId": "figma-context",
             }
         ],
     )
-    package_path = root / "codex" / "plugins" / "figma-context" / ".codex-plugin"
+    package_path = (
+        root / "codex" / "plugins" / "codex-native" / "figma-context" / ".codex-plugin"
+    )
     package_path.mkdir(parents=True, exist_ok=True)
     (package_path / "plugin.json").write_text(
         json.dumps({"name": "figma-context", "version": "0.1.0"}),
         encoding="utf-8",
     )
 
-    detail_response = client.get("/api/v1/marketplace/packages/codex/figma-context")
+    detail_response = client.get(
+        "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native"
+    )
     create_denied_response = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "denied-package",
             "displayName": "Denied Package",
+            "version": "1.0.0",
             "description": "Should not create",
         },
     )
@@ -1719,9 +1909,11 @@ def test_marketplace_rbac_does_not_grant_admin_actions_to_local_member(
     create_response = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "authz-package",
             "displayName": "Authz Package",
+            "version": "1.0.0",
             "description": "Local member must not create packages",
         },
     )
@@ -1755,9 +1947,11 @@ def test_marketplace_rbac_rejects_local_user_with_missing_role_status(
     create_response = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "group-package",
             "displayName": "Group Package",
+            "version": "1.0.0",
             "description": "Invalid local role status must be rejected",
         },
     )
@@ -1786,16 +1980,18 @@ def test_marketplace_rbac_rejects_missing_platform_role_without_default_fallback
     create_response = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "figma-context",
             "displayName": "Figma Context",
+            "version": "1.0.0",
             "description": "Figma MCP package",
         },
     )
     import_scan_response = client.post(
-        "/api/v1/marketplace/import/scan",
+        "/api/v1/marketplace/imports/scan",
         json={
-            "provider": "codex",
+            "targetClient": "codex",
             "sourceKind": "git",
             "source": "https://token@example.com/org/repo.git",
         },
@@ -1829,15 +2025,17 @@ def test_marketplace_rbac_blocks_member_content_and_registry_management(
     create_response = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "figma-context",
             "displayName": "Figma Context",
+            "version": "1.0.0",
             "description": "Figma MCP package",
         },
     )
     delete_response = client.delete(
-        "/api/v1/marketplace/packages/codex/figma-context",
-        params={"revision": "a" * 64},
+        "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native",
+        params={"packageFormat": "codex-native"},
     )
     registry_response = client.post("/api/v1/marketplace/version-control/init")
     registry_git_response = client.post("/api/v1/marketplace/version-control/init")
@@ -1862,9 +2060,9 @@ def test_marketplace_import_scan_validates_source_inputs(
     )
 
     token_response = client.post(
-        "/api/v1/marketplace/import/scan",
+        "/api/v1/marketplace/imports/scan",
         json={
-            "provider": "codex",
+            "targetClient": "codex",
             "sourceKind": "git",
             "source": "https://token@example.com/org/repo.git",
         },
@@ -1880,9 +2078,9 @@ def test_marketplace_import_scan_validates_source_inputs(
     )
 
     valid_response = client.post(
-        "/api/v1/marketplace/import/scan",
+        "/api/v1/marketplace/imports/scan",
         json={
-            "provider": "codex",
+            "targetClient": "codex",
             "sourceKind": "git",
             "source": "https://example.com/org/repo.git",
         },
@@ -1929,17 +2127,19 @@ def test_marketplace_import_upload_accepts_local_zip_source(test_app):
         )
 
     upload_response = client.post(
-        "/api/v1/marketplace/import/upload",
-        data={"provider": "codex"},
+        "/api/v1/marketplace/imports/upload",
+        data={"targetClient": "codex"},
         files={"file": ("marketplace.zip", buffer.getvalue(), "application/zip")},
     )
 
     assert upload_response.status_code == 200
     body = upload_response.json()
     assert body["fileName"] == "marketplace.zip"
-    assert body["source"]["provider"] == "codex"
+    assert body["source"]["targetClient"] == "codex"
     assert body["source"]["sourceKind"] == "local"
-    scan_response = client.post("/api/v1/marketplace/import/scan", json=body["source"])
+    scan_response = client.post(
+        "/api/v1/marketplace/imports/scan", json=body["source"]
+    )
     assert scan_response.status_code == 200
     assert scan_response.json()[0]["packageId"] == "uploaded-plugin"
 
@@ -1981,17 +2181,24 @@ def test_marketplace_import_endpoint_copies_selected_candidates(test_app):
         encoding="utf-8",
     )
     source_payload = {
-        "provider": "codex",
+        "targetClient": "codex",
         "sourceKind": "local",
         "source": str(source_root),
     }
 
-    scan_response = client.post("/api/v1/marketplace/import/scan", json=source_payload)
+    scan_response = client.post(
+        "/api/v1/marketplace/imports/scan", json=source_payload
+    )
+    candidates = scan_response.json()
+    candidates[0]["import"] = {
+        "version": "0.1.0",
+        "overwrite": False,
+    }
     import_response = client.post(
-        "/api/v1/marketplace/import",
+        "/api/v1/marketplace/imports",
         json={
             "source": source_payload,
-            "candidates": scan_response.json(),
+            "candidates": candidates,
         },
     )
 
@@ -1999,19 +2206,155 @@ def test_marketplace_import_endpoint_copies_selected_candidates(test_app):
     assert import_response.status_code == 200
     body = import_response.json()
     assert body["imported"][0]["packageId"] == "figma-context"
-    assert body["imported"][0]["sourceType"] == "imported"
-    assert body["skipped"] == []
     assert body["failed"] == []
     assert (
-        root / "codex" / "plugins" / "figma-context" / ".codex-plugin" / "plugin.json"
+        root
+        / "codex"
+        / "plugins"
+        / "codex-native"
+        / "figma-context"
+        / ".codex-plugin"
+        / "plugin.json"
     ).exists()
 
-    detail_response = client.get("/api/v1/marketplace/packages/codex/figma-context")
+    detail_response = client.get(
+        "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native"
+    )
     detail = detail_response.json()
     assert detail_response.status_code == 200
-    assert detail["sourceType"] == "imported"
     assert detail["manifestMetadata"]["importSource"]["source"] == str(source_root)
     assert detail["manifestMetadata"]["importSource"]["packageId"] == "figma-context"
+    assert (
+        client.post(
+            "/api/v1/marketplace/version-control/stage",
+            json={"all": True},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/api/v1/marketplace/version-control/commit",
+            json={"message": "Commit imported Figma context"},
+        ).status_code
+        == 200
+    )
+    tags = subprocess.run(
+        ["git", "tag", "--list"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert tags == []
+
+    internal_manifest_path = (
+        root
+        / "codex"
+        / "plugins"
+        / "codex-native"
+        / "figma-context"
+        / ".codex-plugin"
+        / "plugin.json"
+    )
+    internal_manifest = json.loads(internal_manifest_path.read_text(encoding="utf-8"))
+    internal_manifest["version"] = "0.1.0-internal.2"
+    internal_manifest_path.write_text(json.dumps(internal_manifest), encoding="utf-8")
+    assert (
+        client.post(
+            "/api/v1/marketplace/version-control/stage",
+            json={"paths": [internal_manifest_path.relative_to(root).as_posix()]},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/api/v1/marketplace/version-control/commit",
+            json={"message": "Commit updated Figma context"},
+        ).status_code
+        == 200
+    )
+    tags = subprocess.run(
+        ["git", "tag", "--list"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert tags == []
+
+    remote_path = root.parent / "marketplace-registry.git"
+    subprocess.run(
+        ["git", "init", "--bare", str(remote_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert (
+        client.put(
+            "/api/v1/marketplace/version-control/remote",
+            json={"remoteUrl": str(remote_path)},
+        ).status_code
+        == 200
+    )
+    publish_response = client.post(
+        "/api/v1/marketplace/version-control/branches/publish",
+        json={"remote": "origin"},
+    )
+    assert publish_response.status_code == 200
+    assert publish_response.json()["affectedTotal"] == 1
+    published_refs = subprocess.run(
+        ["git", "show-ref"],
+        cwd=remote_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert published_refs == [
+        f"{publish_response.json()['headSha']} refs/heads/main",
+    ]
+
+    internal_manifest["version"] = "0.1.0-internal.3"
+    internal_manifest_path.write_text(json.dumps(internal_manifest), encoding="utf-8")
+    assert (
+        client.post(
+            "/api/v1/marketplace/version-control/stage",
+            json={"paths": [internal_manifest_path.relative_to(root).as_posix()]},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/api/v1/marketplace/version-control/commit",
+            json={"message": "Commit latest Figma context"},
+        ).status_code
+        == 200
+    )
+    push_response = client.post("/api/v1/marketplace/version-control/push")
+    assert push_response.status_code == 200
+    assert push_response.json()["success"] is True
+    remote_tags = subprocess.run(
+        ["git", "tag", "--list"],
+        cwd=remote_path,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert remote_tags == []
+
+    readme_path = internal_manifest_path.parent.parent / "README.md"
+    readme_path.write_text("Changed without a new version\n", encoding="utf-8")
+    assert (
+        client.post(
+            "/api/v1/marketplace/version-control/stage",
+            json={"paths": [readme_path.relative_to(root).as_posix()]},
+        ).status_code
+        == 200
+    )
+    duplicate_release_response = client.post(
+        "/api/v1/marketplace/version-control/commit",
+        json={"message": "Attempt to reuse internal version"},
+    )
+    assert duplicate_release_response.status_code == 200
 
 
 def test_marketplace_rbac_allows_admin_registry_management_and_delete(
@@ -2031,15 +2374,17 @@ def test_marketplace_rbac_allows_admin_registry_management_and_delete(
     create_response = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "figma-context",
             "displayName": "Figma Context",
+            "version": "1.0.0",
             "description": "Figma MCP package",
         },
     )
     delete_response = client.delete(
-        "/api/v1/marketplace/packages/codex/figma-context",
-        params={"revision": create_response.json()["revision"]},
+        "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native",
+        params={"packageFormat": "codex-native"},
     )
 
     assert init_response.status_code == 200

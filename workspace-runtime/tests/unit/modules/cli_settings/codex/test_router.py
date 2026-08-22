@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import subprocess
 from dataclasses import dataclass
@@ -11,7 +12,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from app.core.revision import compute_revision
-from app.modules.cli_settings.router import router
+from app.modules.cli_settings import raw_file as raw_file_module
+from app.modules.cli_settings.codex import router as codex_router_module
+from app.modules.cli_settings.codex import settings as codex_settings_module
 from app.modules.cli_settings.codex.models import (
     CodexHookCommandAction,
     CodexHookEntry,
@@ -21,6 +24,7 @@ from app.modules.cli_settings.codex.settings import (
     CodexSettingsIntent,
     get_codex_agent_settings,
 )
+from app.modules.cli_settings.router import router
 
 
 @dataclass(frozen=True)
@@ -1055,9 +1059,7 @@ statusMessage = "Checking managed"
     response = client.get("/api/v1/workspaces/ws-1/codex/hooks-scopes")
     assert response.status_code == 200
     documents = response.json()["scopes"]
-    assert {
-        (document["scope"], document.get("source")) for document in documents
-    } == {
+    assert {(document["scope"], document.get("source")) for document in documents} == {
         ("project", "hooks_json"),
         ("project", "inline_config"),
         ("user", "hooks_json"),
@@ -1070,7 +1072,10 @@ statusMessage = "Checking managed"
     )
     assert inline_document["entries"][0]["event"] == "PreToolUse"
     assert inline_document["entries"][0]["readOnly"] is False
-    assert inline_document["entries"][0]["actions"][0]["statusMessage"] == "Checking inline"
+    assert (
+        inline_document["entries"][0]["actions"][0]["statusMessage"]
+        == "Checking inline"
+    )
     plugin_document = next(
         document for document in documents if document["source"] == "plugin"
     )
@@ -1124,7 +1129,10 @@ statusMessage = "Checking managed"
         },
     )
     assert response.status_code == 400
-    assert response.json()["detail"]["errorCode"] == "INVALID_HOOK_ADDITIONAL_CONTEXT_LIMIT"
+    assert (
+        response.json()["detail"]["errorCode"]
+        == "INVALID_HOOK_ADDITIONAL_CONTEXT_LIMIT"
+    )
 
 
 def test_codex_hooks_structured_entry_upsert_and_delete_touch_only_hooks_json(
@@ -1526,7 +1534,7 @@ def test_codex_file_resources_manage_editable_files_and_read_only_sources(
     assert plugin_file["metadata"]["pluginName"] == "demo"
 
     response = client.get(
-        "/api/v1/workspaces/ws-1/codex/skills/file?scope=plugin&path=review%2FSKILL.md&pluginId=demo%40local"
+        "/api/v1/workspaces/ws-1/codex/skills/file?scope=plugin&path=review%2FSKILL.md&pluginId=demo%40local&raw=false"
     )
     assert response.status_code == 200
     assert response.json()["scope"] == "plugin"
@@ -1556,6 +1564,366 @@ def test_codex_file_resources_manage_editable_files_and_read_only_sources(
         "error": "INVALID_FILE_PATH",
         "message": "../escape.toml",
     }
+
+
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_codex_raw_skill_files_return_png_bytes_for_managed_scopes(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, scope: str
+) -> None:
+    threadpool_calls = []
+
+    async def inline_threadpool(operation, *args, **kwargs):
+        threadpool_calls.append((operation, args, kwargs))
+        return operation(*args, **kwargs)
+
+    monkeypatch.setattr(codex_router_module, "run_in_threadpool", inline_threadpool)
+    client, resolver = _client(tmp_path)
+    image = resolver.resolve(scope, "skills") / "review" / "assets" / "logo.png"
+    image.parent.mkdir(parents=True, exist_ok=True)
+    image.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    response = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={
+            "scope": scope,
+            "path": "review/assets/logo.png",
+            "raw": "true",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"\x89PNG\r\n\x1a\n"
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["content-disposition"] == 'inline; filename="logo.png"'
+    documented_content = client.app.openapi()["paths"][
+        "/api/v1/workspaces/{workspace_id}/codex/{resource}/file"
+    ]["get"]["responses"]["200"]["content"]
+    assert response.headers["content-type"] in documented_content
+    assert len(threadpool_calls) == 1
+
+
+def test_codex_file_openapi_advertises_json_and_binary_content(tmp_path) -> None:
+    client, _resolver = _client(tmp_path)
+
+    operation = client.app.openapi()["paths"][
+        "/api/v1/workspaces/{workspace_id}/codex/{resource}/file"
+    ]["get"]
+    success_content = operation["responses"]["200"]["content"]
+
+    assert success_content["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/CodexTextFileResponse"
+    }
+    assert success_content["application/octet-stream"]["schema"] == {
+        "type": "string",
+        "format": "binary",
+    }
+    assert success_content["image/png"]["schema"] == {
+        "type": "string",
+        "format": "binary",
+    }
+    assert operation["responses"]["413"]["description"] == (
+        "Raw preview exceeds the configured size limit."
+    )
+    assert operation["responses"]["413"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/APIErrorDetail"
+    }
+
+
+@pytest.mark.parametrize("scope", ["project", "user", "plugin"])
+def test_codex_raw_preview_accepts_exact_limit_and_rejects_one_byte_over(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    scope: str,
+) -> None:
+    limit = 8
+    monkeypatch.setattr(codex_settings_module, "_RAW_PREVIEW_MAX_BYTES", limit)
+    plugin_inventory = None
+    if scope == "plugin":
+        package_root = _plugin_cache_root(tmp_path)
+        plugin_inventory = _plugin_cli_inventory(package_root)
+    client, resolver = _client(tmp_path, plugin_inventory=plugin_inventory)
+    params = {"scope": scope, "raw": "true"}
+    if scope == "plugin":
+        target = package_root / "skills" / "review" / "SKILL.md"
+        params.update({"path": "review/SKILL.md", "pluginId": "demo@local"})
+        manifest = package_root / ".codex-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(
+            '{"name":"demo","version":"1.2.3","skills":"./skills"}',
+            encoding="utf-8",
+        )
+    else:
+        target = resolver.resolve(scope, "skills") / "review" / "preview.bin"
+        params["path"] = "review/preview.bin"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"x" * limit)
+
+    exact = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params=params,
+    )
+    target.write_bytes(b"x" * (limit + 1))
+    oversized = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params=params,
+    )
+
+    assert exact.status_code == 200
+    assert exact.content == b"x" * limit
+    assert oversized.status_code == 413
+    assert oversized.json()["detail"] == {
+        "errorCode": "FILE_TOO_LARGE",
+        "message": "Raw preview exceeds the configured size limit",
+    }
+    assert str(tmp_path) not in oversized.text
+    assert str(target) not in oversized.text
+
+
+def test_codex_raw_preview_reads_only_limit_plus_one(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    limit = 8
+    monkeypatch.setattr(codex_settings_module, "_RAW_PREVIEW_MAX_BYTES", limit)
+    client, resolver = _client(tmp_path)
+    target = resolver.resolve("project", "skills") / "review" / "large.bin"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"x" * (limit + 20))
+    original_read = raw_file_module._read_descriptor
+    requested_sizes: list[int] = []
+
+    def guarded_read(descriptor: int, size: int) -> bytes:
+        requested_sizes.append(size)
+        return original_read(descriptor, size)
+
+    monkeypatch.setattr(raw_file_module, "_read_descriptor", guarded_read)
+
+    response = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={"scope": "project", "path": "review/large.bin", "raw": "true"},
+    )
+
+    assert response.status_code == 413
+    assert requested_sizes == [limit + 1]
+
+
+def test_codex_raw_preview_maps_read_error_without_paths(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, resolver = _client(tmp_path)
+    target = resolver.resolve("project", "skills") / "review" / "broken.bin"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"data")
+
+    def failed_read(_descriptor: int, _size: int) -> bytes:
+        raise OSError(errno.EIO, f"sensitive backend path: {target}")
+
+    monkeypatch.setattr(raw_file_module, "_read_descriptor", failed_read)
+
+    response = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={"scope": "project", "path": "review/broken.bin", "raw": "true"},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == {
+        "errorCode": "FILE_READ_FAILED",
+        "message": "Unable to read requested file",
+    }
+    assert str(tmp_path) not in response.text
+    assert str(target) not in response.text
+
+
+def test_codex_raw_skill_files_map_missing_and_traversal_without_path_leakage(
+    tmp_path,
+) -> None:
+    client, _resolver = _client(tmp_path)
+
+    missing = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={"scope": "project", "path": "missing.png", "raw": "true"},
+    )
+    traversal = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={"scope": "user", "path": "../private.png", "raw": "true"},
+    )
+
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == {
+        "errorCode": "FILE_NOT_FOUND",
+        "message": "missing.png",
+    }
+    assert traversal.status_code == 400
+    assert traversal.json()["detail"] == {
+        "errorCode": "INVALID_FILE_PATH",
+        "message": "../private.png",
+    }
+    assert str(tmp_path) not in missing.text
+    assert str(tmp_path) not in traversal.text
+
+
+def test_codex_raw_preview_rejects_static_symlink_ancestors(tmp_path) -> None:
+    client, resolver = _client(tmp_path)
+    outside = tmp_path / "private-assets"
+    outside.mkdir()
+    (outside / "logo.png").write_bytes(b"private")
+    skills_root = resolver.resolve("project", "skills")
+    skills_root.mkdir(parents=True)
+    (skills_root / "review").symlink_to(outside, target_is_directory=True)
+
+    response = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={
+            "scope": "project",
+            "path": "review/logo.png",
+            "raw": "true",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == {
+        "errorCode": "FILE_NOT_FOUND",
+        "message": "review/logo.png",
+    }
+    assert b"private" not in response.content
+    assert str(outside) not in response.text
+
+
+def test_codex_plugin_raw_resolution_error_is_redacted(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_root = _plugin_cache_root(tmp_path)
+    client, _resolver = _client(
+        tmp_path,
+        plugin_inventory=_plugin_cli_inventory(package_root),
+    )
+    sensitive_path = package_root / "sensitive-inventory.json"
+
+    def failed_skills(_resolver):
+        raise OSError(errno.EIO, f"failed to resolve {sensitive_path}")
+
+    monkeypatch.setattr(
+        codex_settings_module.CodexPluginResourceResolver,
+        "skills",
+        failed_skills,
+    )
+
+    response = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={
+            "scope": "plugin",
+            "path": "review/assets/logo.png",
+            "pluginId": "demo@local",
+            "raw": "true",
+        },
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == {
+        "errorCode": "FILE_READ_FAILED",
+        "message": "Unable to read requested file",
+    }
+    assert str(package_root) not in response.text
+    assert str(sensitive_path) not in response.text
+
+
+def test_codex_plugin_raw_read_supports_inventory_skill_children_only(
+    tmp_path,
+) -> None:
+    package_root = _plugin_cache_root(tmp_path)
+    client, _resolver = _client(
+        tmp_path,
+        plugin_inventory=_plugin_cli_inventory(package_root),
+    )
+    plugin_skill = package_root / "skills" / "review" / "SKILL.md"
+    plugin_skill.parent.mkdir(parents=True, exist_ok=True)
+    plugin_skill.write_text("# Review\n", encoding="utf-8")
+    hidden_asset = plugin_skill.parent / "assets" / "logo.png"
+    hidden_asset.parent.mkdir(parents=True)
+    hidden_asset.write_bytes(b"\x89PNG\r\n\x1a\n")
+    outside = package_root.parent / "private.png"
+    outside.write_bytes(b"private")
+    (plugin_skill.parent / "escape.png").symlink_to(outside)
+    manifest = package_root / ".codex-plugin" / "plugin.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        '{"name":"demo","version":"1.2.3","skills":"./skills"}',
+        encoding="utf-8",
+    )
+
+    resolved = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={
+            "scope": "plugin",
+            "path": "review/SKILL.md",
+            "pluginId": "demo@local",
+            "raw": "true",
+        },
+    )
+    child_asset = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={
+            "scope": "plugin",
+            "path": "review/assets/logo.png",
+            "pluginId": "demo@local",
+            "raw": "true",
+        },
+    )
+    wrong_plugin = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={
+            "scope": "plugin",
+            "path": "review/SKILL.md",
+            "pluginId": "other@local",
+            "raw": "true",
+        },
+    )
+    missing_plugin = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={
+            "scope": "plugin",
+            "path": "review/assets/logo.png",
+            "raw": "true",
+        },
+    )
+    traversal = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={
+            "scope": "plugin",
+            "path": "review/../private.png",
+            "pluginId": "demo@local",
+            "raw": "true",
+        },
+    )
+    symlink = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file",
+        params={
+            "scope": "plugin",
+            "path": "review/escape.png",
+            "pluginId": "demo@local",
+            "raw": "true",
+        },
+    )
+
+    assert resolved.status_code == 200
+    assert resolved.content == b"# Review\n"
+    assert resolved.headers["content-type"].startswith("text/markdown")
+    assert child_asset.status_code == 200
+    assert child_asset.content == b"\x89PNG\r\n\x1a\n"
+    assert child_asset.headers["content-type"] == "image/png"
+    assert wrong_plugin.status_code == 404
+    assert wrong_plugin.json()["detail"]["errorCode"] == "PLUGIN_FILE_NOT_FOUND"
+    assert missing_plugin.status_code == 404
+    assert missing_plugin.json()["detail"]["errorCode"] == "PLUGIN_FILE_NOT_FOUND"
+    assert traversal.status_code == 400
+    assert traversal.json()["detail"]["errorCode"] == "INVALID_FILE_PATH"
+    assert symlink.status_code == 404
+    assert symlink.json()["detail"]["errorCode"] == "PLUGIN_FILE_NOT_FOUND"
+    for response in (wrong_plugin, missing_plugin, traversal, symlink):
+        assert str(package_root) not in response.text
+        assert str(outside) not in response.text
 
 
 def test_codex_skills_file_requires_revision_and_rejects_stale_writes(tmp_path) -> None:

@@ -51,6 +51,9 @@ WORKSPACE_RESOURCES = Path(__file__).resolve().parent.parent / "resources"
 TEMPLATE_ROOT = WORKSPACE_RESOURCES / "runtime_templates"
 CODEX_DEFAULT_CONFIG_PATH = WORKSPACE_RESOURCES / "codex" / "config.toml"
 RUNTIME_USER_HOME = Path("/home/developer")
+RUNTIME_PLATFORM_DATABASE_CA_FILE = (
+    "/etc/aileron/data-service-ca/platform-database/ca.crt"
+)
 
 
 class KnowledgeBaseMountSourceError(RuntimeError):
@@ -111,10 +114,12 @@ class RuntimeProvisionService:
         self.settings = get_settings()
         self.script_output_root = Path(self.settings.RUNTIME_SCRIPT_ROOT)
         self.runtime_database_service = (
-            runtime_database_service or WorkspaceRuntimeDatabaseService()
+            runtime_database_service
+            if runtime_database_service is not None
+            else WorkspaceRuntimeDatabaseService()
         )
 
-    def prepare_execution_plane(
+    def _prepare_generation(
         self,
         workspace: db_models.Workspace,
         *,
@@ -183,7 +188,7 @@ class RuntimeProvisionService:
             browser_probe_context=browser_probe_context,
         )
 
-    def apply_execution_plane(
+    def _apply_generation(
         self,
         plan: WorkspaceExecutionPlanePlan,
         *,
@@ -222,7 +227,7 @@ class RuntimeProvisionService:
                 self.runtime_database_service.deactivate(plan.database_credential)
             raise
 
-    def apply_execution_plane_result(
+    def _stage_generation(
         self,
         workspace: db_models.Workspace,
         result: ExecutionPlaneInfo,
@@ -351,7 +356,7 @@ class RuntimeProvisionService:
             self.runtime_database_service.deactivate(plan.database_credential)
             raise
 
-    def terminate_execution_plane(
+    def _discard_generation(
         self,
         plan: WorkspaceExecutionPlanePlan,
         result: ExecutionPlaneInfo,
@@ -369,7 +374,7 @@ class RuntimeProvisionService:
         finally:
             self.runtime_database_service.deactivate(plan.database_credential)
 
-    def terminate_current_execution_plane(
+    def _terminate_persisted_generation(
         self,
         workspace: WorkspaceExecutionPlaneIdentity,
         *,
@@ -390,7 +395,7 @@ class RuntimeProvisionService:
                 )
             )
 
-    def prove_execution_plane_absent(
+    def _prove_generation_absent(
         self,
         workspace: WorkspaceExecutionPlaneIdentity,
         *,
@@ -539,9 +544,9 @@ class RuntimeProvisionService:
     ) -> dict[str, str]:
         browser_container_name = f"workspace-browser-{workspace.id}"
         canvas_container_name = f"workspace-canvas-{workspace.id}"
-        state_database_file = self._write_runtime_secret_file(
+        database_connection_file = self._write_runtime_secret_file(
             workspace.id,
-            "runtime-state-database-url",
+            "runtime-database-connection",
             database_url,
         )
         control_token_file = self._write_runtime_secret_file(
@@ -551,24 +556,20 @@ class RuntimeProvisionService:
         )
 
         env = {
-             "AILERON_WORKSPACE_ID": workspace.id,
-             "AILERON_WORKSPACE_PATH": "/workspace",
-             "AILERON_RUNTIME_INSTANCE_ID": runtime_instance_id,
-             "AILERON_RUNTIME_ACCESS_REVISION": str(
-                 workspace.runtime_access_revision
-             ),
+            "AILERON_WORKSPACE_ID": workspace.id,
+            "AILERON_WORKSPACE_PATH": "/workspace",
+            "AILERON_RUNTIME_INSTANCE_ID": runtime_instance_id,
+            "AILERON_RUNTIME_ACCESS_REVISION": str(workspace.runtime_access_revision),
             "AILERON_KB_MOUNT_REVISION": str(
                 workspace.knowledge_base_mount_desired_revision
             ),
             "AILERON_WORKTREE_SUBDIR": workspace.worktree_subdir,
-            "AILERON_RUNTIME_STATE_DATABASE_URL_FILE": state_database_file,
+            "AILERON_RUNTIME_DATABASE_CONNECTION_FILE": database_connection_file,
             "AILERON_RUNTIME_CONTROL_TOKEN_FILE": control_token_file,
             "AILERON_MANAGER_INTERNAL_URL": (
                 f"http://workspace-manager:{self.settings.PORT}"
             ),
-            "AILERON_PLATFORM_PUBLIC_ORIGIN": (
-                self.settings.PLATFORM_PUBLIC_ORIGIN
-            ),
+            "AILERON_PLATFORM_PUBLIC_ORIGIN": (self.settings.PLATFORM_PUBLIC_ORIGIN),
             "AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE": (
                 self._runtime_assertion_public_key_set_file()
             ),
@@ -583,8 +584,7 @@ class RuntimeProvisionService:
             "AILERON_BROWSER_CDP_URL": f"http://{browser_container_name}:9223",
             "AILERON_CANVAS_SERVICE_NAME": canvas_container_name,
             "AILERON_CANVAS_INTERNAL_URL": (
-                workspace.canvas_internal_url
-                or f"http://{canvas_container_name}:3003"
+                workspace.canvas_internal_url or f"http://{canvas_container_name}:3003"
             ),
             "AILERON_CANVAS_API_URL": f"http://{canvas_container_name}:3013",
         }
@@ -637,9 +637,7 @@ class RuntimeProvisionService:
     ) -> str:
         safe_workspace_id = workspace_id.replace("-", "_")
         secret_root = (
-            self._runtime_home_manager_root(safe_workspace_id)
-            / ".aileron"
-            / "secrets"
+            self._runtime_home_manager_root(safe_workspace_id) / ".aileron" / "secrets"
         )
         secret_root.mkdir(parents=True, exist_ok=True, mode=0o700)
         secret_root.chmod(0o700)
@@ -728,13 +726,26 @@ class RuntimeProvisionService:
 
         runtime_secret_root = host_runtime_home / ".aileron" / "secrets"
         for filename in (
-            "runtime-state-database-url",
+            "runtime-database-connection",
             "runtime-control-token",
         ):
             volumes.append(
                 VolumeMount(
                     source=str(runtime_secret_root / filename),
                     target=f"/run/secrets/aileron/{filename}",
+                    read_only=True,
+                )
+            )
+
+        if self.settings.HOST_PLATFORM_DATABASE_CA_CERT_FILE:
+            volumes.append(
+                VolumeMount(
+                    source=str(
+                        self._resolve_host_mount_path(
+                            self.settings.HOST_PLATFORM_DATABASE_CA_CERT_FILE
+                        )
+                    ),
+                    target=RUNTIME_PLATFORM_DATABASE_CA_FILE,
                     read_only=True,
                 )
             )
@@ -1197,7 +1208,7 @@ class RuntimeProvisionService:
         if not installation_id:
             raise RuntimeError(
                 "Browser connectivity installation identity is unavailable"
-        )
+            )
         profile_source = str(self._resolve_host_mount_path(profile_source))
         secret_source = str(self._resolve_host_mount_path(secret_source))
         backend_ice_source = str(self._resolve_host_mount_path(backend_ice_source))

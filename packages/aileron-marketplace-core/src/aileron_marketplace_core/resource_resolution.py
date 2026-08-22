@@ -112,14 +112,17 @@ def validate_logical_target_locator(value: str) -> str:
     if not isinstance(value, str):
         raise PackageSourceError("source-reference-invalid", value)
     path_part, separator, fragment = value.partition("#")
-    relative = path_part.removeprefix("~/")
+    relative = ""
+    for prefix in ("~/", "$CODEX_HOME/", "$CLAUDE_CONFIG_DIR/"):
+        if path_part.startswith(prefix):
+            relative = path_part.removeprefix(prefix)
+            break
     if (
         not value
         or len(value) > MAX_USER_COPY_WIRE_FIELD_LENGTH
-        or not path_part.startswith("~/")
+        or not relative
         or value.count("#") > 1
         or any(character in value for character in ("\x00", "\n", "\r", "\\"))
-        or not relative
         or any(part in {"", ".", ".."} for part in relative.split("/"))
         or ":" in relative.split("/", 1)[0]
         or (separator and not fragment)

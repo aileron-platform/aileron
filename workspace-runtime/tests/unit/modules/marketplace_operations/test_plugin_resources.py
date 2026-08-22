@@ -48,7 +48,7 @@ def test_sanitizer_redacts_root_secrets_and_url_credentials() -> None:
     }
 
 
-def test_sanitizer_normalizes_provider_root_placeholders() -> None:
+def test_sanitizer_normalizes_target_client_root_placeholders() -> None:
     result = sanitize_plugin_definition(
         {
             "claude": "${CLAUDE_PLUGIN_ROOT}/bin/server",

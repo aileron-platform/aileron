@@ -9,8 +9,9 @@ import pytest
 
 from app.config.model_registry import normalize_model_selection
 from app.modules.settings.models import CodexSettings, UserSettings
-from app.modules.workspace.runtime.sync import RuntimeSyncService
 from app.modules.settings.user_settings import SettingsService
+from app.modules.workspace.capabilities import build_capabilities_from_settings
+from app.modules.workspace.runtime.sync import RuntimeSyncService
 
 # ============================================================================
 # Fixtures
@@ -42,6 +43,7 @@ def sample_workspace():
     workspace.runtime_status = "running"
     workspace.runtime_internal_url = "http://workspace-runtime-workspace-123:3002"
     workspace.runtime_instance_id = "runtime-instance-123"
+    workspace.agentic_tools = ["claude-code"]
     return workspace
 
 
@@ -639,6 +641,29 @@ class TestCapabilitiesSynchronization:
         assert call_args.kwargs["json"]["workspace_id"] == "workspace-123"
         assert call_args.kwargs["json"]["capabilities"]["default_tool"] == "claude"
 
+    async def test_sync_capabilities_to_runtime_url_filters_workspace_selection(
+        self,
+        sync_service,
+        mock_db_session,
+    ):
+        snapshot = build_capabilities_from_settings(UserSettings())
+        workspace = MagicMock(agentic_tools=["codex"])
+        mock_db_session.get.return_value = workspace
+        sync_service._sync_capabilities = AsyncMock(
+            return_value={"type": "capabilities", "success": True}
+        )
+
+        result = await sync_service.sync_capabilities_to_runtime_url(
+            "workspace-123",
+            "http://runtime-123:3002",
+            snapshot,
+        )
+
+        assert result["success"] is True
+        pushed = sync_service._sync_capabilities.await_args.args[1]
+        assert [tool["id"] for tool in pushed["tools"]] == ["codex"]
+        assert pushed["default_tool"] == "codex"
+
     async def test_resolve_capabilities_uses_owner_settings_when_snapshot_missing(
         self,
         sync_service,
@@ -646,6 +671,7 @@ class TestCapabilitiesSynchronization:
     ):
         workspace = MagicMock(
             agentic_capabilities=None,
+            agentic_tools=["codex"],
             owner_id="user-123",
         )
         mock_db_session.get.return_value = workspace
@@ -669,9 +695,112 @@ class TestCapabilitiesSynchronization:
         ):
             capabilities = sync_service.resolve_workspace_capabilities("workspace-123")
 
-        codex = next(tool for tool in capabilities.tools if tool.id == "codex")
+        assert [tool.id for tool in capabilities.tools] == ["codex"]
+        assert capabilities.default_tool == "codex"
+        codex = capabilities.tools[0]
         assert codex.models == ["gpt-owner"]
         assert codex.default_model == "gpt-owner"
+
+    async def test_resolution_preserves_full_snapshot_across_workspace_tool_switch(
+        self,
+        sync_service,
+        mock_db_session,
+    ):
+        workspace = MagicMock(
+            agentic_capabilities=None,
+            agentic_tools=["codex"],
+            owner_id="user-123",
+        )
+        mock_db_session.get.return_value = workspace
+        owner_settings = UserSettings(
+            codex=CodexSettings(
+                model_selection=normalize_model_selection(
+                    "codex",
+                    {
+                        "customModels": ["gpt-owner"],
+                        "allowedModels": ["gpt-owner"],
+                        "defaultModel": "gpt-owner",
+                    },
+                    mode="read",
+                )
+            )
+        )
+
+        with patch(
+            "app.modules.settings.user_settings.SettingsService.get_settings",
+            return_value=owner_settings,
+        ) as get_settings:
+            initial = sync_service.resolve_workspace_capability_resolution(
+                "workspace-123"
+            )
+            workspace.agentic_capabilities = initial.snapshot.model_dump(by_alias=True)
+            workspace.agentic_tools = ["claude-code"]
+            switched = sync_service.resolve_workspace_capability_resolution(
+                "workspace-123"
+            )
+
+        get_settings.assert_called_once_with("user-123")
+        assert [tool.id for tool in initial.snapshot.tools] == [
+            "claude",
+            "codex",
+            "opencode",
+        ]
+        assert [tool.id for tool in initial.effective.tools] == ["codex"]
+        assert switched.snapshot == initial.snapshot
+        assert [tool.id for tool in switched.effective.tools] == ["claude"]
+        assert switched.effective.default_tool == "claude"
+
+        sync_service._sync_capabilities = AsyncMock(
+            return_value={"type": "capabilities", "success": True}
+        )
+        result = await sync_service.sync_capabilities_to_runtime_url(
+            "workspace-123",
+            "http://runtime-123:3002",
+            switched.snapshot,
+        )
+
+        assert result["success"] is True
+        pushed = sync_service._sync_capabilities.await_args.args[1]
+        assert [tool["id"] for tool in pushed["tools"]] == ["claude"]
+        assert pushed["default_tool"] == "claude"
+
+    async def test_resolve_capabilities_filters_persisted_workspace_snapshot(
+        self,
+        sync_service,
+        mock_db_session,
+    ):
+        persisted = build_capabilities_from_settings(
+            UserSettings(
+                codex=CodexSettings(
+                    model_selection=normalize_model_selection(
+                        "codex",
+                        {
+                            "customModels": ["gpt-persisted"],
+                            "allowedModels": ["gpt-persisted"],
+                            "defaultModel": "gpt-persisted",
+                        },
+                        mode="read",
+                    )
+                )
+            )
+        )
+        workspace = MagicMock(
+            agentic_capabilities=persisted.model_dump(by_alias=True),
+            agentic_tools=["codex"],
+            owner_id="user-123",
+        )
+        mock_db_session.get.return_value = workspace
+
+        with patch(
+            "app.modules.settings.user_settings.SettingsService.get_settings"
+        ) as get_settings:
+            capabilities = sync_service.resolve_workspace_capabilities("workspace-123")
+
+        get_settings.assert_not_called()
+        assert [tool.id for tool in capabilities.tools] == ["codex"]
+        assert capabilities.default_tool == "codex"
+        assert capabilities.tools[0].models == ["gpt-persisted"]
+        assert capabilities.tools[0].default_model == "gpt-persisted"
 
     async def test_store_workspace_capabilities_closes_missing_workspace_transaction(
         self,
@@ -727,9 +856,14 @@ class TestCapabilitiesSynchronization:
         sync_service._sync_capabilities = AsyncMock(
             return_value={"type": "capabilities", "success": True}
         )
-        workspace_123 = MagicMock()
-        workspace_456 = MagicMock()
-        mock_db_session.get.side_effect = [workspace_123, workspace_456]
+        workspace_123 = MagicMock(agentic_tools=["claude-code"])
+        workspace_456 = MagicMock(agentic_tools=["claude-code"])
+        mock_db_session.get.side_effect = [
+            workspace_123,
+            workspace_123,
+            workspace_456,
+            workspace_456,
+        ]
         mock_db_session.scalar.side_effect = [workspace_123, workspace_456]
 
         with patch(
@@ -766,6 +900,65 @@ class TestCapabilitiesSynchronization:
             call(mock_db_session, "workspace-123"),
             call(mock_db_session, "workspace-456"),
         ]
+
+    async def test_sync_settings_stores_full_snapshot_and_pushes_effective_subset(
+        self,
+        sync_service,
+        mock_db_session,
+    ):
+        sync_service._get_user_workspace_runtimes = AsyncMock(
+            return_value=[
+                {
+                    "workspace_id": "workspace-123",
+                    "workspace_name": "Workspace 1",
+                    "url": "http://localhost:8080",
+                }
+            ]
+        )
+        sync_service._sync_capabilities = AsyncMock(
+            return_value={"type": "capabilities", "success": True}
+        )
+        snapshot = build_capabilities_from_settings(
+            UserSettings(
+                codex=CodexSettings(
+                    model_selection=normalize_model_selection(
+                        "codex",
+                        {
+                            "customModels": ["gpt-effective"],
+                            "allowedModels": ["gpt-effective"],
+                            "defaultModel": "gpt-effective",
+                        },
+                        mode="read",
+                    )
+                )
+            )
+        )
+        workspace = MagicMock(
+            agentic_capabilities=None,
+            agentic_tools=["codex"],
+            owner_id="user-123",
+        )
+        mock_db_session.get.side_effect = [workspace, workspace]
+        mock_db_session.scalar.return_value = workspace
+
+        with patch(
+            "app.modules.workspace.runtime.sync.acquire_workspace_transaction_lock"
+        ):
+            result = await sync_service.sync_settings_to_runtimes(
+                "user-123",
+                {"capabilities": snapshot.model_dump(by_alias=True)},
+            )
+
+        assert result["success"] is True
+        assert [tool["id"] for tool in workspace.agentic_capabilities["tools"]] == [
+            "claude",
+            "codex",
+            "opencode",
+        ]
+        pushed = sync_service._sync_capabilities.await_args.args[1]
+        assert [tool["id"] for tool in pushed["tools"]] == ["codex"]
+        assert pushed["default_tool"] == "codex"
+        assert pushed["tools"][0]["models"] == ["gpt-effective"]
 
     async def test_sync_running_runtime_capabilities_uses_workspace_snapshots(
         self, sync_service, capabilities_changes

@@ -1,4 +1,4 @@
-"""Private Marketplace import apply support mixin."""
+"""Managed Registry importing apply support mixin."""
 
 from __future__ import annotations
 
@@ -9,25 +9,25 @@ from typing import Any
 from uuid import uuid4
 
 from app.modules.marketplace.models import (
-    MarketplaceImportCandidate,
-    MarketplaceImportSource,
     MarketplacePackageFamily,
     MarketplacePackageFamilySource,
     MarketplacePackageSummary,
-    MarketplaceProviderVariant,
+    MarketplacePackageVariant,
+    MarketplaceImportCandidate,
+    MarketplaceImportSource,
 )
-from app.modules.marketplace.providers import MarketplaceProviderAdapter
+from app.modules.marketplace.target_clients import create_package_format_adapters
+from app.modules.marketplace.target_clients import MarketplaceTargetClientAdapter
 
 from .registry_operations import (
-    MarketplaceConflictError,
-    MarketplaceImportSourceError,
     MarketplaceValidationError,
+    MarketplaceImportSourceError,
     _resource_write_locks,
 )
 
 
 class _MarketplaceImportApplySupport:
-    """Provide import apply support behavior to the composed private kernel."""
+    """Apply imported candidates to the composed registry kernel."""
 
     def _import_one_candidate(
         self,
@@ -38,7 +38,7 @@ class _MarketplaceImportApplySupport:
         import_metadata: dict[str, Any],
     ) -> MarketplacePackageSummary:
         target_package_id = self._target_import_package_id(candidate)
-        adapter = self._get_adapter(candidate.provider)
+        adapter = create_package_format_adapters()[candidate.package_format]
         source_package_path, cleanup_path = self._resolve_import_candidate_source(
             user_id,
             source_root,
@@ -46,21 +46,35 @@ class _MarketplaceImportApplySupport:
             import_metadata,
         )
         lock_key = self._marketplace_package_lock_key(
-            user_id, candidate.provider, target_package_id
+            user_id, candidate.target_client, target_package_id
         )
         try:
             with _resource_write_locks.lock(lock_key):
                 with self._registry_lock:
                     registry_root = self._get_registry_root(user_id)
                     target_package_path = self._resolve_package_path(
-                        user_id, candidate.provider, target_package_id
+                        user_id,
+                        candidate.target_client,
+                        target_package_id,
+                        candidate.package_format,
                     )
                     target_parent = target_package_path.parent
                     target_parent.mkdir(parents=True, exist_ok=True)
                     target_exists = target_package_path.exists()
-                    if candidate.duplicate_action == "overwrite":
-                        self._validate_import_overwrite_revision(user_id, candidate)
-                    elif target_exists:
+                    package_summaries, _ = self._get_package_index(
+                        user_id,
+                        registry_root,
+                    )
+                    conflicting_packages = [
+                        item
+                        for item in package_summaries
+                        if item.package_id == target_package_id
+                    ]
+                    if candidate.import_options is None:
+                        raise MarketplaceImportSourceError(
+                            "marketplace.import.metadata.required"
+                        )
+                    if conflicting_packages and not candidate.import_options.overwrite:
                         raise MarketplaceImportSourceError(
                             "marketplace.package.already_exists"
                         )
@@ -87,7 +101,7 @@ class _MarketplaceImportApplySupport:
                     staging_root = target_parent / f".import-{uuid4().hex}"
                     staging_path = staging_root / target_package_id
                     backup_path = target_parent / f".backup-{uuid4().hex}"
-                    manifest_backup = self._provider_manifest_backup(
+                    manifest_backup = self._target_client_manifest_backup(
                         registry_root, adapter
                     )
                     family_backup = self._package_families_backup(registry_root)
@@ -113,7 +127,7 @@ class _MarketplaceImportApplySupport:
                             adapter, staging_path, target_package_id
                         )
                         self._write_import_source_metadata(
-                            adapter, staging_path, source, candidate, target_package_id
+                            adapter, staging_path, source, candidate
                         )
                         if component_selectors:
                             self._raise_if_validation_blocks(
@@ -123,6 +137,26 @@ class _MarketplaceImportApplySupport:
                         self._raise_if_validation_blocks(
                             adapter.validate_package(staging_path), "importCopy"
                         )
+                        for existing in conflicting_packages:
+                            existing_path = self._resolve_package_path(
+                                user_id,
+                                existing.target_client,
+                                existing.package_id,
+                                existing.package_format,
+                            )
+                            if existing_path == target_package_path:
+                                continue
+                            if existing_path.exists():
+                                shutil.rmtree(existing_path)
+                            existing_adapter = create_package_format_adapters()[
+                                existing.package_format
+                            ]
+                            self._remove_listing_entry_with_core(
+                                existing_adapter,
+                                registry_root,
+                                existing.package_id,
+                                invalidation_key=user_id,
+                            )
                         if target_exists:
                             target_package_path.rename(backup_path)
                             backup_created = True
@@ -141,7 +175,11 @@ class _MarketplaceImportApplySupport:
                             )
                         if listing is None:
                             raise MarketplaceImportSourceError(
-                                "marketplace.import.validation.copy_failed"
+                                "marketplace.import.validation.listing_unavailable",
+                                stage="validate",
+                                source=str(source_package_path),
+                                destination=str(target_package_path),
+                                category="validation",
                             )
                         for field_name, selectors in component_selectors.items():
                             listing[field_name] = [
@@ -187,11 +225,18 @@ class _MarketplaceImportApplySupport:
                             backup_created,
                         )
                         raise MarketplaceImportSourceError(
-                            "marketplace.import.validation.copy_failed"
+                            "marketplace.import.write_failed",
+                            stage="write",
+                            source=str(source_package_path),
+                            destination=str(target_package_path),
+                            category="filesystem",
                         ) from exc
 
                     detail = self._package_reads.get_package_detail(
-                        user_id, candidate.provider, target_package_id
+                        user_id,
+                        candidate.target_client,
+                        target_package_id,
+                        candidate.package_format,
                     )
                     if detail is None:
                         raise MarketplaceImportSourceError(
@@ -275,43 +320,33 @@ class _MarketplaceImportApplySupport:
             variant
             for variant in family.variants
             if not (
-                variant.provider == candidate.provider
+                variant.target_client == candidate.target_client
+                and variant.package_format == candidate.package_format
                 and variant.package_id == target_package_id
             )
         ]
         next_variants.append(
-            MarketplaceProviderVariant(
-                provider=candidate.provider,
+            MarketplacePackageVariant(
+                target_client=candidate.target_client,
+                package_format=candidate.package_format,
                 packageId=target_package_id,
                 registryPath=registry_path,
                 displayName=candidate.display_name,
             )
         )
         family.variants = sorted(
-            next_variants, key=lambda item: (item.provider, item.package_id)
+            next_variants,
+            key=lambda item: (item.target_client, item.package_format),
         )
         self._write_package_families(registry_root, document)
 
     def _target_import_package_id(self, candidate: MarketplaceImportCandidate) -> str:
-        if candidate.duplicate_action != "import-as-new":
-            return candidate.package_id
-        target_package_id = (candidate.new_package_id or "").strip()
+        if candidate.import_options is None:
+            raise MarketplaceImportSourceError("marketplace.import.metadata.required")
+        target_package_id = candidate.package_id.strip()
         if not self._package_id_pattern.match(target_package_id):
             raise MarketplaceImportSourceError("marketplace.package.invalid_id")
         return target_package_id
-
-    def _validate_import_overwrite_revision(
-        self,
-        user_id: str,
-        candidate: MarketplaceImportCandidate,
-    ) -> None:
-        detail = self._package_reads.get_package_detail(
-            user_id, candidate.provider, candidate.package_id
-        )
-        if detail is None:
-            raise MarketplaceImportSourceError("marketplace.package.not_found")
-        if candidate.local_revision != detail.revision:
-            raise MarketplaceConflictError("marketplace.package.revision_conflict")
 
     def _reject_import_symlinks(self, package_path: Path) -> None:
         package_root = package_path.resolve()
@@ -326,7 +361,7 @@ class _MarketplaceImportApplySupport:
 
     def _rewrite_imported_manifest_name(
         self,
-        adapter: MarketplaceProviderAdapter,
+        adapter: MarketplaceTargetClientAdapter,
         package_path: Path,
         package_id: str,
     ) -> None:
@@ -337,7 +372,7 @@ class _MarketplaceImportApplySupport:
 
     def _seed_manifest_from_listing(
         self,
-        adapter: MarketplaceProviderAdapter,
+        adapter: MarketplaceTargetClientAdapter,
         source_root: Path,
         source_package_path: Path,
         package_path: Path,
@@ -392,34 +427,46 @@ class _MarketplaceImportApplySupport:
 
     def _write_import_source_metadata(
         self,
-        adapter: MarketplaceProviderAdapter,
+        adapter: MarketplaceTargetClientAdapter,
         package_path: Path,
         source: MarketplaceImportSource,
         candidate: MarketplaceImportCandidate,
-        target_package_id: str,
     ) -> None:
         manifest_path = adapter.manifest_path(package_path)
         manifest = self._read_json(manifest_path)
-        manifest["sourceType"] = "imported"
-        manifest["importSource"] = {
-            "provider": candidate.provider,
-            "scanProvider": source.provider,
+        if candidate.import_options is None:
+            raise MarketplaceImportSourceError("marketplace.import.metadata.required")
+        manifest["version"] = candidate.import_options.version
+        imported_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        import_source = {
+            "targetClient": candidate.target_client,
+            "scanTargetClient": source.target_client,
             "sourceKind": source.source_kind,
             "source": source.source,
             "packageId": candidate.package_id,
-            "targetPackageId": target_package_id,
             "sourcePath": candidate.source_path,
             "sourceMetadata": candidate.source_metadata,
             "sourceIdentity": candidate.source_identity
             or self._source_identity_for_import(source, {}),
-            "importedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "importedAt": imported_at,
         }
+        if adapter.package_format == "agent-plugin/1.0.0":
+            self._write_json_with_core(manifest_path, manifest)
+            self._write_json_with_core(
+                package_path / ".aileron" / "import.json",
+                {
+                    "packageFormat": candidate.package_format,
+                    **import_source,
+                },
+            )
+            return
+        manifest["importSource"] = import_source
         self._write_json_with_core(manifest_path, manifest)
 
-    def _provider_manifest_backup(
+    def _target_client_manifest_backup(
         self,
         registry_root: Path,
-        adapter: MarketplaceProviderAdapter,
+        adapter: MarketplaceTargetClientAdapter,
     ) -> tuple[Path, dict[str, Any]] | None:
         try:
             manifest_path = adapter.marketplace_manifest_path(registry_root)  # type: ignore[attr-defined]

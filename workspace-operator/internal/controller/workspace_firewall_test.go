@@ -89,6 +89,92 @@ func TestFirewallEgressRulesModes(t *testing.T) {
 	}
 }
 
+func TestRuntimePeerEgressUsesExternalPlatformDatabaseDestination(t *testing.T) {
+	reconciler := &WorkspaceReconciler{
+		ConfigNamespace: "workspace-system",
+		PlatformDatabaseEgressDestination: &TURNPolicyDestination{
+			Kind:      TURNDestinationNamespacePods,
+			Namespace: "platform-data",
+			PodLabels: map[string]string{
+				"app.kubernetes.io/name": "postgres",
+			},
+		},
+	}
+	rules := reconciler.runtimePeerEgressRules("workspace-team", "workspace-123")
+
+	if policyHasInternalServiceRule(rules, "workspace-system", "postgres") {
+		t.Fatal("external platform database policy retained the bundled PostgreSQL destination")
+	}
+	if !policyHasEndpointLabels(rules, map[string]string{
+		"k8s:io.kubernetes.pod.namespace": "platform-data",
+		"k8s:app.kubernetes.io/name":      "postgres",
+	}) {
+		t.Fatal("external platform database destination is missing from Runtime egress")
+	}
+
+	for name, sharedRules := range map[string][]interface{}{
+		"workspace": reconciler.runtimeFirewallEgressRules(workspacev1alpha1.WorkspaceFirewallGroupSpec{
+			EgressMode: workspacev1alpha1.WorkspaceFirewallEgressModeUnrestricted,
+		}),
+		"browser": reconciler.firewallEgressRules(workspacev1alpha1.WorkspaceFirewallGroupSpec{
+			EgressMode: workspacev1alpha1.WorkspaceFirewallEgressModeUnrestricted,
+		}),
+	} {
+		if policyHasEndpointLabels(sharedRules, map[string]string{
+			"k8s:io.kubernetes.pod.namespace": "platform-data",
+			"k8s:app.kubernetes.io/name":      "postgres",
+		}) {
+			t.Fatalf("%s firewall must not receive the Runtime database destination", name)
+		}
+	}
+}
+
+func TestRuntimePeerEgressUsesBundledPlatformDatabaseDestination(t *testing.T) {
+	reconciler := &WorkspaceReconciler{ConfigNamespace: "workspace-system"}
+	rules := reconciler.runtimePeerEgressRules("workspace-team", "workspace-123")
+
+	if !policyHasInternalServiceRule(rules, "workspace-system", "postgres") {
+		t.Fatal("Runtime peer policy is missing the bundled PostgreSQL destination")
+	}
+	if policyHasInternalServiceRule(reconciler.baseEgressRules(nil), "workspace-system", "postgres") {
+		t.Fatal("shared workspace policies must not receive the Runtime database destination")
+	}
+}
+
+func policyHasEndpointLabels(egressEntries []interface{}, expected map[string]string) bool {
+	for _, rawRule := range egressEntries {
+		rule, ok := rawRule.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		endpoints, found, err := unstructured.NestedSlice(rule, "toEndpoints")
+		if err != nil || !found {
+			continue
+		}
+		for _, rawEndpoint := range endpoints {
+			endpoint, ok := rawEndpoint.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			labels, found, err := unstructured.NestedStringMap(endpoint, "matchLabels")
+			if err != nil || !found {
+				continue
+			}
+			matches := true
+			for key, value := range expected {
+				if labels[key] != value {
+					matches = false
+					break
+				}
+			}
+			if matches {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestRuntimeFirewallEgressRulesDoNotIncludeIdentityProviderDependencies(t *testing.T) {
 	reconciler := &WorkspaceReconciler{
 		ConfigNamespace: "workspace-system",

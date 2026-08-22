@@ -25,11 +25,11 @@ RUNTIME_ID = "11111111-1111-4111-8111-111111111111"
 def _request() -> MarketplacePluginInstallRequest:
     return MarketplacePluginInstallRequest(
         operationId="a" * 32,
-        provider="codex",
+        targetClient="codex",
         packageId="github",
         marketplaceId="private-market",
         remoteUrl="git@gitlab.example:team/marketplace.git",
-        publishRef="main",
+        registryRef="main",
         workspaceId="workspace-1",
         runtimeInstanceId=RUNTIME_ID,
     )
@@ -39,7 +39,7 @@ def _failed_result() -> MarketplacePluginCommandResult:
     return MarketplacePluginCommandResult(
         status="failed",
         operationId="a" * 32,
-        provider="codex",
+        targetClient="codex",
         packageId="github",
         marketplaceId="private-market",
         workspaceId="workspace-1",

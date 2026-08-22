@@ -1,4 +1,4 @@
-"""Private Marketplace validation support mixin."""
+"""Managed Registry validation support mixin."""
 
 from __future__ import annotations
 
@@ -7,13 +7,17 @@ from typing import Any
 
 from aileron_file_core import FileCoreError
 from aileron_marketplace_core import (
-    provider_resource_name_contract,
+    package_format_resource_name_contract,
     resolve_user_copy_profile,
 )
 
 from app.modules.marketplace.models import (
-    MarketplaceProvider,
-    MarketplaceValidationResult,
+    MarketplacePackageFormat,
+    MarketplaceTargetClient,
+)
+from app.modules.marketplace.target_clients import (
+    create_package_format_adapters,
+    package_format_from_storage_key,
 )
 
 from .registry_operations import (
@@ -25,36 +29,17 @@ from .registry_operations import (
 
 
 class _MarketplaceValidationSupport:
-    """Provide validation support behavior to the composed private kernel."""
-
-    def _package_lifecycle_status_from_summary(
-        self,
-        manifest_metadata: dict[str, Any],
-        has_required_resources: bool,
-        validation_results: list[MarketplaceValidationResult] | list[dict[str, Any]],
-    ) -> str:
-        has_error = any(
-            (
-                result.severity
-                if isinstance(result, MarketplaceValidationResult)
-                else result.get("severity")
-            )
-            == "error"
-            for result in validation_results
-        )
-        manifest_name = manifest_metadata.get("name")
-        if not isinstance(manifest_name, str) or not manifest_name.strip():
-            return "draft"
-
-        return "draft" if has_error or not has_required_resources else "ready"
+    """Provide validation support behavior to the composed registry kernel."""
 
     def _package_has_required_resources(
         self,
-        provider: MarketplaceProvider,
+        package_format: MarketplacePackageFormat,
         package_path: Path,
     ) -> bool:
-        """Check that at least one native provider resource contains data."""
-        profile = resolve_user_copy_profile(provider, package_path)
+        """Check that at least one native target_client resource contains data."""
+        if package_format == "agent-plugin/1.0.0":
+            return (package_path / "plugin.json").is_file()
+        profile = resolve_user_copy_profile(package_format, package_path)
 
         def has_content(path: Path) -> bool:
             try:
@@ -68,7 +53,7 @@ class _MarketplaceValidationSupport:
                 return True
             if source.is_dir() and has_content(source / "SKILL.md"):
                 return True
-        contract = provider_resource_name_contract(provider)
+        contract = package_format_resource_name_contract(package_format)
         if has_content(package_path / contract.root_document_name):
             return True
         resource_directories = {
@@ -99,7 +84,7 @@ class _MarketplaceValidationSupport:
     def _catalog_metadata_missing_validation(
         self,
         root: Path,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
     ) -> dict[str, Any]:
         return {
@@ -108,7 +93,7 @@ class _MarketplaceValidationSupport:
             "messageKey": "marketplace.validation.catalog_metadata_missing",
             "filePath": self._catalog_path(root).relative_to(root).as_posix(),
             "details": {
-                "provider": provider,
+                "target_client": target_client,
                 "packageId": package_id,
             },
         }
@@ -118,18 +103,24 @@ class _MarketplaceValidationSupport:
         registry_root: Path,
         paths: list[str],
     ) -> None:
-        packages: set[tuple[MarketplaceProvider, str]] = set()
+        packages: set[tuple[MarketplaceTargetClient, MarketplacePackageFormat, str]] = (
+            set()
+        )
         for path in paths:
             parts = Path(path).parts
-            if len(parts) < 3 or parts[1] != "plugins":
+            if len(parts) < 4 or parts[1] != "plugins":
                 continue
-            provider = parts[0]
-            if provider not in self.adapters:
+            target_client = parts[0]
+            if target_client not in self.adapters:
                 continue
-            packages.add((provider, parts[2]))  # type: ignore[arg-type]
-        for provider, package_id in sorted(packages):
-            package_path = registry_root / provider / "plugins" / package_id
-            adapter = self._get_adapter(provider)
+            try:
+                package_format = package_format_from_storage_key(parts[2])
+            except ValueError:
+                continue
+            packages.add((target_client, package_format, parts[3]))  # type: ignore[arg-type]
+        for target_client, package_format, package_id in sorted(packages):
+            adapter = create_package_format_adapters()[package_format]
+            package_path = adapter.package_path(registry_root, package_id)
             self._raise_if_validation_blocks(
                 adapter.validate_package(package_path),
                 "save",
@@ -137,16 +128,18 @@ class _MarketplaceValidationSupport:
 
     def _validate_registry_file_after_restore(self, relative_path: str) -> None:
         parts = Path(relative_path).parts
-        if len(parts) < 3 or parts[1] != "plugins":
+        if len(parts) < 4 or parts[1] != "plugins":
             return
-        provider = parts[0]
-        if provider not in self.adapters:
+        target_client = parts[0]
+        if target_client not in self.adapters:
             return
-        package_id = parts[2]
-        package_path = (
-            self.storage_root / "registry" / provider / "plugins" / package_id
-        )
-        adapter = self._get_adapter(provider)  # type: ignore[arg-type]
+        try:
+            package_format = package_format_from_storage_key(parts[2])
+        except ValueError:
+            return
+        package_id = parts[3]
+        adapter = create_package_format_adapters()[package_format]
+        package_path = adapter.package_path(self.storage_root / "registry", package_id)
         self._raise_if_validation_blocks(adapter.validate_package(package_path), "save")
 
     @staticmethod
@@ -201,7 +194,7 @@ class _MarketplaceValidationSupport:
         action: MarketplaceValidationAction,
     ) -> list[dict[str, Any]]:
         """Return validation results that block the requested action."""
-        if action not in {"create", "save", "export", "install", "importCopy"}:
+        if action not in {"create", "save", "export", "importSelectors", "importCopy"}:
             return []
         return [
             result for result in validation_results if result.get("severity") == "error"
@@ -218,7 +211,7 @@ class _MarketplaceValidationSupport:
 
     def _package_path_has_ready_resource(
         self,
-        provider: MarketplaceProvider,
+        package_format: MarketplacePackageFormat,
         package_path: Path,
     ) -> bool:
-        return self._package_has_required_resources(provider, package_path)
+        return self._package_has_required_resources(package_format, package_path)

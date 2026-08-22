@@ -13,7 +13,7 @@ from fastapi import HTTPException
 
 from app.modules.claude_code.documents import DocumentScope
 from app.modules.claude_code.plugins import (
-    provider_inventory as provider_inventory_module,
+    plugin_inventory as plugin_inventory_module,
 )
 from app.modules.claude_code.plugins import catalog as service_module
 from app.modules.claude_code.plugins.models import ClaudePluginInstallation
@@ -127,10 +127,10 @@ def test_list_plugins_uses_installed_manifest_and_installed_root_resources(
         ),
         patch(
             (
-                "app.modules.claude_code.plugins.provider_inventory."
+                "app.modules.claude_code.plugins.plugin_inventory."
                 "resolve_claude_plugin_resources"
             ),
-            wraps=provider_inventory_module.resolve_claude_plugin_resources,
+            wraps=plugin_inventory_module.resolve_claude_plugin_resources,
         ) as resolve_resources,
     ):
         response = service.list_plugins("workspace-1")
@@ -365,7 +365,7 @@ def test_set_plugin_enabled_writes_with_shared_json_codec(tmp_path: Path) -> Non
         ),
         patch.object(service, "_plugin_rows", return_value=rows),
         patch(
-            "app.modules.claude_code.plugins.catalog.get_marketplace_provider_gate",
+            "app.modules.claude_code.plugins.catalog.get_marketplace_target_client_gate",
             return_value=gate,
         ),
     ):

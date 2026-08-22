@@ -8,19 +8,26 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from sqlalchemy.exc import ProgrammingError
 
-from app.modules.workspace.firewall_contract import FirewallConfig, FirewallRuleConfig
 from app.db import models as db_models
+from app.modules.authorization.actor import AuthorizationActor
+from app.modules.settings.models import UserSettings
+from app.modules.workspace.browser_credentials import BrowserCredentialService
+from app.modules.workspace.capabilities import (
+    WorkspaceCapabilities,
+    build_capabilities_from_settings,
+)
+from app.modules.workspace.catalog import (
+    WorkspaceCapabilitiesSelectionError,
+    WorkspaceService,
+    WorkspaceUpdatePostCommitEffects,
+)
+from app.modules.workspace.firewall_contract import FirewallConfig, FirewallRuleConfig
 from app.modules.workspace.models import (
     WorkspaceCreateRequest,
     WorkspaceSensitiveSettingsReplaceRequest,
     WorkspaceShareUpdateRequest,
     WorkspaceUpdateRequest,
 )
-from app.modules.authorization.actor import AuthorizationActor
-from app.modules.workspace.capabilities import build_capabilities_from_settings
-from app.modules.settings.models import UserSettings
-from app.modules.workspace.browser_credentials import BrowserCredentialService
-from app.modules.workspace.catalog import WorkspaceService
 
 # ============================================================================
 # Fixtures
@@ -156,6 +163,7 @@ def test_authorization_context_is_read_only_for_kubernetes_workspace(
     workspace.id = "workspace-k8s"
     workspace.owner_id = "owner"
     workspace.provisioner = "kubernetes"
+    workspace.agentic_tools = ["codex"]
     workspace.agentic_capabilities = None
     mock_db_session.get.return_value = workspace
 
@@ -165,8 +173,55 @@ def test_authorization_context_is_read_only_for_kubernetes_workspace(
 
     assert context is not None
     assert context.access_role == "owner"
+    assert [tool.id for tool in context.capabilities.tools] == ["codex"]
+    assert context.capabilities.default_tool == "codex"
     mock_db_session.commit.assert_not_called()
     mock_db_session.rollback.assert_not_called()
+
+
+def test_get_capabilities_filters_persisted_snapshot_by_workspace_selection(
+    workspace_service,
+    mock_db_session,
+) -> None:
+    workspace = Mock(spec=db_models.Workspace)
+    workspace.id = "workspace-capabilities"
+    workspace.owner_id = "owner"
+    workspace.agentic_tools = ["codex"]
+    persisted = build_capabilities_from_settings(UserSettings())
+    workspace.agentic_capabilities = persisted.model_dump(by_alias=True)
+    mock_db_session.get.return_value = workspace
+
+    capabilities = workspace_service.get_capabilities(
+        workspace.id,
+        actor=AuthorizationActor("owner", "member"),
+    )
+
+    assert capabilities is not None
+    assert [tool.id for tool in capabilities.tools] == ["codex"]
+    assert capabilities.default_tool == "codex"
+    persisted_codex = next(tool for tool in persisted.tools if tool.id == "codex")
+    assert capabilities.tools[0] == persisted_codex
+
+
+def test_get_capabilities_filters_default_snapshot_by_workspace_selection(
+    workspace_service,
+    mock_db_session,
+) -> None:
+    workspace = Mock(spec=db_models.Workspace)
+    workspace.id = "workspace-capabilities"
+    workspace.owner_id = "owner"
+    workspace.agentic_tools = ["opencode"]
+    workspace.agentic_capabilities = None
+    mock_db_session.get.return_value = workspace
+
+    capabilities = workspace_service.get_capabilities(
+        workspace.id,
+        actor=AuthorizationActor("owner", "member"),
+    )
+
+    assert capabilities is not None
+    assert [tool.id for tool in capabilities.tools] == ["opencode"]
+    assert capabilities.default_tool == "opencode"
 
 
 def test_update_capabilities_serializes_with_workspace_lifecycle(
@@ -176,6 +231,7 @@ def test_update_capabilities_serializes_with_workspace_lifecycle(
     workspace = Mock(spec=db_models.Workspace)
     workspace.id = "workspace-capabilities"
     workspace.owner_id = "owner"
+    workspace.agentic_tools = ["claude-code"]
     workspace.agentic_capabilities = None
     mock_db_session.get.return_value = workspace
     mock_db_session.scalar.return_value = workspace
@@ -196,6 +252,46 @@ def test_update_capabilities_serializes_with_workspace_lifecycle(
     assert result == capabilities
     mock_db_session.rollback.assert_not_called()
     mock_db_session.refresh.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "agentic_tools",
+    (["claude-code"], ["claude-code", "codex"]),
+    ids=("no-selected-provider", "partial-selected-providers"),
+)
+def test_update_capabilities_rejects_snapshot_missing_selected_provider(
+    workspace_service,
+    mock_db_session,
+    agentic_tools,
+) -> None:
+    workspace = Mock(spec=db_models.Workspace)
+    workspace.id = "workspace-capabilities"
+    workspace.owner_id = "owner"
+    workspace.agentic_tools = agentic_tools
+    workspace.agentic_capabilities = None
+    mock_db_session.get.return_value = workspace
+    mock_db_session.scalar.return_value = workspace
+    full_snapshot = build_capabilities_from_settings(UserSettings())
+    codex = next(tool for tool in full_snapshot.tools if tool.id == "codex")
+    capabilities = WorkspaceCapabilities(
+        default_tool="codex",
+        tools=[codex],
+    )
+
+    with (
+        patch("app.modules.workspace.catalog.acquire_workspace_transaction_lock"),
+        pytest.raises(WorkspaceCapabilitiesSelectionError) as exc_info,
+    ):
+        workspace_service.update_capabilities(
+            workspace.id,
+            capabilities,
+            actor=AuthorizationActor("owner", "member"),
+        )
+
+    assert exc_info.value.code == "WORKSPACE_CAPABILITIES_SELECTION_MISMATCH"
+    assert workspace.agentic_capabilities is None
+    mock_db_session.commit.assert_not_called()
+    mock_db_session.rollback.assert_called_once()
 
 
 def test_update_capabilities_rolls_back_when_workspace_disappears_after_lock(
@@ -271,6 +367,7 @@ def sample_workspace_db(user_factory):
     workspace.runtime_access_observed_revision = 0
     workspace.runtime_instance_id = None
     workspace.agentic_tools = ["claude-code"]
+    workspace.agentic_capabilities = None
     workspace.setup_script = "npm install"
     workspace.env_vars = []
     workspace.runtime_status = "running"
@@ -818,6 +915,8 @@ class TestWorkspaceUpdate:
         # Arrange
         mock_db_session.get.side_effect = _workspace_and_owner_get(sample_workspace_db)
         sample_workspace_db.agentic_tools = ["codex"]
+        sample_workspace_db.runtime_instance_id = "runtime-instance-1"
+        post_commit_effects = WorkspaceUpdatePostCommitEffects()
 
         update_request = WorkspaceUpdateRequest(
             agenticTools=["opencode", "claude-code"],
@@ -828,12 +927,107 @@ class TestWorkspaceUpdate:
             "workspace-123",
             update_request,
             actor=AuthorizationActor(sample_workspace_db.owner_id, "member"),
+            post_commit_effects=post_commit_effects,
         )
 
         # Assert
         assert result is not None
         assert sample_workspace_db.agentic_tools == ["claude-code", "opencode"]
+        assert post_commit_effects.capabilities_sync_target is not None
+        assert post_commit_effects.capabilities_sync_target.workspace_id == (
+            sample_workspace_db.id
+        )
+        assert post_commit_effects.capabilities_sync_target.runtime_url == (
+            sample_workspace_db.runtime_internal_url
+        )
         mock_db_session.commit.assert_called_once()
+
+    @pytest.mark.parametrize(
+        (
+            "runtime_status",
+            "runtime_url",
+            "runtime_instance_id",
+            "requested_tools",
+        ),
+        [
+            (
+                "running",
+                "http://localhost:3002",
+                "runtime-instance-1",
+                ["claude-code"],
+            ),
+            (
+                "stopped",
+                "http://localhost:3002",
+                "runtime-instance-1",
+                ["codex"],
+            ),
+            ("running", None, "runtime-instance-1", ["codex"]),
+            ("running", "http://localhost:3002", None, ["codex"]),
+        ],
+    )
+    def test_update_workspace_skips_docker_capabilities_sync_when_ineligible(
+        self,
+        workspace_service,
+        mock_db_session,
+        sample_workspace_db,
+        runtime_status,
+        runtime_url,
+        runtime_instance_id,
+        requested_tools,
+    ):
+        mock_db_session.get.side_effect = _workspace_and_owner_get(sample_workspace_db)
+        sample_workspace_db.agentic_tools = ["claude-code"]
+        sample_workspace_db.runtime_status = runtime_status
+        sample_workspace_db.runtime_internal_url = runtime_url
+        sample_workspace_db.runtime_instance_id = runtime_instance_id
+        post_commit_effects = WorkspaceUpdatePostCommitEffects()
+
+        result = workspace_service.update(
+            sample_workspace_db.id,
+            WorkspaceUpdateRequest(agenticTools=requested_tools),
+            actor=AuthorizationActor(sample_workspace_db.owner_id, "member"),
+            post_commit_effects=post_commit_effects,
+        )
+
+        assert result is not None
+        assert post_commit_effects.capabilities_sync_target is None
+
+    @pytest.mark.parametrize(
+        "requested_tools",
+        (["claude-code"], ["claude-code", "codex"]),
+        ids=("no-selected-provider", "partial-selected-providers"),
+    )
+    def test_update_workspace_rejects_selection_missing_from_persisted_snapshot(
+        self,
+        workspace_service,
+        mock_db_session,
+        sample_workspace_db,
+        requested_tools,
+    ):
+        mock_db_session.get.side_effect = _workspace_and_owner_get(sample_workspace_db)
+        full_snapshot = build_capabilities_from_settings(UserSettings())
+        codex = next(tool for tool in full_snapshot.tools if tool.id == "codex")
+        sample_workspace_db.agentic_tools = ["codex"]
+        sample_workspace_db.agentic_capabilities = WorkspaceCapabilities(
+            default_tool="codex",
+            tools=[codex],
+        ).model_dump(by_alias=True)
+        post_commit_effects = WorkspaceUpdatePostCommitEffects()
+
+        with pytest.raises(WorkspaceCapabilitiesSelectionError) as exc_info:
+            workspace_service.update(
+                sample_workspace_db.id,
+                WorkspaceUpdateRequest(agenticTools=requested_tools),
+                actor=AuthorizationActor(sample_workspace_db.owner_id, "member"),
+                post_commit_effects=post_commit_effects,
+            )
+
+        assert exc_info.value.code == "WORKSPACE_CAPABILITIES_SELECTION_MISMATCH"
+        assert sample_workspace_db.agentic_tools == ["codex"]
+        assert post_commit_effects.capabilities_sync_target is None
+        mock_db_session.commit.assert_not_called()
+        mock_db_session.rollback.assert_called_once()
 
     def test_update_workspace_persists_worktree_subdir_and_notifies_runtime(
         self, workspace_service, mock_db_session, sample_workspace_db

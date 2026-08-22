@@ -14,7 +14,7 @@ from app.modules.cli_settings.codex.plugin_resources import (
 from app.modules.cli_settings.user_scope.paths import CodexPathResolver
 from app.modules.marketplace_operations import inventory as inventory_module
 from app.modules.marketplace_operations.inventory import (
-    FilesystemUserCopyInventoryProvider,
+    FilesystemUserCopyInventoryReader,
 )
 
 
@@ -38,7 +38,7 @@ def _codex_profile(tmp_path: Path):
         "# Review helper\n",
         encoding="utf-8",
     )
-    return resolve_user_copy_profile("codex", package_root)
+    return resolve_user_copy_profile("codex-native", package_root)
 
 
 def test_project_identity_inventory_blocks_same_codex_instructions(
@@ -52,14 +52,14 @@ def test_project_identity_inventory_blocks_same_codex_instructions(
         "# Existing project instructions\n",
         encoding="utf-8",
     )
-    provider = FilesystemUserCopyInventoryProvider(settings)
+    target_client = FilesystemUserCopyInventoryReader(settings)
     monkeypatch.setattr(
-        provider,
+        target_client,
         "_enabled_codex_plugin_roots",
         lambda _toml_documents: (),
     )
 
-    inventory = provider.inventory(
+    inventory = target_client.inventory(
         "codex",
         profile=_codex_profile(tmp_path),
     )
@@ -86,14 +86,14 @@ def test_invalid_project_config_makes_inventory_incomplete(
         "invalid = [",
         encoding="utf-8",
     )
-    provider = FilesystemUserCopyInventoryProvider(settings)
+    target_client = FilesystemUserCopyInventoryReader(settings)
     monkeypatch.setattr(
-        provider,
+        target_client,
         "_enabled_codex_plugin_roots",
         lambda _toml_documents: (),
     )
 
-    inventory = provider.inventory(
+    inventory = target_client.inventory(
         "codex",
         profile=_codex_profile(tmp_path),
     )
@@ -142,12 +142,12 @@ def test_claude_local_inventory_uses_dynamic_home_resolver(
         ),
         encoding="utf-8",
     )
-    provider = FilesystemUserCopyInventoryProvider(settings)
-    monkeypatch.setattr(provider, "_enabled_claude_plugin_roots", lambda: ())
+    target_client = FilesystemUserCopyInventoryReader(settings)
+    monkeypatch.setattr(target_client, "_enabled_claude_plugin_roots", lambda: ())
 
-    inventory = provider.inventory(
+    inventory = target_client.inventory(
         "claude-code",
-        profile=resolve_user_copy_profile("claude-code", package_root),
+        profile=resolve_user_copy_profile("claude-native", package_root),
     )
 
     assert inventory.complete is True
@@ -193,11 +193,11 @@ def test_claude_plugin_inventory_accepts_missing_manifest_without_public_paths(
         "_plugin_rows",
         lambda _self, _workspace_id: rows,
     )
-    provider = FilesystemUserCopyInventoryProvider(settings)
+    target_client = FilesystemUserCopyInventoryReader(settings)
 
-    inventory = provider.inventory(
+    inventory = target_client.inventory(
         "claude-code",
-        profile=resolve_user_copy_profile("claude-code", package_root),
+        profile=resolve_user_copy_profile("claude-native", package_root),
     )
 
     assert inventory.complete is True
@@ -219,7 +219,7 @@ def test_claude_plugin_inventory_accepts_missing_manifest_without_public_paths(
         "installPath" not in installation.model_dump()
         for installation in response.plugins[0].installations
     )
-    assert service.read_provider_inventory("workspace-1").enabled_roots() == (
+    assert service.read_plugin_inventory("workspace-1").enabled_roots() == (
         installed_root.resolve(),
     )
 
@@ -258,9 +258,9 @@ def test_claude_plugin_invalid_locator_makes_disabled_inventory_incomplete(
         lambda _self, _workspace_id: rows,
     )
 
-    inventory = FilesystemUserCopyInventoryProvider(settings).inventory(
+    inventory = FilesystemUserCopyInventoryReader(settings).inventory(
         "claude-code",
-        profile=resolve_user_copy_profile("claude-code", package_root),
+        profile=resolve_user_copy_profile("claude-native", package_root),
     )
 
     assert inventory.complete is False
@@ -309,7 +309,7 @@ def test_codex_inventory_parses_each_toml_document_once(
         counted_toml_document,
     )
 
-    inventory = FilesystemUserCopyInventoryProvider(settings).inventory(
+    inventory = FilesystemUserCopyInventoryReader(settings).inventory(
         "codex",
         profile=_codex_profile(tmp_path),
     )

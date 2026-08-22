@@ -9,9 +9,9 @@ from app.config.settings import Settings
 
 
 def test_runtime_settings_start_with_canonical_platform_environment(tmp_path) -> None:
-    database_url_file = tmp_path / "runtime-state-database-url"
+    database_url_file = tmp_path / "runtime-database-connection"
     database_url_file.write_text(
-        "  postgresql://runtime:password@postgres/runtime\n", encoding="utf-8"
+        "postgresql://runtime:password@postgres/runtime", encoding="utf-8"
     )
     control_token_file = tmp_path / "runtime-control-token"
     control_token_file.write_text("  generation-token\n", encoding="utf-8")
@@ -23,7 +23,7 @@ def test_runtime_settings_start_with_canonical_platform_environment(tmp_path) ->
         AILERON_RUNTIME_ACCESS_REVISION=7,
         AILERON_KB_MOUNT_REVISION=3,
         AILERON_WORKTREE_SUBDIR=".worktrees",
-        AILERON_RUNTIME_STATE_DATABASE_URL_FILE=str(database_url_file),
+        AILERON_RUNTIME_DATABASE_CONNECTION_FILE=str(database_url_file),
         AILERON_RUNTIME_CONTROL_TOKEN_FILE=str(control_token_file),
         AILERON_MANAGER_INTERNAL_URL="http://workspace-manager:8000",
         AILERON_PLATFORM_PUBLIC_ORIGIN="https://aileron.example.com",
@@ -40,8 +40,7 @@ def test_runtime_settings_start_with_canonical_platform_environment(tmp_path) ->
     assert settings.AILERON_WORKSPACE_ID == "workspace-1"
     assert settings.AILERON_WORKSPACE_PATH == "/workspace"
     assert (
-        settings.AILERON_RUNTIME_STATE_DATABASE_URL_FILE.get_secret_value()
-        == "postgresql://runtime:password@postgres/runtime"
+        settings.AILERON_RUNTIME_DATABASE_CONNECTION_FILE == database_url_file
     )
     assert (
         settings.AILERON_RUNTIME_CONTROL_TOKEN_FILE.get_secret_value()
@@ -53,7 +52,7 @@ def test_runtime_settings_start_with_canonical_platform_environment(tmp_path) ->
 
 
 def _settings(tmp_path: Path, **values) -> Settings:
-    database_url_file = tmp_path / "runtime-state-database-url"
+    database_url_file = tmp_path / "runtime-database-connection"
     database_url_file.write_text(
         "postgresql://runtime:password@postgres/runtime", encoding="utf-8"
     )
@@ -66,11 +65,13 @@ def _settings(tmp_path: Path, **values) -> Settings:
         "AILERON_RUNTIME_ACCESS_REVISION": 0,
         "AILERON_KB_MOUNT_REVISION": 0,
         "AILERON_WORKTREE_SUBDIR": ".worktrees",
-        "AILERON_RUNTIME_STATE_DATABASE_URL_FILE": str(database_url_file),
+        "AILERON_RUNTIME_DATABASE_CONNECTION_FILE": str(database_url_file),
         "AILERON_RUNTIME_CONTROL_TOKEN_FILE": str(control_token_file),
         "AILERON_MANAGER_INTERNAL_URL": "http://workspace-manager:8000",
         "AILERON_PLATFORM_PUBLIC_ORIGIN": "https://aileron.example.com",
-        "AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE": "/run/secrets/runtime-jwks.json",
+        "AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE": (
+            "/run/secrets/runtime-jwks.json"
+        ),
         "AILERON_RUNTIME_ASSERTION_ISSUER": "workspace-manager",
         "AILERON_BROWSER_SERVICE_NAME": "workspace-browser",
         "AILERON_BROWSER_WEBRTC_INTERNAL_URL": "http://workspace-browser:6080",
@@ -197,7 +198,7 @@ def test_automation_concurrency_must_stay_within_workspace_limit(
 @pytest.mark.parametrize(
     "missing_field",
     [
-        "AILERON_RUNTIME_STATE_DATABASE_URL_FILE",
+        "AILERON_RUNTIME_DATABASE_CONNECTION_FILE",
         "AILERON_RUNTIME_CONTROL_TOKEN_FILE",
         "AILERON_RUNTIME_INSTANCE_ID",
     ],

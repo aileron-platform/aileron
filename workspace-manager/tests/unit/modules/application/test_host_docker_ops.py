@@ -275,6 +275,10 @@ def test_compose_up_uses_prebuilt_images_and_removes_project_orphans(
     envs: list[dict[str, str]] = []
     repo_root = tmp_path
     (repo_root / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    (repo_root / "docker-compose.bundled-data-services.yml").write_text(
+        "services: {}\n",
+        encoding="utf-8",
+    )
 
     def fake_stream_command(
         args: list[str],
@@ -299,7 +303,18 @@ def test_compose_up_uses_prebuilt_images_and_removes_project_orphans(
     ops.compose_up(repo_root, detach=True, env={"TEST_ENV": "1"})
 
     assert commands == [
-        ["docker", "compose", "up", "--remove-orphans", "--no-build", "-d"]
+        [
+            "docker",
+            "compose",
+            "-f",
+            str(repo_root / "docker-compose.yml"),
+            "-f",
+            str(repo_root / "docker-compose.bundled-data-services.yml"),
+            "up",
+            "--remove-orphans",
+            "--no-build",
+            "-d",
+        ]
     ]
     assert envs == [{"TEST_ENV": "1"}]
 

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from app.config.settings import Settings
 from app.modules.internal.models import MarketplacePluginInstallRequest
 from app.modules.marketplace_operations.errors import MarketplaceOperationError
-from app.modules.marketplace_operations.gate import MarketplaceProviderGate
+from app.modules.marketplace_operations.gate import MarketplaceTargetClientGate
 from app.modules.marketplace_operations.plugin_cli_install import (
     PluginCliInstallResult,
 )
@@ -29,23 +29,23 @@ class _Installer:
         return self.result
 
 
-def _settings(tmp_path: Path) -> Settings:
-    return Settings(
-        ENV="test",
+def _settings(tmp_path: Path) -> SimpleNamespace:
+    return SimpleNamespace(
         AILERON_WORKSPACE_ID="workspace-1",
         AILERON_WORKSPACE_PATH=str(tmp_path / "workspace"),
         MARKETPLACE_OPERATION_JOURNAL_DIR=str(tmp_path / "state"),
+        AILERON_RUNTIME_INSTANCE_ID=RUNTIME_ID,
     )
 
 
 def _request(**overrides: str) -> MarketplacePluginInstallRequest:
     payload = {
         "operationId": "a" * 32,
-        "provider": "codex",
+        "targetClient": "codex",
         "packageId": "github",
         "marketplaceId": "private-market",
         "remoteUrl": "git@gitlab.example:team/marketplace.git",
-        "publishRef": "main",
+        "registryRef": "main",
         "workspaceId": "workspace-1",
         "runtimeInstanceId": RUNTIME_ID,
     }
@@ -53,7 +53,7 @@ def _request(**overrides: str) -> MarketplacePluginInstallRequest:
     return MarketplacePluginInstallRequest.model_validate(payload)
 
 
-def test_failed_install_returns_cli_envelope_and_clears_provider_cache(
+def test_failed_install_returns_cli_envelope_and_clears_target_client_cache(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -63,7 +63,7 @@ def test_failed_install_returns_cli_envelope_and_clears_provider_cache(
         lambda **values: clear_calls.append(values),
     )
     store = MarketplaceMutationStore(tmp_path / "state")
-    gate = MarketplaceProviderGate(store)
+    gate = MarketplaceTargetClientGate(store)
     installer = _Installer(
         PluginCliInstallResult(
             status="failed",
@@ -89,11 +89,11 @@ def test_failed_install_returns_cli_envelope_and_clears_provider_cache(
     assert result.exit_code == 9
     assert installer.calls == [
         {
-            "provider": "codex",
+            "target_client": "codex",
             "package_id": "github",
             "marketplace_id": "private-market",
             "remote_url": "git@gitlab.example:team/marketplace.git",
-            "publish_ref": "main",
+            "registry_ref": "main",
         }
     ]
     assert gate.generation("codex") == 1
@@ -104,10 +104,10 @@ def test_failed_install_returns_cli_envelope_and_clears_provider_cache(
         }
     ]
     assert not (tmp_path / "state" / "operations").exists()
-    assert not (tmp_path / "state" / "provider-resource-state.json").exists()
+    assert (tmp_path / "state" / "target-client-cache-generation.json").is_file()
 
 
-def test_success_clears_all_provider_caches(
+def test_success_clears_all_target_client_caches(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -131,7 +131,7 @@ def test_success_clears_all_provider_caches(
         ),  # type: ignore[arg-type]
     )
 
-    service.install(_request(provider="claude-code"))
+    service.install(_request(targetClient="claude-code"))
 
     assert clear_calls == [
         {

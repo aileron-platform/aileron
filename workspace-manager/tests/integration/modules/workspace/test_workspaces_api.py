@@ -9,7 +9,8 @@ import pytest
 
 from app.config.settings import get_settings
 from app.db import models as db_models
-from app.modules.settings.models import default_tool_model
+from app.modules.settings.models import UserSettings, default_tool_model
+from app.modules.workspace.capabilities import build_capabilities_from_settings
 from tests.helpers.manager_session import authenticate_client_as
 
 
@@ -93,14 +94,176 @@ def test_update_workspace_accepts_agentic_tools(
     workspace_id = _create_workspace(
         session_factory, owner_id=user.id, provisioner="docker"
     )
-
-    response = client.put(
-        f"/api/v1/workspaces/{workspace_id}",
-        json={"agenticTools": ["opencode", "claude-code"]},
+    full_snapshot = build_capabilities_from_settings(UserSettings()).model_dump(
+        by_alias=True
     )
+    with session_factory() as session:
+        workspace_record = session.get(
+            db_models.Workspace,
+            workspace_id,
+        )
+        assert workspace_record is not None
+        workspace_record.agentic_capabilities = full_snapshot
+        runtime_instance_id = workspace_record.runtime_instance_id
+        session.commit()
+    runtime_response = MagicMock()
+    runtime_response.raise_for_status.return_value = None
+    runtime_response.json.return_value = {"success": True}
+    runtime_client = AsyncMock()
+    runtime_client.__aenter__.return_value = runtime_client
+    runtime_client.__aexit__.return_value = False
+    runtime_client.post.return_value = runtime_response
+
+    with (
+        patch(
+            "app.modules.workspace.runtime.sync.runtime_command_headers",
+            return_value={"Authorization": "Bearer test-runtime-command"},
+        ) as command_headers,
+        patch(
+            "app.modules.workspace.runtime.sync.httpx.AsyncClient",
+            return_value=runtime_client,
+        ),
+        patch(
+            "app.modules.workspace.router.SessionLocal",
+            session_factory,
+        ),
+    ):
+        response = client.put(
+            f"/api/v1/workspaces/{workspace_id}",
+            json={"agenticTools": ["codex"]},
+        )
 
     assert response.status_code == 200
-    assert response.json()["agenticTools"] == ["claude-code", "opencode"]
+    assert response.json()["agenticTools"] == ["codex"]
+    command_headers.assert_called_once_with(
+        workspace_id=workspace_id,
+        runtime_instance_id=runtime_instance_id,
+        action="settings.sync",
+    )
+    runtime_client.post.assert_awaited_once()
+    sync_request = runtime_client.post.await_args
+    assert sync_request.args[0] == (
+        "http://workspace-runtime:3002/api/v1/internal/settings/capabilities"
+    )
+    effective_capabilities = sync_request.kwargs["json"]["capabilities"]
+    assert effective_capabilities["default_tool"] == "codex"
+    assert [tool["id"] for tool in effective_capabilities["tools"]] == ["codex"]
+    get_response = client.get(f"/api/v1/workspaces/{workspace_id}/capabilities")
+    assert get_response.status_code == 200
+    assert get_response.json()["defaultTool"] == "codex"
+    assert [tool["id"] for tool in get_response.json()["tools"]] == ["codex"]
+    with session_factory() as session:
+        workspace_record = session.get(db_models.Workspace, workspace_id)
+        assert workspace_record is not None
+        assert workspace_record.agentic_capabilities == full_snapshot
+        assert [tool["id"] for tool in full_snapshot["tools"]] == [
+            "claude",
+            "codex",
+            "opencode",
+        ]
+
+
+@pytest.mark.integration
+def test_update_workspace_does_not_sync_unchanged_agentic_tools(
+    authenticated_client,
+    test_app,
+):
+    client, user = authenticated_client
+    _, session_factory = test_app
+    workspace_id = _create_workspace(
+        session_factory, owner_id=user.id, provisioner="docker"
+    )
+
+    with patch(
+        "app.modules.workspace.router._sync_capabilities_to_runtime",
+        new_callable=AsyncMock,
+    ) as sync_capabilities:
+        response = client.put(
+            f"/api/v1/workspaces/{workspace_id}",
+            json={"agenticTools": ["claude-code"]},
+        )
+
+    assert response.status_code == 200
+    sync_capabilities.assert_not_awaited()
+
+
+@pytest.mark.integration
+def test_update_workspace_keeps_commit_when_capability_delivery_fails(
+    authenticated_client,
+    test_app,
+):
+    client, user = authenticated_client
+    _, session_factory = test_app
+    workspace_id = _create_workspace(
+        session_factory, owner_id=user.id, provisioner="docker"
+    )
+
+    with (
+        patch(
+            "app.modules.workspace.router.RuntimeSyncService.sync_capabilities_to_runtime_url",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("capabilities delivery failed"),
+        ) as sync_capabilities,
+        patch(
+            "app.modules.workspace.router.SessionLocal",
+            session_factory,
+        ),
+    ):
+        response = client.put(
+            f"/api/v1/workspaces/{workspace_id}",
+            json={"agenticTools": ["codex"]},
+        )
+
+    assert response.status_code == 200
+    sync_capabilities.assert_awaited_once()
+    with session_factory() as session:
+        workspace = session.get(db_models.Workspace, workspace_id)
+        assert workspace.agentic_tools == ["codex"]
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "requested_tools",
+    (["claude-code"], ["claude-code", "codex"]),
+    ids=("no-selected-provider", "partial-selected-providers"),
+)
+def test_update_workspace_rejects_selection_missing_from_persisted_snapshot(
+    authenticated_client,
+    test_app,
+    requested_tools,
+):
+    client, user = authenticated_client
+    _, session_factory = test_app
+    workspace_id = _create_workspace(
+        session_factory, owner_id=user.id, provisioner="docker"
+    )
+    codex_snapshot = _codex_capabilities_payload()
+    with session_factory() as session:
+        workspace = session.get(db_models.Workspace, workspace_id)
+        assert workspace is not None
+        workspace.agentic_tools = ["codex"]
+        workspace.agentic_capabilities = codex_snapshot
+        session.commit()
+
+    with patch(
+        "app.modules.workspace.router._sync_capabilities_to_runtime",
+        new_callable=AsyncMock,
+    ) as sync_capabilities:
+        response = client.put(
+            f"/api/v1/workspaces/{workspace_id}",
+            json={"agenticTools": requested_tools},
+        )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": {"errorCode": "WORKSPACE_CAPABILITIES_SELECTION_MISMATCH"}
+    }
+    sync_capabilities.assert_not_awaited()
+    with session_factory() as session:
+        workspace = session.get(db_models.Workspace, workspace_id)
+        assert workspace is not None
+        assert workspace.agentic_tools == ["codex"]
+        assert workspace.agentic_capabilities == codex_snapshot
 
 
 @pytest.mark.integration
@@ -160,7 +323,9 @@ def test_workspace_get_and_list_project_only_same_origin_runtime_urls(
     }
     assert forbidden_runtime_fields.isdisjoint(runtime_status)
     assert list_response.status_code == 200
-    item = next(item for item in list_response.json()["items"] if item["id"] == workspace_id)
+    item = next(
+        item for item in list_response.json()["items"] if item["id"] == workspace_id
+    )
     assert item["runtimeUrl"] == f"/workspaces/{workspace_id}/runtime"
     assert "runtimeExternalUrl" not in item
 
@@ -287,6 +452,15 @@ def _create_workspace(session_factory, *, owner_id: str, provisioner: str) -> st
         return workspace.id
 
 
+def _codex_capabilities_payload() -> dict[str, object]:
+    full_snapshot = build_capabilities_from_settings(UserSettings())
+    codex = next(tool for tool in full_snapshot.tools if tool.id == "codex")
+    return {
+        "defaultTool": "codex",
+        "tools": [codex.model_dump(by_alias=True)],
+    }
+
+
 @pytest.mark.integration
 def test_get_workspace_capabilities_returns_default_when_unset(
     authenticated_client,
@@ -306,7 +480,7 @@ def test_get_workspace_capabilities_returns_default_when_unset(
 
 
 @pytest.mark.integration
-def test_put_workspace_capabilities_round_trips(
+def test_put_workspace_capabilities_preserves_full_snapshot_and_gets_effective_view(
     authenticated_client,
     test_app,
 ):
@@ -315,31 +489,80 @@ def test_put_workspace_capabilities_round_trips(
     workspace_id = _create_workspace(
         session_factory, owner_id=user.id, provisioner="docker"
     )
+    payload = build_capabilities_from_settings(UserSettings()).model_dump(by_alias=True)
+    codex = next(tool for tool in payload["tools"] if tool["id"] == "codex")
+    with session_factory() as session:
+        workspace = session.get(db_models.Workspace, workspace_id)
+        assert workspace is not None
+        workspace.agentic_tools = ["codex"]
+        session.commit()
 
-    payload = {
-        "defaultTool": "codex",
-        "tools": [
-            {
-                "id": "codex",
-                "models": [default_tool_model("codex")],
-                "defaultModel": default_tool_model("codex"),
-                "modes": None,
-                "defaultMode": None,
-                "contextWindow": 200000,
-            }
-        ],
-    }
-
-    put_response = client.put(
-        f"/api/v1/workspaces/{workspace_id}/capabilities",
-        json=payload,
-    )
+    with patch(
+        "app.modules.workspace.router._sync_capabilities_to_runtime",
+        new_callable=AsyncMock,
+    ) as sync_capabilities:
+        put_response = client.put(
+            f"/api/v1/workspaces/{workspace_id}/capabilities",
+            json=payload,
+        )
     get_response = client.get(f"/api/v1/workspaces/{workspace_id}/capabilities")
 
     assert put_response.status_code == 200
     assert put_response.json() == payload
     assert get_response.status_code == 200
-    assert get_response.json() == payload
+    assert get_response.json() == {"defaultTool": "codex", "tools": [codex]}
+    sync_capabilities.assert_awaited_once()
+    with session_factory() as session:
+        workspace = session.get(db_models.Workspace, workspace_id)
+        assert workspace is not None
+        assert workspace.agentic_capabilities == payload
+        assert [tool["id"] for tool in workspace.agentic_capabilities["tools"]] == [
+            "claude",
+            "codex",
+            "opencode",
+        ]
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "agentic_tools",
+    (["claude-code"], ["claude-code", "codex"]),
+    ids=("no-selected-provider", "partial-selected-providers"),
+)
+def test_put_workspace_capabilities_rejects_snapshot_missing_selected_provider(
+    authenticated_client,
+    test_app,
+    agentic_tools,
+):
+    client, user = authenticated_client
+    _, session_factory = test_app
+    workspace_id = _create_workspace(
+        session_factory, owner_id=user.id, provisioner="docker"
+    )
+    with session_factory() as session:
+        workspace = session.get(db_models.Workspace, workspace_id)
+        assert workspace is not None
+        workspace.agentic_tools = agentic_tools
+        session.commit()
+
+    with patch(
+        "app.modules.workspace.router._sync_capabilities_to_runtime",
+        new_callable=AsyncMock,
+    ) as sync_capabilities:
+        response = client.put(
+            f"/api/v1/workspaces/{workspace_id}/capabilities",
+            json=_codex_capabilities_payload(),
+        )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": {"errorCode": "WORKSPACE_CAPABILITIES_SELECTION_MISMATCH"}
+    }
+    sync_capabilities.assert_not_awaited()
+    with session_factory() as session:
+        workspace = session.get(db_models.Workspace, workspace_id)
+        assert workspace is not None
+        assert workspace.agentic_capabilities is None
 
 
 @pytest.mark.integration
@@ -352,19 +575,12 @@ def test_put_workspace_capabilities_pushes_running_runtime(
     workspace_id = _create_workspace(
         session_factory, owner_id=user.id, provisioner="docker"
     )
-    payload = {
-        "defaultTool": "codex",
-        "tools": [
-            {
-                "id": "codex",
-                "models": [default_tool_model("codex")],
-                "defaultModel": default_tool_model("codex"),
-                "modes": None,
-                "defaultMode": None,
-                "contextWindow": 200000,
-            }
-        ],
-    }
+    payload = build_capabilities_from_settings(UserSettings()).model_dump(by_alias=True)
+    with session_factory() as session:
+        workspace = session.get(db_models.Workspace, workspace_id)
+        assert workspace is not None
+        workspace.agentic_tools = ["codex"]
+        session.commit()
     mock_response = MagicMock()
     mock_response.json.return_value = {"success": True}
     mock_response.raise_for_status = MagicMock()
@@ -398,6 +614,18 @@ def test_put_workspace_capabilities_pushes_running_runtime(
     )
     assert call_args.kwargs["json"]["workspace_id"] == workspace_id
     assert call_args.kwargs["json"]["capabilities"]["default_tool"] == "codex"
+    assert [
+        tool["id"] for tool in call_args.kwargs["json"]["capabilities"]["tools"]
+    ] == ["codex"]
+    with session_factory() as session:
+        workspace = session.get(db_models.Workspace, workspace_id)
+        assert workspace is not None
+        assert workspace.agentic_capabilities == payload
+        assert [tool["id"] for tool in workspace.agentic_capabilities["tools"]] == [
+            "claude",
+            "codex",
+            "opencode",
+        ]
 
 
 @pytest.mark.integration
@@ -478,12 +706,17 @@ def test_update_kubernetes_workspace_enqueues_runtime_component_restart(
         provisioner="kubernetes",
     )
 
-    response = client.put(
-        f"/api/v1/workspaces/{workspace_id}",
-        json={"agenticTools": ["codex"]},
-    )
+    with patch(
+        "app.modules.workspace.router._sync_capabilities_to_runtime",
+        new_callable=AsyncMock,
+    ) as sync_capabilities:
+        response = client.put(
+            f"/api/v1/workspaces/{workspace_id}",
+            json={"agenticTools": ["codex"]},
+        )
 
     assert response.status_code == 200
+    sync_capabilities.assert_not_awaited()
     assert response.json()["agenticTools"] == ["codex"]
     assert response.json()["runtimeStatus"]["status"] == "restarting"
     with session_factory() as session:

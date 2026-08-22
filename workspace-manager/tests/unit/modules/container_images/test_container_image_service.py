@@ -6,11 +6,23 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from app.modules.container_images.catalog import (
     ContainerImageService,
     get_container_image_service,
 )
+
+BROWSER_IMAGE = "registry.example.test/aileron/workspace-chrome:test"
+CANVAS_IMAGE = "registry.example.test/aileron/workspace-canvas:test"
+
+
+def _service(config_path: Path | None) -> ContainerImageService:
+    return ContainerImageService(
+        config_path=None if config_path is None else str(config_path),
+        browser_image=BROWSER_IMAGE,
+        canvas_image=CANVAS_IMAGE,
+    )
 
 
 # ============================================================================
@@ -77,7 +89,7 @@ def temp_config_file(sample_config_data, tmp_path):
 @pytest.fixture
 def container_image_service(temp_config_file):
     """ContainerImageService Instance"""
-    return ContainerImageService(config_path=str(temp_config_file))
+    return _service(temp_config_file)
 
 
 # ============================================================================
@@ -92,7 +104,7 @@ class TestContainerImageServiceInit:
     def test_init_with_custom_path(self, temp_config_file):
         """Test: Initialize with Custom Configuration File Path"""
         # Act
-        service = ContainerImageService(config_path=str(temp_config_file))
+        service = _service(temp_config_file)
 
         # Assert
         assert service.config_path == Path(temp_config_file)
@@ -101,7 +113,7 @@ class TestContainerImageServiceInit:
     def test_init_with_default_path(self):
         """Test: Initialize with Default Configuration File Path"""
         # Act
-        service = ContainerImageService(config_path=None)
+        service = _service(None)
 
         # Assert
         assert service.config_path is not None
@@ -133,7 +145,7 @@ class TestConfigLoading:
         """Test: Throw Error When Configuration File Does Not Exist"""
         # Arrange
         non_existent_path = tmp_path / "non_existent.yaml"
-        service = ContainerImageService(config_path=str(non_existent_path))
+        service = _service(non_existent_path)
 
         # Act & Assert
         with pytest.raises(
@@ -172,6 +184,21 @@ class TestConfigLoading:
 
         # Assert - New instance
         assert config2 is not config1
+
+    @pytest.mark.parametrize("legacy_field", ["browser_image", "canvas_image"])
+    def test_legacy_supporting_component_image_fields_are_rejected(
+        self,
+        sample_config_data,
+        tmp_path,
+        legacy_field: str,
+    ):
+        sample_config_data[legacy_field] = "legacy-image:test"
+        config_file = tmp_path / "legacy_config.yaml"
+        with open(config_file, "w", encoding="utf-8") as stream:
+            yaml.dump(sample_config_data, stream)
+
+        with pytest.raises(ValidationError, match=legacy_field):
+            _service(config_file)._load_config()
 
 
 # ============================================================================
@@ -255,7 +282,7 @@ class TestImageRetrieval:
         with open(config_file, "w", encoding="utf-8") as f:
             yaml.dump(bad_config, f)
 
-        service = ContainerImageService(config_path=str(config_file))
+        service = _service(config_file)
 
         # Act & Assert
         with pytest.raises(ValueError, match="Default image does not exist"):
@@ -284,9 +311,9 @@ class TestImageRetrieval:
         """Test: override the default Runtime image without changing catalog choices."""
         container_image_service = ContainerImageService(
             config_path=str(temp_config_file),
-            runtime_image_override=(
-                "ailerondocker/workspace-runtime:dev-lite-arm64"
-            ),
+            runtime_image_override=("ailerondocker/workspace-runtime:dev-lite-arm64"),
+            browser_image=BROWSER_IMAGE,
+            canvas_image=CANVAS_IMAGE,
         )
 
         assert (
@@ -298,6 +325,37 @@ class TestImageRetrieval:
             container_image_service.get_docker_image_name("nonexistent")
             == "ailerondocker/workspace-runtime:dev-lite-arm64"
         )
+
+    def test_supporting_component_images_are_deployment_inputs(
+        self,
+        container_image_service,
+    ):
+        assert container_image_service.get_browser_image_name() == BROWSER_IMAGE
+        assert container_image_service.get_canvas_image_name() == CANVAS_IMAGE
+
+    @pytest.mark.parametrize(
+        ("browser_image", "canvas_image", "getter_name", "setting_name"),
+        [
+            ("", CANVAS_IMAGE, "get_browser_image_name", "WORKSPACE_BROWSER_IMAGE"),
+            (BROWSER_IMAGE, " ", "get_canvas_image_name", "WORKSPACE_CANVAS_IMAGE"),
+        ],
+    )
+    def test_supporting_component_images_must_be_non_empty(
+        self,
+        temp_config_file,
+        browser_image: str,
+        canvas_image: str,
+        getter_name: str,
+        setting_name: str,
+    ):
+        service = ContainerImageService(
+            config_path=str(temp_config_file),
+            browser_image=browser_image,
+            canvas_image=canvas_image,
+        )
+
+        with pytest.raises(ValueError, match=setting_name):
+            getattr(service, getter_name)()
 
     def test_validate_image_id_valid(self, container_image_service):
         """Test: Verify Valid Image ID"""

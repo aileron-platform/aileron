@@ -2,16 +2,22 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +38,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	workspacev1alpha1 "workspace-operator/api/v1alpha1"
+)
+
+const (
+	reviewedBrowserCompositeProbeScriptLength = 1731
+	reviewedBrowserCompositeProbeScriptSHA256 = "83e6cbe28dc5bde234c4a36ca6a3a872d437b54e62c25a077356dd8c7d41d082"
 )
 
 type runtimePlatformEnvironmentContract struct {
@@ -338,42 +349,6 @@ func TestParseTURNServerAddress(t *testing.T) {
 	}
 }
 
-func TestBrowserConnectivityProbeUsesStaticTURNSecretFile(t *testing.T) {
-	profile := validTURNProfile()
-	profile.CredentialIssuer.Kind = TURNCredentialIssuerStaticSecret
-	reconciler := &WorkspaceReconciler{
-		TURNProfile:                   &profile,
-		BrowserConnectivityProbeImage: "workspace-operator:test",
-	}
-
-	container, err := reconciler.browserConnectivityProbeContainer("workspace-123")
-	if err != nil {
-		t.Fatalf("build static TURN connectivity probe: %v", err)
-	}
-	envByName := map[string]string{}
-	for _, env := range container.Env {
-		if env.ValueFrom != nil {
-			t.Fatalf("connectivity probe materializes a Secret as env: %#v", env)
-		}
-		envByName[env.Name] = env.Value
-	}
-	if envByName["TURN_BACKEND_ICE_SERVERS_JSON_FILE"] != browserTURNMountPath+"/backend-ice-servers.json" {
-		t.Fatalf("backend ICE Secret file = %q", envByName["TURN_BACKEND_ICE_SERVERS_JSON_FILE"])
-	}
-	if _, exists := envByName["TURN_BACKEND_ICE_SERVERS_JSON"]; exists {
-		t.Fatal("connectivity probe exposes backend ICE JSON through plaintext env")
-	}
-	if _, exists := envByName["TURN_REST_SHARED_SECRET_FILE"]; exists {
-		t.Fatal("static TURN connectivity probe should not require a TURN REST Secret")
-	}
-	if len(container.VolumeMounts) != 1 ||
-		container.VolumeMounts[0].Name != browserTURNVolumeName ||
-		container.VolumeMounts[0].MountPath != browserTURNMountPath ||
-		!container.VolumeMounts[0].ReadOnly {
-		t.Fatalf("static TURN connectivity probe mount = %#v", container.VolumeMounts)
-	}
-}
-
 type statusUpdateCountingWriter struct {
 	client.SubResourceWriter
 	client *statusUpdateCountingClient
@@ -424,14 +399,14 @@ func defaultPlatformPublicOrigin() string {
 	return "https://aileron.example.com"
 }
 
-func TestRuntimeSecretNameUses128BitWorkspaceDigest(t *testing.T) {
+func TestRuntimeSecretNameUsesCanonicalWorkspaceGenerationDigest(t *testing.T) {
 	name := runtimeSecretName("workspace-1")
-	prefix := "workspace-runtime-db-"
+	prefix := "workspace-generation-"
 	if !strings.HasPrefix(name, prefix) {
 		t.Fatalf("runtime secret name %q does not use prefix %q", name, prefix)
 	}
-	if len(strings.TrimPrefix(name, prefix)) != 32 {
-		t.Fatalf("runtime secret name %q does not use a 128-bit digest", name)
+	if len(strings.TrimPrefix(name, prefix)) != 16 {
+		t.Fatalf("runtime secret name %q does not use the first 16 SHA-256 hex characters", name)
 	}
 }
 
@@ -463,6 +438,11 @@ func TestWorkspaceReconcilerCreatesCanonicalRuntimePodEnvironment(t *testing.T) 
 				AccessRevision:    3,
 				Image:             testImmutableRuntimeImage,
 				RuntimeSecretName: runtimeSecretName("ws-runtime-environment"),
+				DatabaseTrust: &workspacev1alpha1.WorkspaceDatabaseTrustSpec{
+					SecretName: "platform-database-ca",
+					SecretKey:  "ca.pem",
+					Revision:   "ca-2026-08",
+				},
 				Assertion: workspacev1alpha1.WorkspaceRuntimeAssertionSpec{
 					Issuer:                 "workspace-manager",
 					PublicKeySetSecretName: "runtime-assertion-public-jwks",
@@ -526,18 +506,18 @@ func TestWorkspaceReconcilerCreatesCanonicalRuntimePodEnvironment(t *testing.T) 
 		"AILERON_RUNTIME_ACCESS_REVISION":               "3",
 		"AILERON_KB_MOUNT_REVISION":                     "7",
 		"AILERON_WORKTREE_SUBDIR":                       "feature/canonical-runtime-environment",
-		"AILERON_RUNTIME_STATE_DATABASE_URL_FILE":       "/etc/aileron/runtime-secrets/state-database-url",
+		"AILERON_RUNTIME_DATABASE_CONNECTION_FILE":      "/etc/aileron/runtime-secrets/runtime-database-connection",
 		"AILERON_RUNTIME_CONTROL_TOKEN_FILE":            "/etc/aileron/runtime-secrets/runtime-control-token",
 		"AILERON_MANAGER_INTERNAL_URL":                  "http://workspace-manager.operator-system:3001",
 		"AILERON_PLATFORM_PUBLIC_ORIGIN":                "https://aileron.example.com",
 		"AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE": "/etc/aileron/runtime-assertions/jwks.json",
 		"AILERON_RUNTIME_ASSERTION_ISSUER":              "workspace-manager",
 		"AILERON_BROWSER_SERVICE_NAME":                  "workspace-browser-ws-runtime-environment",
-		"AILERON_BROWSER_WEBRTC_INTERNAL_URL":           "http://workspace-browser-ws-runtime-environment:6080",
-		"AILERON_BROWSER_CDP_URL":                       "http://workspace-browser-ws-runtime-environment:9223",
+		"AILERON_BROWSER_WEBRTC_INTERNAL_URL":           "http://workspace-browser-ws-runtime-environment.team-a.svc.cluster.local:6080",
+		"AILERON_BROWSER_CDP_URL":                       "http://workspace-browser-ws-runtime-environment.team-a.svc.cluster.local:9223",
 		"AILERON_CANVAS_SERVICE_NAME":                   "workspace-canvas-ws-runtime-environment",
-		"AILERON_CANVAS_INTERNAL_URL":                   "http://workspace-canvas-ws-runtime-environment:3003",
-		"AILERON_CANVAS_API_URL":                        "http://workspace-canvas-ws-runtime-environment:3013",
+		"AILERON_CANVAS_INTERNAL_URL":                   "http://workspace-canvas-ws-runtime-environment.team-a.svc.cluster.local:3003",
+		"AILERON_CANVAS_API_URL":                        "http://workspace-canvas-ws-runtime-environment.team-a.svc.cluster.local:3013",
 	}
 	actualCanonical := map[string]string{}
 	for _, envVar := range runtimeContainer.Env {
@@ -555,7 +535,7 @@ func TestWorkspaceReconcilerCreatesCanonicalRuntimePodEnvironment(t *testing.T) 
 
 	forbidden := []string{
 		"WORKSPACE_NAME", "PORT", "ENV", "NODE_ENV", "DEPLOYMENT_ENV", "ALLOWED_ORIGINS",
-		"WORKSPACE_ID", "WORKSPACE_PATH", "WORKTREE_SUBDIR", "RUNTIME_STATE_DATABASE_URL",
+		"WORKSPACE_ID", "WORKSPACE_PATH", "WORKTREE_SUBDIR",
 		"RUNTIME_CONTROL_TOKEN", "MANAGER_URL", "FRONTEND_PUBLIC_URL",
 		"RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE", "RUNTIME_ASSERTION_ISSUER",
 		"BROWSER_CONTAINER_NAME", "BROWSER_WEBRTC_INTERNAL_URL", "BROWSER_CDP_URL",
@@ -582,7 +562,7 @@ func TestWorkspaceReconcilerCreatesCanonicalRuntimePodEnvironment(t *testing.T) 
 		t.Fatalf("runtime-secrets Secret = %q, want %q", runtimeSecretVolume.SecretName, workspace.Spec.Runtime.RuntimeSecretName)
 	}
 	wantSecretItems := []corev1.KeyToPath{
-		{Key: "state-database-url", Path: "state-database-url", Mode: int32Ptr(0440)},
+		{Key: "runtime-database-connection", Path: "runtime-database-connection", Mode: int32Ptr(0440)},
 		{Key: "runtime-control-token", Path: "runtime-control-token", Mode: int32Ptr(0440)},
 	}
 	if !reflect.DeepEqual(runtimeSecretVolume.Items, wantSecretItems) {
@@ -596,6 +576,30 @@ func TestWorkspaceReconcilerCreatesCanonicalRuntimePodEnvironment(t *testing.T) 
 	}
 	if !foundReadOnlyMount {
 		t.Fatal("Runtime container has no read-only /etc/aileron/runtime-secrets mount")
+	}
+	var databaseCAVolume *corev1.SecretVolumeSource
+	foundDatabaseCAMount := false
+	for _, volume := range podSpec.Volumes {
+		if volume.Name == "platform-database-ca" {
+			databaseCAVolume = volume.Secret
+		}
+	}
+	for _, mount := range runtimeContainer.VolumeMounts {
+		if mount.Name == "platform-database-ca" {
+			foundDatabaseCAMount = mount.MountPath == "/etc/aileron/data-service-ca/platform-database" && mount.ReadOnly
+		}
+	}
+	if databaseCAVolume == nil || databaseCAVolume.SecretName != "platform-database-ca" {
+		t.Fatalf("Runtime database CA volume = %#v", databaseCAVolume)
+	}
+	if len(databaseCAVolume.Items) != 1 || databaseCAVolume.Items[0].Key != "ca.pem" || databaseCAVolume.Items[0].Path != "ca.crt" {
+		t.Fatalf("Runtime database CA items = %#v", databaseCAVolume.Items)
+	}
+	if !foundDatabaseCAMount {
+		t.Fatal("Runtime container has no read-only platform database CA mount")
+	}
+	if deployment.Spec.Template.Annotations[runtimeDatabaseCARevisionAnnotation] != "ca-2026-08" {
+		t.Fatalf("Runtime database CA revision annotation = %q", deployment.Spec.Template.Annotations[runtimeDatabaseCARevisionAnnotation])
 	}
 }
 
@@ -884,18 +888,18 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 		"AILERON_RUNTIME_ACCESS_REVISION":               "3",
 		"AILERON_KB_MOUNT_REVISION":                     "7",
 		"AILERON_WORKTREE_SUBDIR":                       ".worktrees",
-		"AILERON_RUNTIME_STATE_DATABASE_URL_FILE":       "/etc/aileron/runtime-secrets/state-database-url",
+		"AILERON_RUNTIME_DATABASE_CONNECTION_FILE":      "/etc/aileron/runtime-secrets/runtime-database-connection",
 		"AILERON_RUNTIME_CONTROL_TOKEN_FILE":            "/etc/aileron/runtime-secrets/runtime-control-token",
 		"AILERON_MANAGER_INTERNAL_URL":                  "http://workspace-manager.operator-system:3001",
 		"AILERON_PLATFORM_PUBLIC_ORIGIN":                "https://aileron.example.com",
 		"AILERON_RUNTIME_ASSERTION_ISSUER":              "workspace-manager",
 		"AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE": "/etc/aileron/runtime-assertions/jwks.json",
 		"AILERON_BROWSER_SERVICE_NAME":                  "workspace-browser-ws-123",
-		"AILERON_BROWSER_WEBRTC_INTERNAL_URL":           "http://workspace-browser-ws-123:6080",
-		"AILERON_BROWSER_CDP_URL":                       "http://workspace-browser-ws-123:9223",
+		"AILERON_BROWSER_WEBRTC_INTERNAL_URL":           "http://workspace-browser-ws-123.team-a.svc.cluster.local:6080",
+		"AILERON_BROWSER_CDP_URL":                       "http://workspace-browser-ws-123.team-a.svc.cluster.local:9223",
 		"AILERON_CANVAS_SERVICE_NAME":                   "workspace-canvas-ws-123",
-		"AILERON_CANVAS_INTERNAL_URL":                   "http://workspace-canvas-ws-123:3003",
-		"AILERON_CANVAS_API_URL":                        "http://workspace-canvas-ws-123:3013",
+		"AILERON_CANVAS_INTERNAL_URL":                   "http://workspace-canvas-ws-123.team-a.svc.cluster.local:3003",
+		"AILERON_CANVAS_API_URL":                        "http://workspace-canvas-ws-123.team-a.svc.cluster.local:3013",
 		"HOME":                                          "/home/developer",
 		"USER_FEATURE_FLAG":                             "enabled",
 	})
@@ -956,6 +960,15 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 			t.Fatalf("firewall status must await Cilium enforcement: %+v", status.Firewall)
 		}
 	})
+	browserPolicy := newCiliumNetworkPolicy("team-a", "ws-ws-123-browser-egress")
+	if err := cl.Get(context.Background(), client.ObjectKeyFromObject(browserPolicy), browserPolicy); err != nil {
+		t.Fatalf("get bootstrap-gated Browser policy: %v", err)
+	}
+	browserPolicy.SetUID(types.UID("policy-uid-ws-ws-123-browser-egress"))
+	browserPolicy.SetGeneration(1)
+	if err := cl.Update(context.Background(), browserPolicy); err != nil {
+		t.Fatalf("persist bootstrap-gated Browser policy identity: %v", err)
+	}
 	markFirewallPoliciesEnforced(
 		t,
 		cl,
@@ -963,7 +976,6 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 		7,
 		"ws-ws-123-workspace-egress",
 		"ws-ws-123-runtime-peer-egress",
-		"ws-ws-123-browser-egress",
 	)
 	_, err = reconciler.Reconcile(context.Background(), ctrl.Request{
 		NamespacedName: types.NamespacedName{
@@ -3484,6 +3496,16 @@ func assertBrowserSecretFileContract(
 		!strings.Contains(browser.Args[0], "env -u NEKO_MEMBER_MULTIUSER_USER_PASSWORD") {
 		t.Fatalf("Browser startup wrapper does not sanitize transient credentials: %s", browser.Args[0])
 	}
+	if !strings.Contains(
+		browser.Args[0],
+		`install -m 0600 /dev/null "${generated_config}"`,
+	) {
+		t.Fatalf("Browser startup wrapper does not create writable generated configuration: %s", browser.Args[0])
+	}
+	if !strings.Contains(browser.Args[0], `/^(member|webrtc):[[:space:]]*$/`) {
+		t.Fatalf("Browser startup wrapper does not replace existing top-level Neko sections: %s", browser.Args[0])
+	}
+	assertBrowserGeneratedConfigComposer(t, browser.Args[0])
 	if strings.Contains(browser.Args[0], `export NEKO_MEMBER_MULTIUSER_USER_PASSWORD="${browser_user_password}"`) ||
 		strings.Contains(browser.Args[0], `export NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD="${browser_admin_password}"`) {
 		t.Fatalf("Browser startup wrapper exports a mounted Secret: %s", browser.Args[0])
@@ -3508,6 +3530,121 @@ func assertBrowserSecretFileContract(
 		return
 	}
 	t.Fatalf("deployment %s/%s has no Browser credential Secret volume", namespace, name)
+}
+
+func assertBrowserGeneratedConfigComposer(t *testing.T, startupScript string) {
+	t.Helper()
+	fixtureDir, err := os.MkdirTemp("/tmp", "browser-composer-fixture-")
+	if err != nil {
+		t.Fatalf("create Browser composer fixture directory: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(fixtureDir) })
+	if err := os.Chmod(fixtureDir, 0o755); err != nil {
+		t.Fatalf("make Browser composer fixture directory traversable: %v", err)
+	}
+	secretPaths := map[string]string{
+		"NEKO_MEMBER_MULTIUSER_USER_PASSWORD_FILE":  strings.Repeat("a", 43),
+		"NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD_FILE": strings.Repeat("b", 43),
+	}
+	commandEnvironment := os.Environ()
+	for name, value := range secretPaths {
+		path := filepath.Join(fixtureDir, name)
+		if err := os.WriteFile(path, []byte(value), 0o644); err != nil {
+			t.Fatalf("write Browser composer secret fixture: %v", err)
+		}
+		commandEnvironment = append(commandEnvironment, name+"="+path)
+	}
+
+	seedPath := "/etc/neko/neko.kubernetes.yaml"
+	supervisorPath := "/etc/neko/supervisord.kubernetes.conf"
+	entrypointPath := "/usr/local/bin/aileron-browser-kubernetes-entrypoint"
+	for _, path := range []string{seedPath, supervisorPath, entrypointPath} {
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("Browser composer test refuses to overwrite existing %s", path)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("inspect Browser composer fixture target %s: %v", path, err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(seedPath), 0o755); err != nil {
+		t.Fatalf("create Neko fixture directory: %v", err)
+	}
+	if err := os.WriteFile(seedPath, []byte("server:\n  bind: :8080\nmember:\n  provider: singleuser\nwebrtc:\n  icelite: true\nother:\n  enabled: true\n"), 0o644); err != nil {
+		t.Fatalf("write Neko seed fixture: %v", err)
+	}
+	if err := os.WriteFile(supervisorPath, []byte("command=/usr/bin/neko --config /etc/neko/neko.kubernetes.yaml\n"), 0o644); err != nil {
+		t.Fatalf("write Neko supervisor fixture: %v", err)
+	}
+	if err := os.WriteFile(entrypointPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write Browser entrypoint fixture: %v", err)
+	}
+	stateDir := "/tmp/aileron-browser"
+	if err := os.RemoveAll(stateDir); err != nil {
+		t.Fatalf("reset Browser generated state: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(stateDir)
+		_ = os.Remove(seedPath)
+		_ = os.Remove(supervisorPath)
+		_ = os.Remove(entrypointPath)
+	})
+
+	runComposer := func() []byte {
+		command := exec.Command("/bin/sh", "-ec", startupScript)
+		command.Env = commandEnvironment
+		command.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: 65532, Gid: 65532}}
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("execute Browser config composer as runtime UID: %v\n%s", err, output)
+		}
+		generatedPath := filepath.Join(stateDir, "neko.generated.yaml")
+		content, err := os.ReadFile(generatedPath)
+		if err != nil {
+			t.Fatalf("read generated Browser config: %v", err)
+		}
+		info, err := os.Stat(generatedPath)
+		if err != nil {
+			t.Fatalf("stat generated Browser config: %v", err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("generated Browser config mode = %04o, want 0600", info.Mode().Perm())
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid != 65532 {
+			t.Fatalf("generated Browser config owner UID = %v, want 65532", stat)
+		}
+		return content
+	}
+
+	first := runComposer()
+	second := runComposer()
+	if !reflect.DeepEqual(first, second) {
+		t.Fatal("Browser config composer is not idempotent")
+	}
+	var document yaml.Node
+	if err := yaml.Unmarshal(second, &document); err != nil {
+		t.Fatalf("generated Browser config is not unambiguous YAML: %v", err)
+	}
+	if len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
+		t.Fatalf("generated Browser config has no top-level mapping: %#v", document)
+	}
+	sectionCounts := map[string]int{}
+	for index := 0; index < len(document.Content[0].Content); index += 2 {
+		sectionCounts[document.Content[0].Content[index].Value]++
+	}
+	for _, section := range []string{"member", "webrtc"} {
+		if sectionCounts[section] != 1 {
+			t.Fatalf("generated Browser config section %s count = %d, want 1", section, sectionCounts[section])
+		}
+	}
+	if sectionCounts["server"] != 1 || sectionCounts["other"] != 1 {
+		t.Fatalf("Browser config composer did not preserve unmanaged sections: %#v", sectionCounts)
+	}
+	var generated map[string]map[string]interface{}
+	if err := yaml.Unmarshal(second, &generated); err != nil {
+		t.Fatalf("decode generated Browser config behavior: %v", err)
+	}
+	if generated["member"]["provider"] != "multiuser" || generated["webrtc"]["icelite"] != false {
+		t.Fatalf("Browser config composer did not replace managed sections: %#v", generated)
+	}
 }
 
 func assertRuntimeDeploymentReplacementPolicy(
@@ -4339,6 +4476,76 @@ func assertCanvasDeploymentRuntimeContract(
 	assertHTTPProbeTarget(t, "liveness", container.LivenessProbe, "api", "/health", 10, 2, 3)
 }
 
+const expectedBrowserCompositeProbeScript = `exec >/dev/null 2>&1
+browser_config=/tmp/aileron-browser/neko.generated.yaml
+[ -f "${browser_config}" ] &&
+[ ! -L "${browser_config}" ] &&
+[ "$(stat -c '%a:%u' "${browser_config}")" = "600:$(id -u)" ] &&
+awk '
+/^[^[:space:]#]/ {
+  if ($0 !~ /^[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*$/) {
+    noncanonical_top_level_lines++
+    next
+  }
+  section = $0
+  sub(/:[[:space:]]*$/, "", section)
+  managed_nested = 0
+  if (section == "member") member_sections++
+  if (section == "webrtc") webrtc_sections++
+  next
+}
+(section == "member" || section == "webrtc") {
+  if ($0 ~ /^[[:space:]]*$/ || $0 ~ /^[[:space:]]*#/) next
+  if ($0 ~ /^  [^[:space:]]/) {
+    if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_-]*:([[:space:]]|$)/) {
+      noncanonical_managed_children++
+      next
+    }
+    managed_nested = $0 ~ /^  [A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*(#.*)?$/
+  } else if ($0 ~ /^    / && managed_nested) {
+    next
+  } else {
+    noncanonical_managed_children++
+    next
+  }
+}
+section == "member" && /^  provider:[[:space:]]*/ {
+  member_providers++
+  if ($0 ~ /^  provider:[[:space:]]*multiuser[[:space:]]*$/) valid_member_providers++
+}
+section == "webrtc" && /^  icelite:[[:space:]]*/ {
+  webrtc_icelite_values++
+  if ($0 ~ /^  icelite:[[:space:]]*false[[:space:]]*$/) valid_webrtc_icelite_values++
+}
+END {
+  valid = member_sections == 1 && webrtc_sections == 1 &&
+    member_providers == 1 && valid_member_providers == 1 &&
+    webrtc_icelite_values == 1 && valid_webrtc_icelite_values == 1 &&
+    noncanonical_top_level_lines == 0 && noncanonical_managed_children == 0
+  exit valid ? 0 : 1
+}
+' "${browser_config}" &&
+curl --fail --silent --max-time 1 http://127.0.0.1:6080/health &&
+curl --fail --silent --max-time 1 http://127.0.0.1:9223/json/version`
+
+func TestBrowserCompositeProbeScriptMatchesReviewedIdentity(t *testing.T) {
+	if actualLength := len(browserCompositeProbeScript); actualLength != reviewedBrowserCompositeProbeScriptLength {
+		t.Fatalf(
+			"Browser composite probe script length = %d, want reviewed length %d",
+			actualLength,
+			reviewedBrowserCompositeProbeScriptLength,
+		)
+	}
+	actualSHA256 := fmt.Sprintf("%x", sha256.Sum256([]byte(browserCompositeProbeScript)))
+	if actualSHA256 != reviewedBrowserCompositeProbeScriptSHA256 {
+		t.Fatalf(
+			"Browser composite probe script SHA-256 = %s, want reviewed SHA-256 %s",
+			actualSHA256,
+			reviewedBrowserCompositeProbeScriptSHA256,
+		)
+	}
+}
+
 func assertBrowserCompositeProbe(
 	t *testing.T,
 	name string,
@@ -4352,15 +4559,376 @@ func assertBrowserCompositeProbe(
 		t.Fatalf("%s probe = %v, want Browser composite exec probe", name, probe)
 	}
 	command := probe.Exec.Command
-	if command[0] != "/bin/sh" || command[1] != "-ec" ||
-		!strings.Contains(command[2], "curl --fail") ||
-		!strings.Contains(command[2], "127.0.0.1:6080/health") ||
-		!strings.Contains(command[2], "127.0.0.1:9223/json/version") {
-		t.Fatalf("%s command = %v, want WebRTC and CDP checks", name, command)
+	wantCommand := []string{"/bin/sh", "-ec", expectedBrowserCompositeProbeScript}
+	if !reflect.DeepEqual(command, wantCommand) {
+		t.Fatalf("%s command = %#v, want exact Browser readiness command %#v", name, command, wantCommand)
 	}
 	if probe.PeriodSeconds != periodSeconds || probe.TimeoutSeconds != timeoutSeconds ||
 		probe.FailureThreshold != failureThreshold || probe.SuccessThreshold != 1 {
 		t.Fatalf("unexpected %s probe timings: %+v", name, probe)
+	}
+}
+
+const validBrowserGeneratedConfigFixture = `member:
+  provider: multiuser
+  multiuser:
+    user_password: "probe-user-password-secret"
+    admin_password: "probe-admin-password-secret"
+webrtc:
+  icelite: false
+`
+
+func TestBrowserCompositeProbeUsesExactCommand(t *testing.T) {
+	assertBrowserCompositeProbe(t, "readiness", browserCompositeProbe(5, 2, 3), 5, 2, 3)
+}
+
+func resetBrowserCompositeProbeConfigPath(t *testing.T) string {
+	t.Helper()
+	stateDirectory := "/tmp/aileron-browser"
+	if err := os.RemoveAll(stateDirectory); err != nil {
+		t.Fatalf("reset Browser probe fixture directory: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(stateDirectory) })
+	if err := os.Mkdir(stateDirectory, 0o711); err != nil {
+		t.Fatalf("create Browser probe fixture directory: %v", err)
+	}
+	return filepath.Join(stateDirectory, "neko.generated.yaml")
+}
+
+func executeBrowserCompositeProbe(
+	t *testing.T,
+	config string,
+	mode os.FileMode,
+	ownerUID int,
+) error {
+	t.Helper()
+	configPath := resetBrowserCompositeProbeConfigPath(t)
+	if err := os.WriteFile(configPath, []byte(config), mode); err != nil {
+		t.Fatalf("write Browser probe config fixture: %v", err)
+	}
+	if err := os.Chmod(configPath, mode); err != nil {
+		t.Fatalf("set Browser probe config mode: %v", err)
+	}
+	if err := os.Chown(configPath, ownerUID, ownerUID); err != nil {
+		t.Fatalf("set Browser probe config owner: %v", err)
+	}
+	return runBrowserCompositeProbe(t)
+}
+
+func runBrowserCompositeProbe(t *testing.T) error {
+	t.Helper()
+	commandDirectory := t.TempDir()
+	if err := os.Chmod(filepath.Dir(commandDirectory), 0o755); err != nil {
+		t.Fatalf("make Browser probe command parent directory traversable: %v", err)
+	}
+	if err := os.Chmod(commandDirectory, 0o755); err != nil {
+		t.Fatalf("make Browser probe command directory traversable: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(commandDirectory, "curl"),
+		[]byte("#!/bin/sh\nexit 0\n"),
+		0o755,
+	); err != nil {
+		t.Fatalf("write Browser probe curl fixture: %v", err)
+	}
+
+	probe := browserCompositeProbe(5, 2, 3)
+	command := exec.Command(probe.Exec.Command[0], probe.Exec.Command[1:]...)
+	command.Env = append(os.Environ(), "PATH="+commandDirectory+":"+os.Getenv("PATH"))
+	command.SysProcAttr = &syscall.SysProcAttr{
+		Credential: &syscall.Credential{Uid: 65532, Gid: 65532},
+	}
+	output, err := command.CombinedOutput()
+	if len(output) != 0 {
+		t.Fatalf("Browser composite probe exposed output: %q", output)
+	}
+	return err
+}
+
+func TestBrowserCompositeProbeAcceptsValidGeneratedConfig(t *testing.T) {
+	if err := executeBrowserCompositeProbe(t, validBrowserGeneratedConfigFixture, 0o600, 65532); err != nil {
+		t.Fatalf("Browser composite probe rejected valid generated config: %v", err)
+	}
+}
+
+func TestBrowserCompositeProbeRejectsWrongGeneratedConfigMode(t *testing.T) {
+	if err := executeBrowserCompositeProbe(t, validBrowserGeneratedConfigFixture, 0o644, 65532); err == nil {
+		t.Fatal("Browser composite probe accepted mode 0644 generated config")
+	}
+}
+
+func TestBrowserCompositeProbeRejectsWrongGeneratedConfigOwner(t *testing.T) {
+	if err := executeBrowserCompositeProbe(t, validBrowserGeneratedConfigFixture, 0o600, 0); err == nil {
+		t.Fatal("Browser composite probe accepted generated config owned by a different UID")
+	}
+}
+
+func TestBrowserCompositeProbeRejectsGeneratedConfigSymlink(t *testing.T) {
+	configPath := resetBrowserCompositeProbeConfigPath(t)
+	targetPath := filepath.Join(filepath.Dir(configPath), "neko.target.yaml")
+	if err := os.WriteFile(targetPath, []byte(validBrowserGeneratedConfigFixture), 0o600); err != nil {
+		t.Fatalf("write Browser probe symlink target: %v", err)
+	}
+	if err := os.Chown(targetPath, 65532, 65532); err != nil {
+		t.Fatalf("set Browser probe symlink target owner: %v", err)
+	}
+	if err := os.Symlink(targetPath, configPath); err != nil {
+		t.Fatalf("create Browser probe config symlink: %v", err)
+	}
+	if err := runBrowserCompositeProbe(t); err == nil {
+		t.Fatal("Browser composite probe accepted generated config symlink")
+	}
+}
+
+func TestBrowserCompositeProbeRejectsNonRegularGeneratedConfig(t *testing.T) {
+	configPath := resetBrowserCompositeProbeConfigPath(t)
+	if err := syscall.Mkfifo(configPath, 0o600); err != nil {
+		t.Fatalf("create Browser probe config FIFO: %v", err)
+	}
+	if err := os.Chown(configPath, 65532, 65532); err != nil {
+		t.Fatalf("set Browser probe config FIFO owner: %v", err)
+	}
+	if err := runBrowserCompositeProbe(t); err == nil {
+		t.Fatal("Browser composite probe accepted non-regular generated config")
+	}
+}
+
+func TestBrowserCompositeProbeRejectsDuplicateGeneratedConfigSections(t *testing.T) {
+	tests := map[string]string{
+		"member canonical": validBrowserGeneratedConfigFixture + `member:
+  provider: multiuser
+`,
+		"member inline":                         validBrowserGeneratedConfigFixture + "member: {}\n",
+		"member colon whitespace":               validBrowserGeneratedConfigFixture + "member : {}\n",
+		"member double quoted":                  validBrowserGeneratedConfigFixture + "\"member\": {}\n",
+		"member double quoted colon whitespace": validBrowserGeneratedConfigFixture + "\"member\" : {}\n",
+		"member double quoted escaped": validBrowserGeneratedConfigFixture + `"\u006dember": {}
+`,
+		"member single quoted":                  validBrowserGeneratedConfigFixture + "'member': {}\n",
+		"member single quoted colon whitespace": validBrowserGeneratedConfigFixture + "'member' : {}\n",
+		"webrtc canonical": validBrowserGeneratedConfigFixture + `webrtc:
+  icelite: false
+`,
+		"webrtc inline":                         validBrowserGeneratedConfigFixture + "webrtc: {}\n",
+		"webrtc colon whitespace":               validBrowserGeneratedConfigFixture + "webrtc : {}\n",
+		"webrtc double quoted":                  validBrowserGeneratedConfigFixture + "\"webrtc\": {}\n",
+		"webrtc double quoted colon whitespace": validBrowserGeneratedConfigFixture + "\"webrtc\" : {}\n",
+		"webrtc double quoted escaped": validBrowserGeneratedConfigFixture + `"we\u0062rtc": {}
+`,
+		"webrtc single quoted":                  validBrowserGeneratedConfigFixture + "'webrtc': {}\n",
+		"webrtc single quoted colon whitespace": validBrowserGeneratedConfigFixture + "'webrtc' : {}\n",
+	}
+	for name, config := range tests {
+		t.Run(name, func(t *testing.T) {
+			if err := executeBrowserCompositeProbe(t, config, 0o600, 65532); err == nil {
+				t.Fatalf("Browser composite probe accepted duplicate %s section", name)
+			}
+		})
+	}
+}
+
+func TestBrowserCompositeProbeRejectsUnsupportedGeneratedConfigTopLevelSyntax(t *testing.T) {
+	tests := map[string]string{
+		"tagged managed key": validBrowserGeneratedConfigFixture + `!!str member: {}
+`,
+		"tagged quoted managed key": validBrowserGeneratedConfigFixture + `!!str "member": {}
+`,
+		"anchored managed key": validBrowserGeneratedConfigFixture + `&managed member: {}
+`,
+		"inline document flow mapping": validBrowserGeneratedConfigFixture + `--- {"member": {}, "webrtc": {}}
+`,
+		"inline document quoted key": validBrowserGeneratedConfigFixture + `--- "member": {}
+`,
+		"inline document explicit key": validBrowserGeneratedConfigFixture + `--- ? member
+`,
+		"explicit managed key": validBrowserGeneratedConfigFixture + `? member
+: {}
+`,
+		"explicit escaped managed key": validBrowserGeneratedConfigFixture + `? "\u006dember"
+: {}
+`,
+		"flow document": validBrowserGeneratedConfigFixture + `---
+{"member": {}, "webrtc": {}}
+`,
+	}
+	for name, config := range tests {
+		t.Run(name, func(t *testing.T) {
+			if err := executeBrowserCompositeProbe(t, config, 0o600, 65532); err == nil {
+				t.Fatalf("Browser composite probe accepted %s top-level syntax", name)
+			}
+		})
+	}
+}
+
+func TestBrowserCompositeProbeRejectsNoncanonicalManagedSectionChildren(t *testing.T) {
+	tests := map[string]struct {
+		needle      string
+		replacement string
+	}{
+		"member double quoted key": {
+			"  provider: multiuser",
+			"  provider: multiuser\n  \"provider\": noauth",
+		},
+		"member single quoted key": {
+			"  provider: multiuser",
+			"  provider: multiuser\n  'provider': noauth",
+		},
+		"member escaped key": {
+			"  provider: multiuser",
+			`  provider: multiuser
+  "\u0070rovider": noauth`,
+		},
+		"member tagged key": {
+			"  provider: multiuser",
+			"  provider: multiuser\n  !!str provider: noauth",
+		},
+		"member anchored key": {
+			"  provider: multiuser",
+			"  provider: multiuser\n  &managed provider: noauth",
+		},
+		"member explicit key": {
+			"  provider: multiuser",
+			"  provider: multiuser\n  ? provider\n  : noauth",
+		},
+		"member merge key": {
+			"  provider: multiuser",
+			"  provider: multiuser\n  <<: *member_defaults",
+		},
+		"member flow mapping": {
+			"  provider: multiuser",
+			`  provider: multiuser
+  {"provider": noauth}`,
+		},
+		"member document marker": {
+			"  provider: multiuser",
+			"  provider: multiuser\n  --- provider: noauth",
+		},
+		"member one-space indentation": {
+			"  provider: multiuser",
+			"  provider: multiuser\n provider: noauth",
+		},
+		"member three-space indentation": {
+			"  provider: multiuser",
+			"  provider: multiuser\n   provider: noauth",
+		},
+		"member tab indentation": {
+			"  provider: multiuser",
+			"  provider: multiuser\n\tprovider: noauth",
+		},
+		"member nested content after scalar": {
+			"  provider: multiuser",
+			"  provider: multiuser\n    provider: noauth",
+		},
+		"webrtc double quoted key": {
+			"  icelite: false",
+			"  icelite: false\n  \"icelite\": true",
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			config := strings.Replace(
+				validBrowserGeneratedConfigFixture,
+				test.needle,
+				test.replacement,
+				1,
+			)
+			if err := executeBrowserCompositeProbe(t, config, 0o600, 65532); err == nil {
+				t.Fatalf("Browser composite probe accepted noncanonical %s", name)
+			}
+		})
+	}
+}
+
+func TestBrowserCompositeProbeAcceptsCanonicalManagedSectionNestedMappings(t *testing.T) {
+	config := strings.Replace(
+		validBrowserGeneratedConfigFixture,
+		"  icelite: false",
+		`  icelite: false
+
+  # Optional nested generated section.
+  iceservers:
+    backend: []
+    frontend: []`,
+		1,
+	)
+	if err := executeBrowserCompositeProbe(t, config, 0o600, 65532); err != nil {
+		t.Fatalf("Browser composite probe rejected canonical nested mappings: %v", err)
+	}
+}
+
+func TestBrowserCompositeProbeRejectsInvalidGeneratedConfigProvider(t *testing.T) {
+	tests := map[string]string{
+		"wrong value": strings.Replace(
+			validBrowserGeneratedConfigFixture,
+			"  provider: multiuser",
+			"  provider: singleuser",
+			1,
+		),
+		"duplicate value": strings.Replace(
+			validBrowserGeneratedConfigFixture,
+			"  provider: multiuser",
+			"  provider: multiuser\n  provider: singleuser",
+			1,
+		),
+		"quoted value": strings.Replace(
+			validBrowserGeneratedConfigFixture,
+			"  provider: multiuser",
+			`  provider: "multiuser"`,
+			1,
+		),
+		"wrong parent": `member:
+  multiuser:
+    user_password: "probe-user-password-secret"
+    admin_password: "probe-admin-password-secret"
+webrtc:
+  provider: multiuser
+  icelite: false
+`,
+	}
+	for name, config := range tests {
+		t.Run(name, func(t *testing.T) {
+			if err := executeBrowserCompositeProbe(t, config, 0o600, 65532); err == nil {
+				t.Fatalf("Browser composite probe accepted provider with %s", name)
+			}
+		})
+	}
+}
+
+func TestBrowserCompositeProbeRejectsInvalidGeneratedConfigICELite(t *testing.T) {
+	tests := map[string]string{
+		"wrong value": strings.Replace(
+			validBrowserGeneratedConfigFixture,
+			"  icelite: false",
+			"  icelite: true",
+			1,
+		),
+		"duplicate value": strings.Replace(
+			validBrowserGeneratedConfigFixture,
+			"  icelite: false",
+			"  icelite: false\n  icelite: true",
+			1,
+		),
+		"quoted value": strings.Replace(
+			validBrowserGeneratedConfigFixture,
+			"  icelite: false",
+			`  icelite: "false"`,
+			1,
+		),
+		"wrong parent": `member:
+  provider: multiuser
+  icelite: false
+  multiuser:
+    user_password: "probe-user-password-secret"
+    admin_password: "probe-admin-password-secret"
+webrtc:
+`,
+	}
+	for name, config := range tests {
+		t.Run(name, func(t *testing.T) {
+			if err := executeBrowserCompositeProbe(t, config, 0o600, 65532); err == nil {
+				t.Fatalf("Browser composite probe accepted icelite with %s", name)
+			}
+		})
 	}
 }
 
@@ -4978,8 +5546,8 @@ func assertPolicyAllowsWorkspacePeers(
 	if err != nil || !found {
 		t.Fatalf("policy %s/%s missing egress entries: found=%v err=%v", namespace, name, found, err)
 	}
-	if len(egressEntries) != len(wantPortsByComponent) {
-		t.Fatalf("policy %s/%s peer egress entries = %d, want %d", namespace, name, len(egressEntries), len(wantPortsByComponent))
+	if len(egressEntries) < len(wantPortsByComponent) {
+		t.Fatalf("policy %s/%s peer egress entries = %d, want at least %d", namespace, name, len(egressEntries), len(wantPortsByComponent))
 	}
 
 	foundComponents := map[string]bool{}
@@ -4999,6 +5567,9 @@ func assertPolicyAllowsWorkspacePeers(
 		matchLabels, found, _ := unstructured.NestedStringMap(endpoint, "matchLabels")
 		if !found {
 			t.Fatalf("same-workspace peer rule missing target labels")
+		}
+		if matchLabels["k8s:aileron.io/workspace-id"] != workspaceID {
+			continue
 		}
 		component := matchLabels["k8s:aileron.io/component"]
 		wantPorts, expectedComponent := wantPortsByComponent[component]

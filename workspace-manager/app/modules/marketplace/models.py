@@ -2,18 +2,32 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.modules.version_control.models import FileChange
 
-MarketplaceProvider = Literal["claude-code", "codex"]
-MarketplaceImportProvider = Literal["all", "claude-code", "codex"]
+MarketplaceTargetClient = Literal["claude-code", "codex"]
+MarketplacePackageFormat = Literal[
+    "codex-native", "claude-native", "agent-plugin/1.0.0"
+]
+MarketplaceImportTargetClient = Literal["all", "claude-code", "codex"]
 MarketplaceRegistryStatus = Literal["uninitialized", "ready", "busy", "error"]
-MarketplaceSourceType = Literal["created", "imported", "cloned"]
 MarketplaceValidationSeverity = Literal["none", "info", "warning", "error"]
-MarketplaceLifecycleStatus = Literal["draft", "ready"]
+MarketplaceAuthoringFeature = Literal[
+    "basic",
+    "agentsMd",
+    "hooks",
+    "mcp",
+    "agents",
+    "commands",
+    "outputStyle",
+    "skills",
+    "files",
+]
+MarketplaceAuthoringCapability = Literal["read-write", "read-only", "unsupported"]
 MarketplaceActivityAction = Literal[
     "import",
     "install",
@@ -22,7 +36,6 @@ MarketplaceActivityAction = Literal[
 ]
 MarketplaceActivityStatus = Literal["succeeded", "failed"]
 MarketplaceImportSourceKind = Literal["git", "local"]
-MarketplaceDuplicateAction = Literal["skip", "overwrite", "import-as-new"]
 MarketplaceUserCopyResourceType = Literal[
     "instructions",
     "skill",
@@ -47,7 +60,11 @@ MarketplaceUserCopyBlockingErrorCode = Literal[
     "marketplace.user_copy.profile_invalid",
     "marketplace.user_copy.source_reference_invalid",
     "marketplace.user_copy.source_not_allowed",
+    "marketplace.user_copy.source_document_invalid",
+    "marketplace.user_copy.source_missing",
+    "marketplace.user_copy.duplicate_resource_id",
     "marketplace.user_copy.unsupported_resource",
+    "marketplace.user_copy.projection_not_supported",
 ]
 MARKETPLACE_COPYABLE_RESOURCE_TYPES = frozenset(
     get_args(MarketplaceUserCopyResourceType)
@@ -67,10 +84,29 @@ MarketplacePluginCommandStatus = Literal["installed", "failed"]
 MarketplacePluginCommandStage = Literal[
     "marketplace-add",
     "plugin-install",
+    "plugin-enable",
     "marketplace-list",
     "plugin-list",
     "completed",
 ]
+
+
+class MarketplacePluginCliCommand(BaseModel):
+    """One bounded target-client CLI invocation receipt."""
+
+    sequence: int = Field(ge=0, le=20)
+    stage: MarketplacePluginCommandStage
+    argv_display: str = Field(alias="argvDisplay", min_length=1, max_length=4096)
+    exit_code: int | None = Field(default=None, alias="exitCode")
+    started_at: datetime = Field(alias="startedAt")
+    ended_at: datetime = Field(alias="endedAt")
+    stdout: str | None = Field(default=None, max_length=262144)
+    stderr: str | None = Field(default=None, max_length=262144)
+    stdout_original_byte_count: int = Field(alias="stdoutOriginalByteCount", ge=0)
+    stderr_original_byte_count: int = Field(alias="stderrOriginalByteCount", ge=0)
+    truncated: bool = False
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid", strict=True)
 
 
 class MarketplaceOwnerMetadata(BaseModel):
@@ -83,7 +119,7 @@ class MarketplaceOwnerMetadata(BaseModel):
 
 
 class MarketplaceCatalogPackagePolicy(BaseModel):
-    """Provider policy stored in the canonical Marketplace catalog."""
+    """TargetClient policy stored in the canonical Marketplace catalog."""
 
     installation: str
     authentication: str
@@ -92,9 +128,14 @@ class MarketplaceCatalogPackagePolicy(BaseModel):
 
 
 class MarketplaceCatalogPackage(BaseModel):
-    """One provider package entry in the canonical Marketplace catalog."""
+    """One target_client package entry in the canonical Marketplace catalog."""
 
-    provider: MarketplaceProvider
+    target_client: MarketplaceTargetClient = Field(alias="targetClient")
+    package_format: MarketplacePackageFormat = Field(alias="packageFormat")
+    user_copy_target_client: MarketplaceTargetClient = Field(
+        alias="userCopyTargetClient"
+    )
+    catalog_plugin_id: str = Field(alias="catalogPluginId", min_length=1)
     package_id: str = Field(alias="packageId")
     category: str | None = None
     tags: list[str] = Field(default_factory=list)
@@ -129,7 +170,7 @@ class MarketplaceRegistryCatalog(BaseModel):
     @field_validator("marketplace_id")
     @classmethod
     def validate_marketplace_id(cls, value: str) -> str:
-        """Reject provider-reserved immutable marketplace identities."""
+        """Reject target_client-reserved immutable marketplace identities."""
 
         if value in {"claude-plugins-official", "claude-community"}:
             raise ValueError("Marketplace ID is reserved")
@@ -201,9 +242,9 @@ class MarketplaceSettingsSaveResult(BaseModel):
     settings: MarketplaceRegistrySettings
     claude_written: bool = Field(alias="claudeWritten")
     codex_written: bool = Field(alias="codexWritten")
-    partial_success_provider: MarketplaceProvider | None = Field(
+    partial_success_target_client: MarketplaceTargetClient | None = Field(
         default=None,
-        alias="partialSuccessProvider",
+        alias="partialSuccessTargetClient",
     )
     error_code: str | None = Field(default=None, alias="errorCode")
 
@@ -368,7 +409,7 @@ class MarketplaceGitCommitFilesResult(BaseModel):
 
 
 class MarketplaceValidationResult(BaseModel):
-    """Provider-native Marketplace validation result."""
+    """TargetClient-native Marketplace validation result."""
 
     severity: Literal["info", "warning", "error"]
     code: str
@@ -389,10 +430,11 @@ class MarketplacePackageFamilySource(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-class MarketplaceProviderVariant(BaseModel):
-    """Provider-native package variant that belongs to a package family."""
+class MarketplacePackageVariant(BaseModel):
+    """Package-format/target-client variant that belongs to a package family."""
 
-    provider: MarketplaceProvider
+    target_client: MarketplaceTargetClient = Field(alias="targetClient")
+    package_format: MarketplacePackageFormat = Field(alias="packageFormat")
     package_id: str = Field(alias="packageId")
     registry_path: str = Field(default="", alias="registryPath")
     display_name: str | None = Field(default=None, alias="displayName")
@@ -401,12 +443,12 @@ class MarketplaceProviderVariant(BaseModel):
 
 
 class MarketplacePackageFamily(BaseModel):
-    """Marketplace package family grouping provider-native variants."""
+    """Marketplace package family grouping target_client-native variants."""
 
     family_id: str = Field(alias="familyId")
     display_name: str = Field(alias="displayName")
     source: MarketplacePackageFamilySource
-    variants: list[MarketplaceProviderVariant] = Field(default_factory=list)
+    variants: list[MarketplacePackageVariant] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
 
@@ -422,7 +464,12 @@ class MarketplacePackageFamiliesDocument(BaseModel):
 class MarketplacePackageSummary(BaseModel):
     """Marketplace package summary for list cards and rows."""
 
-    provider: MarketplaceProvider
+    target_client: MarketplaceTargetClient = Field(alias="targetClient")
+    package_format: MarketplacePackageFormat = Field(alias="packageFormat")
+    user_copy_target_client: MarketplaceTargetClient = Field(
+        alias="userCopyTargetClient"
+    )
+    catalog_plugin_id: str = Field(alias="catalogPluginId", min_length=1)
     package_type: Literal["plugin"] = Field(alias="packageType")
     package_id: str = Field(alias="packageId")
     display_name: str = Field(alias="displayName")
@@ -430,23 +477,22 @@ class MarketplacePackageSummary(BaseModel):
     description: str | None = None
     category: str | None = None
     tags: list[str] = Field(default_factory=list)
-    source_type: MarketplaceSourceType = Field(default="created", alias="sourceType")
     indexed_resource_names: list[str] = Field(
         default_factory=list, alias="indexedResourceNames"
     )
     validation_severity: MarketplaceValidationSeverity = Field(
         default="none", alias="validationSeverity"
     )
-    lifecycle_status: MarketplaceLifecycleStatus = Field(
-        default="draft", alias="lifecycleStatus"
-    )
+    authoring_capabilities: dict[
+        MarketplaceAuthoringFeature, MarketplaceAuthoringCapability
+    ] = Field(alias="authoringCapabilities")
     registry_path: str = Field(alias="registryPath")
     revision: str
     updated_at: str = Field(alias="updatedAt")
     family_id: str | None = Field(default=None, alias="familyId")
     family_display_name: str | None = Field(default=None, alias="familyDisplayName")
     source_identity: str | None = Field(default=None, alias="sourceIdentity")
-    variants: list[MarketplaceProviderVariant] = Field(default_factory=list)
+    variants: list[MarketplacePackageVariant] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
 
@@ -460,9 +506,6 @@ class MarketplacePackageListResult(BaseModel):
     page_size: int = Field(alias="pageSize")
     total_pages: int = Field(alias="totalPages")
     categories: list[str] = Field(default_factory=list)
-    source_types: list[MarketplaceSourceType] = Field(
-        default_factory=list, alias="sourceTypes"
-    )
     validation_severities: list[MarketplaceValidationSeverity] = Field(
         default_factory=list,
         alias="validationSeverities",
@@ -473,7 +516,7 @@ class MarketplacePackageListResult(BaseModel):
 
 
 class MarketplaceFeatureContentItem(BaseModel):
-    """Provider-native feature content shown on Marketplace detail pages."""
+    """TargetClient-native feature content shown on Marketplace detail pages."""
 
     id: str
     name: str
@@ -490,7 +533,7 @@ class MarketplaceFeatureContentItem(BaseModel):
 
 
 class MarketplacePackageFile(BaseModel):
-    """A provider package file included in the package detail file tree."""
+    """A target_client package file included in the package detail file tree."""
 
     path: str
     content: str = ""
@@ -519,11 +562,10 @@ class MarketplacePackageDetail(MarketplacePackageSummary):
 
 
 class MarketplacePackageSaveRequest(BaseModel):
-    """Save a provider package snapshot."""
+    """Save a target_client package snapshot."""
 
-    provider: MarketplaceProvider
+    target_client: MarketplaceTargetClient = Field(alias="targetClient")
     package_id: str = Field(alias="packageId")
-    revision: str
     listing: dict[str, Any] = Field(default_factory=dict)
     manifest: dict[str, Any] = Field(default_factory=dict)
     readme_markdown: str | None = Field(default=None, alias="readmeMarkdown")
@@ -537,7 +579,12 @@ class MarketplaceActivityRecord(BaseModel):
 
     id: str
     action: MarketplaceActivityAction
-    provider: MarketplaceProvider | None = None
+    package_format: MarketplacePackageFormat | None = Field(
+        default=None, alias="packageFormat"
+    )
+    target_client: MarketplaceTargetClient | None = Field(
+        default=None, alias="targetClient"
+    )
     package_id: str | None = Field(default=None, alias="packageId")
     operation_id: str | None = Field(default=None, alias="operationId")
     workspace_id: str | None = Field(default=None, alias="workspaceId")
@@ -561,10 +608,35 @@ class MarketplaceActivityListResult(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-class MarketplaceImportSource(BaseModel):
-    """External source selected for Marketplace import scanning."""
+class MarketplaceActivityDetail(MarketplaceActivityRecord):
+    """Authorized activity detail including raw CLI receipts when present."""
 
-    provider: MarketplaceImportProvider
+    workspace_id_snapshot: str | None = Field(default=None, alias="workspaceIdSnapshot")
+    catalog_plugin_id: str | None = Field(default=None, alias="catalogPluginId")
+    release_revision: str | None = Field(default=None, alias="releaseRevision")
+    profile_digest: str | None = Field(default=None, alias="profileDigest")
+    projection_digest: str | None = Field(default=None, alias="projectionDigest")
+    materialization_digest: str | None = Field(
+        default=None, alias="materializationDigest"
+    )
+    projected_count: int | None = Field(default=None, alias="projectedCount")
+    skipped_count: int | None = Field(default=None, alias="skippedCount")
+    conflict_count: int | None = Field(default=None, alias="conflictCount")
+    created_count: int | None = Field(default=None, alias="createdCount")
+    merged_count: int | None = Field(default=None, alias="mergedCount")
+    unchanged_count: int | None = Field(default=None, alias="unchangedCount")
+    overwritten_count: int | None = Field(default=None, alias="overwrittenCount")
+    target_locators: list[str] = Field(default_factory=list, alias="targetLocators")
+    diagnostic_codes: list[str] = Field(default_factory=list, alias="diagnosticCodes")
+    commands: list[MarketplacePluginCliCommand] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+
+class MarketplaceImportSource(BaseModel):
+    """External source selected for Marketplace importing scanning."""
+
+    target_client: MarketplaceImportTargetClient = Field(alias="targetClient")
     source_kind: MarketplaceImportSourceKind = Field(alias="sourceKind")
     source: str
 
@@ -572,7 +644,7 @@ class MarketplaceImportSource(BaseModel):
 
 
 class MarketplaceImportUploadResult(BaseModel):
-    """Uploaded local Marketplace import source."""
+    """Uploaded local Marketplace importing source."""
 
     source: MarketplaceImportSource
     file_name: str = Field(alias="fileName")
@@ -580,19 +652,34 @@ class MarketplaceImportUploadResult(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class MarketplaceImportMetadata(BaseModel):
+    """User choices for importing one discovered plugin."""
+
+    version: str = Field(
+        pattern=(
+            r"^(?:0|[1-9][0-9]*)\."
+            r"(?:0|[1-9][0-9]*)\."
+            r"(?:0|[1-9][0-9]*)"
+            r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+            r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+        )
+    )
+    overwrite: bool = False
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid", strict=True)
+
+
 class MarketplaceImportCandidate(BaseModel):
     """Marketplace package candidate found in an external source."""
 
     id: str
-    provider: MarketplaceProvider
+    target_client: MarketplaceTargetClient = Field(alias="targetClient")
+    package_format: MarketplacePackageFormat = Field(alias="packageFormat")
     package_id: str = Field(alias="packageId")
+    version: str = "1.0.0"
     display_name: str = Field(alias="displayName")
     source_path: str = Field(alias="sourcePath")
     duplicate: bool
-    duplicate_action: MarketplaceDuplicateAction = Field(
-        default="skip", alias="duplicateAction"
-    )
-    new_package_id: str | None = Field(default=None, alias="newPackageId")
     local_revision: str | None = Field(default=None, alias="localRevision")
     validation_severity: MarketplaceValidationSeverity = Field(
         default="none", alias="validationSeverity"
@@ -609,7 +696,11 @@ class MarketplaceImportCandidate(BaseModel):
     variant_status: MarketplaceImportVariantStatus = Field(
         default="new-family", alias="variantStatus"
     )
-    variants: list[MarketplaceProviderVariant] = Field(default_factory=list)
+    variants: list[MarketplacePackageVariant] = Field(default_factory=list)
+    import_options: MarketplaceImportMetadata | None = Field(
+        default=None,
+        alias="import",
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -622,20 +713,32 @@ class MarketplaceImportRequest(BaseModel):
 
     model_config = {"populate_by_name": True}
 
+    @model_validator(mode="after")
+    def validate_import_metadata(self) -> MarketplaceImportRequest:
+        """Require explicit import choices for every selected plugin."""
+
+        for candidate in self.candidates:
+            if candidate.import_options is None:
+                raise ValueError("marketplace.import.metadata.required")
+        return self
+
 
 class MarketplaceImportFailedCandidate(MarketplaceImportCandidate):
-    """Import candidate that failed during copy."""
+    """Plugin candidate that failed during import."""
 
     error_code: str = Field(alias="errorCode")
+    stage: str
+    source: str | None = None
+    destination: str | None = None
+    category: str
 
     model_config = {"populate_by_name": True}
 
 
 class MarketplaceImportResult(BaseModel):
-    """Marketplace import result for selected candidates."""
+    """Marketplace importing result for selected candidates."""
 
     imported: list[MarketplacePackageSummary] = Field(default_factory=list)
-    skipped: list[MarketplaceImportCandidate] = Field(default_factory=list)
     failed: list[MarketplaceImportFailedCandidate] = Field(default_factory=list)
     warnings: list[MarketplaceValidationResult] = Field(default_factory=list)
 
@@ -645,12 +748,21 @@ class MarketplaceImportResult(BaseModel):
 class MarketplacePluginInstallRequest(BaseModel):
     """Install a Marketplace plugin into a workspace runtime."""
 
-    provider: MarketplaceProvider
+    target_client: MarketplaceTargetClient = Field(alias="targetClient")
+    package_format: MarketplacePackageFormat = Field(alias="packageFormat")
     package_id: str = Field(
         alias="packageId",
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
     )
-    revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    version: str = Field(
+        pattern=(
+            r"^(?:0|[1-9][0-9]*)\."
+            r"(?:0|[1-9][0-9]*)\."
+            r"(?:0|[1-9][0-9]*)"
+            r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+            r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+        ),
+    )
     workspace_id: str = Field(alias="workspaceId", min_length=1, max_length=255)
 
     model_config = ConfigDict(
@@ -659,16 +771,17 @@ class MarketplacePluginInstallRequest(BaseModel):
         strict=True,
     )
 
-
 class MarketplaceUserCopyRequest(BaseModel):
     """Identify one package and workspace for a one-shot user-scope copy."""
 
-    provider: MarketplaceProvider
-    package_id: str = Field(
-        alias="packageId",
-        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    package_format: Literal["codex-native", "claude-native", "agent-plugin/1.0.0"] = (
+        Field(alias="packageFormat")
     )
-    revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    target_client: Literal["codex", "claude-code"] = Field(alias="targetClient")
+    catalog_plugin_id: str = Field(
+        alias="catalogPluginId", min_length=1, max_length=1024
+    )
+    release_revision: str = Field(alias="releaseRevision", pattern=r"^[0-9a-f]{64}$")
     workspace_id: str = Field(alias="workspaceId", min_length=1, max_length=255)
 
     model_config = ConfigDict(
@@ -701,6 +814,10 @@ class MarketplaceUserCopyOverwriteApproval(BaseModel):
 class MarketplaceUserCopyApplyRequest(MarketplaceUserCopyRequest):
     """Apply one preflighted user-scope copy plan."""
 
+    expected_profile_digest: str = Field(
+        alias="expectedProfileDigest",
+        pattern=r"^[0-9a-f]{64}$",
+    )
     expected_source_digest: str = Field(
         alias="expectedSourceDigest",
         pattern=r"^[0-9a-f]{64}$",
@@ -709,6 +826,11 @@ class MarketplaceUserCopyApplyRequest(MarketplaceUserCopyRequest):
         alias="expectedMaterializationDigest",
         pattern=r"^[0-9a-f]{64}$",
     )
+    expected_projection_digest: str = Field(
+        alias="expectedProjectionDigest",
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    accept_partial_copy: bool = Field(alias="acceptPartialCopy")
     overwrite_approvals: list[MarketplaceUserCopyOverwriteApproval] = Field(
         default_factory=list,
         alias="overwriteApprovals",
@@ -795,8 +917,11 @@ class MarketplaceUserCopyConflict(BaseModel):
 class MarketplaceUserCopyBlockingIssue(BaseModel):
     """Sanitized issue that blocks a one-shot user copy."""
 
-    resource_type: MarketplaceUserCopyResourceType | None = Field(
-        default=None, alias="resourceType"
+    resource_type: str | None = Field(
+        default=None,
+        alias="resourceType",
+        min_length=1,
+        max_length=1024,
     )
     resource_id: str | None = Field(
         default=None,
@@ -825,27 +950,51 @@ class MarketplaceUserCopyBlockingIssue(BaseModel):
     )
 
 
+class MarketplaceSkippedUserCopyResource(BaseModel):
+    """One source component omitted by the exact projection pair."""
+
+    code: str = Field(min_length=1, max_length=1024)
+    resource_type: str = Field(
+        alias="resourceType",
+        min_length=1,
+        max_length=1024,
+    )
+    resource_id: str = Field(alias="resourceId", min_length=1, max_length=1024)
+    source_locator: str = Field(alias="sourceLocator", min_length=1, max_length=1024)
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid", strict=True)
+
+
 class MarketplaceUserCopyPreflightResult(BaseModel):
     """One-shot user-copy plan returned by Runtime through Manager."""
 
     status: Literal["ready", "confirmation-required", "blocked"]
-    provider: MarketplaceProvider
-    package_id: str = Field(
-        alias="packageId",
-        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    package_format: Literal["codex-native", "claude-native", "agent-plugin/1.0.0"] = (
+        Field(alias="packageFormat")
     )
+    target_client: Literal["codex", "claude-code"] = Field(alias="targetClient")
+    catalog_plugin_id: str = Field(
+        alias="catalogPluginId", min_length=1, max_length=1024
+    )
+    release_revision: str = Field(alias="releaseRevision", pattern=r"^[0-9a-f]{64}$")
     workspace_id: str = Field(alias="workspaceId", min_length=1, max_length=255)
     source_digest: str = Field(alias="sourceDigest", pattern=r"^[0-9a-f]{64}$")
     profile_digest: str = Field(
         alias="profileDigest",
         pattern=r"^[0-9a-f]{64}$",
     )
+    projection_digest: str = Field(alias="projectionDigest", pattern=r"^[0-9a-f]{64}$")
     materialization_digest: str = Field(
         alias="materializationDigest",
         pattern=r"^[0-9a-f]{64}$",
     )
     resources: list[MarketplaceUserCopyResource] = Field(
         default_factory=list,
+        max_length=500,
+    )
+    skipped_resources: list[MarketplaceSkippedUserCopyResource] = Field(
+        default_factory=list,
+        alias="skippedResources",
         max_length=500,
     )
     conflicts: list[MarketplaceUserCopyConflict] = Field(
@@ -868,7 +1017,10 @@ class MarketplaceUserCopyPreflightResult(BaseModel):
     def validate_status(self) -> MarketplaceUserCopyPreflightResult:
         """Status must agree with conflicts and blocking issues."""
 
-        if len(self.resources) + len(self.conflicts) > 500:
+        if (
+            len(self.resources) + len(self.skipped_resources) + len(self.conflicts)
+            > 500
+        ):
             raise ValueError("User-copy plan exceeds the resource limit")
         conflict_identities = [
             conflict.target_identity.casefold() for conflict in self.conflicts
@@ -878,10 +1030,12 @@ class MarketplaceUserCopyPreflightResult(BaseModel):
         if self.status == "blocked" and not self.blocking_issues:
             raise ValueError("Blocked user-copy plan is missing a blocking issue")
         if self.status == "confirmation-required" and (
-            self.blocking_issues or not self.conflicts
+            self.blocking_issues or not (self.conflicts or self.skipped_resources)
         ):
             raise ValueError("User-copy confirmation state is inconsistent")
-        if self.status == "ready" and (self.blocking_issues or self.conflicts):
+        if self.status == "ready" and (
+            self.blocking_issues or self.conflicts or self.skipped_resources
+        ):
             raise ValueError("Ready user-copy plan contains unresolved issues")
         return self
 
@@ -894,16 +1048,20 @@ class MarketplaceUserCopyApplyResult(BaseModel):
         alias="operationId",
         pattern=r"^[0-9a-f]{32}$",
     )
-    provider: MarketplaceProvider
-    package_id: str = Field(
-        alias="packageId",
-        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    package_format: Literal["codex-native", "claude-native", "agent-plugin/1.0.0"] = (
+        Field(alias="packageFormat")
     )
+    target_client: Literal["codex", "claude-code"] = Field(alias="targetClient")
+    catalog_plugin_id: str = Field(
+        alias="catalogPluginId", min_length=1, max_length=1024
+    )
+    release_revision: str = Field(alias="releaseRevision", pattern=r"^[0-9a-f]{64}$")
     workspace_id: str = Field(alias="workspaceId", min_length=1, max_length=255)
     created_count: int = Field(alias="createdCount", ge=0, le=500)
     merged_count: int = Field(alias="mergedCount", ge=0, le=500)
     unchanged_count: int = Field(alias="unchangedCount", ge=0, le=500)
     overwritten_count: int = Field(alias="overwrittenCount", ge=0, le=500)
+    skipped_count: int = Field(alias="skippedCount", ge=0, le=500)
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -920,6 +1078,7 @@ class MarketplaceUserCopyApplyResult(BaseModel):
             + self.merged_count
             + self.unchanged_count
             + self.overwritten_count
+            + self.skipped_count
             > 500
         ):
             raise ValueError("User-copy result exceeds the resource limit")
@@ -927,10 +1086,10 @@ class MarketplaceUserCopyApplyResult(BaseModel):
 
 
 class MarketplacePluginCommandResult(BaseModel):
-    """Terminal result from one provider CLI installation command."""
+    """Terminal result from one target_client CLI installation command."""
 
     status: MarketplacePluginCommandStatus
-    provider: MarketplaceProvider
+    target_client: MarketplaceTargetClient = Field(alias="targetClient")
     package_id: str = Field(
         alias="packageId",
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
@@ -951,9 +1110,19 @@ class MarketplacePluginCommandResult(BaseModel):
         alias="cliMessage",
         max_length=4096,
     )
-    stdout: str | None = Field(default=None, max_length=65536)
-    stderr: str | None = Field(default=None, max_length=65536)
+    stdout: str | None = Field(default=None, max_length=262144)
+    stderr: str | None = Field(default=None, max_length=262144)
     truncated: bool = False
+    commands: list[MarketplacePluginCliCommand] = Field(
+        default_factory=list, max_length=20
+    )
+    warnings: list[
+        Literal[
+            "marketplace.install.state-unconfirmed",
+            "marketplace.install.command-timeout",
+            "marketplace.install.audit-persistence-failed",
+        ]
+    ] = Field(default_factory=list, max_length=10)
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -973,12 +1142,32 @@ class MarketplacePluginCommandResult(BaseModel):
 class MarketplacePackageCreateRequest(BaseModel):
     """Create Marketplace package request."""
 
-    provider: MarketplaceProvider
+    package_format: MarketplacePackageFormat = Field(alias="packageFormat")
+    target_clients: list[MarketplaceTargetClient] = Field(
+        alias="targetClients", min_length=1
+    )
     package_id: str = Field(alias="packageId")
     display_name: str = Field(alias="displayName")
+    version: str = Field(
+        default="1.0.0",
+        pattern=r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$",
+    )
     description: str = ""
 
-    model_config = {"populate_by_name": True}
+    model_config = {"populate_by_name": True, "extra": "forbid"}
+
+
+class MarketplacePackageFormatOption(BaseModel):
+    """One package format that can be created by the current Manager."""
+
+    package_format: MarketplacePackageFormat = Field(alias="packageFormat")
+    target_clients: list[MarketplaceTargetClient] = Field(alias="targetClients")
+    authoring_capabilities: dict[
+        MarketplaceAuthoringFeature, MarketplaceAuthoringCapability
+    ] = Field(alias="authoringCapabilities")
+    default_version: str = Field(default="1.0.0", alias="defaultVersion")
+
+    model_config = {"populate_by_name": True, "extra": "forbid"}
 
 
 class MarketplacePackageMutationResult(BaseModel):
@@ -1042,7 +1231,7 @@ class MarketplaceDocumentRemoveRequest(BaseModel):
 
 
 class MarketplaceMcpServerCreateRequest(BaseModel):
-    """Create one MCP server in the provider's canonical default owner."""
+    """Create one MCP server in the target_client's canonical default owner."""
 
     revision: str
     name: str
@@ -1109,9 +1298,8 @@ class MarketplaceBasicUpdateRequest(BaseModel):
 class MarketplacePackageDeleteRequest(BaseModel):
     """Delete Marketplace package request."""
 
-    provider: MarketplaceProvider
+    target_client: MarketplaceTargetClient = Field(alias="targetClient")
     package_id: str = Field(alias="packageId")
-    revision: str
 
     model_config = {"populate_by_name": True}
 

@@ -56,7 +56,7 @@ def test_combined_source_resolvers_validate_each_tree_once(
     )
     _write(tmp_path / "bin" / "server.js", "console.log('ready')\n")
 
-    expected_profile = resolve_user_copy_profile("codex", tmp_path)
+    expected_profile = resolve_user_copy_profile("codex-native", tmp_path)
     expected_payloads = resolve_user_copy_dependency_payloads(
         tmp_path,
         expected_profile,
@@ -79,10 +79,10 @@ def test_combined_source_resolvers_validate_each_tree_once(
     )
 
     profile, payloads = resolve_user_copy_profile_with_dependency_payloads(
-        "codex",
+        "codex-native",
         tmp_path,
     )
-    snapshot = build_user_copy_source_snapshot("codex", tmp_path)
+    snapshot = build_user_copy_source_snapshot("codex-native", tmp_path)
 
     assert profile == expected_profile
     assert payloads == expected_payloads
@@ -137,7 +137,7 @@ def test_codex_full_profile_includes_all_supported_user_resources(
     _write(tmp_path / "prompts" / "nested" / "review.md", "# Review\n")
     _write(tmp_path / "rules" / "safe.rules", "allow prefix git\n")
 
-    profile = resolve_user_copy_profile("codex", tmp_path)
+    profile = resolve_user_copy_profile("codex-native", tmp_path)
 
     assert profile.compatible is True
     assert len(profile.profile_digest) == 64
@@ -165,7 +165,7 @@ def test_codex_full_profile_includes_all_supported_user_resources(
     }
 
 
-def test_claude_full_profile_includes_provider_copy_conventions(
+def test_claude_full_profile_includes_target_client_copy_conventions(
     tmp_path: Path,
 ) -> None:
     _write(
@@ -180,7 +180,7 @@ def test_claude_full_profile_includes_provider_copy_conventions(
     _write(tmp_path / "commands" / "nested" / "review.md", "# Review\n")
     _write(tmp_path / "output-styles" / "concise.md", "# Concise\n")
 
-    profile = resolve_user_copy_profile("claude-code", tmp_path)
+    profile = resolve_user_copy_profile("claude-native", tmp_path)
 
     assert profile.compatible is True
     assert _resource_locators(profile, UserCopyResourceType.INSTRUCTIONS) == {
@@ -210,7 +210,7 @@ def test_claude_explicit_skill_selector_accepts_non_default_root(
     )
     _write(tmp_path / "skills" / "ignored" / "SKILL.md", "# Ignored\n")
 
-    profile = resolve_user_copy_profile("claude-code", tmp_path)
+    profile = resolve_user_copy_profile("claude-native", tmp_path)
 
     assert profile.compatible is True
     assert [
@@ -242,7 +242,7 @@ def test_claude_explicit_skill_selectors_reject_casefold_target_collision(
     _write(tmp_path / "one" / "Review" / "SKILL.md", "# One\n")
     _write(tmp_path / "two" / "review" / "SKILL.md", "# Two\n")
 
-    profile = resolve_user_copy_profile("claude-code", tmp_path)
+    profile = resolve_user_copy_profile("claude-native", tmp_path)
 
     assert profile.compatible is False
     assert any(
@@ -278,7 +278,7 @@ def test_claude_explicit_skill_selector_counts_are_exact(
         )
     _write(tmp_path / "skills" / "default" / "SKILL.md", "# Default\n")
 
-    profile = resolve_user_copy_profile("claude-code", tmp_path)
+    profile = resolve_user_copy_profile("claude-native", tmp_path)
     skills = [
         resource
         for resource in profile.resources
@@ -307,8 +307,8 @@ def test_profile_digest_is_independent_of_absolute_package_root(
         _write(root / "skills" / "review" / "SKILL.md", "# Same\n")
 
     assert (
-        resolve_user_copy_profile("codex", left).profile_digest
-        == resolve_user_copy_profile("codex", right).profile_digest
+        resolve_user_copy_profile("codex-native", left).profile_digest
+        == resolve_user_copy_profile("codex-native", right).profile_digest
     )
 
 
@@ -321,7 +321,7 @@ def test_codex_readme_and_starter_prompt_are_not_instructions_or_prompt_files(
     )
     _write(tmp_path / "README.md", "# Readme\n")
 
-    profile = resolve_user_copy_profile("codex", tmp_path)
+    profile = resolve_user_copy_profile("codex-native", tmp_path)
 
     assert profile.resources == ()
     assert profile.compatible is False
@@ -341,10 +341,11 @@ def test_wrong_extensions_and_unsupported_components_are_explicitly_blocked(
     _write(tmp_path / "requirements.toml", "[policy]\n")
     _write(tmp_path / "apps" / "demo.app", "{}")
 
-    profile = resolve_user_copy_profile("codex", tmp_path)
+    profile = resolve_user_copy_profile("codex-native", tmp_path)
 
     assert profile.compatible is False
     assert {resource.reason for resource in profile.blocked_resources} == {
+        UserCopyBlockReason.FORMAT_UNSUPPORTED,
         UserCopyBlockReason.SOURCE_NOT_ALLOWED,
         UserCopyBlockReason.UNSUPPORTED_RESOURCE,
     }
@@ -366,7 +367,7 @@ def test_claude_default_lsp_document_blocks_user_copy_profile(
         '{"python":{"command":"pyright"}}',
     )
 
-    profile = resolve_user_copy_profile("claude-code", tmp_path)
+    profile = resolve_user_copy_profile("claude-native", tmp_path)
 
     assert profile.compatible is False
     assert any(
@@ -387,7 +388,7 @@ def test_profile_blocks_symlink_escape(tmp_path: Path) -> None:
     agents.mkdir()
     os.symlink("../../outside.md", agents / "escape.md")
 
-    profile = resolve_user_copy_profile("claude-code", package)
+    profile = resolve_user_copy_profile("claude-native", package)
 
     assert profile.compatible is False
     assert profile.resources == ()
@@ -397,12 +398,12 @@ def test_profile_blocks_symlink_escape(tmp_path: Path) -> None:
     )
 
 
-def test_source_allowlist_is_provider_specific() -> None:
+def test_source_allowlist_is_target_client_specific() -> None:
     codex_patterns = {
-        rule.source_pattern for rule in user_copy_source_allowlist("codex")
+        rule.source_pattern for rule in user_copy_source_allowlist("codex-native")
     }
     claude_patterns = {
-        rule.source_pattern for rule in user_copy_source_allowlist("claude-code")
+        rule.source_pattern for rule in user_copy_source_allowlist("claude-native")
     }
 
     assert "AGENTS.md" in codex_patterns
@@ -416,7 +417,7 @@ def test_target_resource_is_typed_and_serializes_to_contract_value(
 ) -> None:
     _write(tmp_path / "AGENTS.md", "# Instructions\n")
 
-    profile = resolve_user_copy_profile("codex", tmp_path)
+    profile = resolve_user_copy_profile("codex-native", tmp_path)
     resource = profile.resources[0]
 
     assert resource.target_resource is UserCopyTargetResource.AGENTS_MD
@@ -457,7 +458,7 @@ def test_copy_convention_extensions_are_case_sensitive(tmp_path: Path) -> None:
     _write(tmp_path / "prompts" / "review.MD", "# Review\n")
     _write(tmp_path / "rules" / "safe.RULES", "allow\n")
 
-    profile = resolve_user_copy_profile("codex", tmp_path)
+    profile = resolve_user_copy_profile("codex-native", tmp_path)
 
     assert profile.compatible is False
     assert {resource.source_locator for resource in profile.blocked_resources} == {
@@ -488,7 +489,7 @@ def test_profile_preview_contains_sanitized_shared_source_proofs(
     _write(tmp_path / "AGENTS.md", "# Instructions\n")
     _write(tmp_path / "skills" / "review" / "SKILL.md", "# Review\n")
 
-    profile = resolve_user_copy_profile("codex", tmp_path)
+    profile = resolve_user_copy_profile("codex-native", tmp_path)
     preview = build_user_copy_profile_preview(tmp_path, profile)
 
     assert preview["profileDigest"] == profile.profile_digest
@@ -524,7 +525,7 @@ def test_profile_preview_directory_digest_is_root_independent(
         root = tmp_path / name
         _write(root / "skills" / "review" / "SKILL.md", "# Review\n")
         _write(root / "skills" / "review" / "scripts" / "run.sh", "echo ok\n")
-        profile = resolve_user_copy_profile("codex", root)
+        profile = resolve_user_copy_profile("codex-native", root)
         previews.append(build_user_copy_profile_preview(root, profile))
 
     assert (
@@ -535,7 +536,7 @@ def test_profile_preview_directory_digest_is_root_independent(
 
 def test_profile_preview_rejects_stale_profile(tmp_path: Path) -> None:
     _write(tmp_path / "AGENTS.md", "# Instructions\n")
-    profile = resolve_user_copy_profile("codex", tmp_path)
+    profile = resolve_user_copy_profile("codex-native", tmp_path)
     _write(tmp_path / "prompts" / "review.md", "# Review\n")
 
     with pytest.raises(PackageSourceError, match="source-profile-mismatch"):
@@ -558,7 +559,7 @@ def test_profile_preview_marks_missing_dependency_payload_unprojectable(
         }
         """,
     )
-    profile = resolve_user_copy_profile("claude-code", tmp_path)
+    profile = resolve_user_copy_profile("claude-native", tmp_path)
 
     preview = build_user_copy_profile_preview(tmp_path, profile)
     resource = preview["resources"][0]
@@ -586,7 +587,7 @@ def test_directory_dependency_payload_covers_all_referenced_descendants(
         """,
     )
     _write(tmp_path / "bin" / "server.js", "console.log('ready')\n")
-    profile = resolve_user_copy_profile("codex", tmp_path)
+    profile = resolve_user_copy_profile("codex-native", tmp_path)
 
     preview = build_user_copy_profile_preview(tmp_path, profile)
 
@@ -619,7 +620,7 @@ def test_source_digest_rejects_unreferenced_canonical_payload(
         """,
     )
     _write(tmp_path / "bin" / "server.js", "console.log('ready')\n")
-    profile = resolve_user_copy_profile("codex", tmp_path)
+    profile = resolve_user_copy_profile("codex-native", tmp_path)
     preview = build_user_copy_profile_preview(tmp_path, profile)
     preview["dependencyPayloads"].append(
         {

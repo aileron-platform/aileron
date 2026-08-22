@@ -29,7 +29,7 @@ from app.modules.cli_settings.user_scope.paths import (
     logical_runtime_locator,
     runtime_user_home,
 )
-from app.modules.marketplace_operations.gate import get_marketplace_provider_gate
+from app.modules.marketplace_operations.gate import get_marketplace_target_client_gate
 from app.modules.marketplace_operations.plugin_resources import (
     sanitize_plugin_definition,
 )
@@ -46,9 +46,9 @@ from .models import (
     ClaudePluginSummary,
     ClaudePluginToggleResponse,
 )
-from .provider_inventory import (
-    ClaudeProviderInventorySnapshot,
-    build_claude_provider_inventory_snapshot,
+from .plugin_inventory import (
+    ClaudePluginInventorySnapshot,
+    build_claude_plugin_inventory_snapshot,
     read_claude_installed_manifest,
     run_claude_plugin_cli,
 )
@@ -72,7 +72,7 @@ class ClaudePluginsService:
 
     def list_plugins(self, workspace_id: str) -> ClaudePluginsResponse:
         snapshot_future = _provider_read_executor.submit(
-            self.read_provider_inventory,
+            self.read_plugin_inventory,
             workspace_id,
         )
         marketplace_future = _provider_read_executor.submit(
@@ -169,13 +169,13 @@ class ClaudePluginsService:
             plugin=detail,
         )
 
-    def read_provider_inventory(
+    def read_plugin_inventory(
         self,
         workspace_id: str,
-    ) -> ClaudeProviderInventorySnapshot:
+    ) -> ClaudePluginInventorySnapshot:
         """Read provider rows with internal roots retained outside public models."""
 
-        return build_claude_provider_inventory_snapshot(self._plugin_rows(workspace_id))
+        return build_claude_plugin_inventory_snapshot(self._plugin_rows(workspace_id))
 
     def set_plugin_enabled(
         self,
@@ -185,7 +185,7 @@ class ClaudePluginsService:
         enabled: bool,
         revision: str | None = None,
     ) -> ClaudePluginToggleResponse:
-        gate = get_marketplace_provider_gate()
+        gate = get_marketplace_target_client_gate()
         rows = self._plugin_rows(workspace_id)
         if plugin_id not in self._group_rows(rows):
             raise HTTPException(
@@ -722,7 +722,7 @@ class ClaudePluginsService:
 
     @staticmethod
     def _provider_generation() -> int:
-        return get_marketplace_provider_gate().generation("claude-code")
+        return get_marketplace_target_client_gate().generation("claude-code")
 
     @staticmethod
     def _settings_file(workspace_id: str, scope: ClaudePluginScope) -> Path:

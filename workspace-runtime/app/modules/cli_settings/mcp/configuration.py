@@ -23,7 +23,7 @@ from app.modules.cli_settings.user_scope.models import (
     UserScopeResource,
 )
 from app.modules.cli_settings.user_scope.paths import get_user_scope_path_resolver
-from app.modules.marketplace_operations.gate import get_marketplace_provider_gate
+from app.modules.marketplace_operations.gate import get_marketplace_target_client_gate
 from app.modules.marketplace_operations.plugin_resources import (
     plugin_resource_provenance,
     sanitize_plugin_definition,
@@ -568,7 +568,7 @@ class CliMcpService:
                     policy,
                 ),
                 "provenance": plugin_resource_provenance(
-                    provider="codex",
+                    target_client="codex",
                     plugin_id=server.plugin.plugin_id,
                     marketplace_id=marketplace_name,
                 ).model_dump(mode="json", by_alias=True),
@@ -578,7 +578,7 @@ class CliMcpService:
     def _provider_generation(self) -> int | None:
         if self._config.tool is not McpTool.CODEX:
             return None
-        return get_marketplace_provider_gate().generation("codex")
+        return get_marketplace_target_client_gate().generation("codex")
 
     # --- OpenCode Format Conversion -----------------------------------------
 

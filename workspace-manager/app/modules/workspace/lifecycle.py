@@ -47,14 +47,12 @@ from app.modules.workspace.catalog import (
     WorkspaceNotFoundError,
     WorkspaceService,
 )
-from app.modules.workspace.custom_resources import (
-    WorkspaceCustomResourceExecutionIdentity,
-    WorkspaceCustomResourceExecutionPlan,
-    WorkspaceCustomResourceService,
-)
+from app.modules.workspace.custom_resources import WorkspaceCustomResourceService
 from app.modules.workspace.execution_plane import (
-    WorkspaceExecutionPlaneService,
-    activate_runtime_generation,
+    GenerationClaim,
+    GenerationOutcome,
+    GenerationState,
+    WorkspaceExecutionPlane,
 )
 from app.modules.workspace.firewall_command_repository import (
     WorkspaceFirewallSyncCommandRepository,
@@ -92,7 +90,6 @@ from app.modules.workspace.runtime.job_repository import (
 from app.modules.workspace.runtime.provisioning import (
     RuntimeProvisionService,
     WorkspaceExecutionPlaneIdentity,
-    WorkspaceExecutionPlanePlan,
 )
 from app.modules.workspace.runtime.sync import (
     RuntimeCapabilitiesSyncError,
@@ -211,7 +208,7 @@ class _ProvisionCycle:
     observed_mount_revision: int
     access_revision: int
     workspace_identity: WorkspaceExecutionPlaneIdentity
-    provider_plan: Any
+    generation_attempt: object
     children: tuple[_ClaimedRevisionChild, ...]
 
 
@@ -225,7 +222,7 @@ class WorkspaceLifecycleService:
         settings: Settings | None = None,
         runtime_provision: RuntimeProvisionService | None = None,
         custom_resources: WorkspaceCustomResourceService | None = None,
-        drain_service: WorkspaceExecutionPlaneService | None = None,
+        execution_plane: WorkspaceExecutionPlane | None = None,
         runtime_database_service: WorkspaceRuntimeDatabaseService | None = None,
         runtime_sync: RuntimeSyncService | None = None,
         automation_execution_service: Any | None = None,
@@ -250,14 +247,15 @@ class WorkspaceLifecycleService:
             if custom_resources is not None
             else WorkspaceCustomResourceService(db)
         )
-        self.drain_service = (
-            drain_service
-            if drain_service is not None
-            else WorkspaceExecutionPlaneService(
+        self.execution_plane = (
+            execution_plane
+            if execution_plane is not None
+            else WorkspaceExecutionPlane(
                 db,
                 settings=self.settings,
                 runtime_provision=self.runtime_provision,
-                custom_resource_service=self.custom_resources,
+                custom_resources=self.custom_resources,
+                runtime_database_service=runtime_database_service,
             )
         )
         self._runtime_database_service = runtime_database_service
@@ -544,9 +542,7 @@ class WorkspaceLifecycleService:
                             or workspace.runtime_instance_id is not None,
                         )
                     ),
-                    "stop_confirmed": bool(
-                        retry_metadata.get("stop_confirmed", False)
-                    ),
+                    "stop_confirmed": bool(retry_metadata.get("stop_confirmed", False)),
                 }
             enqueue_result = self.jobs.enqueue_lifecycle_job(
                 workspace=workspace,
@@ -971,29 +967,36 @@ class WorkspaceLifecycleService:
 
                 component_result: RuntimeInfo | None = None
                 component_instance_id: str | None = None
-                runtime_plan: (
-                    WorkspaceExecutionPlanePlan
-                    | WorkspaceCustomResourceExecutionPlan
-                    | None
-                ) = None
+                runtime_capabilities_snapshot: WorkspaceCapabilities | None = None
+                generation_outcome: GenerationOutcome | None = None
                 if claim.component == "runtime":
                     workspace_identity = self._execution_identity(workspace)
-                    runtime_plan = self._prepare_provider_plan(
-                        workspace,
-                        runtime_instance_id=str(uuid4()),
+                    generation_attempt = self.execution_plane._prepare(
+                        workspace, str(uuid4())
                     )
                     self.db.commit()
-                    self.drain_service.best_effort_drain(
-                        workspace_id=claim.workspace_id,
-                        workspace_identity=workspace_identity,
-                        expected_mounted_revision=runtime_plan.observed_mount_revision,
-                        target_mounted_revision=runtime_plan.mount_revision,
-                        job_id=claim.job_id,
-                        assert_claim=assert_claim,
+                    generation_outcome = self.execution_plane.reconcile(
+                        GenerationClaim(
+                            workspace_id=claim.workspace_id,
+                            job_id=claim.job_id,
+                            assert_owned=assert_claim,
+                            runtime_instance_id=self._attempt_generation_id(
+                                generation_attempt
+                            ),
+                            expected_mounted_revision=getattr(
+                                generation_attempt, "observed_mount_revision"
+                            ),
+                            target_mounted_revision=getattr(
+                                generation_attempt, "mount_revision"
+                            ),
+                            identity=workspace_identity,
+                        ),
+                        attempt=generation_attempt,
                     )
-                    component_result = self._apply_runtime_provider_plan(
-                        workspace,
-                        runtime_plan,
+                    generation_outcome.raise_for_failure()
+                    runtime_capabilities_snapshot = self._sync_generation_capabilities(
+                        workspace_id=claim.workspace_id,
+                        outcome=generation_outcome,
                         assert_claim=assert_claim,
                     )
                 elif workspace.provisioner == "kubernetes":
@@ -1019,10 +1022,14 @@ class WorkspaceLifecycleService:
                     self._apply_component_execution_result(
                         locked_workspace,
                         claim=claim,
-                        runtime_plan=runtime_plan,
+                        generation_outcome=generation_outcome,
                         component_result=component_result,
                         component_instance_id=component_instance_id,
                     )
+                    if runtime_capabilities_snapshot is not None:
+                        locked_workspace.agentic_capabilities = (
+                            runtime_capabilities_snapshot.model_dump(by_alias=True)
+                        )
 
                 outcome = self.job_execution.complete_component(
                     claim,
@@ -1037,10 +1044,21 @@ class WorkspaceLifecycleService:
                     enqueue_docker_browser_connectivity_reconcile(claim.workspace_id)
                 return WorkspaceLifecycleRunResult(outcome.value)
         except Exception as exc:
+            error_code = self._stable_error_code(exc)
+            logger.error(
+                "Workspace component reconcile failed",
+                extra={
+                    "job_id": claim.job_id,
+                    "workspace_id": claim.workspace_id,
+                    "component": claim.component,
+                    "error_code": error_code,
+                    "error_type": type(exc).__name__,
+                },
+            )
             self.job_execution.fail_component(
                 claim,
                 failed_at=datetime.now(timezone.utc),
-                error_code=self._stable_error_code(exc),
+                error_code=error_code,
             )
             return WorkspaceLifecycleRunResult.FAILED
 
@@ -1049,18 +1067,12 @@ class WorkspaceLifecycleService:
         workspace: db_models.Workspace,
         *,
         claim: ComponentJobClaim,
-        runtime_plan: (
-            WorkspaceExecutionPlanePlan | WorkspaceCustomResourceExecutionPlan | None
-        ),
+        generation_outcome: GenerationOutcome | None,
         component_result: RuntimeInfo | None,
         component_instance_id: str | None,
     ) -> None:
-        if runtime_plan is not None:
-            self._stage_runtime_provider_result(
-                workspace,
-                runtime_plan,
-                component_result,
-            )
+        if generation_outcome is not None:
+            self.execution_plane._stage_ready(workspace, generation_outcome)
         elif component_result is not None:
             self.runtime_provision.apply_component_result(
                 workspace,
@@ -1282,35 +1294,34 @@ class WorkspaceLifecycleService:
                         assert_child()
 
                 assert_claim()
-                self.drain_service.best_effort_drain(
-                    workspace_id=work.workspace_id,
-                    workspace_identity=cycle.workspace_identity,
-                    expected_mounted_revision=cycle.observed_mount_revision,
-                    target_mounted_revision=cycle.mount_revision,
-                    job_id=work.job_id,
-                    assert_claim=assert_claim,
+                outcome = self.execution_plane.reconcile(
+                    GenerationClaim(
+                        workspace_id=work.workspace_id,
+                        job_id=work.job_id,
+                        assert_owned=assert_claim,
+                        runtime_instance_id=self._attempt_generation_id(
+                            cycle.generation_attempt
+                        ),
+                        expected_mounted_revision=cycle.observed_mount_revision,
+                        target_mounted_revision=cycle.mount_revision,
+                        identity=cycle.workspace_identity,
+                    ),
+                    attempt=cycle.generation_attempt,
                 )
-                result = self._apply_provider_plan(
-                    cycle.provider_plan,
-                    provisioner=cycle.workspace_identity.provisioner,
-                    assert_claim=assert_claim,
-                )
+                outcome.raise_for_failure()
                 termination_attempted = False
                 completion_attempted = False
                 try:
                     assert_claim()
-                    capabilities = self._sync_provider_capabilities(
-                        work=work,
-                        result=result,
-                        provisioner=cycle.workspace_identity.provisioner,
+                    capabilities = self._sync_generation_capabilities(
+                        workspace_id=work.workspace_id,
+                        outcome=outcome,
                         assert_claim=assert_claim,
                     )
                     if not self._provision_target_is_current(work, cycle):
                         termination_attempted = True
-                        self._terminate_provider_result(
-                            cycle.provider_plan,
-                            result,
-                            provisioner=cycle.workspace_identity.provisioner,
+                        self.execution_plane._discard_ready(
+                            outcome,
                             assert_claim=assert_claim,
                         )
                         if self._complete_superseded_if_state_advanced(work):
@@ -1321,7 +1332,7 @@ class WorkspaceLifecycleService:
                     return self._complete_provision_success(
                         work,
                         cycle,
-                        result,
+                        outcome,
                         capabilities,
                     )
                 except Exception as exc:
@@ -1329,7 +1340,7 @@ class WorkspaceLifecycleService:
                         completion_state = self._provision_completion_state(
                             work=work,
                             cycle=cycle,
-                            result=result,
+                            outcome=outcome,
                         )
                         if completion_state == _ProvisionCompletionState.COMMITTED:
                             logger.warning(
@@ -1338,7 +1349,7 @@ class WorkspaceLifecycleService:
                                 extra={
                                     "workspace_id": work.workspace_id,
                                     "job_id": work.job_id,
-                                    "runtime_instance_id": result.runtime_instance_id,
+                                    "runtime_instance_id": outcome.generation_id,
                                 },
                             )
                             return WorkspaceLifecycleRunResult.SUCCEEDED
@@ -1348,10 +1359,8 @@ class WorkspaceLifecycleService:
                             ) from exc
                     if not termination_attempted:
                         termination_attempted = True
-                        self._terminate_provider_result(
-                            cycle.provider_plan,
-                            result,
-                            provisioner=cycle.workspace_identity.provisioner,
+                        self.execution_plane._discard_ready(
+                            outcome,
                             assert_claim=assert_claim,
                         )
                     raise
@@ -1395,10 +1404,7 @@ class WorkspaceLifecycleService:
                 claimed_at=now,
             )
             workspace_identity = self._execution_identity(workspace)
-            provider_plan = self._prepare_provider_plan(
-                workspace,
-                runtime_instance_id=str(uuid4()),
-            )
+            generation_attempt = self.execution_plane._prepare(workspace, str(uuid4()))
             cycle = _ProvisionCycle(
                 workspace_id=workspace.id,
                 mount_revision=workspace.knowledge_base_mount_desired_revision,
@@ -1407,7 +1413,7 @@ class WorkspaceLifecycleService:
                 ),
                 access_revision=workspace.runtime_access_revision,
                 workspace_identity=workspace_identity,
-                provider_plan=provider_plan,
+                generation_attempt=generation_attempt,
                 children=tuple(children),
             )
             self.db.commit()
@@ -1567,7 +1573,7 @@ class WorkspaceLifecycleService:
         self,
         work: _ClaimedLifecycleWork,
         cycle: _ProvisionCycle,
-        result: Any,
+        outcome: GenerationOutcome,
         capabilities: WorkspaceCapabilities,
     ) -> WorkspaceLifecycleRunResult:
         now = datetime.now(timezone.utc)
@@ -1591,11 +1597,7 @@ class WorkspaceLifecycleService:
                 or workspace.runtime_access_revision != cycle.access_revision
             ):
                 raise RuntimeJobClaimLostError("Lifecycle target advanced")
-            self._stage_provider_result(
-                workspace,
-                result,
-                provisioner=workspace.provisioner,
-            )
+            self.execution_plane._stage_ready(workspace, outcome)
             self._mark_provision_success(workspace, transitioned_at=now)
             workspace.runtime_access_observed_revision = cycle.access_revision
             workspace.agentic_capabilities = capabilities.model_dump(by_alias=True)
@@ -1633,7 +1635,7 @@ class WorkspaceLifecycleService:
         *,
         work: _ClaimedLifecycleWork,
         cycle: _ProvisionCycle,
-        result: Any,
+        outcome: GenerationOutcome,
     ) -> _ProvisionCompletionState:
         """Read completion through a fresh session after commit acknowledgement loss."""
 
@@ -1649,7 +1651,7 @@ class WorkspaceLifecycleService:
                     and parent is not None
                     and parent.status == "succeeded"
                     and workspace.runtime_status == "running"
-                    and workspace.runtime_instance_id == result.runtime_instance_id
+                    and workspace.runtime_instance_id == outcome.generation_id
                     and workspace.knowledge_base_mount_desired_revision
                     == cycle.mount_revision
                     and workspace.knowledge_base_mount_observed_revision
@@ -1666,7 +1668,7 @@ class WorkspaceLifecycleService:
                 extra={
                     "workspace_id": work.workspace_id,
                     "job_id": work.job_id,
-                    "runtime_instance_id": result.runtime_instance_id,
+                    "runtime_instance_id": outcome.generation_id,
                 },
             )
             return _ProvisionCompletionState.UNKNOWN
@@ -1695,18 +1697,26 @@ class WorkspaceLifecycleService:
             if not running_execution_ids.issubset(confirmed_execution_ids):
                 raise RuntimeError("Workspace automation cancellation is unconfirmed")
             assert_claim()
-        self.drain_service.best_effort_drain(
-            workspace_id=work.workspace_id,
-            workspace_identity=work.workspace_identity,
-            expected_mounted_revision=self._load_observed_mount_revision(
-                work.workspace_id
-            ),
-            target_mounted_revision=self._load_desired_mount_revision(
-                work.workspace_id
-            ),
-            job_id=work.job_id,
-            assert_claim=assert_claim,
-        )
+
+        def reconcile_absent(*, delete_workspace: bool) -> None:
+            outcome = self.execution_plane.reconcile(
+                GenerationClaim(
+                    workspace_id=work.workspace_id,
+                    job_id=work.job_id,
+                    assert_owned=assert_claim,
+                    desired_state=GenerationState.ABSENT,
+                    expected_mounted_revision=self._load_observed_mount_revision(
+                        work.workspace_id
+                    ),
+                    target_mounted_revision=self._load_desired_mount_revision(
+                        work.workspace_id
+                    ),
+                    identity=work.workspace_identity,
+                    delete_workspace=delete_workspace,
+                )
+            )
+            outcome.raise_for_failure()
+
         assert_claim()
         if work.operation == WORKSPACE_DELETE:
             self._advance_delete_phase(
@@ -1715,23 +1725,7 @@ class WorkspaceLifecycleService:
                 assert_claim=assert_claim,
             )
             if self._delete_requires_runtime_stop(work):
-                if work.workspace_identity.provisioner == "kubernetes":
-                    workspace = self.db.get(db_models.Workspace, work.workspace_id)
-                    if workspace is None:
-                        return WorkspaceLifecycleRunResult.SUCCEEDED
-                    self.custom_resources.stop_persisted_execution_plane(
-                        workspace,
-                        assert_claim=assert_claim,
-                    )
-                else:
-                    self.runtime_provision.terminate_current_execution_plane(
-                        work.workspace_identity,
-                        assert_claim=assert_claim,
-                    )
-                    self.runtime_provision.prove_execution_plane_absent(
-                        work.workspace_identity,
-                        assert_claim=assert_claim,
-                    )
+                reconcile_absent(delete_workspace=False)
                 self._mark_delete_stop_confirmed(work, assert_claim=assert_claim)
             assert_claim()
             self._advance_delete_phase(
@@ -1740,44 +1734,20 @@ class WorkspaceLifecycleService:
                 assert_claim=assert_claim,
             )
             if work.workspace_identity.provisioner == "kubernetes":
-                self._terminate_persisted_generation(
-                    work.workspace_identity,
-                    assert_claim=assert_claim,
-                )
+                reconcile_absent(delete_workspace=True)
             elif (
                 work.workspace_identity.runtime_instance_id is not None
                 and not self._delete_stop_confirmed(work)
             ):
-                self.runtime_provision.terminate_current_execution_plane(
-                    work.workspace_identity,
-                    assert_claim=assert_claim,
-                )
-                self.runtime_provision.prove_execution_plane_absent(
-                    work.workspace_identity,
-                    assert_claim=assert_claim,
-                )
+                reconcile_absent(delete_workspace=False)
             self._cleanup_workspace_volumes(work.workspace_id)
             self._advance_delete_phase(
                 work,
                 phase=DELETE_PHASE_FINALIZING,
                 assert_claim=assert_claim,
             )
-        elif (
-            work.operation == WORKSPACE_STOP
-            and work.workspace_identity.provisioner == "kubernetes"
-        ):
-            workspace = self.db.get(db_models.Workspace, work.workspace_id)
-            if workspace is None:
-                return WorkspaceLifecycleRunResult.SUCCEEDED
-            self.custom_resources.stop_persisted_execution_plane(
-                workspace,
-                assert_claim=assert_claim,
-            )
         else:
-            self._terminate_persisted_generation(
-                work.workspace_identity,
-                assert_claim=assert_claim,
-            )
+            reconcile_absent(delete_workspace=False)
         assert_claim()
         return self._complete_termination_success(work)
 
@@ -1887,7 +1857,11 @@ class WorkspaceLifecycleService:
             )
             .execution_options(populate_existing=True)
         )
-        if job is None or job.status != "running" or job.claim_token != work.claim_token:
+        if (
+            job is None
+            or job.status != "running"
+            or job.claim_token != work.claim_token
+        ):
             raise RuntimeJobClaimLostError(
                 "Workspace deletion claim is no longer current"
             )
@@ -2438,113 +2412,45 @@ class WorkspaceLifecycleService:
             .with_for_update()
         )
 
-    def _prepare_provider_plan(
-        self,
-        workspace: db_models.Workspace,
-        *,
-        runtime_instance_id: str,
-    ) -> Any:
-        if workspace.provisioner == "kubernetes":
-            plan = self.custom_resources.prepare_execution_plane(
-                workspace,
-                runtime_instance_id=runtime_instance_id,
-            )
-        else:
-            plan = self.runtime_provision.prepare_execution_plane(
-                workspace,
-                runtime_instance_id=runtime_instance_id,
-            )
-        activate_runtime_generation(workspace, plan)
-        return plan
-
-    def _apply_provider_plan(
-        self,
-        plan: Any,
-        *,
-        provisioner: str,
-        assert_claim: Callable[[], None],
-    ) -> Any:
-        if provisioner == "kubernetes":
-            return self.custom_resources.apply_execution_plane(
-                plan,
-                assert_claim=assert_claim,
-                max_attempts=max(1, self.settings.RUNTIME_READY_TIMEOUT_SECONDS),
-                interval_seconds=1.0,
-            )
-        return self.runtime_provision.apply_execution_plane(
-            plan,
-            assert_claim=assert_claim,
-            timeout_seconds=self.settings.RUNTIME_READY_TIMEOUT_SECONDS,
-        )
-
-    def _apply_runtime_provider_plan(
-        self,
-        workspace: db_models.Workspace,
-        plan: WorkspaceExecutionPlanePlan | WorkspaceCustomResourceExecutionPlan,
-        *,
-        assert_claim: Callable[[], None],
-    ) -> RuntimeInfo | None:
-        if workspace.provisioner == "kubernetes":
-            if not isinstance(plan, WorkspaceCustomResourceExecutionPlan):
-                raise TypeError("Kubernetes Runtime component plan is invalid")
-            self.custom_resources.apply_component_desired_revision(
-                workspace,
-                component="runtime",
-                assert_claim=assert_claim,
-                runtime_plan=plan,
-                max_attempts=max(
-                    1,
-                    self.settings.RUNTIME_READY_TIMEOUT_SECONDS,
-                ),
-            )
-            return None
-        if not isinstance(plan, WorkspaceExecutionPlanePlan):
-            raise TypeError("Docker Runtime component plan is invalid")
-        return self.runtime_provision.apply_prepared_runtime_component(
-            plan,
-            assert_claim=assert_claim,
-        )
-
-    def _stage_runtime_provider_result(
-        self,
-        workspace: db_models.Workspace,
-        plan: WorkspaceExecutionPlanePlan | WorkspaceCustomResourceExecutionPlan,
-        result: RuntimeInfo | None,
-    ) -> None:
-        if (
-            workspace.runtime_instance_id != plan.runtime_instance_id
-            or workspace.runtime_control_instance_id != plan.runtime_instance_id
-            or not workspace.runtime_control_token_hash
-        ):
-            raise ValueError("Runtime control generation is not active")
-        if workspace.provisioner == "docker":
-            if not isinstance(plan, WorkspaceExecutionPlanePlan):
-                raise TypeError("Docker Runtime component plan is invalid")
-            if result is None:
-                raise RuntimeError("Docker Runtime component result is missing")
-            self.runtime_provision.apply_component_result(
-                workspace,
-                component="runtime",
-                result=result,
-            )
-        elif not isinstance(plan, WorkspaceCustomResourceExecutionPlan):
-            raise TypeError("Kubernetes Runtime component plan is invalid")
-
-    def _sync_provider_capabilities(
+    def _sync_generation_capabilities(
         self,
         *,
-        work: _ClaimedLifecycleWork,
-        result: Any,
-        provisioner: str,
+        workspace_id: str,
+        outcome: GenerationOutcome,
         assert_claim: Callable[[], None],
     ) -> WorkspaceCapabilities:
-        capabilities = self.runtime_sync.resolve_workspace_capabilities(
-            work.workspace_id
+        runtime_url = outcome.runtime_url
+        runtime_instance_id = outcome.generation_id
+        if not runtime_url or not runtime_instance_id:
+            raise RuntimeCapabilitiesSyncError(
+                "Ready Runtime generation has no capabilities sync target"
+            )
+        return self._sync_runtime_capabilities(
+            workspace_id=workspace_id,
+            runtime_url=runtime_url,
+            runtime_instance_id=runtime_instance_id,
+            assert_claim=assert_claim,
         )
-        runtime_url, runtime_instance_id = self._runtime_capabilities_sync_target(
-            result,
-            provisioner=provisioner,
+
+    @staticmethod
+    def _attempt_generation_id(attempt: object) -> str:
+        generation_id = getattr(attempt, "runtime_instance_id", None)
+        if not isinstance(generation_id, str) or not generation_id:
+            raise ValueError("Prepared Workspace generation identity is missing")
+        return generation_id
+
+    def _sync_runtime_capabilities(
+        self,
+        *,
+        workspace_id: str,
+        runtime_url: str,
+        runtime_instance_id: str,
+        assert_claim: Callable[[], None],
+    ) -> WorkspaceCapabilities:
+        capability_resolution = (
+            self.runtime_sync.resolve_workspace_capability_resolution(workspace_id)
         )
+        effective_capabilities = capability_resolution.effective
         convergence_budget_seconds = max(
             0,
             self.settings.RUNTIME_READY_TIMEOUT_SECONDS,
@@ -2557,17 +2463,17 @@ class WorkspaceLifecycleService:
             assert_claim()
             try:
                 sync_result = self.runtime_sync.sync_capabilities_to_runtime_generation(
-                    work.workspace_id,
+                    workspace_id,
                     runtime_url,
                     runtime_instance_id,
-                    capabilities,
+                    effective_capabilities,
                 )
                 if sync_result.get("success") is not True:
                     raise RuntimeCapabilitiesSyncError(
                         "Runtime rejected its capabilities snapshot"
                     )
                 assert_claim()
-                return capabilities
+                return capability_resolution.snapshot
             except RuntimeCapabilitiesSyncError:
                 remaining_seconds = convergence_budget_seconds - elapsed_retry_seconds
                 if remaining_seconds <= 0:
@@ -2576,7 +2482,7 @@ class WorkspaceLifecycleService:
                 logger.warning(
                     "Runtime capabilities sync retry scheduled",
                     extra={
-                        "workspace_id": work.workspace_id,
+                        "workspace_id": workspace_id,
                         "attempt": attempt,
                         "remaining_seconds": remaining_seconds,
                     },
@@ -2584,90 +2490,6 @@ class WorkspaceLifecycleService:
                 time.sleep(sleep_seconds)
                 elapsed_retry_seconds += sleep_seconds
                 retry_delay_seconds = min(retry_delay_seconds * 2, 5)
-
-    @staticmethod
-    def _runtime_capabilities_sync_target(
-        result: Any,
-        *,
-        provisioner: str,
-    ) -> tuple[str, str]:
-        runtime_instance_id = getattr(result, "runtime_instance_id", None)
-        if provisioner == "kubernetes":
-            runtime_url: object | None = getattr(result, "runtime_internal_url", None)
-        else:
-            runtime = getattr(result, "runtime", None)
-            runtime_url = getattr(runtime, "internal_url", None)
-
-        if (
-            not isinstance(runtime_url, str)
-            or not runtime_url
-            or not isinstance(runtime_instance_id, str)
-            or not runtime_instance_id
-        ):
-            raise RuntimeCapabilitiesSyncError(
-                "Ready Runtime generation has no capabilities sync target"
-            )
-        return runtime_url, runtime_instance_id
-
-    def _terminate_provider_result(
-        self,
-        plan: Any,
-        result: Any,
-        *,
-        provisioner: str,
-        assert_claim: Callable[[], None],
-    ) -> None:
-        if provisioner == "kubernetes":
-            self.custom_resources.abandon_execution_plane_generation(
-                result,
-                assert_claim=assert_claim,
-            )
-            return
-        self.runtime_provision.terminate_execution_plane(
-            plan,
-            result,
-            assert_claim=assert_claim,
-        )
-
-    def _stage_provider_result(
-        self,
-        workspace: db_models.Workspace,
-        result: Any,
-        *,
-        provisioner: str,
-    ) -> None:
-        if provisioner == "kubernetes":
-            self.custom_resources.apply_execution_plane_result(workspace, result)
-            return
-        self.runtime_provision.apply_execution_plane_result(workspace, result)
-
-    def _terminate_persisted_generation(
-        self,
-        identity: WorkspaceExecutionPlaneIdentity,
-        *,
-        assert_claim: Callable[[], None],
-    ) -> None:
-        if identity.provisioner == "kubernetes":
-            self.custom_resources.delete_persisted_workspace(
-                WorkspaceCustomResourceExecutionIdentity(
-                    workspace_id=identity.id,
-                    target_namespace=self.settings.RUNTIME_K8S_NAMESPACE,
-                    runtime_instance_id=identity.runtime_instance_id,
-                    runtime_pod_uid=identity.runtime_container_id,
-                    browser_pod_uid=identity.browser_container_id,
-                    canvas_pod_uid=identity.canvas_container_id,
-                ),
-                assert_claim=assert_claim,
-            )
-            return
-        self.runtime_provision.terminate_current_execution_plane(
-            identity,
-            assert_claim=assert_claim,
-        )
-        self.runtime_provision.prove_execution_plane_absent(
-            identity,
-            assert_claim=assert_claim,
-        )
 
     def _execution_identity(
         self,

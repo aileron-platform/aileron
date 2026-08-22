@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from unittest.mock import patch
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -129,9 +130,13 @@ class RecordingRunner:
     def __init__(self) -> None:
         self.requests: list[AgentExecutionRequest] = []
         self.reserved: list[str] = []
+        self.stopped: list[str] = []
 
     def reserve(self) -> str:
-        execution_id = f"session-{len(self.reserved) + 1}"
+        # A fresh RecordingRunner is instantiated per request (see
+        # `override_service`), so ids must be globally unique rather than
+        # derived from this instance's own reservation count.
+        execution_id = f"session-{uuid4().hex}"
         self.reserved.append(execution_id)
         return execution_id
 
@@ -148,10 +153,13 @@ class RecordingRunner:
         self.requests.append(request)
 
     async def stop(self, execution_id: str) -> None:
+        self.stopped.append(execution_id)
+
+    async def wait(self, execution_id: str) -> None:
         return None
 
     def is_alive(self, execution_id: str) -> bool:
-        return True
+        return execution_id not in self.stopped
 
     async def destroy_thread(self, thread_id: str) -> None:
         return None
@@ -784,6 +792,85 @@ async def test_thread_api_removes_queued_message_by_id(
         assert missing.json() == {
             "error_code": "queued_message_not_found",
             "error_info": {"queued_message_id": "missing"},
+        }
+
+
+@pytest.mark.asyncio
+async def test_thread_api_stop_dequeues_next_message_over_http(
+    thread_api_session: AsyncSession,
+) -> None:
+    await put_capabilities(thread_api_session)
+
+    async with api_client(thread_api_session) as client:
+        headers = {"Authorization": "Bearer user-a"}
+        draft_response = await client.post(
+            "/api/v1/threads/draft",
+            headers=headers,
+            json={
+                "agenticTool": "claude",
+                "model": "claude-opus-4-8",
+                "claudeMode": "execute",
+            },
+        )
+        thread_id = draft_response.json()["id"]
+
+        submitted = await client.post(
+            f"/api/v1/threads/{thread_id}/submit",
+            headers=headers,
+            json={"text": "first", "attachments": []},
+        )
+        assert submitted.json()["status"] == "queued"
+        first_execution_id = submitted.json()["activeTurnExecutionId"]
+
+        await client.post(
+            f"/api/v1/threads/{thread_id}/messages",
+            headers=headers,
+            json={"text": "second", "attachments": []},
+        )
+        await client.post(
+            f"/api/v1/threads/{thread_id}/messages",
+            headers=headers,
+            json={"text": "third", "attachments": []},
+        )
+
+        response = await client.post(
+            f"/api/v1/threads/{thread_id}/stop", headers=headers
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "queued"
+        assert [message["text"] for message in body["queuedMessages"]] == ["third"]
+        assert body["activeTurnExecutionId"] != first_execution_id
+
+
+@pytest.mark.asyncio
+async def test_thread_api_stop_rejects_non_running_thread(
+    thread_api_session: AsyncSession,
+) -> None:
+    await put_capabilities(thread_api_session)
+
+    async with api_client(thread_api_session) as client:
+        headers = {"Authorization": "Bearer user-a"}
+        draft_response = await client.post(
+            "/api/v1/threads/draft",
+            headers=headers,
+            json={
+                "agenticTool": "claude",
+                "model": "claude-opus-4-8",
+                "claudeMode": "execute",
+            },
+        )
+        thread_id = draft_response.json()["id"]
+
+        response = await client.post(
+            f"/api/v1/threads/{thread_id}/stop", headers=headers
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "error_code": "invalid_state",
+            "error_info": {"thread_id": thread_id},
         }
 
 

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Mapping, Sequence
 
 import pytest
 
 from app.modules.marketplace_operations.plugin_cli_install import (
     CliCommandResult,
-    ProviderPluginCliInstaller,
+    TargetClientPluginCliInstaller,
     marketplace_add_argv,
+    plugin_enable_argv,
     plugin_install_argv,
 )
 
@@ -42,8 +42,8 @@ def _ok(stdout: str = "", stderr: str = "") -> CliCommandResult:
     return CliCommandResult(returncode=0, stdout=stdout, stderr=stderr)
 
 
-def _success_results(provider: str) -> list[CliCommandResult]:
-    if provider == "claude-code":
+def _success_results(target_client: str) -> list[CliCommandResult]:
+    if target_client == "claude-code":
         marketplaces = [{"name": "private-market"}]
         plugins = [{"id": "demo@private-market"}]
     else:
@@ -55,18 +55,19 @@ def _success_results(provider: str) -> list[CliCommandResult]:
     return [
         _ok("marketplace added"),
         _ok("plugin installed"),
+        *([_ok("plugin enabled")] if target_client == "claude-code" else []),
         _ok(json.dumps(marketplaces)),
         _ok(json.dumps(plugins)),
     ]
 
 
-def test_claude_and_codex_argv_are_provider_native_and_keep_scp_remote() -> None:
+def test_claude_and_codex_argv_are_target_client_native_and_keep_scp_remote() -> None:
     remote = "git@gitlab.example:team/private-marketplace.git"
 
     assert marketplace_add_argv(
-        provider="claude-code",
+        target_client="claude-code",
         remote_url=remote,
-        publish_ref="main",
+        registry_ref="main",
     ) == [
         "claude",
         "plugin",
@@ -80,9 +81,9 @@ def test_claude_and_codex_argv_are_provider_native_and_keep_scp_remote() -> None
         "user",
     ]
     assert marketplace_add_argv(
-        provider="codex",
+        target_client="codex",
         remote_url=remote,
-        publish_ref="release",
+        registry_ref="release",
     ) == [
         "codex",
         "plugin",
@@ -97,7 +98,7 @@ def test_claude_and_codex_argv_are_provider_native_and_keep_scp_remote() -> None
         "codex",
     ]
     assert plugin_install_argv(
-        provider="claude-code",
+        target_client="claude-code",
         plugin_identity="demo@private-market",
     ) == [
         "claude",
@@ -108,32 +109,38 @@ def test_claude_and_codex_argv_are_provider_native_and_keep_scp_remote() -> None
         "user",
     ]
     assert plugin_install_argv(
-        provider="codex",
+        target_client="codex",
         plugin_identity="demo@private-market",
     ) == ["codex", "plugin", "add", "demo@private-market"]
+    assert plugin_enable_argv("demo@private-market") == [
+        "claude", "plugin", "enable", "demo@private-market", "--scope", "user"
+    ]
 
 
-@pytest.mark.parametrize("provider", ["claude-code", "codex"])
-def test_install_runs_four_commands_and_reads_back_once(provider: str) -> None:
-    runner = _Runner(_success_results(provider))
-    installer = ProviderPluginCliInstaller(runner=runner)
+@pytest.mark.parametrize("target_client", ["claude-code", "codex"])
+def test_install_runs_required_mutations_and_reads_back_once(target_client: str) -> None:
+    runner = _Runner(_success_results(target_client))
+    installer = TargetClientPluginCliInstaller(runner=runner)
 
     result = installer.install(
-        provider=provider,  # type: ignore[arg-type]
+        target_client=target_client,  # type: ignore[arg-type]
         package_id="demo",
         marketplace_id="private-market",
         remote_url="git@gitlab.example:team/marketplace.git",
-        publish_ref="main",
+        registry_ref="main",
     )
 
     assert result.status == "installed"
     assert result.stage == "completed"
     assert result.exit_code == 0
-    assert len(runner.calls) == 4
+    assert len(runner.calls) == (5 if target_client == "claude-code" else 4)
     assert runner.calls[-2][-2:] == ["list", "--json"]
     assert runner.calls[-1][-2:] == ["list", "--json"]
     assert result.stdout is not None
-    assert "plugin installed" in result.stdout
+    assert ("plugin enabled" if target_client == "claude-code" else "plugin installed") in result.stdout
+    assert [command.sequence for command in result.commands] == list(
+        range(len(runner.calls))
+    )
 
 
 @pytest.mark.parametrize(
@@ -141,8 +148,6 @@ def test_install_runs_four_commands_and_reads_back_once(provider: str) -> None:
     [
         (0, "marketplace-add"),
         (1, "plugin-install"),
-        (2, "marketplace-list"),
-        (3, "plugin-list"),
     ],
 )
 def test_nonzero_exit_returns_typed_stage_and_cli_output(
@@ -152,37 +157,55 @@ def test_nonzero_exit_returns_typed_stage_and_cli_output(
     results = _success_results("codex")
     results[failed_index] = CliCommandResult(
         returncode=17,
-        stdout="provider stdout",
-        stderr="provider stderr",
+        stdout="target_client stdout",
+        stderr="target_client stderr",
     )
     runner = _Runner(results)
 
-    result = ProviderPluginCliInstaller(runner=runner).install(
-        provider="codex",
+    result = TargetClientPluginCliInstaller(runner=runner).install(
+        target_client="codex",
         package_id="demo",
         marketplace_id="private-market",
         remote_url="git@gitlab.example:team/marketplace.git",
-        publish_ref="main",
+        registry_ref="main",
     )
 
     assert result.status == "failed"
     assert result.stage == expected_stage
     assert result.exit_code == 17
-    assert result.cli_message == "provider stderr"
-    assert result.stdout is not None and "provider stdout" in result.stdout
-    assert result.stderr is not None and "provider stderr" in result.stderr
+    assert result.cli_message == "target_client stderr"
+    assert result.stdout is not None and "target_client stdout" in result.stdout
+    assert result.stderr is not None and "target_client stderr" in result.stderr
     assert len(runner.calls) == failed_index + 1
+
+
+def test_claude_enable_failure_is_terminal_and_preserves_install_receipt() -> None:
+    results = _success_results("claude-code")
+    results[2] = CliCommandResult(9, "", "enable denied")
+    result = TargetClientPluginCliInstaller(runner=_Runner(results)).install(
+        target_client="claude-code",
+        package_id="demo",
+        marketplace_id="private-market",
+        remote_url="git@gitlab.example:team/marketplace.git",
+        registry_ref="main",
+    )
+
+    assert result.status == "failed"
+    assert result.stage == "plugin-enable"
+    assert [command.stage for command in result.commands] == [
+        "marketplace-add", "plugin-install", "plugin-enable"
+    ]
 
 
 def test_launch_failure_returns_failed_without_exit_code() -> None:
     runner = _Runner([FileNotFoundError("claude executable not found")])
 
-    result = ProviderPluginCliInstaller(runner=runner).install(
-        provider="claude-code",
+    result = TargetClientPluginCliInstaller(runner=runner).install(
+        target_client="claude-code",
         package_id="demo",
         marketplace_id="private-market",
         remote_url="git@gitlab.example:team/marketplace.git",
-        publish_ref="main",
+        registry_ref="main",
     )
 
     assert result.status == "failed"
@@ -204,12 +227,12 @@ def test_cli_output_decode_failure_returns_typed_failure() -> None:
         ]
     )
 
-    result = ProviderPluginCliInstaller(runner=runner).install(
-        provider="codex",
+    result = TargetClientPluginCliInstaller(runner=runner).install(
+        target_client="codex",
         package_id="demo",
         marketplace_id="private-market",
         remote_url="git@gitlab.example:team/marketplace.git",
-        publish_ref="main",
+        registry_ref="main",
     )
 
     assert result.status == "failed"
@@ -244,22 +267,27 @@ def test_parser_and_readback_failures_keep_raw_cli_output(
         ]
     )
 
-    result = ProviderPluginCliInstaller(runner=runner).install(
-        provider="codex",
+    result = TargetClientPluginCliInstaller(runner=runner).install(
+        target_client="codex",
         package_id="demo",
         marketplace_id="private-market",
         remote_url="git@gitlab.example:team/marketplace.git",
-        publish_ref="main",
+        registry_ref="main",
     )
 
-    assert result.status == "failed"
-    assert result.stage == expected_stage
+    assert result.status == "installed"
+    assert result.stage == "completed"
     assert result.exit_code == 0
-    assert result.stdout is not None
-    assert marketplace_output in result.stdout or plugin_output in result.stdout
+    assert result.warnings == ("marketplace.install.state-unconfirmed",)
+    assert any(
+        marketplace_output in (command.stdout or "")
+        or plugin_output in (command.stdout or "")
+        for command in result.commands
+        if command.stage == expected_stage
+    )
 
 
-def test_output_is_bounded_and_redacts_secrets_credentials_and_home() -> None:
+def test_output_is_bounded_without_changing_cli_text() -> None:
     private_key = (
         "-----BEGIN OPENSSH PRIVATE KEY-----\n"
         "private-material\n"
@@ -272,30 +300,25 @@ def test_output_is_bounded_and_redacts_secrets_credentials_and_home() -> None:
         "ssh://deploy:private@gitlab.example/team/repo.git\n"
         "git@gitlab.example:team/repo.git\n"
         "/home/developer/.codex/plugins/demo\n"
-        f"{private_key}\n" + ("x" * 70000)
+        f"{private_key}\n" + ("x" * 300000)
     )
     runner = _Runner([CliCommandResult(returncode=1, stdout="", stderr=diagnostic)])
 
-    result = ProviderPluginCliInstaller(
-        runner=runner,
-        runtime_home=Path("/home/developer"),
-    ).install(
-        provider="codex",
+    result = TargetClientPluginCliInstaller(runner=runner).install(
+        target_client="codex",
         package_id="demo",
         marketplace_id="private-market",
         remote_url="git@gitlab.example:team/marketplace.git",
-        publish_ref="main",
+        registry_ref="main",
     )
 
     assert result.status == "failed"
     assert result.truncated is True
     assert result.stderr is not None
-    assert "top-secret" not in result.stderr
-    assert "bearer-secret" not in result.stderr
-    assert "user:password" not in result.stderr
-    assert "deploy:private" not in result.stderr
+    assert "top-secret" in result.stderr
+    assert "bearer-secret" in result.stderr
+    assert "user:password" in result.stderr
+    assert "deploy:private" in result.stderr
     assert "git@gitlab.example:team/repo.git" in result.stderr
-    assert "private-material" not in result.stderr
-    assert "/home/developer" not in result.stderr
-    assert "[REDACTED]" in result.stderr
-    assert "${RUNTIME_HOME}" in result.stderr
+    assert "private-material" in result.stderr
+    assert "/home/developer" in result.stderr

@@ -121,7 +121,7 @@ class TestGetScope:
         gate.generation.return_value = 9
         monkeypatch.setattr(
             "app.modules.claude_code.output_styles.catalog."
-            "get_marketplace_provider_gate",
+            "get_marketplace_target_client_gate",
             lambda: gate,
         )
         service = OutputStyleService(plugin_loader=loader)
@@ -145,7 +145,7 @@ class TestGetScope:
         assert result.documents[0].plugin_id == "demo@registry"
         assert result.documents[0].generation == 9
         assert result.documents[0].provenance is not None
-        assert result.documents[0].provenance.provider == "claude-code"
+        assert result.documents[0].provenance.target_client == "claude-code"
         assert result.documents[0].relative_source_path == ("output-styles/calm.md")
         assert result.documents[0].file_name == "output-styles/calm.md"
         assert detail.document.content.endswith("# Calm\n")
@@ -185,7 +185,7 @@ class TestGetScope:
         gate.generation.return_value = 11
         monkeypatch.setattr(
             "app.modules.claude_code.output_styles.catalog."
-            "get_marketplace_provider_gate",
+            "get_marketplace_target_client_gate",
             lambda: gate,
         )
         service = OutputStyleService(plugin_loader=loader)

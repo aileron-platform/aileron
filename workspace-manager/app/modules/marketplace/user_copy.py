@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import json
 import logging
-import re
 import shutil
 import tempfile
 from collections.abc import Iterator
@@ -21,24 +21,25 @@ from aileron_file_core import (
     FileOperationEngine,
 )
 from aileron_marketplace_core import (
-    MarketplaceUserCopyProfilePreview,
     PackageSourceError,
-    UserCopyApplyMetadataContract,
-    UserCopyApplyResultContract,
-    UserCopyContractError,
+    PluginReleaseIdentity,
+    UserCopyProjectionApplyMetadataContract,
+    UserCopyProjectionApplyResultContract,
     UserCopyOverwriteApprovalContract,
-    UserCopyPreflightRequestContract,
-    UserCopyPreflightResultContract,
-    UserCopyProfile,
-    build_user_copy_source_snapshot,
-    provider_resource_name_contract,
-    resolve_user_copy_profile_with_dependency_payloads,
+    UserCopyProjectionPreflightRequestContract,
+    UserCopyProjectionPreflightResultContract,
+    UserCopySourceProfile,
+    UserCopySourceProfilePreviewContract,
+    decode_json_pointer,
+    extract_user_copy_source_profile,
+    package_tree_digest,
+    validate_source_locator,
 )
+from app.modules.marketplace.target_clients import create_package_format_adapters
 from sqlalchemy.orm import Session
 
 from app.modules.marketplace.models import (
     MarketplacePackageSummary,
-    MarketplaceProvider,
     MarketplaceUserCopyApplyRequest,
     MarketplaceUserCopyApplyResult,
     MarketplaceUserCopyBlockingIssue,
@@ -46,6 +47,7 @@ from app.modules.marketplace.models import (
     MarketplaceUserCopyPreflightResult,
     MarketplaceUserCopyRequest,
     MarketplaceUserCopyResource,
+    MarketplaceSkippedUserCopyResource,
 )
 from app.modules.marketplace.runtime_client import (
     MarketplaceRuntimeClient,
@@ -53,7 +55,6 @@ from app.modules.marketplace.runtime_client import (
 )
 from app.modules.workspace.access_repository import WorkspaceAccessRepository
 
-_PROVIDER_STATE_ROOT_ID = re.compile(r"^psr_[0-9a-f]{64}$")
 _MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
 _LOGGER = logging.getLogger(__name__)
 
@@ -71,14 +72,13 @@ class MarketplaceUserCopyError(RuntimeError):
 class _RuntimeDescriptor:
     runtime_url: str
     runtime_instance_id: str
-    provider_state_root_id: str
 
 
 @dataclass(frozen=True)
 class _SparseSource:
     root: Path
-    profile: UserCopyProfile
-    preview: MarketplaceUserCopyProfilePreview
+    profile: UserCopySourceProfile
+    preview: UserCopySourceProfilePreviewContract
     source_digest: str
     package_tree_digest: str
 
@@ -86,26 +86,13 @@ class _SparseSource:
 class MarketplaceUserCopyRegistryPort(Protocol):
     """Narrow registry seam required by the user-copy workflow."""
 
-    def package_source_lock(
+    def open_user_copy_source(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
-        package_id: str,
-    ) -> AbstractContextManager[None]: ...
-
-    def get_package_operation_summary(
-        self,
-        user_id: str,
-        provider: MarketplaceProvider,
-        package_id: str,
-    ) -> MarketplacePackageSummary | None: ...
-
-    def resolve_package_path(
-        self,
-        user_id: str,
-        provider: MarketplaceProvider,
-        package_id: str,
-    ) -> Path: ...
+        catalog_plugin_id: str,
+        package_format: str,
+        target_client: str,
+    ) -> AbstractContextManager[tuple[MarketplacePackageSummary, Path]]: ...
 
     def file_engine_for_root(
         self,
@@ -163,17 +150,14 @@ class MarketplaceUserCopyService:
                     runtime_instance_id=runtime.runtime_instance_id,
                     request=contract,
                 )
-                contract.verify_response(
+                self._verify_preflight(
                     result,
-                    provider_state_root_id=runtime.provider_state_root_id,
+                    request=request,
+                    runtime_instance_id=runtime.runtime_instance_id,
+                    source=source,
                 )
             except MarketplaceRuntimeClientError as exc:
                 raise self._runtime_error(exc) from exc
-            except UserCopyContractError as exc:
-                raise MarketplaceUserCopyError(
-                    exc.args[0],
-                    http_status=503,
-                ) from exc
             return self._typed_public_preflight_result(
                 result,
                 request=request,
@@ -208,9 +192,11 @@ class MarketplaceUserCopyService:
                     runtime_instance_id=runtime.runtime_instance_id,
                     request=preflight_contract,
                 )
-                preflight_contract.verify_response(
+                self._verify_preflight(
                     wire_preflight,
-                    provider_state_root_id=runtime.provider_state_root_id,
+                    request=request,
+                    runtime_instance_id=runtime.runtime_instance_id,
+                    source=source,
                 )
                 preflight = self._typed_public_preflight_result(
                     wire_preflight,
@@ -218,37 +204,39 @@ class MarketplaceUserCopyService:
                     source=source,
                 )
                 if (
-                    preflight.materialization_digest
+                    preflight.profile_digest != request.expected_profile_digest
+                    or preflight.projection_digest != request.expected_projection_digest
+                    or preflight.materialization_digest
                     != request.expected_materialization_digest
                 ):
                     raise MarketplaceUserCopyError("marketplace.user_copy.plan_stale")
-                if preflight.status == "confirmation-required":
-                    self._validate_overwrite_approvals(request, preflight)
+                self._validate_confirmations(request, preflight)
                 if preflight.status == "blocked":
                     raise MarketplaceUserCopyError(
                         preflight.blocking_issues[0].error_code
                         if preflight.blocking_issues
                         else "marketplace.user_copy.apply_failed"
                     )
-                if preflight.status == "ready" and request.overwrite_approvals:
-                    raise MarketplaceUserCopyError("marketplace.user_copy.plan_stale")
-
                 archive = self._build_archive(source.root)
                 archive_digest = sha256(archive).hexdigest()
-                metadata = UserCopyApplyMetadataContract(
+                metadata = UserCopyProjectionApplyMetadataContract(
                     operationId=operation_id,
-                    provider=request.provider,
-                    packageId=request.package_id,
-                    revision=request.revision,
+                    packageFormat=request.package_format,
+                    targetClient=request.target_client,
+                    catalogPluginId=request.catalog_plugin_id,
+                    releaseRevision=request.release_revision,
                     workspaceId=request.workspace_id,
                     runtimeInstanceId=runtime.runtime_instance_id,
-                    providerStateRootId=runtime.provider_state_root_id,
+                    targetClientStateRootId=wire_preflight.target_client_state_root_id,
                     expectedSourceDigest=source.source_digest,
                     expectedArchiveDigest=archive_digest,
                     expectedPackageTreeDigest=source.package_tree_digest,
                     expectedProfileVersion=source.profile.profile_version,
                     expectedProfileDigest=source.profile.profile_digest,
+                    expectedProjectionDigest=preflight.projection_digest,
                     expectedMaterializationDigest=preflight.materialization_digest,
+                    acceptPartialCopy=request.accept_partial_copy,
+                    expectedSkippedCount=len(preflight.skipped_resources),
                     overwriteApprovals=[
                         UserCopyOverwriteApprovalContract.model_validate(
                             approval.model_dump(by_alias=True)
@@ -263,7 +251,10 @@ class MarketplaceUserCopyService:
                     metadata=metadata,
                     bundle=archive,
                 )
-                metadata.verify_result(wire_result, preflight=wire_preflight)
+                metadata.verify_result(
+                    wire_result,
+                    expected_counts=wire_preflight.expected_result_counts,
+                )
                 result = self._typed_apply_result(
                     wire_result,
                     request=request,
@@ -271,16 +262,6 @@ class MarketplaceUserCopyService:
                 )
         except MarketplaceRuntimeClientError as exc:
             error = self._runtime_error(exc)
-            self._record_activity(
-                user_id=user_id,
-                request=request,
-                operation_id=operation_id,
-                status="failed",
-                error_code=error.code,
-            )
-            raise error from exc
-        except UserCopyContractError as exc:
-            error = MarketplaceUserCopyError(exc.args[0], http_status=503)
             self._record_activity(
                 user_id=user_id,
                 request=request,
@@ -305,6 +286,8 @@ class MarketplaceUserCopyService:
             operation_id=operation_id,
             status="succeeded",
             error_code=None,
+            preflight=preflight,
+            result=result,
         )
         return result
 
@@ -317,68 +300,79 @@ class MarketplaceUserCopyService:
         with tempfile.TemporaryDirectory(prefix="marketplace-user-copy-") as tmp:
             sparse_root = Path(tmp) / "package"
             sparse_root.mkdir()
-            with self.registry.package_source_lock(
-                user_id,
-                request.provider,
-                request.package_id,
-            ):
-                summary = self.registry.get_package_operation_summary(
+            try:
+                with self.registry.open_user_copy_source(
                     user_id,
-                    request.provider,
-                    request.package_id,
-                )
-                if summary is None:
-                    raise MarketplaceUserCopyError(
-                        "marketplace.user_copy.package_not_found",
-                        http_status=404,
-                    )
-                if summary.revision != request.revision:
-                    raise MarketplaceUserCopyError(
-                        "marketplace.user_copy.revision_conflict"
-                    )
-                if summary.lifecycle_status != "ready":
-                    raise MarketplaceUserCopyError(
-                        "marketplace.user_copy.package_not_ready"
-                    )
-                package_root = self.registry.resolve_package_path(
-                    user_id,
-                    request.provider,
-                    request.package_id,
-                )
-                try:
-                    full_profile, dependency_payloads = (
-                        resolve_user_copy_profile_with_dependency_payloads(
-                            request.provider,
-                            package_root,
+                    request.catalog_plugin_id,
+                    request.package_format,
+                    request.target_client,
+                ) as source:
+                    summary, package_root = source
+                    if (
+                        summary.catalog_plugin_id != request.catalog_plugin_id
+                        or summary.package_format != request.package_format
+                        or summary.user_copy_target_client != request.target_client
+                    ):
+                        raise MarketplaceUserCopyError(
+                            "marketplace.user_copy.package_identity_mismatch"
                         )
-                    )
-                    self._materialize_sparse_root(
-                        package_root=package_root,
-                        sparse_root=sparse_root,
-                        provider=request.provider,
-                        profile=full_profile,
-                        dependency_locators=tuple(
-                            payload.source_locator for payload in dependency_payloads
-                        ),
-                    )
-                    snapshot = build_user_copy_source_snapshot(
-                        request.provider,
-                        sparse_root,
-                    )
-                    preview = MarketplaceUserCopyProfilePreview.from_wire(
-                        snapshot.preview
-                    )
-                    source_digest = preview.source_digest
-                except (OSError, PackageSourceError, ValueError) as exc:
-                    raise MarketplaceUserCopyError(
-                        "marketplace.user_copy.source_invalid"
-                    ) from exc
+                    if summary.revision != request.release_revision:
+                        raise MarketplaceUserCopyError(
+                            "marketplace.user_copy.revision_conflict"
+                        )
+                    try:
+                        release = PluginReleaseIdentity(
+                            catalog_plugin_id=request.catalog_plugin_id,
+                            revision=request.release_revision,
+                        )
+                        full_profile = extract_user_copy_source_profile(
+                            request.package_format,
+                            package_root,
+                            release=release,
+                        )
+                        self._materialize_sparse_root(
+                            package_root=package_root,
+                            sparse_root=sparse_root,
+                            package_format=request.package_format,
+                            profile=full_profile,
+                            dependency_locators=tuple(
+                                reference.source_locator
+                                for resource in full_profile.resources
+                                for reference in resource.dependency_references
+                            ),
+                        )
+                        profile = extract_user_copy_source_profile(
+                            request.package_format,
+                            sparse_root,
+                            release=release,
+                        )
+                        preview_payload = profile.canonical_dict()
+                        preview_payload["profileDigest"] = profile.profile_digest
+                        preview = UserCopySourceProfilePreviewContract.from_wire(
+                            preview_payload
+                        )
+                        source_digest = package_tree_digest(sparse_root)
+                    except (OSError, PackageSourceError, ValueError) as exc:
+                        raise MarketplaceUserCopyError(
+                            "marketplace.user_copy.source_invalid"
+                        ) from exc
+            except FileNotFoundError as exc:
+                raise MarketplaceUserCopyError(
+                    "marketplace.user_copy.package_not_found",
+                    http_status=404,
+                ) from exc
+            except MarketplaceUserCopyError:
+                raise
+            except (OSError, PackageSourceError, ValueError) as exc:
+                raise MarketplaceUserCopyError(
+                    "marketplace.user_copy.source_invalid"
+                ) from exc
             yield _SparseSource(
                 root=sparse_root,
-                profile=snapshot.profile,
+                profile=profile,
                 preview=preview,
                 source_digest=source_digest,
-                package_tree_digest=snapshot.package_tree_digest,
+                package_tree_digest=source_digest,
             )
 
     def _materialize_sparse_root(
@@ -386,8 +380,8 @@ class MarketplaceUserCopyService:
         *,
         package_root: Path,
         sparse_root: Path,
-        provider: str,
-        profile: UserCopyProfile,
+        package_format: str,
+        profile: UserCopySourceProfile,
         dependency_locators: tuple[str, ...],
     ) -> None:
         """Copy canonical profile sources and their exact dependency closure."""
@@ -395,16 +389,11 @@ class MarketplaceUserCopyService:
         resolved_package_root = package_root.resolve(strict=True)
         if package_root.is_symlink() or not resolved_package_root.is_dir():
             raise ValueError("Invalid package root")
-        contract = provider_resource_name_contract(provider)  # type: ignore[arg-type]
         locators = {
-            contract.plugin_manifest_path,
+            _manifest_locator(package_format),
             *(resource.source_locator for resource in profile.resources),
-            *(
-                blocked.source_locator
-                for blocked in profile.blocked_resources
-                if blocked.source_locator
-            ),
             *dependency_locators,
+            *self._diagnostic_source_locators(package_root, profile),
         }
         copied: set[str] = set()
         for raw_locator in sorted(locators):
@@ -440,6 +429,64 @@ class MarketplaceUserCopyService:
             else:
                 raise ValueError("Unsupported sparse source entry")
             copied.add(relative)
+
+    @staticmethod
+    def _diagnostic_source_locators(
+        package_root: Path,
+        profile: UserCopySourceProfile,
+    ) -> set[str]:
+        """Return bounded source files required to reproduce diagnostics."""
+
+        locators: set[str] = set()
+        for diagnostic in profile.diagnostics:
+            source_locator, separator, pointer = diagnostic.source_locator.partition(
+                "#"
+            )
+            try:
+                canonical = validate_source_locator(source_locator)
+            except PackageSourceError:
+                continue
+            locators.add(canonical)
+            if not separator:
+                continue
+            try:
+                document = json.loads(
+                    package_root.joinpath(*Path(canonical).parts).read_text(
+                        encoding="utf-8"
+                    )
+                )
+                value: Any = document
+                for token in decode_json_pointer(pointer):
+                    if isinstance(value, dict):
+                        value = value[token]
+                    elif isinstance(value, list):
+                        value = value[int(token)]
+                    else:
+                        raise KeyError(token)
+            except (
+                IndexError,
+                KeyError,
+                OSError,
+                TypeError,
+                ValueError,
+                json.JSONDecodeError,
+            ):
+                continue
+            references = (
+                [value]
+                if isinstance(value, str)
+                else value
+                if isinstance(value, list)
+                else []
+            )
+            for reference in references:
+                if not isinstance(reference, str):
+                    continue
+                try:
+                    locators.add(validate_source_locator(reference.removeprefix("./")))
+                except PackageSourceError:
+                    continue
+        return locators
 
     @staticmethod
     def _reject_symlinks(package_root: Path, source: Path) -> None:
@@ -509,12 +556,7 @@ class MarketplaceUserCopyService:
                 http_status=503,
             )
         descriptor_runtime_id = details.get("runtimeInstanceId")
-        provider_state_root_id = details.get("providerStateRootId")
-        if (
-            descriptor_runtime_id != runtime_instance_id
-            or not isinstance(provider_state_root_id, str)
-            or not _PROVIDER_STATE_ROOT_ID.fullmatch(provider_state_root_id)
-        ):
+        if descriptor_runtime_id != runtime_instance_id:
             raise MarketplaceUserCopyError(
                 "marketplace.user_copy.runtime_contract_invalid",
                 http_status=503,
@@ -522,7 +564,6 @@ class MarketplaceUserCopyService:
         return _RuntimeDescriptor(
             runtime_url=runtime_url,
             runtime_instance_id=runtime_instance_id,
-            provider_state_root_id=provider_state_root_id,
         )
 
     @staticmethod
@@ -531,33 +572,37 @@ class MarketplaceUserCopyService:
         request: MarketplaceUserCopyRequest,
         runtime: _RuntimeDescriptor,
         source: _SparseSource,
-    ) -> UserCopyPreflightRequestContract:
-        return UserCopyPreflightRequestContract(
-            provider=request.provider,
-            packageId=request.package_id,
-            revision=request.revision,
+    ) -> UserCopyProjectionPreflightRequestContract:
+        return UserCopyProjectionPreflightRequestContract(
+            packageFormat=request.package_format,
+            targetClient=request.target_client,
+            catalogPluginId=request.catalog_plugin_id,
+            releaseRevision=request.release_revision,
             workspaceId=request.workspace_id,
             runtimeInstanceId=runtime.runtime_instance_id,
             expectedSourceDigest=source.source_digest,
             expectedProfileVersion=source.profile.profile_version,
             expectedProfileDigest=source.profile.profile_digest,
-            userCopyProfilePreview=source.preview,
+            sourceProfile=source.preview,
         )
 
     @staticmethod
     def _typed_public_preflight_result(
-        result: UserCopyPreflightResultContract,
+        result: UserCopyProjectionPreflightResultContract,
         *,
         request: MarketplaceUserCopyRequest,
         source: _SparseSource,
     ) -> MarketplaceUserCopyPreflightResult:
         return MarketplaceUserCopyPreflightResult(
             status=result.status,
-            provider=request.provider,
-            packageId=request.package_id,
+            packageFormat=request.package_format,
+            targetClient=request.target_client,
+            catalogPluginId=request.catalog_plugin_id,
+            releaseRevision=request.release_revision,
             workspaceId=request.workspace_id,
             sourceDigest=source.source_digest,
             profileDigest=source.profile.profile_digest,
+            projectionDigest=result.projection_digest,
             materializationDigest=result.materialization_digest,
             resources=[
                 MarketplaceUserCopyResource(
@@ -568,6 +613,15 @@ class MarketplaceUserCopyService:
                     operation=resource.action,
                 )
                 for resource in result.resources
+            ],
+            skippedResources=[
+                MarketplaceSkippedUserCopyResource(
+                    code=item.code,
+                    resourceType=item.resource_type,
+                    resourceId=item.resource_id,
+                    sourceLocator=item.source_locator,
+                )
+                for item in result.skipped_resources
             ],
             conflicts=[
                 MarketplaceUserCopyConflict(
@@ -596,7 +650,7 @@ class MarketplaceUserCopyService:
 
     @staticmethod
     def _typed_apply_result(
-        result: UserCopyApplyResultContract,
+        result: UserCopyProjectionApplyResultContract,
         *,
         request: MarketplaceUserCopyApplyRequest,
         operation_id: str,
@@ -604,14 +658,54 @@ class MarketplaceUserCopyService:
         return MarketplaceUserCopyApplyResult(
             status="completed",
             operationId=operation_id,
-            provider=request.provider,
-            packageId=request.package_id,
+            packageFormat=request.package_format,
+            targetClient=request.target_client,
+            catalogPluginId=request.catalog_plugin_id,
+            releaseRevision=request.release_revision,
             workspaceId=request.workspace_id,
             createdCount=result.created_count,
             mergedCount=result.merged_count,
             unchangedCount=result.unchanged_count,
             overwrittenCount=result.overwritten_count,
+            skippedCount=result.skipped_count,
         )
+
+    @staticmethod
+    def _verify_preflight(
+        result: UserCopyProjectionPreflightResultContract,
+        *,
+        request: MarketplaceUserCopyRequest,
+        runtime_instance_id: str,
+        source: _SparseSource,
+    ) -> None:
+        if (
+            result.package_format != request.package_format
+            or result.target_client != request.target_client
+            or result.catalog_plugin_id != request.catalog_plugin_id
+            or result.release_revision != request.release_revision
+            or result.workspace_id != request.workspace_id
+            or result.runtime_instance_id != runtime_instance_id
+            or result.source_digest != source.source_digest
+            or result.profile_version != source.profile.profile_version
+            or result.profile_digest != source.profile.profile_digest
+        ):
+            raise MarketplaceUserCopyError(
+                "marketplace.user_copy.runtime_contract_invalid",
+                http_status=503,
+            )
+
+    @classmethod
+    def _validate_confirmations(
+        cls,
+        request: MarketplaceUserCopyApplyRequest,
+        preflight: MarketplaceUserCopyPreflightResult,
+    ) -> None:
+        if preflight.status == "confirmation-required":
+            cls._validate_overwrite_approvals(request, preflight)
+        elif request.overwrite_approvals:
+            raise MarketplaceUserCopyError("marketplace.user_copy.plan_stale")
+        if bool(preflight.skipped_resources) != request.accept_partial_copy:
+            raise MarketplaceUserCopyError("marketplace.user_copy.plan_stale")
 
     def _validate_overwrite_approvals(
         request: MarketplaceUserCopyApplyRequest,
@@ -690,17 +784,69 @@ class MarketplaceUserCopyService:
         operation_id: str,
         status: str,
         error_code: str | None,
+        preflight: MarketplaceUserCopyPreflightResult | None = None,
+        result: MarketplaceUserCopyApplyResult | None = None,
     ) -> None:
         try:
             self.registry.record_activity(
                 user_id,
                 action="copy",
                 status=status,
-                provider=request.provider,
-                package_id=request.package_id,
+                package_format=request.package_format,
+                target_client=request.target_client,
+                package_id=request.catalog_plugin_id,
                 operation_id=operation_id,
                 workspace_id=request.workspace_id,
                 error_code=error_code,
+                catalog_plugin_id=request.catalog_plugin_id,
+                release_revision=request.release_revision,
+                profile_digest=(preflight.profile_digest if preflight else None),
+                projection_digest=(preflight.projection_digest if preflight else None),
+                materialization_digest=(
+                    preflight.materialization_digest if preflight else None
+                ),
+                projected_count=(len(preflight.resources) if preflight else None),
+                skipped_count=(
+                    result.skipped_count
+                    if result
+                    else (len(preflight.skipped_resources) if preflight else None)
+                ),
+                conflict_count=(len(preflight.conflicts) if preflight else None),
+                created_count=(result.created_count if result else None),
+                merged_count=(result.merged_count if result else None),
+                unchanged_count=(result.unchanged_count if result else None),
+                overwritten_count=(result.overwritten_count if result else None),
+                target_locators=(
+                    tuple(
+                        dict.fromkeys(
+                            [
+                                *(item.target_locator for item in preflight.resources),
+                                *(item.target_locator for item in preflight.conflicts),
+                            ]
+                        )
+                    )
+                    if preflight
+                    else ()
+                ),
+                diagnostic_codes=(
+                    tuple(
+                        dict.fromkeys(
+                            [
+                                *(item.code for item in preflight.skipped_resources),
+                                *(
+                                    item.error_code
+                                    for item in preflight.blocking_issues
+                                ),
+                            ]
+                        )
+                    )
+                    if preflight
+                    else ()
+                ),
             )
         except Exception:
             _LOGGER.exception("Failed to append one-shot Marketplace copy activity")
+
+
+def _manifest_locator(package_format: str) -> str:
+    return str(create_package_format_adapters()[package_format].manifest_path(Path()))

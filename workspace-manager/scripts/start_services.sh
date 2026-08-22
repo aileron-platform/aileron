@@ -58,46 +58,7 @@ echo "   - Celery Worker: 2 concurrent processes"
 echo "   - Celery Beat: durable job recovery and dispatch"
 echo "   - Celery Flower: http://0.0.0.0:5555"
 echo "   - Celery Queue: celery"
-echo "   - Broker: ${CELERY_BROKER_URL:-redis://redis:6379/0}"
-echo "   - Result Backend: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}"
 echo ""
-
-# Derive host and port from REDIS_URL so Kubernetes deployments that only set
-# the URL do not wait the full 30 seconds.
-redis_url="${REDIS_URL:-redis://redis:6379/0}"
-redis_target="${redis_url#redis://}"
-redis_target="${redis_target#rediss://}"
-redis_target="${redis_target#*@}"
-redis_target="${redis_target%%/*}"
-
-redis_host="${REDIS_HOST:-${redis_target%%:*}}"
-redis_port="${REDIS_PORT:-6379}"
-
-if [[ -n "${redis_target}" && "${redis_target}" == *:* ]]; then
-    redis_port="${REDIS_PORT:-${redis_target##*:}}"
-fi
-
-if [ -z "${redis_host}" ]; then
-    redis_host="redis"
-fi
-
-# Wait for Redis availability.
-echo "⏳ Waiting for Redis service..."
-timeout=30
-echo "   - Redis Host: ${redis_host}"
-echo "   - Redis Port: ${redis_port}"
-while ! redis-cli -h "${redis_host}" -p "${redis_port}" ping > /dev/null 2>&1; do
-    timeout=$((timeout - 1))
-    if [ $timeout -eq 0 ]; then
-        echo "❌ Redis service is unavailable, continuing service startup"
-        break
-    fi
-    sleep 1
-done
-
-if [ $timeout -gt 0 ]; then
-    echo "✅ Redis service is ready"
-fi
 
 # Select Supervisor configuration.
 if [ "${NODE_ENV}" = "development" ]; then

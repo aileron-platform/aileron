@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List
 
@@ -12,13 +13,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import models as db_models
-from app.modules.workspace.capabilities import (
-    WorkspaceCapabilities,
-    build_capabilities_from_settings,
-)
 from app.modules.settings.models import UserSettings
 from app.modules.workspace.advisory_lock import (
     acquire_workspace_transaction_lock,
+)
+from app.modules.workspace.capabilities import (
+    WorkspaceCapabilities,
+    build_capabilities_from_settings,
+    reconcile_workspace_capabilities,
 )
 from app.modules.workspace.runtime.command_auth import runtime_command_headers
 
@@ -29,6 +31,14 @@ class RuntimeCapabilitiesSyncError(RuntimeError):
     """A ready Runtime generation could not accept its capabilities snapshot."""
 
     code = "RUNTIME_CAPABILITIES_SYNC_FAILED"
+
+
+@dataclass(frozen=True)
+class WorkspaceCapabilityResolution:
+    """Full persistence snapshot and workspace-selected effective capabilities."""
+
+    snapshot: WorkspaceCapabilities
+    effective: WorkspaceCapabilities
 
 
 class RuntimeSyncService:
@@ -106,10 +116,13 @@ class RuntimeSyncService:
                     runtime["workspace_id"],
                     changes["capabilities"],
                 )
+                effective_capabilities = self.resolve_workspace_capabilities(
+                    runtime["workspace_id"]
+                )
                 runtime_tasks.append(
                     self._sync_capabilities(
                         runtime["url"],
-                        self._normalize_capabilities(changes["capabilities"]),
+                        self._normalize_capabilities(effective_capabilities),
                         runtime["workspace_id"],
                     )
                 )
@@ -370,9 +383,16 @@ class RuntimeSyncService:
         capabilities: dict | WorkspaceCapabilities,
     ) -> Dict[str, any]:
         """Sync capabilities snapshot to an already-resolved runtime URL."""
+
+        capability_snapshot = WorkspaceCapabilities.model_validate(capabilities)
+        workspace = self.db.get(db_models.Workspace, workspace_id)
+        capability_snapshot = reconcile_workspace_capabilities(
+            capability_snapshot,
+            workspace.agentic_tools if workspace is not None else None,
+        )
         return await self._sync_capabilities(
             runtime_url,
-            self._normalize_capabilities(capabilities),
+            self._normalize_capabilities(capability_snapshot),
             workspace_id,
         )
 
@@ -449,18 +469,42 @@ class RuntimeSyncService:
         self,
         workspace_id: str,
     ) -> WorkspaceCapabilities:
-        """Resolve the persisted snapshot or the owner's current model settings."""
+        """Resolve the workspace-selected effective capability subset."""
+
+        return self.resolve_workspace_capability_resolution(workspace_id).effective
+
+    def resolve_workspace_capability_resolution(
+        self,
+        workspace_id: str,
+    ) -> WorkspaceCapabilityResolution:
+        """Resolve the full snapshot and its workspace-selected effective view."""
 
         workspace = self.db.get(db_models.Workspace, workspace_id)
-        if workspace and workspace.agentic_capabilities is not None:
-            return WorkspaceCapabilities.model_validate(workspace.agentic_capabilities)
-        if workspace:
-            from app.modules.settings.user_settings import SettingsService
+        snapshot = self._resolve_workspace_capability_snapshot(workspace)
+        effective = reconcile_workspace_capabilities(
+            snapshot,
+            workspace.agentic_tools if workspace is not None else None,
+        )
+        return WorkspaceCapabilityResolution(
+            snapshot=snapshot,
+            effective=effective,
+        )
 
-            owner_settings = SettingsService(self.db).get_settings(workspace.owner_id)
-            if owner_settings is not None:
-                return build_capabilities_from_settings(owner_settings)
-        return build_capabilities_from_settings(UserSettings())
+    def _resolve_workspace_capability_snapshot(
+        self,
+        workspace: db_models.Workspace | None,
+    ) -> WorkspaceCapabilities:
+        """Resolve a full owner-model snapshot without filtering workspace tools."""
+
+        if workspace is None:
+            return build_capabilities_from_settings(UserSettings())
+        if workspace.agentic_capabilities is not None:
+            return WorkspaceCapabilities.model_validate(workspace.agentic_capabilities)
+
+        from app.modules.settings.user_settings import SettingsService
+
+        owner_settings = SettingsService(self.db).get_settings(workspace.owner_id)
+        return build_capabilities_from_settings(owner_settings or UserSettings())
 
     def _capabilities_request(
         self,
@@ -645,4 +689,8 @@ class RuntimeSyncService:
             raise Exception(f"Firewall sync failed for {workspace_id}: {e}")
 
 
-__all__ = ["RuntimeCapabilitiesSyncError", "RuntimeSyncService"]
+__all__ = [
+    "RuntimeCapabilitiesSyncError",
+    "RuntimeSyncService",
+    "WorkspaceCapabilityResolution",
+]

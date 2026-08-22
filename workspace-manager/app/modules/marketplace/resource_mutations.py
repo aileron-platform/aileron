@@ -11,8 +11,8 @@ from aileron_marketplace_core import (
     decode_json_pointer,
     json_pointer_escape,
 )
-from aileron_marketplace_core.provider_resources import (
-    provider_resource_name_contract,
+from aileron_marketplace_core.package_format_resources import (
+    package_format_resource_name_contract,
 )
 from aileron_marketplace_core.resource_resolution import (
     manifest_reference_values,
@@ -23,10 +23,10 @@ from aileron_marketplace_core.resource_resolution import (
     validate_inline_mcp_servers,
 )
 
-from app.modules.marketplace.models import MarketplaceProvider
+from app.modules.marketplace.models import MarketplaceTargetClient
 from app.modules.marketplace.resource_resolvers import MarketplaceResourceOwner
 
-DOCUMENT_RESOURCE_ROOTS: dict[MarketplaceProvider, dict[str, str]] = {
+DOCUMENT_RESOURCE_ROOTS: dict[MarketplaceTargetClient, dict[str, str]] = {
     "claude-code": {
         "commands": "commands",
         "subagents": "agents",
@@ -34,7 +34,7 @@ DOCUMENT_RESOURCE_ROOTS: dict[MarketplaceProvider, dict[str, str]] = {
         "policies": "policies",
     },
     "codex": {
-        "commands": "prompts",
+        "commands": "commands",
         "subagents": "agents",
         "output-styles": "output-styles",
         "policies": "policies",
@@ -49,17 +49,27 @@ def validate_package_relative_path(path: str) -> PurePosixPath:
     return candidate
 
 
-def load_root_document_path(provider: str, package_path: Path) -> Path:
-    contract = provider_resource_name_contract(provider)
+def load_root_document_path(target_client: str, package_path: Path) -> Path:
+    package_formats = {
+        "codex": "codex-native",
+        "claude-code": "claude-native",
+    }
+    try:
+        package_format = package_formats[target_client]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unsupported Marketplace target client: {target_client}"
+        ) from exc
+    contract = package_format_resource_name_contract(package_format)
     return package_path / contract.root_document_name
 
 
 def document_resource_root(
-    provider: MarketplaceProvider,
+    target_client: MarketplaceTargetClient,
     resource_type: str,
 ) -> str:
     try:
-        return DOCUMENT_RESOURCE_ROOTS[provider][resource_type]
+        return DOCUMENT_RESOURCE_ROOTS[target_client][resource_type]
     except KeyError as exc:
         raise ValueError("marketplace.resource.unsupported_type") from exc
 
@@ -129,10 +139,11 @@ def get_json_entry(data: dict[str, Any], pointer: str | None) -> Any:
 def default_mcp_owner(
     package_path: Path,
     server_name: str,
-    provider: MarketplaceProvider,
+    target_client: MarketplaceTargetClient,
 ) -> MarketplaceResourceOwner:
     escaped_name = json_pointer_escape(server_name)
-    contract = provider_resource_name_contract(provider)
+    package_format = "codex-native" if target_client == "codex" else "claude-native"
+    contract = package_format_resource_name_contract(package_format)
     manifest_path = package_path / contract.plugin_manifest_path
     try:
         manifest = (
@@ -196,7 +207,7 @@ def default_mcp_owner(
         file_path=".mcp.json",
         json_pointer=(
             f"/{escaped_name}"
-            if provider == "claude-code"
+            if target_client == "claude-code"
             else f"/mcpServers/{escaped_name}"
         ),
         standalone_file=True,

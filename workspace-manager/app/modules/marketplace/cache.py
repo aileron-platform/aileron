@@ -35,10 +35,16 @@ class MarketplaceCache:
 
     def package_overview_key(
         self,
-        provider: str,
+        target_client: str,
         package_id: str,
+        package_format: str | None = None,
     ) -> str:
-        return f"marketplace:package:{provider}:{package_id}:overview"
+        identity = (
+            f"{target_client}:{package_format}:{package_id}"
+            if package_format is not None
+            else f"{target_client}:{package_id}"
+        )
+        return f"marketplace:package:{identity}:overview"
 
     def package_overview_pattern(self) -> str:
         return "marketplace:package:*:overview"

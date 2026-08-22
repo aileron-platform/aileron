@@ -40,7 +40,14 @@ def test_workspace_crd_schema_keeps_runtime_secret_reference_and_worktree_subdir
     assert "worktreeSubdir" in spec_schema["required"]
     assert spec_schema["properties"]["worktreeSubdir"]["minLength"] == 1
     assert "runtimeSecretName" in runtime_schema["required"]
-    assert runtime_schema["properties"]["runtimeSecretName"]["minLength"] == 1
+    runtime_secret_schema = runtime_schema["properties"]["runtimeSecretName"]
+    assert runtime_secret_schema["minLength"] == 37
+    assert runtime_secret_schema["maxLength"] == 37
+    assert runtime_secret_schema["pattern"] == (
+        "^workspace-generation-[0-9a-f]{16}$"
+    )
+    database_trust = runtime_schema["properties"]["databaseTrust"]
+    assert set(database_trust["required"]) == {"secretName", "secretKey", "revision"}
     assert "controlAssertion" not in runtime_schema["properties"]
     assert "stateDatabaseSecretName" not in runtime_schema["properties"]
 

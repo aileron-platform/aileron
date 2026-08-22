@@ -8,16 +8,18 @@ from sqlalchemy import JSON
 
 from app.config.model_registry import normalize_model_selection
 from app.db import models
-from app.modules.workspace.capabilities import (
-    ToolCapability,
-    WorkspaceCapabilities,
-    build_capabilities_from_settings,
-)
 from app.modules.settings.models import (
     ClaudeCodeSettings,
     CodexSettings,
     OpenCodeSettings,
     UserSettings,
+)
+from app.modules.workspace.capabilities import (
+    AgenticToolId,
+    ToolCapability,
+    WorkspaceCapabilities,
+    build_capabilities_from_settings,
+    reconcile_workspace_capabilities,
 )
 
 
@@ -224,3 +226,100 @@ def test_build_capabilities_normalizes_empty_user_model_selection() -> None:
     assert dumped["tools"][2]["models"]
     assert dumped["tools"][2]["defaultModel"] in dumped["tools"][2]["models"]
     assert all(tool["contextWindow"] > 0 for tool in dumped["tools"])
+
+
+def _capabilities_with_default(
+    default_tool: AgenticToolId = "claude",
+) -> WorkspaceCapabilities:
+    capabilities = build_capabilities_from_settings(UserSettings())
+    return WorkspaceCapabilities(
+        default_tool=default_tool,
+        tools=capabilities.tools,
+    )
+
+
+def test_reconcile_workspace_capabilities_filters_to_codex_without_data_loss() -> None:
+    capabilities = _capabilities_with_default()
+    original_codex = next(tool for tool in capabilities.tools if tool.id == "codex")
+
+    effective = reconcile_workspace_capabilities(capabilities, ["codex"])
+
+    assert [tool.id for tool in effective.tools] == ["codex"]
+    assert effective.default_tool == "codex"
+    assert effective.tools[0].model_dump(by_alias=True) == original_codex.model_dump(
+        by_alias=True
+    )
+
+
+def test_reconcile_workspace_capabilities_uses_workspace_canonical_order() -> None:
+    capabilities = _capabilities_with_default()
+
+    effective = reconcile_workspace_capabilities(
+        capabilities,
+        ["opencode", "claude-code"],
+    )
+
+    assert [tool.id for tool in effective.tools] == ["claude", "opencode"]
+
+
+def test_reconcile_workspace_capabilities_preserves_enabled_default() -> None:
+    capabilities = _capabilities_with_default("opencode")
+
+    effective = reconcile_workspace_capabilities(
+        capabilities,
+        ["claude-code", "opencode"],
+    )
+
+    assert [tool.id for tool in effective.tools] == ["claude", "opencode"]
+    assert effective.default_tool == "opencode"
+
+
+def test_reconcile_workspace_capabilities_falls_back_to_first_enabled_tool() -> None:
+    capabilities = _capabilities_with_default("codex")
+
+    effective = reconcile_workspace_capabilities(
+        capabilities,
+        ["opencode", "claude-code"],
+    )
+
+    assert [tool.id for tool in effective.tools] == ["claude", "opencode"]
+    assert effective.default_tool == "claude"
+
+
+@pytest.mark.parametrize(
+    "agentic_tools",
+    [None, [], ["unknown"], ["claude"], "codex", [None, 1]],
+)
+def test_reconcile_workspace_capabilities_constrains_legacy_invalid_selection(
+    agentic_tools: object,
+) -> None:
+    capabilities = _capabilities_with_default("codex")
+
+    effective = reconcile_workspace_capabilities(capabilities, agentic_tools)
+
+    assert [tool.id for tool in effective.tools] == ["codex"]
+    assert effective.default_tool == "codex"
+
+
+def test_reconcile_workspace_capabilities_honors_known_tool_in_mixed_state() -> None:
+    capabilities = _capabilities_with_default()
+
+    effective = reconcile_workspace_capabilities(
+        capabilities,
+        ["unknown", "codex"],
+    )
+
+    assert [tool.id for tool in effective.tools] == ["codex"]
+    assert effective.default_tool == "codex"
+
+
+def test_reconcile_workspace_capabilities_rejects_missing_explicit_tool() -> None:
+    capabilities = _capabilities_with_default()
+    claude = next(tool for tool in capabilities.tools if tool.id == "claude")
+    claude_only = WorkspaceCapabilities(default_tool="claude", tools=[claude])
+
+    with pytest.raises(
+        ValueError,
+        match="No enabled workspace tools have capability definitions",
+    ):
+        reconcile_workspace_capabilities(claude_only, ["codex"])

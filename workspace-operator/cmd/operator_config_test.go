@@ -20,6 +20,7 @@ func TestLoadOperatorConfigurationValidatesAndTypesEnvironment(t *testing.T) {
 	environment["WORKSPACE_STORAGE_CLASS_NAME"] = "workspace-data"
 	environment["RUNTIME_HOME_STORAGE_CLASS_NAME"] = "runtime-home"
 	environment["WORKSPACE_IMAGE_PULL_SECRET_NAMES"] = "first,second,first"
+	environment["PLATFORM_DATABASE_CILIUM_EGRESS_JSON"] = `{"kind":"namespacePods","namespace":"platform-data","podLabels":{"app.kubernetes.io/name":"postgres"}}`
 
 	configuration, err := loadOperatorConfigurationFromEnvironment(mapEnvironment(environment))
 	if err != nil {
@@ -40,11 +41,25 @@ func TestLoadOperatorConfigurationValidatesAndTypesEnvironment(t *testing.T) {
 	if !configuration.ciliumEnabled {
 		t.Fatal("Cilium should be enabled")
 	}
+	if configuration.platformDatabaseEgressDestination == nil ||
+		configuration.platformDatabaseEgressDestination.Namespace != "platform-data" {
+		t.Fatalf("platform database egress destination = %#v", configuration.platformDatabaseEgressDestination)
+	}
 	if !reflect.DeepEqual(configuration.workloadImagePullSecrets, []string{"first", "second"}) {
 		t.Fatalf("image pull secrets = %#v", configuration.workloadImagePullSecrets)
 	}
 	if configuration.browserCredentialKeyring == nil {
 		t.Fatal("browser credential keyring was not loaded")
+	}
+}
+
+func TestLoadOperatorConfigurationRejectsInvalidPlatformDatabaseEgressDestination(t *testing.T) {
+	environment := validOperatorEnvironment(t)
+	environment["PLATFORM_DATABASE_CILIUM_EGRESS_JSON"] = `{"kind":"namespacePods","namespace":"platform-data"}`
+
+	_, err := loadOperatorConfigurationFromEnvironment(mapEnvironment(environment))
+	if err == nil || !strings.Contains(err.Error(), "namespacePods requires namespace and podLabels") {
+		t.Fatalf("error = %v, want platform database egress validation failure", err)
 	}
 }
 

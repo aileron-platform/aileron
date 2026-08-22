@@ -59,6 +59,7 @@ dependencies = [
     "aileron-file-core",
     "aileron-git-core",
     "aileron-marketplace-core",
+    "aileron-runtime-database-connection",
 ]
 
 [project.optional-dependencies]
@@ -117,6 +118,7 @@ dev = [
 aileron-file-core = { path = "../packages/aileron-file-core", editable = true }
 aileron-git-core = { path = "../packages/aileron-git-core", editable = true }
 aileron-marketplace-core = { path = "../packages/aileron-marketplace-core", editable = true }
+aileron-runtime-database-connection = { path = "../packages/aileron-runtime-database-connection", editable = true }
 
 [tool.black]
 line-length = 88

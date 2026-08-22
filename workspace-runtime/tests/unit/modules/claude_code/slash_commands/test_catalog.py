@@ -270,6 +270,23 @@ class TestSlashCommandService:
         assert result[0].path == "plugin-cmd.md"
         assert result[0].plugin_name == "test-plugin"
 
+    def test_load_plugin_commands_propagates_file_errors_in_strict_mode(self, service):
+        mock_cmd = MagicMock()
+        mock_cmd.file_path = "/missing/plugin-cmd.md"
+
+        with (
+            patch(
+                "app.modules.claude_code.plugins.loader.get_plugin_loader"
+            ) as mock_get_loader,
+            patch("app.modules.claude_code.settings.dependencies.get_settings_service"),
+        ):
+            mock_loader = MagicMock()
+            mock_loader.load_plugin_commands.return_value = [mock_cmd]
+            mock_get_loader.return_value = mock_loader
+
+            with pytest.raises(OSError):
+                service._load_plugin_commands("workspace-1", strict_errors=True)
+
     def test_get_plugin_document_success(self, service, tmp_path):
         command_path = tmp_path / "test-plugin-cmd.md"
         command_path.write_text("# Plugin Command", encoding="utf-8")

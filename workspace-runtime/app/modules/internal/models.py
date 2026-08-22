@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import (
@@ -235,25 +236,46 @@ class _StrictMarketplaceModel(BaseModel):
     )
 
 
-MarketplaceProvider = Literal["claude-code", "codex"]
+MarketplaceTargetClient = Literal["claude-code", "codex"]
 MarketplacePluginCommandStatus = Literal["installed", "failed"]
 MarketplacePluginCommandStage = Literal[
     "marketplace-add",
     "plugin-install",
+    "plugin-enable",
     "marketplace-list",
     "plugin-list",
     "completed",
 ]
 
 
+class MarketplacePluginCliCommand(_StrictMarketplaceModel):
+    """One bounded CLI invocation included for durable Manager audit."""
+
+    sequence: int = Field(ge=0, le=20)
+    stage: MarketplacePluginCommandStage
+    argv_display: str = Field(alias="argvDisplay", min_length=1, max_length=4096)
+    exit_code: Optional[int] = Field(default=None, alias="exitCode")
+    started_at: datetime = Field(alias="startedAt")
+    ended_at: datetime = Field(alias="endedAt")
+    stdout: Optional[str] = Field(default=None, max_length=262144)
+    stderr: Optional[str] = Field(default=None, max_length=262144)
+    stdout_original_byte_count: int = Field(
+        alias="stdoutOriginalByteCount", ge=0
+    )
+    stderr_original_byte_count: int = Field(
+        alias="stderrOriginalByteCount", ge=0
+    )
+    truncated: bool = False
+
+
 class MarketplacePluginInstallRequest(_StrictMarketplaceModel):
-    """Run one provider-native plugin installation command sequence."""
+    """Run one target-client-native plugin installation command sequence."""
 
     operation_id: str = Field(
         alias="operationId",
         pattern=r"^[0-9a-f]{32}$",
     )
-    provider: MarketplaceProvider
+    target_client: MarketplaceTargetClient = Field(alias="targetClient")
     package_id: str = Field(
         alias="packageId",
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
@@ -263,7 +285,7 @@ class MarketplacePluginInstallRequest(_StrictMarketplaceModel):
         pattern=r"^[a-z0-9][a-z0-9._-]{0,127}$",
     )
     remote_url: str = Field(alias="remoteUrl", min_length=1, max_length=2048)
-    publish_ref: str = Field(alias="publishRef", min_length=1, max_length=255)
+    registry_ref: str = Field(alias="registryRef", min_length=1, max_length=255)
     workspace_id: str = Field(alias="workspaceId", min_length=1, max_length=255)
     runtime_instance_id: str = Field(
         alias="runtimeInstanceId",
@@ -282,7 +304,7 @@ class MarketplacePluginCommandResult(_StrictMarketplaceModel):
         alias="operationId",
         pattern=r"^[0-9a-f]{32}$",
     )
-    provider: MarketplaceProvider
+    target_client: MarketplaceTargetClient = Field(alias="targetClient")
     package_id: str = Field(
         alias="packageId",
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
@@ -299,9 +321,17 @@ class MarketplacePluginCommandResult(_StrictMarketplaceModel):
         alias="cliMessage",
         max_length=4096,
     )
-    stdout: Optional[str] = Field(default=None, max_length=65536)
-    stderr: Optional[str] = Field(default=None, max_length=65536)
+    stdout: Optional[str] = Field(default=None, max_length=262144)
+    stderr: Optional[str] = Field(default=None, max_length=262144)
     truncated: bool = False
+    commands: list[MarketplacePluginCliCommand] = Field(
+        default_factory=list, max_length=20
+    )
+    warnings: list[Literal[
+        "marketplace.install.state-unconfirmed",
+        "marketplace.install.command-timeout",
+        "marketplace.install.audit-persistence-failed",
+    ]] = Field(default_factory=list, max_length=10)
 
     @model_validator(mode="after")
     def validate_terminal_outcome(self) -> "MarketplacePluginCommandResult":

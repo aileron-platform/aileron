@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Union
+from enum import Enum
+from typing import Any, Callable
 from uuid import uuid4
 
 import httpx
 from sqlalchemy.orm import Session
-from typing_extensions import TypeAlias
-
 from app.config.settings import Settings, get_settings
 from app.db import models as db_models
-from app.modules.workspace.orchestrator.models import RuntimeInfo
+from app.modules.workspace.orchestrator.models import ExecutionPlaneInfo, RuntimeInfo
 from app.modules.workspace.runtime.assertions import (
     DrainAssertionContext,
     RuntimeAssertionService,
@@ -27,34 +27,66 @@ from app.modules.workspace.advisory_lock import WorkspaceAdvisoryLockLostError
 from app.modules.workspace.custom_resources import (
     WorkspaceCustomResourceExecutionIdentity,
     WorkspaceCustomResourceExecutionPlan,
+    WorkspaceCustomResourceExecutionResult,
     WorkspaceCustomResourceService,
 )
 from app.modules.workspace.runtime.job_execution import RuntimeJobClaimLostError
 
 logger = logging.getLogger(__name__)
 
-ExecutionPlanePlan: TypeAlias = Union[
-    WorkspaceExecutionPlanePlan,
-    WorkspaceCustomResourceExecutionPlan,
-]
+_ExecutionPlaneAttempt = (
+    WorkspaceExecutionPlanePlan | WorkspaceCustomResourceExecutionPlan
+)
 
 
-def activate_runtime_generation(
-    workspace: db_models.Workspace,
-    plan: ExecutionPlanePlan,
-) -> None:
-    """Activate a prepared Runtime generation before provider-side startup."""
+class GenerationState(str, Enum):
+    """Provisioner-neutral execution-plane outcome."""
 
-    if (
-        workspace.runtime_control_instance_id != plan.runtime_instance_id
-        or not workspace.runtime_control_token_hash
-    ):
-        raise ValueError("Runtime control generation is not prepared")
-    workspace.runtime_instance_id = plan.runtime_instance_id
+    READY = "ready"
+    FAILED = "failed"
+    ABSENT = "absent"
 
 
-class WorkspaceExecutionPlaneService:
-    """Own provisioner-neutral execution-plane lifecycle operations."""
+@dataclass(frozen=True)
+class GenerationClaim:
+    """One claimed generation transition with durable-job fencing."""
+
+    workspace_id: str
+    job_id: str
+    assert_owned: Callable[[], None] = field(repr=False)
+    desired_state: GenerationState = GenerationState.READY
+    runtime_instance_id: str | None = None
+    expected_mounted_revision: int = 0
+    target_mounted_revision: int = 0
+    identity: WorkspaceExecutionPlaneIdentity | None = None
+    delete_workspace: bool = False
+
+
+@dataclass(frozen=True)
+class GenerationOutcome:
+    """Observable generation state without provider plan leakage."""
+
+    state: GenerationState
+    workspace_id: str
+    generation_id: str | None
+    runtime_url: str | None = None
+    error_code: str | None = None
+    _attempt: object | None = field(default=None, repr=False, compare=False)
+    _provider_result: object | None = field(default=None, repr=False, compare=False)
+    _error: Exception | None = field(default=None, repr=False, compare=False)
+
+    def raise_for_failure(self) -> None:
+        """Re-raise the implementation failure for durable-job classification."""
+
+        if self.state != GenerationState.FAILED:
+            return
+        if self._error is None:
+            raise RuntimeError(self.error_code or "WORKSPACE_GENERATION_FAILED")
+        raise self._error
+
+
+class WorkspaceExecutionPlane:
+    """Own the complete Workspace generation transaction."""
 
     def __init__(
         self,
@@ -62,46 +94,247 @@ class WorkspaceExecutionPlaneService:
         *,
         settings: Settings | None = None,
         runtime_provision: RuntimeProvisionService | None = None,
-        custom_resource_service: WorkspaceCustomResourceService | None = None,
+        custom_resources: WorkspaceCustomResourceService | None = None,
+        runtime_database_service: Any | None = None,
         assertion_service_factory: Callable[[], RuntimeAssertionService] | None = None,
         http_client_factory: Callable[..., httpx.Client] | None = None,
     ) -> None:
         self.db = db
         self.settings = settings or get_settings()
+        self.runtime_database = runtime_database_service
         self.runtime_provision = (
             runtime_provision
             if runtime_provision is not None
-            else RuntimeProvisionService(db)
+            else RuntimeProvisionService(
+                db,
+                runtime_database_service=runtime_database_service,
+            )
         )
         self.custom_resources = (
-            custom_resource_service
-            if custom_resource_service is not None
-            else WorkspaceCustomResourceService(db)
+            custom_resources
+            if custom_resources is not None
+            else WorkspaceCustomResourceService(
+                db,
+                runtime_database_service=runtime_database_service,
+            )
         )
         self._assertion_service_factory = (
             assertion_service_factory or RuntimeAssertionService.from_settings
         )
         self._http_client_factory = http_client_factory or httpx.Client
 
-    def _prepare_execution_plane(
-        self,
-        workspace: db_models.Workspace,
-    ) -> ExecutionPlanePlan:
-        runtime_instance_id = str(uuid4())
+    def _prepare(self, workspace: db_models.Workspace, generation_id: str) -> object:
+        """Prepare and persist one generation without exposing adapter plans."""
+
         if workspace.provisioner == "kubernetes":
-            plan = self.custom_resources.prepare_execution_plane(
+            attempt = self.custom_resources._prepare_generation(
                 workspace,
-                runtime_instance_id=runtime_instance_id,
+                runtime_instance_id=generation_id,
             )
         elif workspace.provisioner == "docker":
-            plan = self.runtime_provision.prepare_execution_plane(
+            attempt = self.runtime_provision._prepare_generation(
                 workspace,
-                runtime_instance_id=runtime_instance_id,
+                runtime_instance_id=generation_id,
             )
         else:
             raise ValueError("Workspace provisioner is unsupported")
-        activate_runtime_generation(workspace, plan)
-        return plan
+        if (
+            workspace.runtime_control_instance_id != attempt.runtime_instance_id
+            or not workspace.runtime_control_token_hash
+        ):
+            raise ValueError("Runtime control generation is not prepared")
+        workspace.runtime_instance_id = attempt.runtime_instance_id
+        return attempt
+
+    def _prepare_execution_plane(self, workspace: db_models.Workspace) -> object:
+        """Prepare an internal generation attempt for durable reconcilers."""
+
+        return self._prepare(workspace, str(uuid4()))
+
+    def reconcile(
+        self, claim: GenerationClaim, *, attempt: object | None = None
+    ) -> GenerationOutcome:
+        """Converge one claimed Workspace generation transition."""
+
+        claim.assert_owned()
+        try:
+            if claim.desired_state == GenerationState.ABSENT:
+                if claim.identity is None:
+                    return GenerationOutcome(
+                        state=GenerationState.ABSENT,
+                        workspace_id=claim.workspace_id,
+                        generation_id=None,
+                    )
+                self.best_effort_drain(
+                    workspace_id=claim.workspace_id,
+                    workspace_identity=claim.identity,
+                    expected_mounted_revision=claim.expected_mounted_revision,
+                    target_mounted_revision=claim.target_mounted_revision,
+                    job_id=claim.job_id,
+                    assert_claim=claim.assert_owned,
+                )
+                self._revoke_generation(claim.identity)
+                self._terminate_persisted(
+                    claim.identity,
+                    assert_claim=claim.assert_owned,
+                    delete_workspace=claim.delete_workspace,
+                )
+                return GenerationOutcome(
+                    state=GenerationState.ABSENT,
+                    workspace_id=claim.workspace_id,
+                    generation_id=claim.identity.runtime_instance_id,
+                )
+
+            if attempt is None or claim.runtime_instance_id is None:
+                raise ValueError("Prepared Workspace generation is required")
+            identity = claim.identity
+            if identity is not None:
+                self.best_effort_drain(
+                    workspace_id=claim.workspace_id,
+                    workspace_identity=identity,
+                    expected_mounted_revision=claim.expected_mounted_revision,
+                    target_mounted_revision=claim.target_mounted_revision,
+                    job_id=claim.job_id,
+                    assert_claim=claim.assert_owned,
+                )
+            result = self._apply(attempt, claim.assert_owned)
+            return GenerationOutcome(
+                state=GenerationState.READY,
+                workspace_id=claim.workspace_id,
+                generation_id=claim.runtime_instance_id,
+                runtime_url=self._runtime_url(result),
+                _attempt=attempt,
+                _provider_result=result,
+            )
+        except (RuntimeJobClaimLostError, WorkspaceAdvisoryLockLostError):
+            raise
+        except Exception as exc:
+            return GenerationOutcome(
+                state=GenerationState.FAILED,
+                workspace_id=claim.workspace_id,
+                generation_id=claim.runtime_instance_id,
+                error_code=getattr(exc, "code", type(exc).__name__.upper()),
+                _attempt=attempt,
+                _error=exc,
+            )
+
+    def _apply(self, attempt: object, assert_claim: Callable[[], None]) -> object:
+        if isinstance(attempt, WorkspaceCustomResourceExecutionPlan):
+            return self.custom_resources._apply_generation(
+                attempt,
+                assert_claim=assert_claim,
+                max_attempts=max(1, self.settings.RUNTIME_READY_TIMEOUT_SECONDS),
+                interval_seconds=1.0,
+            )
+        if not isinstance(attempt, WorkspaceExecutionPlanePlan):
+            raise TypeError("Workspace generation attempt is invalid")
+        return self.runtime_provision._apply_generation(
+            attempt,
+            assert_claim=assert_claim,
+            timeout_seconds=self.settings.RUNTIME_READY_TIMEOUT_SECONDS,
+        )
+
+    def _stage_ready(
+        self,
+        workspace: db_models.Workspace,
+        outcome: GenerationOutcome,
+    ) -> None:
+        """Internal durable completion bridge for a Ready outcome."""
+
+        if outcome.state != GenerationState.READY or outcome._provider_result is None:
+            raise ValueError("Ready Workspace generation outcome is required")
+        result = outcome._provider_result
+        if isinstance(result, WorkspaceCustomResourceExecutionResult):
+            self.custom_resources._stage_generation(workspace, result)
+        elif isinstance(result, ExecutionPlaneInfo):
+            self.runtime_provision._stage_generation(workspace, result)
+        else:
+            raise TypeError("Workspace generation result is invalid")
+
+    def _discard_ready(
+        self,
+        outcome: GenerationOutcome,
+        *,
+        assert_claim: Callable[[], None],
+    ) -> None:
+        """Discard a Ready generation that lost its durable target."""
+
+        result = outcome._provider_result
+        attempt = outcome._attempt
+        if isinstance(result, WorkspaceCustomResourceExecutionResult):
+            self.custom_resources._discard_generation(
+                result,
+                assert_claim=assert_claim,
+            )
+        elif isinstance(attempt, WorkspaceExecutionPlanePlan) and isinstance(
+            result, ExecutionPlaneInfo
+        ):
+            self.runtime_provision._discard_generation(
+                attempt,
+                result,
+                assert_claim=assert_claim,
+            )
+        else:
+            raise TypeError("Workspace generation outcome is invalid")
+
+    def _revoke_generation(self, identity: WorkspaceExecutionPlaneIdentity) -> None:
+        if not identity.runtime_instance_id:
+            return
+        database = self.runtime_database
+        if database is None:
+            database = self.runtime_provision.runtime_database_service
+        database.deactivate(
+            database.prepare(
+                workspace_id=identity.id,
+                runtime_instance_id=identity.runtime_instance_id,
+            )
+        )
+
+    def _terminate_persisted(
+        self,
+        identity: WorkspaceExecutionPlaneIdentity,
+        *,
+        assert_claim: Callable[[], None],
+        delete_workspace: bool,
+    ) -> None:
+        if identity.provisioner == "kubernetes":
+            custom_identity = WorkspaceCustomResourceExecutionIdentity(
+                workspace_id=identity.id,
+                target_namespace=self.settings.RUNTIME_K8S_NAMESPACE,
+                runtime_instance_id=identity.runtime_instance_id,
+                runtime_pod_uid=identity.runtime_container_id,
+                browser_pod_uid=identity.browser_container_id,
+                canvas_pod_uid=identity.canvas_container_id,
+            )
+            if delete_workspace:
+                self.custom_resources._delete_persisted_workspace(
+                    custom_identity,
+                    assert_claim=assert_claim,
+                )
+            else:
+                self.custom_resources._discard_generation(
+                    custom_identity,
+                    assert_claim=assert_claim,
+                )
+            return
+        if identity.provisioner != "docker":
+            raise ValueError("Workspace provisioner is unsupported")
+        self.runtime_provision._terminate_persisted_generation(
+            identity,
+            assert_claim=assert_claim,
+        )
+        self.runtime_provision._prove_generation_absent(
+            identity,
+            assert_claim=assert_claim,
+        )
+
+    @staticmethod
+    def _runtime_url(result: object) -> str:
+        if isinstance(result, WorkspaceCustomResourceExecutionResult):
+            return result.runtime_internal_url
+        if isinstance(result, ExecutionPlaneInfo):
+            return result.runtime.internal_url
+        raise TypeError("Workspace generation result is invalid")
 
     @staticmethod
     def _execution_plane_identity(
@@ -143,7 +376,7 @@ class WorkspaceExecutionPlaneService:
         *,
         workspace_id: str,
         target_revision: int,
-        plan: ExecutionPlanePlan,
+        plan: _ExecutionPlaneAttempt,
         assert_claim: Callable[[], None],
     ) -> RuntimeInfo | None:
         workspace = self.db.get(db_models.Workspace, workspace_id)
@@ -179,7 +412,7 @@ class WorkspaceExecutionPlaneService:
     def _apply_runtime_component_result(
         self,
         workspace: db_models.Workspace,
-        plan: ExecutionPlanePlan,
+        plan: _ExecutionPlaneAttempt,
         result: RuntimeInfo | None,
     ) -> None:
         if (
@@ -224,14 +457,14 @@ class WorkspaceExecutionPlaneService:
                     assert_claim=assert_claim,
                 )
                 return
-            self.custom_resources.prove_execution_plane_absent(
+            self.custom_resources._prove_generation_absent(
                 custom_resource_identity,
                 assert_claim=assert_claim,
             )
             return
         if workspace_identity.provisioner != "docker":
             raise ValueError("Workspace provisioner is unsupported")
-        self.runtime_provision.prove_execution_plane_absent(
+        self.runtime_provision._prove_generation_absent(
             workspace_identity,
             assert_claim=assert_claim,
         )
@@ -336,6 +569,8 @@ class WorkspaceExecutionPlaneService:
 
 
 __all__ = [
-    "ExecutionPlanePlan",
-    "WorkspaceExecutionPlaneService",
+    "GenerationClaim",
+    "GenerationOutcome",
+    "GenerationState",
+    "WorkspaceExecutionPlane",
 ]

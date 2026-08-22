@@ -14,15 +14,13 @@ from typing import Any, Callable, Iterable, Literal, Mapping, Never, overload
 from fastapi import HTTPException, status
 
 from app.core.revision import assert_revision, compute_revision
-from app.modules.cli_settings.user_scope.models import (
-    CodexLayer,
-    CodexResource,
-)
-from app.modules.cli_settings.user_scope.paths import (
-    CodexPathResolver,
-    get_codex_path_resolver,
-)
 from app.modules.cli_settings.cache import ProcessTTLCache
+from app.modules.cli_settings.raw_file import (
+    RawFileError,
+    RawFileFailure,
+    raw_file_parts,
+    read_raw_file,
+)
 from app.modules.cli_settings.toml_codec import (
     dump_toml,
     merge_known_values,
@@ -34,8 +32,16 @@ from app.modules.cli_settings.user_scope.codecs import (
     remove_file_exact,
     write_text_atomic,
 )
-from app.modules.cli_settings.user_scope.paths import logical_runtime_locator
-from app.modules.marketplace_operations.gate import get_marketplace_provider_gate
+from app.modules.cli_settings.user_scope.models import (
+    CodexLayer,
+    CodexResource,
+)
+from app.modules.cli_settings.user_scope.paths import (
+    CodexPathResolver,
+    get_codex_path_resolver,
+    logical_runtime_locator,
+)
+from app.modules.marketplace_operations.gate import get_marketplace_target_client_gate
 from app.modules.marketplace_operations.plugin_resources import (
     plugin_resource_provenance,
     sanitize_plugin_definition,
@@ -91,9 +97,10 @@ from .models import (
     CodexTrustUpdateResponse,
 )
 from .plugin_controls import CodexPluginControlStore
-from .plugin_resources import CodexPluginResourceResolver
+from .plugin_resources import CodexPluginResourceResolver, CodexPluginSkill
 
 _TOML_CODEC = TomlDocumentCodec(invalid_as_empty=False)
+_RAW_PREVIEW_MAX_BYTES = 10 * 1024 * 1024
 _write_locks_guard = Lock()
 _write_locks: dict[Path, Lock] = {}
 _CodexCollectionCacheKey = tuple[str, str, str, str, str]
@@ -341,6 +348,7 @@ class CodexSettingsIntent(StrEnum):
     GET_SUBAGENT = "get_subagent"
     LIST_FILES = "list_files"
     GET_FILE = "get_file"
+    GET_FILE_BINARY = "get_file_binary"
     UPDATE_FILE = "update_file"
     DELETE_FILE = "delete_file"
     REFRESH_CACHE = "refresh_cache"
@@ -371,6 +379,7 @@ CodexSettingsResult = (
     | CodexSubagentDeleteResponse
     | CodexFileListResponse
     | CodexTextFileResponse
+    | bytes
     | dict[str, str]
     | None
 )
@@ -683,6 +692,18 @@ class CodexAgentSettings:
     @overload
     def execute(
         self,
+        intent: Literal[CodexSettingsIntent.GET_FILE_BINARY],
+        workspace_id: str,
+        layer: CodexLayer | str,
+        resource: str,
+        relative_path: str,
+        *,
+        plugin_id: str | None = None,
+    ) -> bytes: ...
+
+    @overload
+    def execute(
+        self,
         intent: Literal[CodexSettingsIntent.UPDATE_FILE],
         workspace_id: str,
         layer: CodexLayer | str,
@@ -784,6 +805,8 @@ class CodexAgentSettings:
             return self._list_files(*arguments, **options)
         if intent is CodexSettingsIntent.GET_FILE:
             return self._get_file(*arguments, **options)
+        if intent is CodexSettingsIntent.GET_FILE_BINARY:
+            return self._get_file_binary(*arguments, **options)
         if intent is CodexSettingsIntent.UPDATE_FILE:
             return self._update_file(*arguments, **options)
         if intent is CodexSettingsIntent.DELETE_FILE:
@@ -1350,7 +1373,8 @@ class CodexAgentSettings:
             )
         if entry.source != "hooks_json":
             _raise_invalid_hooks(
-                "READ_ONLY_HOOK_ENTRY", "Only user and project hook sources are editable"
+                "READ_ONLY_HOOK_ENTRY",
+                "Only user and project hook sources are editable",
             )
         if previous is not None and previous.source != "hooks_json":
             _raise_invalid_hooks(
@@ -1390,12 +1414,11 @@ class CodexAgentSettings:
         revision: str,
     ) -> CodexHooksDocumentResponse:
         if entry.source == "inline_config":
-            return self._delete_inline_hook_entry(
-                workspace_id, layer, entry, revision
-            )
+            return self._delete_inline_hook_entry(workspace_id, layer, entry, revision)
         if entry.source != "hooks_json":
             _raise_invalid_hooks(
-                "READ_ONLY_HOOK_ENTRY", "Only user and project hook sources are editable"
+                "READ_ONLY_HOOK_ENTRY",
+                "Only user and project hook sources are editable",
             )
 
         codex_layer = CodexLayer(layer)
@@ -1434,7 +1457,9 @@ class CodexAgentSettings:
                     continue
                 for item in event_hooks:
                     if isinstance(item, dict):
-                        inline_items.append({"layer": layer.value, "event": event, "hook": item})
+                        inline_items.append(
+                            {"layer": layer.value, "event": event, "hook": item}
+                        )
         return self._inline_hook_entries(inline_items) if inline_items else []
 
     def _write_inline_hook_entries(
@@ -1464,7 +1489,9 @@ class CodexAgentSettings:
             scope=layer.value,
         )
         shared = self._shared_hook_sources()
-        return self._get_inline_hooks_document(workspace_id, layer, shared) or CodexHooksDocumentResponse(
+        return self._get_inline_hooks_document(
+            workspace_id, layer, shared
+        ) or CodexHooksDocumentResponse(
             workspaceId=workspace_id,
             scope=layer.value,
             path=self._logical_locator(path),
@@ -1565,7 +1592,9 @@ class CodexAgentSettings:
             capability="hooks",
             scope=codex_layer.value,
         )
-        return CodexFeatureEnableResponse(workspaceId=workspace_id, featureEnabled=False)
+        return CodexFeatureEnableResponse(
+            workspaceId=workspace_id, featureEnabled=False
+        )
 
     def _list_apps(
         self,
@@ -1807,7 +1836,7 @@ class CodexAgentSettings:
         enabled: bool,
         revision: str | None = None,
     ) -> CodexPluginToggleResponse:
-        gate = get_marketplace_provider_gate()
+        gate = get_marketplace_target_client_gate()
         self._validate_plugin_id(plugin_id)
         codex_layer = CodexLayer(scope)
         path = self._resolver.resolve(codex_layer, CodexResource.CONFIG)
@@ -2154,6 +2183,74 @@ class CodexAgentSettings:
             revision=compute_revision(content) if resource == "skills" else None,
         )
 
+    def _get_file_binary(
+        self,
+        workspace_id: str,
+        layer: CodexLayer | str,
+        resource: str,
+        relative_path: str,
+        plugin_id: str | None = None,
+    ) -> bytes:
+        _ = workspace_id
+        not_found_code = (
+            "PLUGIN_FILE_NOT_FOUND" if str(layer) == "plugin" else "FILE_NOT_FOUND"
+        )
+        try:
+            if str(layer) == "plugin":
+                root, target_path = self._resolve_plugin_binary_file(
+                    resource,
+                    relative_path,
+                    plugin_id,
+                )
+            else:
+                root = self._file_resource_path(CodexLayer(layer), resource)
+                target_path = relative_path
+            return read_raw_file(root, target_path, _RAW_PREVIEW_MAX_BYTES)
+        except HTTPException:
+            raise
+        except RawFileError as exc:
+            self._raise_raw_file_error(exc, relative_path, not_found_code)
+        except Exception as exc:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error": "FILE_READ_FAILED",
+                    "message": "Unable to read requested file",
+                },
+            ) from exc
+
+    @staticmethod
+    def _raise_raw_file_error(
+        error: RawFileError,
+        relative_path: str,
+        not_found_code: str,
+    ) -> Never:
+        if error.failure is RawFileFailure.INVALID_PATH:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"error": "INVALID_FILE_PATH", "message": relative_path},
+            ) from error
+        if error.failure is RawFileFailure.NOT_FOUND:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail={"error": not_found_code, "message": relative_path},
+            ) from error
+        if error.failure is RawFileFailure.TOO_LARGE:
+            raise HTTPException(
+                status.HTTP_413_CONTENT_TOO_LARGE,
+                detail={
+                    "error": "FILE_TOO_LARGE",
+                    "message": "Raw preview exceeds the configured size limit",
+                },
+            ) from error
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "FILE_READ_FAILED",
+                "message": "Unable to read requested file",
+            },
+        ) from error
+
     def _update_file(
         self,
         workspace_id: str,
@@ -2285,6 +2382,21 @@ class CodexAgentSettings:
         relative_path: str,
         plugin_id: str | None,
     ) -> CodexTextFileResponse:
+        skill = self._resolve_plugin_skill(resource, relative_path, plugin_id)
+        return CodexTextFileResponse(
+            workspaceId=workspace_id,
+            scope="plugin",
+            path=skill.relative_source_path or skill.relative_path,
+            content=read_text(skill.path),
+            exists=True,
+        )
+
+    def _resolve_plugin_skill(
+        self,
+        resource: str,
+        relative_path: str,
+        plugin_id: str | None,
+    ) -> CodexPluginSkill:
         clean_path = Path(relative_path)
         if clean_path.is_absolute() or ".." in clean_path.parts:
             raise HTTPException(
@@ -2305,13 +2417,64 @@ class CodexAgentSettings:
                 status.HTTP_404_NOT_FOUND,
                 detail={"error": "PLUGIN_FILE_NOT_FOUND", "message": relative_path},
             )
-        return CodexTextFileResponse(
-            workspaceId=workspace_id,
-            scope="plugin",
-            path=skill.relative_source_path or skill.relative_path,
-            content=read_text(skill.path),
-            exists=True,
-        )
+        return skill
+
+    def _resolve_plugin_binary_file(
+        self,
+        resource: str,
+        relative_path: str,
+        plugin_id: str | None,
+    ) -> tuple[Path, str]:
+        if resource != "skills":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"errorCode": "marketplace.settings.plugin_scope_not_supported"},
+            )
+        requested_parts = raw_file_parts(relative_path)
+        if plugin_id is None:
+            raise RawFileError(RawFileFailure.NOT_FOUND)
+
+        matches: dict[tuple[Path, str], int] = {}
+        for skill in self._plugin_resolver.skills():
+            if skill.plugin.plugin_id != plugin_id:
+                continue
+            package_root = skill.plugin.package_root
+            try:
+                source_relative = skill.path.relative_to(package_root)
+            except ValueError:
+                continue
+            if (
+                source_relative.is_absolute()
+                or ".." in source_relative.parts
+                or not source_relative.parts
+            ):
+                continue
+            skill_root_relative = source_relative.parent
+            for locator in (skill.relative_path, skill.relative_source_path):
+                if not locator:
+                    continue
+                try:
+                    logical_parts = raw_file_parts(locator)
+                except RawFileError as exc:
+                    raise RuntimeError("Invalid plugin skill inventory") from exc
+                logical_root = logical_parts[:-1]
+                if (
+                    len(requested_parts) <= len(logical_root)
+                    or requested_parts[: len(logical_root)] != logical_root
+                ):
+                    continue
+                tail = requested_parts[len(logical_root) :]
+                descriptor_path = (skill_root_relative / Path(*tail)).as_posix()
+                key = (package_root, descriptor_path)
+                matches[key] = max(matches.get(key, -1), len(logical_root))
+
+        if not matches:
+            raise RawFileError(RawFileFailure.NOT_FOUND)
+        specificity = max(matches.values())
+        selected = [target for target, score in matches.items() if score == specificity]
+        if len(selected) != 1:
+            raise RawFileError(RawFileFailure.NOT_FOUND)
+        return selected[0]
 
     def _resolve_subagent_file(self, layer: CodexLayer, relative_path: str) -> Path:
         if not relative_path or not relative_path.strip():
@@ -2841,7 +3004,7 @@ class CodexAgentSettings:
             relativeSourcePath=item.relative_source_path,
             generation=generation,
             provenance=plugin_resource_provenance(
-                provider="codex",
+                target_client="codex",
                 plugin_id=item.plugin.plugin_id,
                 marketplace_id=marketplace_id,
             ),
@@ -2849,7 +3012,7 @@ class CodexAgentSettings:
 
     @staticmethod
     def _provider_generation() -> int:
-        return get_marketplace_provider_gate().generation("codex")
+        return get_marketplace_target_client_gate().generation("codex")
 
     @staticmethod
     def _clear_process_cache(
@@ -2880,7 +3043,7 @@ class CodexAgentSettings:
         capability: str | None = None,
         scope: str | None = None,
     ) -> None:
-        get_marketplace_provider_gate().advance_generation("codex")
+        get_marketplace_target_client_gate().advance_generation("codex")
         cls._clear_process_cache(
             workspace_id,
             capability=capability,
@@ -3076,13 +3239,10 @@ class CodexAgentSettings:
                     if timeout is not None and not isinstance(timeout, int):
                         _raise_invalid_hooks("INVALID_HOOK_TIMEOUT", event)
                     additional_context_limit = action.get("additionalContextLimit")
-                    if (
-                        additional_context_limit is not None
-                        and (
-                            isinstance(additional_context_limit, bool)
-                            or not isinstance(additional_context_limit, int)
-                            or additional_context_limit < 0
-                        )
+                    if additional_context_limit is not None and (
+                        isinstance(additional_context_limit, bool)
+                        or not isinstance(additional_context_limit, int)
+                        or additional_context_limit < 0
                     ):
                         _raise_invalid_hooks(
                             "INVALID_HOOK_ADDITIONAL_CONTEXT_LIMIT", event
@@ -3264,9 +3424,7 @@ class CodexAgentSettings:
                         source=source,  # type: ignore[arg-type]
                         layer=layer,  # type: ignore[arg-type]
                         hookScope=(
-                            source
-                            if source in {"plugin", "session"}
-                            else layer
+                            source if source in {"plugin", "session"} else layer
                         ),  # type: ignore[arg-type]
                         readOnly=read_only,
                         editable=not read_only,
@@ -3373,7 +3531,11 @@ class CodexAgentSettings:
                     statusMessage=(
                         status_message if isinstance(status_message, str) else None
                     ),
-                    async_=item.get("async") if isinstance(item.get("async"), bool) else None,
+                    async_=(
+                        item.get("async")
+                        if isinstance(item.get("async"), bool)
+                        else None
+                    ),
                     commandWindows=(
                         item.get("commandWindows", item.get("command_windows"))
                         if isinstance(

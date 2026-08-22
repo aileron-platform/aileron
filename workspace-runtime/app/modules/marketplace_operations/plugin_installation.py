@@ -1,4 +1,4 @@
-"""One-shot Runtime orchestration for provider CLI plugin installation."""
+"""One-shot Runtime orchestration for target_client CLI plugin installation."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from app.modules.internal.models import (
 )
 
 from .errors import MarketplaceOperationError
-from .gate import MarketplaceProviderGate
-from .plugin_cli_install import ProviderPluginCliInstaller
+from .gate import MarketplaceTargetClientGate
+from .plugin_cli_install import TargetClientPluginCliInstaller
 from .state import MarketplaceMutationStore
 
 _URI_CREDENTIALS = re.compile(
@@ -23,22 +23,22 @@ _URI_CREDENTIALS = re.compile(
 
 
 class MarketplacePluginInstallService:
-    """Serialize one provider CLI installation without retaining lifecycle state."""
+    """Serialize one target_client CLI installation without retaining lifecycle state."""
 
     def __init__(
         self,
         *,
         settings: Settings | None = None,
         store: MarketplaceMutationStore | None = None,
-        gate: MarketplaceProviderGate | None = None,
-        installer: ProviderPluginCliInstaller | None = None,
+        gate: MarketplaceTargetClientGate | None = None,
+        installer: TargetClientPluginCliInstaller | None = None,
     ) -> None:
         self._settings = settings or get_settings()
         self._store = store or MarketplaceMutationStore(
             Path(self._settings.MARKETPLACE_OPERATION_JOURNAL_DIR)
         )
-        self._gate = gate or MarketplaceProviderGate(self._store)
-        self._installer = installer or ProviderPluginCliInstaller()
+        self._gate = gate or MarketplaceTargetClientGate(self._store)
+        self._installer = installer or TargetClientPluginCliInstaller()
 
     def install(
         self,
@@ -47,25 +47,25 @@ class MarketplacePluginInstallService:
         """Run the CLI sequence and return its bounded terminal result."""
 
         self._validate_request(request)
-        with self._store.provider_lock(
-            provider=request.provider,
+        with self._store.target_client_lock(
+            target_client=request.target_client,
         ):
             outcome = self._installer.install(
-                provider=request.provider,
+                target_client=request.target_client,
                 package_id=request.package_id,
                 marketplace_id=request.marketplace_id,
                 remote_url=request.remote_url,
-                publish_ref=request.publish_ref,
+                registry_ref=request.registry_ref,
             )
-            self._gate.advance_generation(request.provider)
+            self._gate.advance_generation(request.target_client)
             clear_agent_settings_cache(
-                provider=request.provider,
+                provider=request.target_client,
                 workspace_id=request.workspace_id,
             )
         return MarketplacePluginCommandResult(
             status=outcome.status,
             operationId=request.operation_id,
-            provider=request.provider,
+            targetClient=request.target_client,
             packageId=request.package_id,
             marketplaceId=request.marketplace_id,
             workspaceId=request.workspace_id,
@@ -75,6 +75,23 @@ class MarketplacePluginInstallService:
             stdout=outcome.stdout,
             stderr=outcome.stderr,
             truncated=outcome.truncated,
+            commands=[
+                {
+                    "sequence": command.sequence,
+                    "stage": command.stage,
+                    "argvDisplay": command.argv_display,
+                    "exitCode": command.exit_code,
+                    "startedAt": command.started_at,
+                    "endedAt": command.ended_at,
+                    "stdout": command.stdout,
+                    "stderr": command.stderr,
+                    "stdoutOriginalByteCount": command.stdout_original_byte_count,
+                    "stderrOriginalByteCount": command.stderr_original_byte_count,
+                    "truncated": command.truncated,
+                }
+                for command in outcome.commands
+            ],
+            warnings=list(outcome.warnings),
         )
 
     def _validate_request(
@@ -89,7 +106,7 @@ class MarketplacePluginInstallService:
                 "marketplace.install.runtime_rebind_failed",
                 http_status=409,
             )
-        for value in (request.remote_url, request.publish_ref):
+        for value in (request.remote_url, request.registry_ref):
             if value != value.strip() or any(
                 ord(character) < 32 for character in value
             ):

@@ -155,7 +155,10 @@ def test_initializer_clones_before_seeding_defaults(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert (workspace / "README.md").read_text(encoding="utf-8") == "# Repository\n"
-    assert (workspace / ".agents" / "skills" / "default-skill").is_dir()
+    home = Path(environment["HOME"])
+    assert (home / ".claude" / "skills" / "default-skill").is_dir()
+    assert (home / ".codex" / "skills" / "default-skill").is_dir()
+    assert (home / ".config" / "opencode" / "skills" / "default-skill").is_dir()
     assert state["phase"] == "Succeeded"
     assert (
         state["gitRepoFingerprint"]
@@ -237,31 +240,35 @@ def test_initializer_fails_when_succeeded_defaults_marker_is_missing(
 
 
 @pytest.mark.unit
-def test_initializer_repairs_default_skill_layout_on_restart(tmp_path: Path) -> None:
-    environment = _environment(tmp_path)
-    assert _run(environment).returncode == 0
-
-    workspace = Path(environment["AILERON_WORKSPACE_PATH"])
-    bootstrap_dir = _bootstrap_dir(environment)
-    (bootstrap_dir / "agent-defaults-v2.json").unlink()
-    codex_skill = workspace / ".codex" / "skills" / "default-skill"
-    codex_skill.joinpath("SKILL.md").write_text(
-        "# Project override\n",
+def test_initializer_surfaces_bounded_agent_defaults_diagnostic(
+    tmp_path: Path,
+) -> None:
+    diagnostic_script = tmp_path / "failing-agent-defaults.sh"
+    diagnostic_script.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' '{'x' * 5000}agent-defaults-detail' >&2\n"
+        "exit 1\n",
         encoding="utf-8",
     )
-    opencode_skill = workspace / ".opencode" / "skills" / "default-skill"
-    shutil.rmtree(opencode_skill)
+    diagnostic_script.chmod(0o755)
+    environment = _environment(
+        tmp_path,
+        AILERON_AGENT_DEFAULTS_INITIALIZER=str(diagnostic_script),
+    )
 
     result = _run(environment)
 
-    assert result.returncode == 0, result.stderr
-    assert codex_skill.joinpath("SKILL.md").read_text(encoding="utf-8") == (
-        "# Project override\n"
-    )
-    assert opencode_skill.joinpath("SKILL.md").read_text(encoding="utf-8") == (
-        "# Default\n"
-    )
-    assert (bootstrap_dir / "agent-defaults-v2.json").is_file()
+    assert result.returncode != 0
+    diagnostic_lines = [
+        line
+        for line in result.stderr.splitlines()
+        if line.startswith("Agent defaults initializer diagnostics: ")
+    ]
+    assert len(diagnostic_lines) == 1
+    diagnostic = diagnostic_lines[0].split(": ", 1)[1]
+    assert len(diagnostic) == 4096
+    assert diagnostic.endswith("agent-defaults-detail")
+    assert result.stderr.splitlines()[-1] == "AGENT_DEFAULTS_INIT_FAILED"
 
 
 @pytest.mark.unit
@@ -363,10 +370,7 @@ def test_initializer_does_not_restore_deleted_defaults_on_restart(
     environment = _environment(tmp_path)
     assert _run(environment).returncode == 0
     skill = (
-        Path(environment["AILERON_WORKSPACE_PATH"])
-        / ".agents"
-        / "skills"
-        / "default-skill"
+        Path(environment["HOME"]) / ".codex" / "skills" / "default-skill"
     )
     shutil.rmtree(skill)
 

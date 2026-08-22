@@ -32,7 +32,7 @@ def plugin_loader(settings_service: Mock, monkeypatch: pytest.MonkeyPatch):
     gate.generation.return_value = 7
     monkeypatch.setattr(
         loader_module,
-        "get_marketplace_provider_gate",
+        "get_marketplace_target_client_gate",
         Mock(return_value=gate),
     )
     return PluginComponentsLoader(settings_service)

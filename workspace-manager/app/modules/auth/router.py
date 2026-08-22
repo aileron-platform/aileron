@@ -27,6 +27,8 @@ WORKSPACE_GATEWAY_SESSION_COOKIE_NAME = "aileron_workspace_gateway_session"
 LOGIN_ATTEMPT_COOKIE_MAX_AGE = 600
 MANAGER_COOKIE_PATH = "/api/v1"
 WORKSPACE_GATEWAY_COOKIE_PATH = "/workspaces"
+WORKSPACE_GATEWAY_COOKIE_SECURE = True
+WORKSPACE_GATEWAY_COOKIE_SAMESITE = "none"
 
 
 def _login_attempt_bucket(request: Request) -> str:
@@ -40,6 +42,7 @@ class SessionUser(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str
+    subject: str
     username: str
     email: str | None
     display_name: str | None = None
@@ -120,9 +123,9 @@ async def callback(
     response.set_cookie(
         WORKSPACE_GATEWAY_SESSION_COOKIE_NAME,
         result.session.handle,
-        secure=True,
+        secure=WORKSPACE_GATEWAY_COOKIE_SECURE,
         httponly=True,
-        samesite="none",
+        samesite=WORKSPACE_GATEWAY_COOKIE_SAMESITE,
         path=WORKSPACE_GATEWAY_COOKIE_PATH,
         max_age=None,
     )
@@ -157,6 +160,7 @@ async def session_bootstrap(
     return SessionBootstrap(
         user=SessionUser(
             id=authenticated.user.id,
+            subject=authenticated.user.subject,
             username=authenticated.user.username,
             email=authenticated.user.email,
             display_name=authenticated.user.display_name,
@@ -183,18 +187,19 @@ async def logout(
             detail={"errorCode": "MANAGER_SESSION_REQUIRED"},
         )
     ManagerSessionService(db).revoke_by_id(authenticated.session_id)
+    config = get_settings()
     response.delete_cookie(
         SESSION_COOKIE_NAME,
-        secure=get_settings().PLATFORM_PUBLIC_ORIGIN.startswith("https://"),
+        secure=config.PLATFORM_PUBLIC_ORIGIN.startswith("https://"),
         httponly=True,
         samesite="lax",
         path=MANAGER_COOKIE_PATH,
     )
     response.delete_cookie(
         WORKSPACE_GATEWAY_SESSION_COOKIE_NAME,
-        secure=True,
+        secure=WORKSPACE_GATEWAY_COOKIE_SECURE,
         httponly=True,
-        samesite="none",
+        samesite=WORKSPACE_GATEWAY_COOKIE_SAMESITE,
         path=WORKSPACE_GATEWAY_COOKIE_PATH,
     )
     return LogoutResponse(provider_logout_url=await OIDCCore(db).provider_logout_url())

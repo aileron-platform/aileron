@@ -97,15 +97,8 @@ func NewTURNProbeServer(
 	if installationID == "" || turnRESTIdentity == "" {
 		return nil, fmt.Errorf("TURN probe producer identity is required")
 	}
-	if profile.CredentialIssuer.Kind == TURNCredentialIssuerTURNREST &&
-		(turnRESTSharedSecret == "" || turnRESTIdentity == "") {
+	if turnRESTSharedSecret == "" || turnRESTIdentity == "" {
 		return nil, fmt.Errorf("TURN REST shared secret and probe identity are required")
-	}
-	for index, server := range iceServers {
-		if profile.CredentialIssuer.Kind == TURNCredentialIssuerStaticSecret &&
-			(strings.TrimSpace(server.Username) == "" || strings.TrimSpace(server.Credential) == "") {
-			return nil, fmt.Errorf("TURN ICE server %d requires username and credential", index)
-		}
 	}
 	return &TURNProbeServer{
 		profile:              profile,

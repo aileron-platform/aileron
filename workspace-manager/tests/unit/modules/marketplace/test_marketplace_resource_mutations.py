@@ -71,19 +71,19 @@ def test_document_mutation_request_uses_package_relative_path() -> None:
     assert request.path == "commands/team/review.md"
 
 
-def test_root_document_path_is_provider_native(tmp_path: Path) -> None:
+def test_root_document_path_is_target_client_native(tmp_path: Path) -> None:
     assert load_root_document_path("codex", tmp_path).name == "AGENTS.md"
     assert load_root_document_path("claude-code", tmp_path).name == "CLAUDE.md"
 
 
-def test_root_document_path_rejects_unknown_provider(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="Unsupported Marketplace provider"):
+def test_root_document_path_rejects_unknown_target_client(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="Unsupported Marketplace target client"):
         load_root_document_path("opencode", tmp_path)
 
 
-def test_document_resource_root_is_provider_native() -> None:
+def test_document_resource_root_is_target_client_native() -> None:
     assert document_resource_root("claude-code", "commands") == "commands"
-    assert document_resource_root("codex", "commands") == "prompts"
+    assert document_resource_root("codex", "commands") == "commands"
     assert document_resource_root("codex", "subagents") == "agents"
 
 
@@ -144,7 +144,9 @@ def test_remove_json_entry_supports_wrapped_and_direct_maps() -> None:
     ) == {"other": {"command": "python"}}
 
 
-def test_default_mcp_owner_uses_provider_native_document_shape(tmp_path: Path) -> None:
+def test_default_mcp_owner_uses_target_client_native_document_shape(
+    tmp_path: Path,
+) -> None:
     claude_owner = default_mcp_owner(tmp_path, "local/server", "claude-code")
     codex_owner = default_mcp_owner(tmp_path, "local/server", "codex")
 

@@ -1,6 +1,6 @@
 # Phase 10 — Resume completed session
 
-Use the shared `ppt-design-flow` runtime from `/workspace/.codex/skills/ppt-design-flow/`.
+Use the shared `ppt-design-flow` runtime from the sibling skill directory (`../../ppt-design-flow/` relative to this file).
 
 List completed sessions when the target is unknown:
 

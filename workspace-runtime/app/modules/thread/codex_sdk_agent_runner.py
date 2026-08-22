@@ -67,15 +67,41 @@ class CodexSdkAgentRunner:
         task.add_done_callback(discard_completed)
 
     async def stop(self, execution_id: str) -> None:
-        await self._manager.stop_execution(execution_id)
         task = self._tasks.get(execution_id)
-        if task is not None and not task.done():
-            task.cancel()
+        stop_error: BaseException | None = None
+        task_error: BaseException | None = None
+        try:
+            await self._manager.stop_execution(execution_id)
+        except BaseException as exc:
+            stop_error = exc
+
+        if task is not None:
+            if not task.done():
+                task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
                 pass
-        self._tasks.pop(execution_id, None)
+            except BaseException as exc:
+                task_error = exc
+        if self._tasks.get(execution_id) is task:
+            self._tasks.pop(execution_id, None)
+
+        if stop_error is not None:
+            if task_error is not None:
+                logger.debug(
+                    "Codex SDK runner task cleanup failed after manager stop error: "
+                    "execution_id=%s",
+                    execution_id,
+                    exc_info=(
+                        type(task_error),
+                        task_error,
+                        task_error.__traceback__,
+                    ),
+                )
+            raise stop_error
+        if task_error is not None:
+            raise task_error
 
     def is_alive(self, execution_id: str) -> bool:
         task = self._tasks.get(execution_id)

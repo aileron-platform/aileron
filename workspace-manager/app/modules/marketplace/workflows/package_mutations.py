@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from io import BytesIO
 import json
-from typing import Any, BinaryIO
+from typing import BinaryIO
 
 from aileron_marketplace_core import (
     PackageSourceError,
@@ -52,7 +52,7 @@ from app.modules.marketplace.models import (
     MarketplacePackageDetail,
     MarketplacePackageMutationResult,
     MarketplacePackageSaveRequest,
-    MarketplaceProvider,
+    MarketplaceTargetClient,
 )
 from app.modules.marketplace.resource_mutations import (
     canonical_entry_fingerprint,
@@ -72,6 +72,7 @@ from app.modules.marketplace.resource_resolvers import (
     resolve_mcp_owners,
     resolve_hook_sources,
 )
+from app.modules.marketplace.target_clients import create_package_format_adapters
 
 from .kernel import _MarketplaceRegistrySupport
 from .package_reads import MarketplacePackageReadModel
@@ -125,18 +126,23 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def _package_file_engine(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
     ):
-        detail = self._get_package_detail_for_mutation(user_id, provider, package_id)
+        detail = self._get_package_detail_for_mutation(
+            user_id, target_client, package_id
+        )
         if detail is None:
             raise FileNotFoundError("marketplace.package.not_found")
-        package_path = self._resolve_package_path(user_id, provider, package_id)
-        return self._file_engine_for_root(
-            root=package_path,
-            registry_root=self._get_registry_root(user_id),
-            invalidation_key=user_id,
-        ), package_path
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
+        return (
+            self._file_engine_for_root(
+                root=package_path,
+                registry_root=self._get_registry_root(user_id),
+                invalidation_key=user_id,
+            ),
+            package_path,
+        )
 
     @_registry_git_operation(OperationKind.WRITE, "create_package")
     def create_package(
@@ -144,20 +150,31 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
         user_id: str,
         request: MarketplacePackageCreateRequest,
     ) -> MarketplacePackageDetail:
-        """Create a provider-native package scaffold."""
+        """Create a format-first Managed Plugin scaffold."""
         with self._registry_lock:
             self._settings_activity.initialize_registry(user_id)
+            adapter = create_package_format_adapters()[request.package_format]
+            if set(request.target_clients) != {adapter.target_client}:
+                raise MarketplacePathError("marketplace.package.variant_invalid")
+            root = self._get_registry_root(user_id)
+            if any(
+                entry.package_id == request.package_id
+                for entry in self._read_catalog(root).packages
+            ):
+                raise FileExistsError("marketplace.package.already_exists")
             package_path = self._resolve_package_path(
-                user_id, request.provider, request.package_id
+                user_id,
+                adapter.target_client,
+                request.package_id,
+                request.package_format,
             )
             if package_path.exists():
                 raise FileExistsError("marketplace.package.already_exists")
-            adapter = self._get_adapter(request.provider)
-            # Validate the prospective manifest against provider requirements before
+            # Validate the prospective manifest against target_client requirements before
             # touching disk so callers cannot create packages in an invalid state.
             prospective_manifest = {
                 "name": request.package_id,
-                "version": "0.1.0",
+                "version": request.version,
                 "description": request.description,
             }
             relative_manifest_path = str(
@@ -177,7 +194,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                 request,
                 invalidation_key=user_id,
             )
-            if request.provider == "claude-code":
+            if adapter.target_client == "claude-code":
                 self._upsert_listing_entry_with_core(
                     adapter,
                     self._get_registry_root(user_id),
@@ -189,7 +206,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                     },
                     invalidation_key=user_id,
                 )
-            elif request.provider == "codex":
+            elif adapter.target_client == "codex":
                 self._upsert_listing_entry_with_core(
                     adapter,
                     self._get_registry_root(user_id),
@@ -207,8 +224,9 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                 )
             detail = self._package_reads.get_package_detail(
                 user_id,
-                request.provider,
+                adapter.target_client,
                 request.package_id,
+                request.package_format,
                 use_cache=False,
             )
             if detail is None:
@@ -221,40 +239,27 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
         user_id: str,
         request: MarketplacePackageDeleteRequest,
     ) -> MarketplacePackageDeleteResult:
-        """Hard delete a package after revision verification."""
+        """Hard delete the current Managed Plugin working tree."""
         with self._registry_lock:
             detail = self._get_package_detail_for_mutation(
-                user_id, request.provider, request.package_id
+                user_id, request.target_client, request.package_id
             )
             if detail is None:
                 self._settings_activity.record_activity(
                     user_id,
                     action="delete",
                     status="failed",
-                    provider=request.provider,
+                    target_client=request.target_client,
                     package_id=request.package_id,
                     error_code="marketplace.package.not_found",
                 )
                 return MarketplacePackageDeleteResult(
                     deleted=False,
                     error_code="marketplace.package.not_found",
-                )
-            if detail.revision != request.revision:
-                self._settings_activity.record_activity(
-                    user_id,
-                    action="delete",
-                    status="failed",
-                    provider=request.provider,
-                    package_id=request.package_id,
-                    error_code="marketplace.package.revision_conflict",
-                )
-                return MarketplacePackageDeleteResult(
-                    deleted=False,
-                    error_code="marketplace.package.revision_conflict",
                 )
             try:
                 package_path = self._resolve_package_path(
-                    user_id, request.provider, request.package_id
+                    user_id, request.target_client, request.package_id
                 )
                 if package_path.exists():
                     registry_root = self._get_registry_root(user_id)
@@ -278,8 +283,8 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                         raise MarketplacePathError(
                             "marketplace.package.path_escape"
                         ) from exc
-                if request.provider in {"claude-code", "codex"}:
-                    adapter = self._get_adapter(request.provider)
+                if request.target_client in {"claude-code", "codex"}:
+                    adapter = self._get_adapter(request.target_client)
                     self._remove_listing_entry_with_core(
                         adapter,
                         self._get_registry_root(user_id),
@@ -290,7 +295,8 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                     user_id,
                     action="delete",
                     status="succeeded",
-                    provider=request.provider,
+                    package_format=detail.package_format,
+                    target_client=request.target_client,
                     package_id=request.package_id,
                 )
                 return MarketplacePackageDeleteResult(
@@ -300,90 +306,35 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             finally:
                 self._invalidate_package_overview(
                     user_id,
-                    request.provider,
+                    request.target_client,
                     request.package_id,
                 )
-
-    def discard_draft_package(
-        self,
-        user_id: str,
-        provider: MarketplaceProvider,
-        package_id: str,
-    ) -> MarketplacePackageDeleteResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
-        with _resource_write_locks.lock(lock_key):
-            with self._registry_lock:
-                detail = self._get_package_detail_for_mutation(
-                    user_id, provider, package_id
-                )
-                if detail is None:
-                    return MarketplacePackageDeleteResult(
-                        deleted=False,
-                        error_code="marketplace.package.not_found",
-                    )
-                if detail.lifecycle_status != "draft":
-                    return MarketplacePackageDeleteResult(
-                        deleted=False,
-                        error_code="marketplace.package.not_draft",
-                    )
-                try:
-                    package_path = self._resolve_package_path(
-                        user_id, provider, package_id
-                    )
-                    if package_path.exists():
-                        registry_root = self._get_registry_root(user_id)
-                        plugins_root = package_path.parent
-                        self._file_engine_for_root(
-                            root=plugins_root,
-                            registry_root=registry_root,
-                            invalidation_key=user_id,
-                        ).delete_entry(
-                            DeleteEntryRequest(
-                                locator=FileLocator(
-                                    domain="marketplace",
-                                    resource_id="registry",
-                                ),
-                                path=package_path.name,
-                                recursive=True,
-                            )
-                        )
-                    adapter = self._get_adapter(provider)
-                    self._remove_listing_entry_with_core(
-                        adapter,
-                        self._get_registry_root(user_id),
-                        package_id,
-                        invalidation_key=user_id,
-                    )
-                    return MarketplacePackageDeleteResult(
-                        deleted=True,
-                        revision=f"deleted-{detail.revision}",
-                    )
-                finally:
-                    self._invalidate_package_overview(user_id, provider, package_id)
 
     def save_root_document(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         content: str,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
-            path = load_root_document_path(provider, package_path)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
+            path = load_root_document_path(target_client, package_path)
             self._write_text_with_core(path, content, invalidation_key=user_id)
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=path.relative_to(package_path).as_posix(),
             )
@@ -391,42 +342,44 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def create_document(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         resource_type: str,
         request: MarketplaceDocumentMutationRequest,
     ) -> MarketplacePackageMutationResult:
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
         relative_path = validate_package_relative_path(request.path)
-        root = document_resource_root(provider, resource_type)
+        root = document_resource_root(target_client, resource_type)
         if not str(relative_path).startswith(f"{root}/"):
             raise MarketplacePathError("marketplace.package.path_escape")
         if (package_path / str(relative_path)).exists():
             raise MarketplaceConflictError("marketplace.resource.entry_conflict")
         return self.update_document(
-            user_id, provider, package_id, resource_type, request
+            user_id, target_client, package_id, resource_type, request
         )
 
     def update_document(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         resource_type: str,
         request: MarketplaceDocumentMutationRequest,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != request.revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
             relative_path = validate_package_relative_path(request.path)
-            package_path = self._resolve_package_path(user_id, provider, package_id)
-            root = document_resource_root(provider, resource_type)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
+            root = document_resource_root(target_client, resource_type)
             if not str(relative_path).startswith(f"{root}/"):
                 raise MarketplacePathError("marketplace.package.path_escape")
             target = package_path / str(relative_path)
@@ -435,7 +388,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             )
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=relative_path.as_posix(),
             )
@@ -443,22 +396,24 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def move_document(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         resource_type: str,
         request: MarketplaceDocumentRenameRequest,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != request.revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
-            root = document_resource_root(provider, resource_type)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
+            root = document_resource_root(target_client, resource_type)
             previous_path = validate_package_relative_path(request.previous_path)
             next_path = validate_package_relative_path(request.next_path)
             if not str(previous_path).startswith(f"{root}/") or not str(
@@ -488,7 +443,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                 raise MarketplacePathError("marketplace.package.path_escape") from exc
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=next_path.as_posix(),
             )
@@ -496,22 +451,24 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def remove_document(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         resource_type: str,
         request: MarketplaceDocumentRemoveRequest,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != request.revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
-            root = document_resource_root(provider, resource_type)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
+            root = document_resource_root(target_client, resource_type)
             relative_path = validate_package_relative_path(request.path)
             if not str(relative_path).startswith(f"{root}/"):
                 raise MarketplacePathError("marketplace.package.path_escape")
@@ -535,7 +492,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                 raise MarketplacePathError("marketplace.package.path_escape") from exc
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=relative_path.as_posix(),
             )
@@ -543,27 +500,29 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def create_mcp_server(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         request: MarketplaceMcpServerCreateRequest,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != request.revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             if any(
                 binding.name == request.name
-                for binding in resolve_mcp_owners(package_path, provider)
+                for binding in resolve_mcp_owners(package_path, target_client)
             ):
                 raise MarketplaceConflictError("marketplace.resource.entry_conflict")
             try:
-                owner = default_mcp_owner(package_path, request.name, provider)
+                owner = default_mcp_owner(package_path, request.name, target_client)
             except ValueError as exc:
                 raise MarketplacePathError(str(exc)) from exc
             owner_path = package_path / owner.file_path
@@ -577,7 +536,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             self._write_json_with_core(owner_path, patched, invalidation_key=user_id)
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=owner.file_path,
                 owner_file_path=owner.file_path,
@@ -587,21 +546,23 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def update_basic_metadata(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         payload: MarketplaceBasicUpdateRequest,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != payload.revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
-            adapter = self._get_adapter(provider)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
+            adapter = self._get_adapter(target_client)
             try:
                 manifest = adapter.read_manifest(package_path)  # type: ignore[attr-defined]
                 if payload.display_name is not None:
@@ -634,36 +595,40 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                 )
                 return self._mutation_result_for_package(
                     user_id,
-                    provider,
+                    target_client,
                     package_id,
                     path=adapter.manifest_path(package_path)
                     .relative_to(package_path)
                     .as_posix(),
                 )
             finally:
-                self._invalidate_package_overview(user_id, provider, package_id)
+                self._invalidate_package_overview(user_id, target_client, package_id)
 
     def save_package(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         payload: MarketplacePackageSaveRequest,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
-            if payload.provider != provider or payload.package_id != package_id:
+            if (
+                payload.target_client != target_client
+                or payload.package_id != package_id
+            ):
                 raise MarketplacePathError("marketplace.package.path_escape")
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != payload.revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-
-            package_path = self._resolve_package_path(user_id, provider, package_id)
-            adapter = self._get_adapter(provider)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
+            adapter = self._get_adapter(target_client)
             manifest_path = adapter.manifest_path(package_path)
             relative_manifest_path = str(manifest_path.relative_to(package_path))
             listing, _ = self._strip_root_metadata(payload.listing)
@@ -703,52 +668,58 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                 )
                 return self._mutation_result_for_package(
                     user_id,
-                    provider,
+                    target_client,
                     package_id,
                     path=relative_manifest_path,
                 )
             finally:
-                self._invalidate_package_overview(user_id, provider, package_id)
+                self._invalidate_package_overview(user_id, target_client, package_id)
 
     def update_hooks(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         source_id: str | None,
         content: str,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             try:
                 submitted = json.loads(content)
             except (TypeError, json.JSONDecodeError) as exc:
-                raise MarketplaceValidationError([
-                    {
-                        "code": "marketplace.hooks.invalid_json",
-                        "messageKey": "marketplace.hooks.diagnostics.source-document-invalid",
-                        "sourceLocator": source_id or "hooks",
-                    }
-                ]) from exc
+                raise MarketplaceValidationError(
+                    [
+                        {
+                            "code": "marketplace.hooks.invalid_json",
+                            "messageKey": "marketplace.hooks.diagnostics.source-document-invalid",
+                            "sourceLocator": source_id or "hooks",
+                        }
+                    ]
+                ) from exc
             if not isinstance(submitted, dict):
-                raise MarketplaceValidationError([
-                    {
-                        "code": "marketplace.hooks.invalid_json",
-                        "messageKey": "marketplace.hooks.diagnostics.source-document-invalid",
-                        "sourceLocator": source_id or "hooks",
-                    }
-                ])
+                raise MarketplaceValidationError(
+                    [
+                        {
+                            "code": "marketplace.hooks.invalid_json",
+                            "messageKey": "marketplace.hooks.diagnostics.source-document-invalid",
+                            "sourceLocator": source_id or "hooks",
+                        }
+                    ]
+                )
 
-            owners, diagnostics = resolve_hook_sources(package_path, provider)
+            owners, diagnostics = resolve_hook_sources(package_path, target_client)
             fatal_codes = {
                 "source-reference-invalid",
                 "source-missing",
@@ -767,54 +738,75 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             if fatal_diagnostics:
                 raise MarketplaceValidationError(fatal_diagnostics)
 
-            owner = next(
-                (item for item in owners if hook_source_id(item) == source_id),
-                None,
-            ) if source_id else None
+            owner = (
+                next(
+                    (item for item in owners if hook_source_id(item) == source_id),
+                    None,
+                )
+                if source_id
+                else None
+            )
             if source_id and owner is None:
-                raise MarketplaceValidationError([
-                    {
-                        "code": "marketplace.hooks.source_not_found",
-                        "messageKey": "marketplace.hooks.diagnostics.source-not-found",
-                        "sourceLocator": source_id,
-                    }
-                ])
+                raise MarketplaceValidationError(
+                    [
+                        {
+                            "code": "marketplace.hooks.source_not_found",
+                            "messageKey": "marketplace.hooks.diagnostics.source-not-found",
+                            "sourceLocator": source_id,
+                        }
+                    ]
+                )
 
             if owner is not None:
                 source_path = package_path / owner.file_path
                 try:
                     _, current_document, _ = read_hook_source(package_path, owner)
-                except (OSError, UnicodeError, json.JSONDecodeError, PackageSourceError) as exc:
-                    code = exc.code if isinstance(exc, PackageSourceError) else "source-document-invalid"
-                    raise MarketplaceValidationError([
-                        {
-                            "code": f"marketplace.hooks.{code}",
-                            "messageKey": f"marketplace.hooks.diagnostics.{code}",
-                            "sourceLocator": owner.file_path,
-                        }
-                    ]) from exc
+                except (
+                    OSError,
+                    UnicodeError,
+                    json.JSONDecodeError,
+                    PackageSourceError,
+                ) as exc:
+                    code = (
+                        exc.code
+                        if isinstance(exc, PackageSourceError)
+                        else "source-document-invalid"
+                    )
+                    raise MarketplaceValidationError(
+                        [
+                            {
+                                "code": f"marketplace.hooks.{code}",
+                                "messageKey": f"marketplace.hooks.diagnostics.{code}",
+                                "sourceLocator": owner.file_path,
+                            }
+                        ]
+                    ) from exc
                 submitted_native = get_json_entry(submitted, owner.json_pointer)
                 if not isinstance(submitted_native, dict):
-                    raise MarketplaceValidationError([
-                        {
-                            "code": "marketplace.hooks.invalid_json",
-                            "messageKey": "marketplace.hooks.diagnostics.source-document-invalid",
-                            "sourceLocator": owner.file_path,
-                        }
-                    ])
+                    raise MarketplaceValidationError(
+                        [
+                            {
+                                "code": "marketplace.hooks.invalid_json",
+                                "messageKey": "marketplace.hooks.diagnostics.source-document-invalid",
+                                "sourceLocator": owner.file_path,
+                            }
+                        ]
+                    )
                 try:
                     validate_inline_hooks(
                         submitted_native,
                         source_locator=owner.file_path,
                     )
                 except PackageSourceError as exc:
-                    raise MarketplaceValidationError([
-                        {
-                            "code": f"marketplace.hooks.{exc.code}",
-                            "messageKey": f"marketplace.hooks.diagnostics.{exc.code}",
-                            "sourceLocator": exc.source_locator,
-                        }
-                    ]) from exc
+                    raise MarketplaceValidationError(
+                        [
+                            {
+                                "code": f"marketplace.hooks.{exc.code}",
+                                "messageKey": f"marketplace.hooks.diagnostics.{exc.code}",
+                                "sourceLocator": exc.source_locator,
+                            }
+                        ]
+                    ) from exc
                 updated_document = patch_json_entry(
                     current_document,
                     owner.json_pointer,
@@ -827,27 +819,33 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                 )
                 canonical_path = source_path
             else:
-                manifest_path = self._get_adapter(provider).manifest_path(package_path)
+                manifest_path = self._get_adapter(target_client).manifest_path(
+                    package_path
+                )
                 manifest = read_json_file(manifest_path)
                 if "hooks" in manifest:
-                    raise MarketplaceValidationError([
-                        {
-                            "code": "marketplace.hooks.source_not_found",
-                            "messageKey": "marketplace.hooks.diagnostics.source-not-found",
-                            "sourceLocator": "hooks",
-                        }
-                    ])
+                    raise MarketplaceValidationError(
+                        [
+                            {
+                                "code": "marketplace.hooks.source_not_found",
+                                "messageKey": "marketplace.hooks.diagnostics.source-not-found",
+                                "sourceLocator": "hooks",
+                            }
+                        ]
+                    )
                 try:
                     _, hooks = hook_map(submitted, source_locator="hooks")
                     validate_inline_hooks(hooks, source_locator="hooks")
                 except PackageSourceError as exc:
-                    raise MarketplaceValidationError([
-                        {
-                            "code": f"marketplace.hooks.{exc.code}",
-                            "messageKey": f"marketplace.hooks.diagnostics.{exc.code}",
-                            "sourceLocator": exc.source_locator,
-                        }
-                    ]) from exc
+                    raise MarketplaceValidationError(
+                        [
+                            {
+                                "code": f"marketplace.hooks.{exc.code}",
+                                "messageKey": f"marketplace.hooks.diagnostics.{exc.code}",
+                                "sourceLocator": exc.source_locator,
+                            }
+                        ]
+                    ) from exc
                 target_path = package_path / "hooks" / "hooks.json"
                 self._write_json_with_core(
                     target_path, submitted, invalidation_key=user_id
@@ -855,7 +853,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                 canonical_path = target_path
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=canonical_path.relative_to(package_path).as_posix(),
             )
@@ -863,29 +861,31 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def write_skill_file(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         path: str,
         content: str,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             relative_path = self._validate_skill_relative_path(path)
             self._write_text_with_core(
                 package_path / relative_path, content, invalidation_key=user_id
             )
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=relative_path,
             )
@@ -893,7 +893,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def upload_skill_streams(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         target_path: str,
@@ -901,10 +901,12 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
         default_strategy: str,
         resolutions: Sequence[FileConflictResolution],
     ) -> FileConflictBatchResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             engine, _ = self._skill_file_engine_for_revision(
-                user_id, provider, package_id, revision
+                user_id, target_client, package_id, revision
             )
             relative_target = self._validate_skill_relative_path(target_path)
             locator = FileLocator(domain="marketplace", resource_id="registry")
@@ -933,17 +935,19 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def preflight_skill_file_conflicts(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         payload: FileConflictPreflightRequest,
     ) -> FileConflictPreflightResponse:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             if payload.operation == "paste":
                 raise MarketplacePathError("marketplace.resource.invalid_operation")
             engine, package_path = self._skill_file_engine_for_revision(
-                user_id, provider, package_id, revision
+                user_id, target_client, package_id, revision
             )
             relative_target = self._validate_skill_relative_path(payload.targetPath)
             locator = FileLocator(domain="marketplace", resource_id="registry")
@@ -963,9 +967,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                     )
                 else:
                     if not payload.archivePath:
-                        raise MarketplacePathError(
-                            "marketplace.resource.invalid_path"
-                        )
+                        raise MarketplacePathError("marketplace.resource.invalid_path")
                     relative_archive = self._validate_skill_relative_path(
                         payload.archivePath
                     )
@@ -987,7 +989,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def extract_skill_archive(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         archive_path: str,
@@ -995,10 +997,12 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
         default_strategy: str,
         resolutions: Sequence[FileConflictResolution],
     ) -> FileConflictBatchResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             engine, package_path = self._skill_file_engine_for_revision(
-                user_id, provider, package_id, revision
+                user_id, target_client, package_id, revision
             )
             relative_archive = self._validate_skill_relative_path(archive_path)
             relative_target = self._validate_skill_relative_path(target_path)
@@ -1028,16 +1032,16 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def _skill_file_engine_for_revision(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
     ):
-        detail = self._get_package_detail_for_mutation(user_id, provider, package_id)
+        detail = self._get_package_detail_for_mutation(
+            user_id, target_client, package_id
+        )
         if detail is None:
             raise FileNotFoundError("marketplace.package.not_found")
-        if detail.revision != revision:
-            raise MarketplaceConflictError("marketplace.package.revision_conflict")
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
         return (
             self._file_engine_for_root(
                 root=package_path,
@@ -1050,23 +1054,25 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def create_skill_entry(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         path: str,
         entry_type: str,
         content: str = "",
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             relative_path = self._validate_skill_relative_path(path)
             self._file_engine_for_root(
                 root=package_path,
@@ -1082,7 +1088,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             )
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=relative_path,
             )
@@ -1090,21 +1096,23 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def delete_skill_entry(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         path: str,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             relative_path = self._validate_skill_relative_path(path)
             self._file_engine_for_root(
                 root=package_path,
@@ -1119,7 +1127,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             )
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=relative_path,
             )
@@ -1127,22 +1135,24 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def move_skill_entry(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         previous_path: str,
         next_path: str,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             source_path = self._validate_skill_relative_path(previous_path)
             dest_path = self._validate_skill_relative_path(next_path)
             self._file_engine_for_root(
@@ -1158,7 +1168,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             )
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=dest_path,
             )
@@ -1166,29 +1176,31 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def write_package_file(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         path: str,
         content: str,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             relative_path = self._validate_package_file_relative_path(path)
             self._write_text_with_core(
                 package_path / relative_path, content, invalidation_key=user_id
             )
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=relative_path,
             )
@@ -1196,13 +1208,15 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def preflight_package_file_conflicts(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         payload: FileConflictPreflightRequest,
     ) -> FileConflictPreflightResponse:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
-            engine, _ = self._package_file_engine(user_id, provider, package_id)
+            engine, _ = self._package_file_engine(user_id, target_client, package_id)
             locator = FileLocator(domain="marketplace", resource_id="registry")
             sources = payload.sources or []
             if payload.operation == "upload":
@@ -1233,7 +1247,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
                     payload.archivePath
                 )
                 _, package_path = self._package_file_engine(
-                    user_id, provider, package_id
+                    user_id, target_client, package_id
                 )
                 archive_file = package_path / archive_path
                 if not archive_file.is_file():
@@ -1251,16 +1265,18 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def upload_package_files(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         target_path: str,
         files: Sequence[tuple[str, BinaryIO, int]],
         default_strategy: str,
         resolutions: Sequence[FileConflictResolution],
     ) -> FileConflictBatchResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
-            engine, _ = self._package_file_engine(user_id, provider, package_id)
+            engine, _ = self._package_file_engine(user_id, target_client, package_id)
             relative_target = self._validate_package_file_relative_path(target_path)
             result = engine.upload_streams(
                 locator=FileLocator(domain="marketplace", resource_id="registry"),
@@ -1277,18 +1293,18 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def paste_package_files(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         payload: FileConflictExecutionRequest,
     ) -> FileConflictBatchResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
-            engine, _ = self._package_file_engine(user_id, provider, package_id)
+            engine, _ = self._package_file_engine(user_id, target_client, package_id)
             result = engine.copy_entries(
                 CopyEntriesRequest(
-                    locator=FileLocator(
-                        domain="marketplace", resource_id="registry"
-                    ),
+                    locator=FileLocator(domain="marketplace", resource_id="registry"),
                     source_paths=[source.sourcePath for source in payload.sources],
                     target_path=payload.targetPath,
                     default_strategy=payload.defaultStrategy,
@@ -1300,14 +1316,16 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def extract_package_archive(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         payload: FileExtractExecutionRequest,
     ) -> FileConflictBatchResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             engine, package_path = self._package_file_engine(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             archive_path = self._validate_package_file_relative_path(
                 payload.archivePath
@@ -1336,23 +1354,25 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def create_package_file_entry(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         path: str,
         entry_type: str,
         content: str = "",
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             relative_path = self._validate_package_file_relative_path(path)
             self._file_engine_for_root(
                 root=package_path,
@@ -1368,7 +1388,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             )
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=relative_path,
             )
@@ -1376,21 +1396,23 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def delete_package_file_entry(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         path: str,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             relative_path = self._validate_package_file_relative_path(path)
             self._file_engine_for_root(
                 root=package_path,
@@ -1405,7 +1427,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             )
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=relative_path,
             )
@@ -1413,22 +1435,24 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def move_package_file_entry(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
         previous_path: str,
         next_path: str,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             source_path = self._validate_package_file_relative_path(previous_path)
             dest_path = self._validate_package_file_relative_path(next_path)
             self._file_engine_for_root(
@@ -1444,7 +1468,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             )
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=dest_path,
             )
@@ -1452,24 +1476,26 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def save_mcp_server(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         name: str,
         request: MarketplaceMcpServerMutationRequest,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != request.revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             owner = resolve_mcp_owner(
                 package_path,
-                provider,
+                target_client,
                 name,
                 owner_file_path=request.owner_file_path,
             )
@@ -1480,8 +1506,6 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             current = get_json_entry(data, owner.json_pointer)
             if current is None:
                 raise FileNotFoundError("marketplace.resource.not_found")
-            if canonical_entry_fingerprint(current) != request.base_entry_fingerprint:
-                raise MarketplaceConflictError("marketplace.resource.entry_conflict")
             pointer = owner.json_pointer
             if pointer is None:
                 raise MarketplacePathError("marketplace.resource.invalid_json_root")
@@ -1489,7 +1513,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             self._write_json_with_core(owner_path, patched, invalidation_key=user_id)
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=owner.file_path,
                 owner_file_path=owner.file_path,
@@ -1499,24 +1523,26 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
     def delete_mcp_server(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         name: str,
         request: MarketplaceMcpServerDeleteRequest,
     ) -> MarketplacePackageMutationResult:
-        lock_key = self._marketplace_package_lock_key(user_id, provider, package_id)
+        lock_key = self._marketplace_package_lock_key(
+            user_id, target_client, package_id
+        )
         with _resource_write_locks.lock(lock_key):
             detail = self._get_package_detail_for_mutation(
-                user_id, provider, package_id
+                user_id, target_client, package_id
             )
             if detail is None:
                 raise FileNotFoundError("marketplace.package.not_found")
-            if detail.revision != request.revision:
-                raise MarketplaceConflictError("marketplace.package.revision_conflict")
-            package_path = self._resolve_package_path(user_id, provider, package_id)
+            package_path = self._resolve_package_path(
+                user_id, target_client, package_id
+            )
             owner = resolve_mcp_owner(
                 package_path,
-                provider,
+                target_client,
                 name,
                 owner_file_path=request.owner_file_path,
             )
@@ -1530,8 +1556,6 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             current = get_json_entry(data, pointer)
             if current is None:
                 raise FileNotFoundError("marketplace.resource.not_found")
-            if canonical_entry_fingerprint(current) != request.base_entry_fingerprint:
-                raise MarketplaceConflictError("marketplace.resource.entry_conflict")
             try:
                 patched = remove_json_entry(data, pointer)
             except ValueError as exc:
@@ -1539,7 +1563,7 @@ class MarketplacePackageMutationWorkflow(_MarketplaceRegistrySupport):
             self._write_json_with_core(owner_path, patched, invalidation_key=user_id)
             return self._mutation_result_for_package(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 path=owner.file_path,
                 owner_file_path=owner.file_path,

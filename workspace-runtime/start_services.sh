@@ -107,11 +107,52 @@ ensure_developer_writable() {
 ensure_developer_writable "/workspace"
 ensure_developer_writable "/workspace-terminal"
 ensure_developer_writable "${HOME}"
-# Guard against opencode data ending up root-owned (e.g. from an ad-hoc root
-# `docker exec` running `opencode`), which makes `opencode acp` fail to start
-# and leaves agent turns stuck in "running" forever.
-ensure_developer_writable "${XDG_CONFIG_HOME}/opencode"
-ensure_developer_writable "${XDG_DATA_HOME}/opencode"
+# The Docker-host image creates these paths as root before the Runtime process
+# drops to developer.  A writable HOME does not imply that its 0755 children
+# are writable, especially when /home/developer is a bind-mounted Runtime home.
+# Keep every fixed user-scope Runtime path writable so bootstrap and the agent
+# CLIs can initialize without mutating image-managed dependencies.
+ensure_developer_writable "${CODEX_HOME}"
+ensure_developer_writable "${HOME}/.codex-sessions"
+ensure_developer_writable "${HOME}/.claude"
+ensure_developer_writable "${NPM_CONFIG_PREFIX}"
+ensure_developer_writable "${XDG_CONFIG_HOME}"
+ensure_developer_writable "${XDG_DATA_HOME}"
+ensure_developer_writable "${XDG_STATE_HOME}"
+ensure_developer_writable "${UV_CACHE_DIR}"
+ensure_developer_writable "${NPM_CONFIG_CACHE}"
+
+# Docker Runtime secret mounts are intentionally root-readable only.  FastAPI
+# and the terminal service run as developer, so hand the required values to
+# them through container-local files owned by developer without weakening the
+# permissions of the mounted source files.
+prepare_runtime_secret() {
+    local source_path="$1"
+    local filename="$2"
+    local target_dir="/run/aileron-runtime-secrets"
+    local target_path="${target_dir}/${filename}"
+
+    if [ ! -f "${source_path}" ]; then
+        echo "❌ Runtime secret file is unavailable: ${source_path}"
+        return 1
+    fi
+
+    install -d -o developer -g developer -m 0700 "${target_dir}"
+    install -o developer -g developer -m 0400 "${source_path}" "${target_path}"
+    printf '%s\n' "${target_path}"
+}
+
+export AILERON_RUNTIME_DATABASE_CONNECTION_FILE="$({
+    prepare_runtime_secret \
+        "${AILERON_RUNTIME_DATABASE_CONNECTION_FILE}" \
+        "runtime-database-connection"
+})"
+export AILERON_RUNTIME_CONTROL_TOKEN_FILE="$({
+    prepare_runtime_secret \
+        "${AILERON_RUNTIME_CONTROL_TOKEN_FILE}" \
+        "runtime-control-token"
+})"
+
 # Bind mounts can remove +x from host scripts, overriding Dockerfile chmod; restore it here.
 chmod +x /workspace-runtime/scripts/*.sh 2>/dev/null || true
 

@@ -48,6 +48,23 @@ def test_get_profile_returns_provider_owned_snapshot(
     db_session.commit.assert_not_called()
 
 
+def test_get_profile_accepts_special_use_provider_email_snapshot(
+    service: UserProfileService, db_session: MagicMock
+) -> None:
+    user = DBUser(
+        id="user-123",
+        username="testuser",
+        email="testuser@identity.invalid",
+    )
+    db_session.query.return_value.filter.return_value.first.return_value = user
+
+    result = service.get_profile("user-123")
+
+    assert isinstance(result, UserProfile)
+    assert result.email == "testuser@identity.invalid"
+    db_session.commit.assert_not_called()
+
+
 def test_get_profile_returns_none_for_unknown_user(
     service: UserProfileService, db_session: MagicMock
 ) -> None:

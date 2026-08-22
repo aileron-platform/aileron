@@ -26,6 +26,9 @@ from aileron_git_core import (
     ConflictMarkResolved,
     DiffQuery,
     DiscardChanges,
+)
+from aileron_git_core import GitCommandError as CoreGitCommandError
+from aileron_git_core import (
     HistoryListQuery,
     LfsPatternsQuery,
     LfsPatternsUpdate,
@@ -49,9 +52,9 @@ from aileron_git_core import (
     UnstagePaths,
     VersionControlApplication,
     VersionControlError,
+    git_allow_failure,
     to_change_dict,
 )
-from aileron_git_core import GitCommandError as CoreGitCommandError
 
 from app.modules.marketplace.models import (
     MarketplaceGitCommitFilesResult,
@@ -201,9 +204,7 @@ class MarketplaceRegistryGitWorkflow(_MarketplaceRegistrySupport):
                 can_clone_safely=not has_local_content,
                 can_init_safely=True,
                 clone_blocked_reason=(
-                    "VC_CLONE_TARGET_NOT_EMPTY"
-                    if has_local_content
-                    else None
+                    "VC_CLONE_TARGET_NOT_EMPTY" if has_local_content else None
                 ),
             )
         status = self.version_control.read(self._target(), RepositoryStatusQuery())
@@ -303,6 +304,7 @@ class MarketplaceRegistryGitWorkflow(_MarketplaceRegistrySupport):
     def delete_branch(self, user_id: str, *, name: str) -> BranchMutationResponse:
         return self._execute_branch_command(user_id, BranchDeleteLocal(name))
 
+    @_registry_git_operation(OperationKind.REMOTE, "publish_branch")
     def publish_branch(
         self,
         user_id: str,
@@ -318,18 +320,16 @@ class MarketplaceRegistryGitWorkflow(_MarketplaceRegistrySupport):
             user_id=user_id,
             remote_url=remote_url,
         ) as environment:
-            target = MarketplaceRepositoryTargetResolver(
-                self.storage_root
-            ).resolve(environment=environment)
+            target = MarketplaceRepositoryTargetResolver(self.storage_root).resolve(
+                environment=environment
+            )
             result = self.version_control.execute(
                 target,
                 BranchPublish(remote, remote_name),
             )
         return self._branch_mutation_response(result)
 
-    def _execute_branch_command(
-        self, user_id: str, command
-    ) -> BranchMutationResponse:
+    def _execute_branch_command(self, user_id: str, command) -> BranchMutationResponse:
         self._require_registry_git_repo(self._get_registry_root(user_id))
         result = self.version_control.execute(self._target(), command)
         return self._branch_mutation_response(result)
@@ -479,7 +479,7 @@ class MarketplaceRegistryGitWorkflow(_MarketplaceRegistrySupport):
                         moved_checkout = True
                         for entry in checkout_root.iterdir():
                             shutil.move(str(entry), root / entry.name)
-                self._ensure_provider_roots(root)
+                self._ensure_target_client_roots(root)
                 self._ensure_registry_gitignore(root, invalidation_key=user_id)
                 self._generate_publish_manifests(
                     root,
@@ -735,15 +735,13 @@ class MarketplaceRegistryGitWorkflow(_MarketplaceRegistrySupport):
     def get_registry_commit_files(
         self, user_id: str, commit_id: str
     ) -> MarketplaceGitCommitFilesResult:
-        """Return provider-prefixed file changes for a selected commit."""
+        """Return target_client-prefixed file changes for a selected commit."""
         root = self._get_registry_root(user_id)
         if not (root / ".git").exists():
             raise MarketplaceImportSourceError(
                 "marketplace.git.repository_not_initialized"
             )
-        result = self.version_control.read(
-            self._target(), CommitFilesQuery(commit_id)
-        )
+        result = self.version_control.read(self._target(), CommitFilesQuery(commit_id))
         files = []
         for item in result.files:
             change = self._git_file_change(
@@ -791,9 +789,7 @@ class MarketplaceRegistryGitWorkflow(_MarketplaceRegistrySupport):
     ) -> DiscardResponse:
         root = self._get_registry_root(user_id)
         self._require_registry_git_repo(root)
-        paths = [
-            self._resolve_registry_git_path(root, path) for path in payload.paths
-        ]
+        paths = [self._resolve_registry_git_path(root, path) for path in payload.paths]
         for path in paths:
             target = root / path
             if target.exists() and target.is_file():
@@ -866,7 +862,11 @@ class MarketplaceRegistryGitWorkflow(_MarketplaceRegistrySupport):
         root = self._get_registry_root(user_id)
         if not (root / ".git").exists():
             return CommitListResponse(
-                items=[], total=0, nextCursor=None, hasMore=False, queryScope=query_scope
+                items=[],
+                total=0,
+                nextCursor=None,
+                hasMore=False,
+                queryScope=query_scope,
             )
         history = self.version_control.read(
             self._target(),
@@ -923,6 +923,7 @@ class MarketplaceRegistryGitWorkflow(_MarketplaceRegistrySupport):
             "marketplace.git.pull_success",
         )
 
+    @_registry_git_operation(OperationKind.REMOTE, "push_registry")
     def push_registry(self, user_id: str) -> MarketplaceRegistryGitOperationResult:
         """Push current user's Marketplace registry branch to origin."""
         status = self.version_control.read(self._target(), RepositoryStatusQuery())
@@ -950,9 +951,7 @@ class MarketplaceRegistryGitWorkflow(_MarketplaceRegistrySupport):
             user_id=user_id,
             remote_url=remote_url,
         ) as environment:
-            self.version_control.execute(
-                self._target(environment=environment), command
-            )
+            self.version_control.execute(self._target(environment=environment), command)
         self._invalidate_package_index(user_id)
         return MarketplaceRegistryGitOperationResult(
             success=True,

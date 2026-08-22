@@ -1,23 +1,28 @@
-"""Private Marketplace catalog support mixin."""
+"""Managed Registry catalog support mixin."""
 
 from __future__ import annotations
 
 import json
-import re
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
 from app.modules.marketplace.models import (
     MarketplaceCatalogPackage,
+    MarketplacePackageFormat,
     MarketplacePackageFamily,
     MarketplacePackageSummary,
-    MarketplaceProvider,
+    MarketplaceTargetClient,
     MarketplaceRegistryCatalog,
     MarketplaceRegistryRootMetadataSavePayload,
     MarketplaceValidationResult,
 )
-from app.modules.marketplace.providers import MarketplaceProviderAdapter
+from app.modules.marketplace.target_clients import (
+    MarketplaceTargetClientAdapter,
+    create_package_format_adapters,
+    package_format_storage_key,
+    package_format_authoring_capabilities,
+)
 
 from .registry_operations import (
     MarketplaceImportSourceError,
@@ -26,34 +31,39 @@ from .registry_operations import (
 
 
 class _MarketplaceCatalogSupport:
-    """Provide catalog support behavior to the composed private kernel."""
+    """Provide catalog support behavior to the composed registry kernel."""
 
     def _get_package_candidate(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
+        package_format: MarketplacePackageFormat | None = None,
     ) -> _MarketplacePackageCandidate | None:
         root = self._get_registry_root(user_id)
         if not self._catalog_path(root).is_file() or not self._package_id_pattern.match(
             package_id
         ):
             return None
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        catalog = self._read_catalog(root)
+        package_format = package_format or self._requested_package_format()
+        matches = [
+            entry
+            for entry in catalog.packages
+            if entry.target_client == target_client
+            and entry.package_id == package_id
+            and (package_format is None or entry.package_format == package_format)
+        ]
+        if len(matches) != 1:
+            return None
+        catalog_entry = matches[0]
+        adapter = create_package_format_adapters()[catalog_entry.package_format]
+        package_path = adapter.package_path(root, package_id)
         if not package_path.is_dir():
             return None
-        catalog = self._read_catalog(root)
-        catalog_entry = next(
-            (
-                entry
-                for entry in catalog.packages
-                if entry.provider == provider and entry.package_id == package_id
-            ),
-            None,
-        )
         candidate = self._build_package_candidate(
             root,
-            self._get_adapter(provider),
+            adapter,
             package_path,
             catalog_entry,
         )
@@ -97,30 +107,50 @@ class _MarketplaceCatalogSupport:
     def _build_package_candidate(
         self,
         root: Path,
-        adapter: MarketplaceProviderAdapter,
+        adapter: MarketplaceTargetClientAdapter,
         package_path: Path,
         catalog_entry: MarketplaceCatalogPackage | None,
     ) -> _MarketplacePackageCandidate:
-        """Build one summary and its lifecycle inputs with one provider read."""
+        """Build one managed-plugin summary with one target-client read."""
 
         package_id = package_path.name
-        manifest = adapter.read_manifest(package_path)  # type: ignore[attr-defined]
+        artifact_adapter = (
+            create_package_format_adapters()[catalog_entry.package_format]
+            if catalog_entry is not None
+            else adapter
+        )
+        manifest = artifact_adapter.read_manifest(package_path)  # type: ignore[attr-defined]
         package_validation = [
-            *adapter.validate_package(package_path),
-            *adapter.validate_component_projection(package_path),
+            *artifact_adapter.validate_package(package_path, package_id=package_id),
+            *artifact_adapter.validate_component_projection(package_path),
         ]
         summary_validation = list(package_validation)
         if catalog_entry is None:
             summary_validation.append(
                 self._catalog_metadata_missing_validation(
                     root,
-                    adapter.provider,
+                    adapter.target_client,
                     package_id,
                 )
             )
 
         summary = MarketplacePackageSummary(
-            provider=adapter.provider,
+            target_client=adapter.target_client,
+            packageFormat=(
+                catalog_entry.package_format
+                if catalog_entry is not None
+                else adapter.package_format
+            ),
+            userCopyTargetClient=(
+                catalog_entry.user_copy_target_client
+                if catalog_entry is not None
+                else adapter.user_copy_target_client
+            ),
+            catalogPluginId=(
+                catalog_entry.catalog_plugin_id
+                if catalog_entry is not None
+                else f"managed/{adapter.package_format}/{package_id}"
+            ),
             package_type="plugin",
             package_id=package_id,
             display_name=str(
@@ -141,9 +171,11 @@ class _MarketplaceCatalogSupport:
             ),
             category=catalog_entry.category if catalog_entry is not None else None,
             tags=catalog_entry.tags if catalog_entry is not None else [],
-            source_type=adapter.source_type_from_metadata(manifest),  # type: ignore[attr-defined]
-            indexed_resource_names=adapter.indexed_resource_names(package_path),  # type: ignore[attr-defined]
-            validation_severity=adapter.highest_severity(summary_validation),  # type: ignore[attr-defined]
+            indexed_resource_names=artifact_adapter.indexed_resource_names(package_path),  # type: ignore[attr-defined]
+            validation_severity=artifact_adapter.highest_severity(summary_validation),  # type: ignore[attr-defined]
+            authoringCapabilities=package_format_authoring_capabilities(
+                artifact_adapter.package_format
+            ),
             registry_path=package_path.relative_to(root).as_posix(),
             revision=adapter.revision_for_paths(  # type: ignore[attr-defined]
                 [self._catalog_path(root), package_path]
@@ -158,26 +190,10 @@ class _MarketplaceCatalogSupport:
             else None
         )
         catalog_validation = list(
-            adapter.validate_catalog_metadata(catalog_payload, manifest)  # type: ignore[attr-defined]
+            artifact_adapter.validate_catalog_metadata(catalog_payload, manifest)  # type: ignore[attr-defined]
         )
-        has_required_resources = self._package_has_required_resources(
-            adapter.provider,
-            package_path,
-        )
-        lifecycle_status = self._package_lifecycle_status_from_summary(
-            manifest,
-            has_required_resources,
-            [*summary_validation, *catalog_validation],
-        )
-        operation_lifecycle_status = self._package_lifecycle_status_from_summary(
-            manifest,
-            has_required_resources,
-            [*package_validation, *catalog_validation],
-        )
-        summary = summary.model_copy(update={"lifecycle_status": lifecycle_status})
         return _MarketplacePackageCandidate(
             summary=summary,
-            operation_lifecycle_status=operation_lifecycle_status,
             manifest=manifest,
             validation_results=[
                 MarketplaceValidationResult.model_validate(result)
@@ -189,45 +205,47 @@ class _MarketplaceCatalogSupport:
         if not root.exists() or not self._catalog_path(root).exists():
             return []
         catalog = self._read_catalog(root)
-        catalog_entries = {
-            (entry.provider, entry.package_id): entry for entry in catalog.packages
-        }
         candidates: list[_MarketplacePackageCandidate] = []
-        for adapter in self.adapters.values():
-            plugins_root = root / adapter.provider / "plugins"
-            if not plugins_root.is_dir():
-                continue
-            for package_path in sorted(
-                path for path in plugins_root.iterdir() if path.is_dir()
-            ):
+        for entry in sorted(
+            catalog.packages,
+            key=lambda item: (item.target_client, item.package_format, item.package_id),
+        ):
+            adapter = create_package_format_adapters()[entry.package_format]
+            package_path = adapter.package_path(root, entry.package_id)
+            if package_path.is_dir():
                 candidates.append(
-                    self._build_package_candidate(
-                        root,
-                        adapter,
-                        package_path,
-                        catalog_entries.get((adapter.provider, package_path.name)),
-                    )
+                    self._build_package_candidate(root, adapter, package_path, entry)
                 )
         packages = self._with_family_metadata(
             root,
             [candidate.summary for candidate in candidates],
             package_manifests={
-                (candidate.summary.provider, candidate.summary.package_id): (
-                    candidate.manifest
-                )
+                (
+                    candidate.summary.target_client,
+                    candidate.summary.package_format,
+                    candidate.summary.package_id,
+                ): (candidate.manifest)
                 for candidate in candidates
             },
         )
-        return sorted(packages, key=lambda item: (item.provider, item.package_id))
+        return sorted(
+            packages,
+            key=lambda item: (
+                item.target_client,
+                item.package_format,
+                item.package_id,
+            ),
+        )
 
     def _with_family_metadata(
         self,
         root: Path,
         packages: list[MarketplacePackageSummary],
         *,
-        package_manifests: (
-            dict[tuple[MarketplaceProvider, str], dict[str, Any]] | None
-        ) = None,
+        package_manifests: dict[
+            tuple[MarketplaceTargetClient, MarketplacePackageFormat, str],
+            dict[str, Any],
+        ] = None,
     ) -> list[MarketplacePackageSummary]:
         document = self._read_package_families(root)
         inferred = self._infer_imported_families(
@@ -239,19 +257,22 @@ class _MarketplaceCatalogSupport:
         families = {
             family.family_id: family for family in [*document.families, *inferred]
         }
-        by_variant: dict[tuple[str, str], MarketplacePackageFamily] = {}
+        by_variant: dict[tuple[str, str, str], MarketplacePackageFamily] = {}
         for family in families.values():
             for variant in family.variants:
-                by_variant[(variant.provider, variant.package_id)] = family
+                by_variant[
+                    (variant.target_client, variant.package_format, variant.package_id)
+                ] = family
         enriched: list[MarketplacePackageSummary] = []
         for item in packages:
-            family = by_variant.get((item.provider, item.package_id))
+            family = by_variant.get(
+                (item.target_client, item.package_format, item.package_id)
+            )
             if family is None:
                 enriched.append(item)
                 continue
-            # Only cross-provider builds of the same package are real variants.
-            # Other packages persisted under the same source-scoped family are
-            # unrelated peers and must be excluded from this summary's variants.
+            # Only builds of the same logical package are variants. Different
+            # package IDs under one source-scoped family remain unrelated peers.
             same_package_variants = [
                 variant
                 for variant in family.variants
@@ -274,7 +295,7 @@ class _MarketplaceCatalogSupport:
         self,
         items: list[MarketplacePackageSummary],
         *,
-        provider: MarketplaceProvider | None,
+        target_client: MarketplaceTargetClient | None,
         q: str | None,
         category: str | None,
         features: list[str],
@@ -283,7 +304,7 @@ class _MarketplaceCatalogSupport:
         normalized_features = {feature for feature in features if feature}
         result: list[MarketplacePackageSummary] = []
         for item in items:
-            if provider and item.provider != provider:
+            if target_client and item.target_client != target_client:
                 continue
             if category and category != "all" and item.category != category:
                 continue
@@ -293,7 +314,7 @@ class _MarketplaceCatalogSupport:
             if normalized_q:
                 haystack = " ".join(
                     [
-                        item.provider,
+                        item.target_client,
                         item.package_id,
                         item.display_name,
                         item.description or "",
@@ -346,12 +367,14 @@ class _MarketplaceCatalogSupport:
         cleaned = self._readme_javascript_link_pattern.sub(r"\1#\2", cleaned)
         return cleaned
 
-    def _get_provider_root(self, user_id: str, provider: MarketplaceProvider) -> Path:
-        """Return a provider root path under the user's registry."""
+    def _get_target_client_root(
+        self, user_id: str, target_client: MarketplaceTargetClient
+    ) -> Path:
+        """Return a target_client root path under the user's registry."""
         root = self._get_registry_root(user_id)
-        return root / provider
+        return root / target_client
 
-    def _ensure_provider_roots(self, root: Path) -> None:
+    def _ensure_target_client_roots(self, root: Path) -> None:
         for adapter in self.adapters.values():
             adapter.ensure_roots(root)
 
@@ -369,9 +392,7 @@ class _MarketplaceCatalogSupport:
             ) from exc
 
     def _initial_marketplace_id(self, display_name: str) -> str:
-        normalized = re.sub(r"[^a-z0-9]+", "-", display_name.strip().lower())
-        normalized = normalized.strip("-")[:64].rstrip("-")
-        candidate = normalized or "marketplace"
+        candidate = "aileron-internal"
         MarketplaceRegistryCatalog(
             schema_version=1,
             marketplace_id=candidate,
@@ -389,7 +410,8 @@ class _MarketplaceCatalogSupport:
     def _catalog_entry(
         self,
         root: Path,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
+        package_format: MarketplacePackageFormat,
         package_id: str,
     ) -> MarketplaceCatalogPackage | None:
         catalog = self._read_catalog(root)
@@ -397,7 +419,9 @@ class _MarketplaceCatalogSupport:
             (
                 entry
                 for entry in catalog.packages
-                if entry.provider == provider and entry.package_id == package_id
+                if entry.target_client == target_client
+                and entry.package_format == package_format
+                and entry.package_id == package_id
             ),
             None,
         )
@@ -451,7 +475,7 @@ class _MarketplaceCatalogSupport:
         *,
         invalidation_key: str,
     ) -> None:
-        """Generate both provider manifests from one canonical catalog snapshot."""
+        """Generate both target_client manifests from one canonical catalog snapshot."""
 
         if self._generating_publish_manifests:
             return
@@ -465,10 +489,10 @@ class _MarketplaceCatalogSupport:
         self,
         root: Path,
         catalog: MarketplaceRegistryCatalog,
-    ) -> dict[MarketplaceProvider, dict[str, Any]]:
-        """Build both complete provider manifests without mutating the registry."""
+    ) -> dict[MarketplaceTargetClient, dict[str, Any]]:
+        """Build both complete target_client manifests without mutating the registry."""
 
-        manifests: dict[MarketplaceProvider, dict[str, Any]] = {
+        manifests: dict[MarketplaceTargetClient, dict[str, Any]] = {
             "claude-code": {
                 "name": catalog.marketplace_id,
                 "owner": catalog.owner.model_dump(),
@@ -484,19 +508,14 @@ class _MarketplaceCatalogSupport:
         }
         entries = sorted(
             catalog.packages,
-            key=lambda item: (item.provider, item.package_id),
+            key=lambda item: (item.target_client, item.package_id),
         )
         for entry in entries:
-            adapter = self._get_adapter(entry.provider)
-            package_path = adapter.package_path(root, entry.package_id)  # type: ignore[attr-defined]
+            artifact_adapter = create_package_format_adapters()[entry.package_format]
+            package_path = artifact_adapter.package_path(root, entry.package_id)
             if not package_path.is_dir():
                 continue
-            manifest = adapter.read_manifest(package_path)  # type: ignore[attr-defined]
-            validation = adapter.validate_package(package_path)
-            if any(item.get("severity") == "error" for item in validation):
-                continue
-            if not self._package_path_has_ready_resource(entry.provider, package_path):
-                continue
+            manifest = artifact_adapter.read_manifest(package_path)  # type: ignore[attr-defined]
             publish_entry: dict[str, Any] = {
                 "name": entry.package_id,
                 "description": manifest.get("description"),
@@ -508,12 +527,17 @@ class _MarketplaceCatalogSupport:
                 publish_entry["category"] = entry.category
             if entry.tags:
                 publish_entry["tags"] = entry.tags
-            if entry.provider == "claude-code":
-                publish_entry["source"] = f"./claude-code/plugins/{entry.package_id}"
+            source_path = (
+                f"./{entry.target_client}/plugins/"
+                f"{package_format_storage_key(entry.package_format)}/"
+                f"{entry.package_id}"
+            )
+            if entry.target_client == "claude-code":
+                publish_entry["source"] = source_path
             else:
                 publish_entry["source"] = {
                     "source": "local",
-                    "path": f"./codex/plugins/{entry.package_id}",
+                    "path": source_path,
                 }
                 publish_entry["category"] = entry.category or "uncategorized"
                 publish_entry["policy"] = (
@@ -524,18 +548,18 @@ class _MarketplaceCatalogSupport:
                         "authentication": "ON_INSTALL",
                     }
                 )
-            manifests[entry.provider]["plugins"].append(publish_entry)
+            manifests[entry.target_client]["plugins"].append(publish_entry)
 
         return manifests
 
     def _write_publish_manifests(
         self,
         root: Path,
-        manifests: dict[MarketplaceProvider, dict[str, Any]],
+        manifests: dict[MarketplaceTargetClient, dict[str, Any]],
         *,
         invalidation_key: str,
     ) -> None:
-        """Write both provider manifests as one rollback-safe transaction."""
+        """Write both target_client manifests as one rollback-safe transaction."""
 
         manifest_paths = (
             self._claude_manifest_path(root),
@@ -596,7 +620,7 @@ class _MarketplaceCatalogSupport:
                 "name": "Marketplace Maintainer",
                 "email": "marketplace@example.local",
             },
-            description="Provider-separated Marketplace package registry.",
+            description="TargetClient-separated Marketplace package registry.",
         )
 
     def _claude_manifest_path(self, root: Path) -> Path:

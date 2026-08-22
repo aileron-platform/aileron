@@ -1,4 +1,4 @@
-"""Coordinate one published Marketplace plugin CLI installation."""
+"""Coordinate one managed Marketplace plugin CLI installation."""
 
 from __future__ import annotations
 
@@ -13,47 +13,50 @@ from uuid import uuid4
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.modules.marketplace.models import (
-    MarketplacePluginCommandResult,
-    MarketplacePluginInstallRequest,
-    MarketplaceProvider,
-)
 from app.modules.marketplace.activity_repository import (
     MarketplaceActivityRepository,
 )
-from app.modules.workspace.access_repository import WorkspaceAccessRepository
+from app.modules.marketplace.models import (
+    MarketplaceActivityStatus,
+    MarketplacePackageFormat,
+    MarketplacePluginCommandResult,
+    MarketplacePluginInstallRequest,
+    MarketplaceTargetClient,
+)
 from app.modules.marketplace.runtime_client import (
     MarketplaceRuntimeClient,
     MarketplaceRuntimeClientError,
 )
+from app.modules.workspace.access_repository import WorkspaceAccessRepository
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class MarketplacePublishedPackage(Protocol):
-    """Published package fields consumed by the CLI installation workflow."""
+class MarketplaceManagedPackage(Protocol):
+    """Managed Registry fields consumed by the CLI installation workflow."""
 
     marketplace_id: str
     remote_url: str
-    publish_ref: str
+    registry_ref: str
 
 
 class MarketplaceInstallationPublisher(Protocol):
-    """Narrow published-package resolution seam required by CLI installation."""
+    """Narrow managed-package resolution seam required by CLI installation."""
 
-    def resolve_published_package_for_install(
+    def resolve_managed_package_for_install(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
+        package_format: MarketplacePackageFormat,
         package_id: str,
-        revision: str,
-    ) -> MarketplacePublishedPackage: ...
+        version: str,
+    ) -> MarketplaceManagedPackage: ...
 
     def resolve_install_runtime(self, workspace_id: str) -> dict[str, str | None]: ...
 
 
 class MarketplaceCliInstallError(RuntimeError):
-    """Raised when Aileron cannot reach the provider CLI installation stage."""
+    """Raised when Aileron cannot reach the target_client CLI installation stage."""
 
     def __init__(self, code: str, *, http_status: int = 400) -> None:
         self.code = code
@@ -62,19 +65,34 @@ class MarketplaceCliInstallError(RuntimeError):
 
 
 class _KeyedInstallMutex:
-    """Serialize one workspace/provider mutation without durable state."""
+    """Serialize one workspace/target_client mutation without durable state."""
 
     def __init__(self) -> None:
         self._guard = threading.Lock()
-        self._entries: dict[tuple[str, str], tuple[threading.Lock, int]] = {}
+        self._entries: dict[tuple[str, str, str], tuple[threading.Lock, int]] = {}
 
     @contextmanager
-    def acquire(self, workspace_id: str, provider: str) -> Iterator[None]:
-        key = (workspace_id, provider)
+    def acquire(
+        self,
+        workspace_id: str,
+        target_client: str,
+        catalog_plugin_id: str,
+    ) -> Iterator[None]:
+        key = (workspace_id, target_client, catalog_plugin_id)
         with self._guard:
             lock, users = self._entries.get(key, (threading.Lock(), 0))
             self._entries[key] = (lock, users + 1)
-        lock.acquire()
+        if not lock.acquire(blocking=False):
+            with self._guard:
+                current_lock, current_users = self._entries[key]
+                if current_users == 1:
+                    del self._entries[key]
+                else:
+                    self._entries[key] = (current_lock, current_users - 1)
+            raise MarketplaceCliInstallError(
+                "marketplace.install.operation-in-progress",
+                http_status=409,
+            )
         try:
             yield
         finally:
@@ -91,7 +109,7 @@ _INSTALL_MUTEX = _KeyedInstallMutex()
 
 
 class MarketplaceCliInstallService:
-    """Resolve a published package and return one provider CLI terminal result."""
+    """Resolve a managed package and return one target_client CLI terminal result."""
 
     def __init__(
         self,
@@ -128,24 +146,32 @@ class MarketplaceCliInstallService:
                 workspace_id=request.workspace_id,
                 user_id=user_id,
             )
-            with _INSTALL_MUTEX.acquire(request.workspace_id, request.provider):
-                published = self.publisher.resolve_published_package_for_install(
-                    user_id,
-                    request.provider,
-                    request.package_id,
-                    request.revision,
-                )
-                marketplace_id = published.marketplace_id
+            managed_package = self.publisher.resolve_managed_package_for_install(
+                user_id,
+                request.target_client,
+                request.package_format,
+                request.package_id,
+                request.version,
+            )
+            marketplace_id = managed_package.marketplace_id
+            remote_url = managed_package.remote_url
+            registry_ref = managed_package.registry_ref
+            catalog_plugin_id = f"{marketplace_id}/{request.package_id}"
+            with _INSTALL_MUTEX.acquire(
+                request.workspace_id,
+                request.target_client,
+                catalog_plugin_id,
+            ):
                 runtime_url, runtime_instance_id = self._resolve_runtime(
                     request.workspace_id
                 )
                 payload = {
                     "operationId": operation_id,
-                    "provider": request.provider,
+                    "targetClient": request.target_client,
                     "packageId": request.package_id,
                     "marketplaceId": marketplace_id,
-                    "remoteUrl": published.remote_url,
-                    "publishRef": published.publish_ref,
+                    "remoteUrl": remote_url,
+                    "registryRef": registry_ref,
                     "workspaceId": request.workspace_id,
                     "runtimeInstanceId": runtime_instance_id,
                 }
@@ -178,7 +204,17 @@ class MarketplaceCliInstallService:
                 if result.status == "installed"
                 else "marketplace.install.cli_failed"
             ),
+            result=result,
         )
+        if result.status == "installed" and not self._last_activity_persisted:
+            result = result.model_copy(
+                update={
+                    "warnings": [
+                        *result.warnings,
+                        "marketplace.install.audit-persistence-failed",
+                    ]
+                }
+            )
         return result
 
     def _resolve_runtime(self, workspace_id: str) -> tuple[str, str]:
@@ -214,7 +250,7 @@ class MarketplaceCliInstallService:
             ) from exc
         identity_fields = (
             ("operationId", result.operation_id),
-            ("provider", result.provider),
+            ("targetClient", result.target_client),
             ("packageId", result.package_id),
             ("marketplaceId", result.marketplace_id),
             ("workspaceId", result.workspace_id),
@@ -247,26 +283,36 @@ class MarketplaceCliInstallService:
         request: MarketplacePluginInstallRequest,
         operation_id: str,
         marketplace_id: str | None,
-        status: str,
+        status: MarketplaceActivityStatus,
         error_code: str | None,
+        result: MarketplacePluginCommandResult | None = None,
     ) -> None:
-        try:
-            self.activity_repository.append(
-                actor_user_id=actor_user_id,
-                action="install",
-                status=status,  # type: ignore[arg-type]
-                provider=request.provider,
-                package_id=request.package_id,
-                operation_id=operation_id,
-                workspace_id=request.workspace_id,
-                marketplace_id=marketplace_id,
-                error_code=error_code,
-                now=self.now(),
-            )
-            self.db.commit()
-        except Exception:
-            self.db.rollback()
-            _LOGGER.exception("Failed to append Marketplace CLI install activity")
+        self._last_activity_persisted = False
+        for attempt in range(3):
+            try:
+                self.activity_repository.append(
+                    actor_user_id=actor_user_id,
+                    action="install",
+                    status=status,
+                    package_format=request.package_format,
+                    target_client=request.target_client,
+                    package_id=request.package_id,
+                    operation_id=operation_id,
+                    workspace_id=request.workspace_id,
+                    marketplace_id=marketplace_id,
+                    error_code=error_code,
+                    commands=() if result is None else result.commands,
+                    now=self.now(),
+                )
+                self.db.commit()
+                self._last_activity_persisted = True
+                return
+            except Exception:
+                self.db.rollback()
+                _LOGGER.exception(
+                    "Failed to append Marketplace CLI install activity (attempt %s)",
+                    attempt + 1,
+                )
 
     @staticmethod
     def _error_code(exc: Exception) -> str:

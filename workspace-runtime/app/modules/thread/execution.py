@@ -64,6 +64,14 @@ class AgentEvent:
     raw: dict[str, Any] | None = None
 
 
+class RunnerStopTimeoutError(RuntimeError):
+    """Raised when a stop-current-turn request cannot confirm the runner exited."""
+
+    def __init__(self, execution_id: str) -> None:
+        super().__init__(f"runner_stop_timeout:{execution_id}")
+        self.execution_id = execution_id
+
+
 @dataclass(frozen=True)
 class TimelineInvalidation:
     thread: ThreadModel
@@ -248,6 +256,29 @@ class _ThreadExecution:
         await self._runner.wait(execution_id)
         if self._runner.is_alive(execution_id):
             raise RuntimeError("agent_process_still_alive")
+
+    async def stop_and_confirm_for_turn_stop(self, execution_id: str) -> None:
+        """Stop the runner for a user-initiated turn stop and confirm it exited.
+
+        Any exception raised while signaling or waiting on the runner is
+        swallowed and logged: the final `is_alive` check alone decides whether
+        the stop is confirmed, so a runner that reports itself dead after a
+        failed `stop()` call can still safely proceed to finalize the turn.
+        """
+        if not self._runner.is_alive(execution_id):
+            return
+        try:
+            await self._runner.stop(execution_id)
+            await self._runner.wait(execution_id)
+        except Exception:
+            logger.warning(
+                "Runner stop/wait raised while stopping the current turn: "
+                "execution_id=%s",
+                execution_id,
+                exc_info=True,
+            )
+        if self._runner.is_alive(execution_id):
+            raise RunnerStopTimeoutError(execution_id)
 
     async def destroy_thread(self, thread_id: str) -> None:
         await self._runner.destroy_thread(thread_id)
@@ -544,6 +575,86 @@ class _ThreadExecution:
         if next_execution is not None:
             await self._start_reserved_execution(thread_id, next_execution)
 
+    async def _finish_and_handoff(
+        self,
+        *,
+        thread_id: str,
+        updated: ThreadModel,
+        execution: ThreadTurnExecutionModel,
+        turn: ThreadTurnModel,
+        finished_status: str,
+        next_execution_id: str | None,
+        queued_message: dict[str, Any] | None,
+        timeline_turn_ids: list[str],
+        affected_execution_ids: list[str],
+        created_item_ids: list[str],
+    ) -> tuple[str, AgentExecutionRequest] | None:
+        """Finish the current turn/execution and, when a queued message was
+        reserved, atomically build the handoff request for the next turn.
+
+        Shared by the complete-event dequeue path and the stop-current-turn
+        dequeue path so both advance the FIFO queue identically.
+        """
+        if queued_message is None or next_execution_id is None:
+            await self.turn_repo.finish(
+                thread=updated,
+                execution=execution,
+                turn=turn,
+                status=finished_status,
+            )
+            return None
+
+        await self.turn_repo.finish(
+            thread=updated,
+            execution=execution,
+            turn=turn,
+            status=finished_status,
+        )
+        message = {
+            key: value for key, value in queued_message.items() if key != "id"
+        }
+        text = str(message.get("text") or "")
+        message_attachments, runner_attachments = self._message_attachments(
+            thread_id, message
+        )
+        next_turn = await self.turn_repo.create_turn(
+            thread=updated,
+            turn_id=str(uuid4()),
+            status="running",
+        )
+        timeline_turn_ids.append(next_turn.id)
+        next_turn_execution = await self.turn_repo.create_execution(
+            thread=updated,
+            turn=next_turn,
+            execution_id=next_execution_id,
+            agentic_tool=updated.agentic_tool,
+            status="running",
+        )
+        affected_execution_ids.append(next_turn_execution.id)
+        next_user = await self.message_repo.append(
+            thread_id,
+            next_turn.id,
+            next_turn_execution.id,
+            "user",
+            self._user_message_content(text, message_attachments),
+            source_event_key=f"submission:{next_execution_id}",
+        )
+        created_item_ids.append(str(next_user.id))
+        return (
+            next_execution_id,
+            AgentExecutionRequest(
+                thread_id=updated.id,
+                agentic_tool=updated.agentic_tool,
+                model=updated.model,
+                claude_mode=updated.claude_mode,
+                prompt_text=text,
+                attachments=runner_attachments,
+                permission_mode=None,
+                git_context_id=updated.git_context_id,
+                agent_resume_id=execution.agent_resume_id,
+            ),
+        )
+
     async def handle_event(
         self, thread_id: str, execution_id: str, event: AgentEvent
     ) -> tuple[
@@ -632,63 +743,18 @@ class _ThreadExecution:
                 execution,
                 event,
             )
-            if queued_message is not None and next_execution_id is not None:
-                await self.turn_repo.finish(
-                    thread=updated,
+            if event.type == "complete":
+                next_execution = await self._finish_and_handoff(
+                    thread_id=thread_id,
+                    updated=updated,
                     execution=execution,
                     turn=turn,
-                    status="complete",
-                )
-                message = {
-                    key: value for key, value in queued_message.items() if key != "id"
-                }
-                text = str(message.get("text") or "")
-                message_attachments, runner_attachments = self._message_attachments(
-                    thread_id, message
-                )
-                next_turn = await self.turn_repo.create_turn(
-                    thread=updated,
-                    turn_id=str(uuid4()),
-                    status="running",
-                )
-                timeline_turn_ids.append(next_turn.id)
-                next_turn_execution = await self.turn_repo.create_execution(
-                    thread=updated,
-                    turn=next_turn,
-                    execution_id=next_execution_id,
-                    agentic_tool=updated.agentic_tool,
-                    status="running",
-                )
-                affected_execution_ids.append(next_turn_execution.id)
-                next_user = await self.message_repo.append(
-                    thread_id,
-                    next_turn.id,
-                    next_turn_execution.id,
-                    "user",
-                    self._user_message_content(text, message_attachments),
-                    source_event_key=f"submission:{next_execution_id}",
-                )
-                created_item_ids.append(str(next_user.id))
-                next_execution = (
-                    next_execution_id,
-                    AgentExecutionRequest(
-                        thread_id=updated.id,
-                        agentic_tool=updated.agentic_tool,
-                        model=updated.model,
-                        claude_mode=updated.claude_mode,
-                        prompt_text=text,
-                        attachments=runner_attachments,
-                        permission_mode=None,
-                        git_context_id=updated.git_context_id,
-                        agent_resume_id=execution.agent_resume_id,
-                    ),
-                )
-            elif event.type == "complete":
-                await self.turn_repo.finish(
-                    thread=updated,
-                    execution=execution,
-                    turn=turn,
-                    status="complete",
+                    finished_status="complete",
+                    next_execution_id=next_execution_id,
+                    queued_message=queued_message,
+                    timeline_turn_ids=timeline_turn_ids,
+                    affected_execution_ids=affected_execution_ids,
+                    created_item_ids=created_item_ids,
                 )
             elif event.type == "error":
                 execution.agent_resume_id = None
@@ -722,6 +788,134 @@ class _ThreadExecution:
             executions=tuple(self._execution_metadata(item) for item in executions),
         )
         return True, next_execution, invalidation
+
+    async def finalize_turn_stop(
+        self, thread_id: str, execution_id: str
+    ) -> tuple[
+        bool,
+        tuple[str, AgentExecutionRequest] | None,
+        TimelineInvalidation | None,
+    ]:
+        """Atomically finish the current turn as canceled and, if a message
+        is queued, hand off to the next turn.
+
+        This is the stop-current-turn counterpart to the complete-event
+        dequeue branch of `handle_event`, sharing `_finish_and_handoff` so
+        both advance the FIFO queue identically. Returns `(False, None,
+        None)` without mutating anything when `execution_id` is no longer
+        the thread's active turn (already finalized by a concurrent stop, or
+        superseded by a runner event) so repeated stop calls for the same
+        execution are idempotent and never double-dequeue or start a
+        duplicate turn.
+        """
+        execution = await self.turn_repo.get_execution(execution_id)
+        if execution is None:
+            return False, None, None
+        turn = await self.turn_repo.get_turn(thread_id, execution.turn_id)
+        if turn is None:
+            return False, None, None
+
+        stale = False
+        next_execution_id: str | None = None
+        queued_message: dict[str, Any] | None = None
+        previous_status = ""
+        timeline_turn_ids = [turn.id]
+        affected_execution_ids = [execution.id]
+
+        def mutate(model: ThreadModel) -> None:
+            nonlocal next_execution_id, queued_message, stale, previous_status
+            if (
+                model.active_turn_execution_id != execution_id
+                or ThreadStatus(model.status) not in RUNNING_STATUSES
+            ):
+                stale = True
+                return
+            previous_status = model.status
+            if model.queued_messages:
+                queued_message = model.queued_messages[0]
+                model.queued_messages = model.queued_messages[1:]
+                next_execution_id = self._runner.reserve()
+                model.status = ThreadStatus.QUEUED.value
+            else:
+                model.status = ThreadStatus.CANCELED.value
+
+        created_item_ids: list[str] = []
+        try:
+            updated = await self.thread_repo.locked_update(thread_id, mutate)
+            if updated is None or stale:
+                return False, None, None
+
+            next_execution = await self._finish_and_handoff(
+                thread_id=thread_id,
+                updated=updated,
+                execution=execution,
+                turn=turn,
+                finished_status="canceled",
+                next_execution_id=next_execution_id,
+                queued_message=queued_message,
+                timeline_turn_ids=timeline_turn_ids,
+                affected_execution_ids=affected_execution_ids,
+                created_item_ids=created_item_ids,
+            )
+        except Exception:
+            if next_execution_id is not None and self._runner.is_alive(
+                next_execution_id
+            ):
+                await self._runner.stop(next_execution_id)
+            raise
+
+        turns = await self.turn_repo.list_turns_by_ids(
+            thread_id, set(timeline_turn_ids)
+        )
+        executions = await self.turn_repo.list_executions_by_ids(
+            set(affected_execution_ids)
+        )
+        invalidation = TimelineInvalidation(
+            thread=updated,
+            previous_status=previous_status,
+            created_item_ids=tuple(created_item_ids),
+            changed_item_ids=(),
+            turns=tuple(self._turn_metadata(item) for item in turns),
+            executions=tuple(self._execution_metadata(item) for item in executions),
+        )
+        return True, next_execution, invalidation
+
+    async def stop_current_turn(self, thread_id: str, execution_id: str) -> bool:
+        """Confirm the runner for `execution_id` stopped, then atomically
+        finish the current turn as canceled and hand off to the next queued
+        message if one is waiting.
+
+        Mirrors `_handle_runner_event`'s session handling so the finalize
+        step composes correctly whether or not a dedicated event session
+        factory is configured. Returns False if this execution was already
+        finalized by a concurrent stop or superseded runner event.
+        """
+        if self.event_session_factory is None:
+            handled, next_execution, invalidation = await self.finalize_turn_stop(
+                thread_id, execution_id
+            )
+            await self.db.commit()
+            if invalidation is not None:
+                await self._emit_timeline(invalidation)
+            if next_execution is not None:
+                await self._start_reserved_execution(thread_id, next_execution)
+            return handled
+
+        async with self.event_session_factory() as db:
+            try:
+                async with db.begin():
+                    adapter = self._event_adapter(db)
+                    handled, next_execution, invalidation = (
+                        await adapter.finalize_turn_stop(thread_id, execution_id)
+                    )
+            finally:
+                if db.in_transaction():
+                    await db.rollback()
+        if invalidation is not None:
+            await self._emit_timeline(invalidation)
+        if next_execution is not None:
+            await self._start_reserved_execution(thread_id, next_execution)
+        return handled
 
     async def _start_reserved_execution(
         self, thread_id: str, execution: tuple[str, AgentExecutionRequest]

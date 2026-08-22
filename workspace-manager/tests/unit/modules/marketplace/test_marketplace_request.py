@@ -72,7 +72,7 @@ def test_request_rejects_unknown_operation() -> None:
         ("delete_package", OperationId.MARKETPLACE_DELETE_EXECUTE),
         ("preflight_user_copy", OperationId.MARKETPLACE_USER_COPY_MANAGE),
         (
-            "resolve_published_package_for_install",
+            "resolve_managed_package_for_install",
             OperationId.MARKETPLACE_INSTALL_EXECUTE,
         ),
         ("resolve_install_runtime", OperationId.MARKETPLACE_INSTALL_EXECUTE),

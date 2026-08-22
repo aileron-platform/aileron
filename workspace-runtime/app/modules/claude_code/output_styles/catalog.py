@@ -19,7 +19,7 @@ from app.modules.cli_settings.user_scope.models import (
     UserScopeResource,
 )
 from app.modules.cli_settings.user_scope.paths import get_user_scope_path_resolver
-from app.modules.marketplace_operations.gate import get_marketplace_provider_gate
+from app.modules.marketplace_operations.gate import get_marketplace_target_client_gate
 from app.modules.marketplace_operations.plugin_resources import (
     plugin_resource_provenance,
 )
@@ -311,14 +311,14 @@ class OutputStyleService:
             relativeSourcePath=self._plugin_locator(item),
             generation=generation,
             provenance=plugin_resource_provenance(
-                provider="claude-code",
+                target_client="claude-code",
                 plugin_id=item.plugin_id,
                 marketplace_id=item.marketplace_name,
             ),
         )
 
     def _provider_generation(self) -> int:
-        return get_marketplace_provider_gate().generation("claude-code")
+        return get_marketplace_target_client_gate().generation("claude-code")
 
     @staticmethod
     def _plugin_locator(item: ComponentFileInfo) -> str:

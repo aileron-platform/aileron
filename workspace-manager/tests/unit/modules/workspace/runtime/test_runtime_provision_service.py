@@ -6,13 +6,14 @@ import base64
 import json
 import re
 from pathlib import Path
-from urllib.parse import urlsplit
 from unittest.mock import MagicMock, Mock, patch
+from urllib.parse import urlsplit
 from uuid import UUID
 
 import pytest
 
 from app.db import models as db_models
+from app.modules.container_images.catalog import get_container_image_service
 from app.modules.workspace.browser_credentials import BrowserCredentialService
 from app.modules.workspace.environment import WorkspaceEnvironmentError
 from app.modules.workspace.orchestrator.base import (
@@ -56,9 +57,9 @@ def _assert_runtime_platform_environment(environment: dict[str, str]) -> None:
     }
     assert set(observed) == set(required)
     for name, item in required.items():
-        assert re.fullmatch(item["valuePattern"], observed[name]), (
-            f"{name} does not satisfy {item['valueKind']}"
-        )
+        assert re.fullmatch(
+            item["valuePattern"], observed[name]
+        ), f"{name} does not satisfy {item['valueKind']}"
         port_contract = item.get("port")
         if port_contract is None:
             continue
@@ -70,9 +71,10 @@ def _assert_runtime_platform_environment(environment: dict[str, str]) -> None:
         if port_contract["required"]:
             assert port is not None, f"{name} requires an explicit port"
         if port is not None:
-            assert port_contract["minimum"] <= port <= port_contract["maximum"], (
-                f"{name} port is outside the allowed range"
-            )
+            assert (
+                port_contract["minimum"] <= port <= port_contract["maximum"]
+            ), f"{name} port is outside the allowed range"
+
 
 # ============================================================================
 # Fixtures
@@ -122,6 +124,7 @@ def mock_settings():
     settings.HOST_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE = (
         "/tmp/runtime-assertions/jwks.json"
     )
+    settings.HOST_PLATFORM_DATABASE_CA_CERT_FILE = ""
     settings.MANAGER_WORKSPACES_DIR = "/mnt/workspaces"
     settings.MANAGER_WORKSPACE_SCRIPTS_DIR = "/mnt/workspace-scripts"
     settings.MANAGER_RUNTIME_HOME_DIR = "/mnt/runtime-home"
@@ -129,7 +132,6 @@ def mock_settings():
     settings.DOCKER_NETWORK = "workspace-network"
     settings.AILERON_INSTALLATION_ID = "test-installation"
     settings.ENV = "testing"
-    settings.DATABASE_URL = "postgresql://test:test@localhost/test"
     settings.PORT = 8000
     settings.PLATFORM_PUBLIC_ORIGIN = "https://aileron.example.test"
     settings.RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE = (
@@ -211,7 +213,7 @@ def provision_service(mock_db_session, mock_settings, mock_template_engine):
                 role_prefix="wsr_test_",
                 password="scoped-password",
                 database_url="postgresql://wsr_test_generation:scoped-password@postgres/test",
-                secret_name="workspace-runtime-db-test",
+                secret_name="workspace-generation-0123456789abcdef",
             )
             service = RuntimeProvisionService(
                 mock_db_session,
@@ -251,7 +253,7 @@ class TestRuntimeProvisionService:
                 return_value=MagicMock(spec=RuntimeContext),
             ),
         ):
-            plan = provision_service.prepare_execution_plane(
+            plan = provision_service._prepare_generation(
                 sample_workspace,
                 runtime_instance_id="11111111-1111-4111-8111-111111111111",
             )
@@ -271,6 +273,85 @@ class TestRuntimeProvisionService:
             database_url=plan.database_credential.database_url,
             runtime_control_token=plan.runtime_control_token,
         )
+
+    def test_deployment_images_reach_docker_orchestrator_boundary(
+        self,
+        provision_service,
+        sample_workspace,
+        mock_settings,
+        tmp_path: Path,
+    ) -> None:
+        runtime_image = "ailerondocker/workspace-runtime:git-test"
+        browser_image = "ailerondocker/workspace-chrome:git-test"
+        canvas_image = "ailerondocker/workspace-canvas:git-test"
+        image_settings = MagicMock()
+        image_settings.WORKSPACE_RUNTIME_IMAGE = runtime_image
+        image_settings.WORKSPACE_BROWSER_IMAGE = browser_image
+        image_settings.WORKSPACE_CANVAS_IMAGE = canvas_image
+        mock_settings.HOST_WORKSPACES_DIR = str(tmp_path / "workspaces")
+        sample_workspace.browser_credential_revision = 1
+        sample_workspace.browser_credential_key_id = "test-browser-key"
+        sample_workspace.browser_credential_algorithm = "hkdf-sha256-v1"
+        credential_service = MagicMock()
+        credential_service.derive.return_value = MagicMock(
+            user_password="test-user-password",
+            admin_password="test-admin-password",
+        )
+        orchestrator = MagicMock()
+        orchestrator.recreate_workspace_execution_plane.return_value = MagicMock()
+        assert_claim = MagicMock()
+
+        get_container_image_service.cache_clear()
+        try:
+            with (
+                patch(
+                    "app.modules.container_images.catalog.get_settings",
+                    return_value=image_settings,
+                ),
+                patch.object(
+                    provision_service,
+                    "_build_environment",
+                    return_value={},
+                ),
+                patch.object(provision_service, "_build_volumes", return_value=[]),
+                patch.object(
+                    provision_service,
+                    "_build_browser_connectivity_probe_context",
+                    return_value=None,
+                ),
+                patch.object(
+                    provision_service,
+                    "_write_browser_credential_files",
+                    return_value=[],
+                ),
+                patch.object(
+                    BrowserCredentialService,
+                    "from_settings",
+                    return_value=credential_service,
+                ),
+                patch(
+                    "app.modules.workspace.runtime.provisioning."
+                    "OrchestratorFactory.get_orchestrator",
+                    return_value=orchestrator,
+                ),
+                patch.object(provision_service, "_wait_for_execution_plane_ready"),
+            ):
+                plan = provision_service._prepare_generation(
+                    sample_workspace,
+                    runtime_instance_id="11111111-1111-4111-8111-111111111111",
+                )
+                provision_service._apply_generation(
+                    plan,
+                    assert_claim=assert_claim,
+                    timeout_seconds=300,
+                )
+        finally:
+            get_container_image_service.cache_clear()
+
+        call = orchestrator.recreate_workspace_execution_plane.call_args.kwargs
+        assert call["runtime_context"].labels["image"] == runtime_image
+        assert call["browser_context"].labels["image"] == browser_image
+        assert call["canvas_context"].labels["image"] == canvas_image
 
     def test_apply_execution_plane_keeps_ready_generation_active(
         self,
@@ -296,7 +377,7 @@ class TestRuntimeProvisionService:
                 "_wait_for_execution_plane_ready",
             ) as wait_for_ready,
         ):
-            result = provision_service.apply_execution_plane(
+            result = provision_service._apply_generation(
                 plan,
                 assert_claim=assert_claim,
                 timeout_seconds=300,
@@ -341,7 +422,7 @@ class TestRuntimeProvisionService:
             ),
         )
 
-        provision_service.apply_execution_plane_result(sample_workspace, result)
+        provision_service._stage_generation(sample_workspace, result)
 
         assert (
             sample_workspace.runtime_instance_id,
@@ -534,7 +615,7 @@ class TestRuntimeProvisionService:
             ),
             pytest.raises(RuntimeError, match="not ready"),
         ):
-            provision_service.apply_execution_plane(
+            provision_service._apply_generation(
                 plan,
                 assert_claim=MagicMock(),
                 timeout_seconds=1,
@@ -579,7 +660,7 @@ class TestRuntimeProvisionService:
                 match="not fenced",
             ),
         ):
-            provision_service.apply_execution_plane(
+            provision_service._apply_generation(
                 plan,
                 assert_claim=MagicMock(),
                 timeout_seconds=1,
@@ -609,7 +690,7 @@ class TestRuntimeProvisionService:
             ),
             pytest.raises(RuntimeError, match="cleanup failed"),
         ):
-            provision_service.terminate_execution_plane(
+            provision_service._discard_generation(
                 plan,
                 execution_plane,
                 assert_claim=MagicMock(),
@@ -686,9 +767,7 @@ class TestRuntimeProvisionService:
             assert context.environment["AILERON_KB_MOUNT_REVISION"] == "0"
             assert context.environment[
                 "AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE"
-            ] == (
-                "/run/secrets/aileron/runtime-assertion-jwks.json"
-            )
+            ] == ("/run/secrets/aileron/runtime-assertion-jwks.json")
             assert context.environment["AILERON_RUNTIME_ASSERTION_ISSUER"] == (
                 "workspace-manager"
             )
@@ -749,12 +828,8 @@ class TestRuntimeProvisionService:
         mock_settings.HOST_RUNTIME_HOME_DIR = str(tmp_path / "host-runtime-home")
         mock_settings.HOST_KNOWLEDGE_BASES_DIR = str(tmp_path / "host-kbs")
         mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "manager-workspaces")
-        mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(
-            tmp_path / "manager-scripts"
-        )
-        mock_settings.MANAGER_RUNTIME_HOME_DIR = str(
-            tmp_path / "manager-runtime-home"
-        )
+        mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "manager-scripts")
+        mock_settings.MANAGER_RUNTIME_HOME_DIR = str(tmp_path / "manager-runtime-home")
         mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(tmp_path / "manager-kbs")
         sample_workspace.runtime_access_revision = 7
         sample_workspace.browser_webrtc_internal_url = None
@@ -780,8 +855,8 @@ class TestRuntimeProvisionService:
             "AILERON_RUNTIME_ACCESS_REVISION": "7",
             "AILERON_KB_MOUNT_REVISION": "0",
             "AILERON_WORKTREE_SUBDIR": ".worktrees",
-            "AILERON_RUNTIME_STATE_DATABASE_URL_FILE": (
-                "/run/secrets/aileron/runtime-state-database-url"
+            "AILERON_RUNTIME_DATABASE_CONNECTION_FILE": (
+                "/run/secrets/aileron/runtime-database-connection"
             ),
             "AILERON_RUNTIME_CONTROL_TOKEN_FILE": (
                 "/run/secrets/aileron/runtime-control-token"
@@ -815,14 +890,14 @@ class TestRuntimeProvisionService:
                 "/tmp/runtime-assertions/jwks.json",
                 True,
             ),
-            "/run/secrets/aileron/runtime-state-database-url": (
+            "/run/secrets/aileron/runtime-database-connection": (
                 str(
                     tmp_path
                     / "host-runtime-home"
                     / "workspace_123"
                     / ".aileron"
                     / "secrets"
-                    / "runtime-state-database-url"
+                    / "runtime-database-connection"
                 ),
                 True,
             ),
@@ -839,20 +914,16 @@ class TestRuntimeProvisionService:
             ),
         }
         manager_secret_root = (
-            tmp_path
-            / "manager-runtime-home"
-            / "workspace_123"
-            / ".aileron"
-            / "secrets"
+            tmp_path / "manager-runtime-home" / "workspace_123" / ".aileron" / "secrets"
         )
-        assert (
-            manager_secret_root / "runtime-state-database-url"
-        ).read_text(encoding="utf-8") == "postgresql://scoped@postgres/test"
+        assert (manager_secret_root / "runtime-database-connection").read_text(
+            encoding="utf-8"
+        ) == "postgresql://scoped@postgres/test"
         assert (manager_secret_root / "runtime-control-token").read_text(
             encoding="utf-8"
         ) == "scoped-control-token"
         assert (
-            manager_secret_root / "runtime-state-database-url"
+            manager_secret_root / "runtime-database-connection"
         ).stat().st_mode & 0o777 == 0o400
         assert (
             manager_secret_root / "runtime-control-token"
@@ -893,13 +964,9 @@ class TestRuntimeProvisionService:
                 continue
             for port in (0, 65536):
                 invalid_port = dict(environment)
-                scheme = (
-                    "https" if item["valueKind"] == "public-origin" else "http"
-                )
+                scheme = "https" if item["valueKind"] == "public-origin" else "http"
                 invalid_port[item["name"]] = f"{scheme}://service:{port}"
-                with pytest.raises(
-                    AssertionError, match="invalid port|allowed range"
-                ):
+                with pytest.raises(AssertionError, match="invalid port|allowed range"):
                     _assert_runtime_platform_environment(invalid_port)
 
     @pytest.mark.parametrize(
@@ -1002,6 +1069,40 @@ class TestRuntimeProvisionService:
         )
         assert codex_config_path.stat().st_mode & 0o777 == 0o600
 
+    def test_build_volumes_mounts_platform_database_ca_at_the_fixed_runtime_path(
+        self,
+        provision_service,
+        sample_workspace,
+        mock_settings,
+        tmp_path: Path,
+    ):
+        mock_settings.HOST_WORKSPACES_DIR = str(tmp_path / "workspaces")
+        mock_settings.HOST_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "workspace-scripts")
+        mock_settings.HOST_RUNTIME_HOME_DIR = str(tmp_path / "runtime-home")
+        mock_settings.HOST_KNOWLEDGE_BASES_DIR = str(tmp_path / "knowledge-bases")
+        mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
+        mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(
+            tmp_path / "mounted-workspace-scripts"
+        )
+        mock_settings.MANAGER_RUNTIME_HOME_DIR = str(tmp_path / "mounted-runtime-home")
+        mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(
+            tmp_path / "mounted-knowledge-bases"
+        )
+        ca_file = tmp_path / "platform-database-ca.crt"
+        ca_file.write_text("test-ca", encoding="utf-8")
+        mock_settings.HOST_PLATFORM_DATABASE_CA_CERT_FILE = str(ca_file)
+
+        volumes = provision_service._build_volumes(sample_workspace)
+
+        ca_mounts = [
+            volume
+            for volume in volumes
+            if volume.target == "/etc/aileron/data-service-ca/platform-database/ca.crt"
+        ]
+        assert len(ca_mounts) == 1
+        assert ca_mounts[0].source == str(ca_file)
+        assert ca_mounts[0].read_only is True
+
     def test_write_codex_default_config_preserves_existing_user_config(
         self, provision_service, tmp_path: Path
     ):
@@ -1064,7 +1165,7 @@ class TestRuntimeProvisionService:
         ):
             provision_service._build_volumes(sample_workspace)
 
-    def test_build_volumes_mounts_runtime_vendor_in_development(
+    def test_build_volumes_mounts_runtime_import_in_development(
         self,
         provision_service,
         sample_workspace,
@@ -1089,7 +1190,7 @@ class TestRuntimeProvisionService:
             tmp_path / "workspace-runtime" / "tests"
         )
         assert sources["/workspace-runtime/vendor"] == str(
-            tmp_path / "workspace-runtime" / "vendor"
+            tmp_path / "workspace-runtime" / "import"
         )
         assert sources["/workspace-runtime/pyproject.toml"] == str(
             tmp_path / "workspace-runtime" / "pyproject.toml"
@@ -1320,16 +1421,20 @@ class TestRuntimeProvisionService:
         admin_password_file = credential_directory / "admin-password"
 
         assert user_password_file.read_text(encoding="utf-8") == expected_user_password
-        assert admin_password_file.read_text(encoding="utf-8") == expected_admin_password
+        assert (
+            admin_password_file.read_text(encoding="utf-8") == expected_admin_password
+        )
         assert credential_directory.stat().st_mode & 0o777 == 0o700
         assert user_password_file.stat().st_mode & 0o777 == 0o600
         assert admin_password_file.stat().st_mode & 0o777 == 0o600
-        assert context.environment[
-            "NEKO_MEMBER_MULTIUSER_USER_PASSWORD_FILE"
-        ] == "/run/secrets/browser-credentials/user-password"
-        assert context.environment[
-            "NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD_FILE"
-        ] == "/run/secrets/browser-credentials/admin-password"
+        assert (
+            context.environment["NEKO_MEMBER_MULTIUSER_USER_PASSWORD_FILE"]
+            == "/run/secrets/browser-credentials/user-password"
+        )
+        assert (
+            context.environment["NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD_FILE"]
+            == "/run/secrets/browser-credentials/admin-password"
+        )
         assert "NEKO_MEMBER_MULTIUSER_USER_PASSWORD" not in context.environment
         assert "NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD" not in context.environment
         assert expected_user_password not in context.environment.values()
@@ -1344,9 +1449,7 @@ class TestRuntimeProvisionService:
             "/run/secrets/browser-credentials/admin-password",
         }
         assert all(mount.read_only for mount in secret_mounts.values())
-        assert {
-            mount.source for mount in secret_mounts.values()
-        } == {
+        assert {mount.source for mount in secret_mounts.values()} == {
             f"/host/browser-credentials/{runtime_instance_id}/user-password",
             f"/host/browser-credentials/{runtime_instance_id}/admin-password",
         }

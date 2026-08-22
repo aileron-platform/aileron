@@ -14,10 +14,7 @@ from app.modules.authorization.actor import AuthorizationActor
 from app.modules.knowledge_base.mount_reconcile import (
     KnowledgeBaseMountReconcileService,
 )
-from app.modules.workspace.orchestrator.models import (
-    RuntimeContext,
-    RuntimeInfo,
-)
+from app.modules.workspace.orchestrator.models import RuntimeContext
 from app.modules.workspace.runtime.provisioning import (
     WorkspaceExecutionPlaneIdentity,
     WorkspaceExecutionPlanePlan,
@@ -30,6 +27,7 @@ from app.modules.workspace.custom_resources import (
     WorkspaceKnowledgeBasePreflightError,
 )
 from app.modules.workspace.runtime.database import RuntimeDatabaseCredential
+from app.modules.workspace.execution_plane import GenerationOutcome, GenerationState
 from app.modules.workspace.runtime.job_execution import WorkspaceRuntimeJobRunResult
 
 
@@ -42,15 +40,7 @@ def _database_credential(workspace_id: str, runtime_instance_id: str):
         role_prefix="wsr_test_",
         password="scoped-password",
         database_url="postgresql://runtime:scoped@postgres/app",
-        secret_name="workspace-runtime-db-test",
-    )
-
-
-def _runtime_info(identifier: str, port: int) -> RuntimeInfo:
-    return RuntimeInfo(
-        identifier=identifier,
-        internal_url=f"http://{identifier}:{port}",
-        extra_info={"container_name": identifier},
+        secret_name="workspace-generation-0123456789abcdef",
     )
 
 
@@ -278,6 +268,31 @@ def _service(
         assertion_service_factory=MagicMock(),
     )
     service.best_effort_drain = MagicMock()
+
+    def reconcile(claim, *, attempt):
+        assert claim.runtime_instance_id == attempt.runtime_instance_id
+        assert claim.identity.runtime_instance_id != claim.runtime_instance_id
+        claim.assert_owned()
+        return GenerationOutcome(
+            state=GenerationState.READY,
+            workspace_id=claim.workspace_id,
+            generation_id=claim.runtime_instance_id,
+            runtime_url=f"http://runtime-{claim.runtime_instance_id}:3002",
+        )
+
+    def stage_ready(workspace, outcome):
+        generation_id = outcome.generation_id
+        workspace.runtime_instance_id = generation_id
+        workspace.runtime_control_instance_id = generation_id
+        workspace.runtime_container_id = f"runtime-{generation_id}"
+        workspace.browser_instance_id = generation_id
+        workspace.browser_container_id = f"browser-{generation_id}"
+        workspace.canvas_instance_id = generation_id
+        workspace.canvas_container_id = f"canvas-{generation_id}"
+
+    service.reconcile = MagicMock(side_effect=reconcile)
+    service._stage_ready = MagicMock(side_effect=stage_ready)
+    service._discard_ready = MagicMock()
     return service
 
 
@@ -290,35 +305,9 @@ def test_running_mount_reconcile_commits_claim_before_external_io(test_app) -> N
             workspace_id,
         ).runtime_instance_id
         runtime_provision = MagicMock()
-        runtime_provision.prepare_execution_plane.side_effect = (
+        runtime_provision._prepare_generation.side_effect = (
             lambda workspace, **_: _plan(workspace)
         )
-        runtime_result = _runtime_info("runtime-new", 3002)
-
-        def apply_runtime(plan, *, assert_claim):
-            assert not db.in_transaction()
-            with session_factory() as state_db:
-                state_workspace = state_db.get(
-                    db_models.Workspace,
-                    workspace_id,
-                )
-                assert state_workspace.knowledge_base_mount_sync_status == "applying"
-                assert state_workspace.runtime_instance_id == plan.runtime_instance_id
-                assert (
-                    state_workspace.runtime_control_instance_id
-                    == plan.runtime_instance_id
-                )
-                assert state_workspace.runtime_control_token_hash == "b" * 64
-            assert_claim()
-            return runtime_result
-
-        runtime_provision.apply_prepared_runtime_component.side_effect = apply_runtime
-
-        def stage_result(workspace, *, component, result):
-            assert component == "runtime"
-            workspace.runtime_container_id = result.identifier
-
-        runtime_provision.apply_component_result.side_effect = stage_result
         service = _service(db, runtime_provision)
 
         result = service.reconcile_mount_job(job_id)
@@ -350,11 +339,13 @@ def test_running_mount_reconcile_commits_claim_before_external_io(test_app) -> N
             )
             is not None
         )
-        assert workspace.runtime_container_id == "runtime-new"
         assert workspace.runtime_instance_id != old_instance_id
         assert workspace.runtime_instance_id == workspace.runtime_control_instance_id
-        assert workspace.browser_container_id == "browser-old"
-        assert workspace.canvas_container_id == "canvas-old"
+        assert workspace.runtime_instance_id == workspace.browser_instance_id
+        assert workspace.runtime_instance_id == workspace.canvas_instance_id
+        assert old_instance_id not in workspace.runtime_container_id
+        assert old_instance_id not in workspace.browser_container_id
+        assert old_instance_id not in workspace.canvas_container_id
         assert workspace.runtime_desired_revision == 2
         assert workspace.runtime_observed_revision == 2
         assert event_types == {
@@ -363,7 +354,7 @@ def test_running_mount_reconcile_commits_claim_before_external_io(test_app) -> N
         }
 
 
-def test_kubernetes_mount_reconcile_uses_custom_resource_execution_api(
+def test_kubernetes_mount_reconcile_uses_provider_neutral_generation_boundary(
     test_app,
 ) -> None:
     _, session_factory = test_app
@@ -378,48 +369,17 @@ def test_kubernetes_mount_reconcile_uses_custom_resource_execution_api(
         ).runtime_instance_id
         runtime_provision = MagicMock()
         custom_resources = MagicMock()
-        custom_resources.prepare_execution_plane.side_effect = (
+        custom_resources._prepare_generation.side_effect = (
             lambda workspace, **_: _custom_resource_plan(workspace)
         )
-
-        def apply(
-            workspace,
-            *,
-            component,
-            assert_claim,
-            runtime_plan,
-            max_attempts,
-        ):
-            assert not db.in_transaction()
-            assert component == "runtime"
-            assert isinstance(runtime_plan, WorkspaceCustomResourceExecutionPlan)
-            assert max_attempts == 1
-            with session_factory() as state_db:
-                state_workspace = state_db.get(db_models.Workspace, workspace_id)
-                assert (
-                    state_workspace.runtime_instance_id
-                    == runtime_plan.runtime_instance_id
-                )
-                assert (
-                    state_workspace.runtime_control_instance_id
-                    == runtime_plan.runtime_instance_id
-                )
-                assert state_workspace.runtime_control_token_hash == "b" * 64
-            assert_claim()
-
-        custom_resources.apply_component_desired_revision.side_effect = apply
         service = _service(db, runtime_provision, custom_resources)
 
         result = service.reconcile_mount_job(job_id)
 
     assert result == WorkspaceRuntimeJobRunResult.SUCCEEDED
-    custom_resources.prepare_execution_plane.assert_called_once()
-    custom_resources.apply_component_desired_revision.assert_called_once()
-    custom_resources.apply_execution_plane.assert_not_called()
-    custom_resources.apply_execution_plane_result.assert_not_called()
-    custom_resources.abandon_execution_plane_generation.assert_not_called()
-    runtime_provision.prepare_execution_plane.assert_not_called()
-    runtime_provision.apply_prepared_runtime_component.assert_not_called()
+    service.reconcile.assert_called_once()
+    service._stage_ready.assert_called_once()
+    service._discard_ready.assert_not_called()
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
         assert workspace.knowledge_base_mount_active_revision == 1
@@ -428,14 +388,13 @@ def test_kubernetes_mount_reconcile_uses_custom_resource_execution_api(
         assert workspace.knowledge_base_mount_candidate_snapshot is None
         assert workspace.runtime_instance_id != old_instance_id
         assert workspace.runtime_instance_id == workspace.runtime_control_instance_id
-        assert workspace.runtime_container_id == "runtime-old"
-        assert workspace.browser_container_id == "browser-old"
-        assert workspace.canvas_container_id == "canvas-old"
+        assert workspace.runtime_instance_id == workspace.browser_instance_id
+        assert workspace.runtime_instance_id == workspace.canvas_instance_id
         assert workspace.runtime_desired_revision == 2
         assert workspace.runtime_observed_revision == 2
 
 
-def test_kubernetes_stale_mount_revision_never_terminates_custom_resource(
+def test_stale_kubernetes_mount_generation_is_discarded(
     test_app,
 ) -> None:
     _, session_factory = test_app
@@ -446,11 +405,8 @@ def test_kubernetes_stale_mount_revision_never_terminates_custom_resource(
     with session_factory() as db:
         runtime_provision = MagicMock()
         custom_resources = MagicMock()
-        custom_resources.prepare_execution_plane.side_effect = (
+        custom_resources._prepare_generation.side_effect = (
             lambda workspace, **_: _custom_resource_plan(workspace)
-        )
-        custom_resources.apply_component_desired_revision.side_effect = (
-            lambda workspace, **_: None
         )
         service = _service(db, runtime_provision, custom_resources)
         service._target_is_current = MagicMock(return_value=False)
@@ -458,10 +414,9 @@ def test_kubernetes_stale_mount_revision_never_terminates_custom_resource(
         result = service.reconcile_mount_job(job_id)
 
     assert result == WorkspaceRuntimeJobRunResult.SUPERSEDED
-    custom_resources.apply_component_desired_revision.assert_called_once()
-    custom_resources.abandon_execution_plane_generation.assert_not_called()
-    custom_resources.apply_execution_plane_result.assert_not_called()
-    runtime_provision.terminate_execution_plane.assert_not_called()
+    service.reconcile.assert_called_once()
+    service._stage_ready.assert_not_called()
+    service._discard_ready.assert_called_once()
 
 
 def test_reconcile_failure_stages_last_known_good_compensation(test_app) -> None:
@@ -473,13 +428,18 @@ def test_reconcile_failure_stages_last_known_good_compensation(test_app) -> None
 
     with session_factory() as db:
         runtime_provision = MagicMock()
-        runtime_provision.prepare_execution_plane.side_effect = (
+        runtime_provision._prepare_generation.side_effect = (
             lambda workspace, **_: _plan(workspace)
         )
-        runtime_provision.apply_prepared_runtime_component.side_effect = ApplyError(
-            "sensitive host path"
-        )
         service = _service(db, runtime_provision)
+        service.reconcile.side_effect = None
+        service.reconcile.return_value = GenerationOutcome(
+            state=GenerationState.FAILED,
+            workspace_id=workspace_id,
+            generation_id="failed-generation",
+            error_code="KB_MOUNT_SOURCE_INVALID",
+            _error=ApplyError("sensitive host path"),
+        )
         service._publish_after_commit = MagicMock()
         result = service.reconcile_mount_job(job_id)
 
@@ -516,13 +476,18 @@ def test_compensation_success_restores_active_snapshot_and_keeps_degraded_state(
 
     with session_factory() as db:
         failed_runtime = MagicMock()
-        failed_runtime.prepare_execution_plane.side_effect = (
-            lambda workspace, **_: _plan(workspace)
-        )
-        failed_runtime.apply_prepared_runtime_component.side_effect = RuntimeError(
-            "mount apply failed"
+        failed_runtime._prepare_generation.side_effect = lambda workspace, **_: _plan(
+            workspace
         )
         failed_service = _service(db, failed_runtime)
+        failed_service.reconcile.side_effect = None
+        failed_service.reconcile.return_value = GenerationOutcome(
+            state=GenerationState.FAILED,
+            workspace_id=workspace_id,
+            generation_id="failed-generation",
+            error_code="WORKSPACE_KB_MOUNT_RECONCILE_FAILED",
+            _error=RuntimeError("mount apply failed"),
+        )
         failed_service._publish_after_commit = MagicMock()
 
         assert (
@@ -544,24 +509,11 @@ def test_compensation_success_restores_active_snapshot_and_keeps_degraded_state(
 
     with session_factory() as db:
         runtime_provision = MagicMock()
-        runtime_provision.prepare_execution_plane.side_effect = (
+        runtime_provision._prepare_generation.side_effect = (
             lambda workspace, **_: _plan(workspace)
         )
-        runtime_provision.apply_prepared_runtime_component.return_value = _runtime_info(
-            "runtime-compensated",
-            3002,
-        )
-        runtime_provision.apply_component_result.side_effect = (
-            lambda workspace, *, component, result: setattr(
-                workspace,
-                "runtime_container_id",
-                result.identifier,
-            )
-        )
-
-        result = _service(db, runtime_provision).reconcile_mount_job(
-            compensation_job_id
-        )
+        compensation_service = _service(db, runtime_provision)
+        result = compensation_service.reconcile_mount_job(compensation_job_id)
 
     assert result == WorkspaceRuntimeJobRunResult.SUCCEEDED
     with session_factory() as db:
@@ -597,15 +549,20 @@ def test_kubernetes_double_patch_failure_blocks_stale_custom_resource(
         code = "WORKSPACE_CUSTOM_RESOURCE_PATCH_FAILED"
 
     custom_resources = MagicMock()
-    custom_resources.prepare_execution_plane.side_effect = (
+    custom_resources._prepare_generation.side_effect = (
         lambda workspace, **_: _custom_resource_plan(workspace)
-    )
-    custom_resources.apply_component_desired_revision.side_effect = PatchError(
-        "Workspace CR PATCH failed"
     )
 
     with session_factory() as db:
         candidate_service = _service(db, MagicMock(), custom_resources)
+        candidate_service.reconcile.side_effect = None
+        candidate_service.reconcile.return_value = GenerationOutcome(
+            state=GenerationState.FAILED,
+            workspace_id=workspace_id,
+            generation_id="candidate-generation",
+            error_code="WORKSPACE_CUSTOM_RESOURCE_PATCH_FAILED",
+            _error=PatchError("Workspace CR PATCH failed"),
+        )
         candidate_service._publish_after_commit = MagicMock()
         candidate_result = candidate_service.reconcile_mount_job(candidate_job_id)
 
@@ -623,12 +580,21 @@ def test_kubernetes_double_patch_failure_blocks_stale_custom_resource(
 
     with session_factory() as db:
         compensation_service = _service(db, MagicMock(), custom_resources)
+        compensation_service.reconcile.side_effect = None
+        compensation_service.reconcile.return_value = GenerationOutcome(
+            state=GenerationState.FAILED,
+            workspace_id=workspace_id,
+            generation_id="compensation-generation",
+            error_code="WORKSPACE_CUSTOM_RESOURCE_PATCH_FAILED",
+            _error=PatchError("Workspace CR PATCH failed"),
+        )
         compensation_result = compensation_service.reconcile_mount_job(
             compensation_job_id
         )
 
     assert compensation_result == WorkspaceRuntimeJobRunResult.FAILED
-    assert custom_resources.apply_component_desired_revision.call_count == 2
+    assert candidate_service.reconcile.call_count == 1
+    assert compensation_service.reconcile.call_count == 1
 
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
@@ -745,7 +711,7 @@ def test_stopped_candidate_promotion_requires_absence_proof_and_replaces_active_
 
     assert result == WorkspaceRuntimeJobRunResult.SUCCEEDED
     runtime_provision.preflight_knowledge_base_mounts.assert_called_once()
-    runtime_provision.apply_execution_plane.assert_not_called()
+    service.reconcile.assert_not_called()
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
         job = db.get(db_models.WorkspaceRuntimeJob, job_id)
@@ -774,11 +740,12 @@ def test_kubernetes_stopped_candidate_promotion_preserves_cr_and_proves_pods_abs
         custom_resources.prove_workspace_pods_absent.side_effect = (
             lambda **kwargs: kwargs["assert_claim"]()
         )
-        result = _service(
+        service = _service(
             db,
             runtime_provision,
             custom_resources,
-        ).reconcile_mount_job(job_id)
+        )
+        result = service.reconcile_mount_job(job_id)
 
     assert result == WorkspaceRuntimeJobRunResult.SUCCEEDED
     runtime_provision.preflight_knowledge_base_mounts.assert_called_once()
@@ -786,7 +753,7 @@ def test_kubernetes_stopped_candidate_promotion_preserves_cr_and_proves_pods_abs
     proof_call = custom_resources.prove_workspace_pods_absent.call_args
     assert proof_call.kwargs["workspace_id"] == workspace_id
     custom_resources.prove_execution_plane_absent.assert_not_called()
-    custom_resources.apply_execution_plane.assert_not_called()
+    service.reconcile.assert_not_called()
     runtime_provision.prove_execution_plane_absent.assert_not_called()
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
@@ -850,9 +817,10 @@ def test_stopped_regular_mount_job_remains_queued(test_app) -> None:
     )
     with session_factory() as db:
         runtime_provision = MagicMock()
-        result = _service(db, runtime_provision).reconcile_mount_job(job_id)
+        service = _service(db, runtime_provision)
+        result = service.reconcile_mount_job(job_id)
 
     assert result == WorkspaceRuntimeJobRunResult.NOT_CLAIMED
     with session_factory() as db:
         assert db.get(db_models.WorkspaceRuntimeJob, job_id).status == "queued"
-    runtime_provision.prepare_execution_plane.assert_not_called()
+    service.reconcile.assert_not_called()

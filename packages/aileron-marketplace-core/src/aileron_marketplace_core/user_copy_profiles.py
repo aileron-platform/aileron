@@ -12,7 +12,7 @@ from typing import Any, Mapping
 from .claude_resources import resolve_claude_plugin_resources
 from .codex_resources import resolve_codex_plugin_resources
 from .package_tree import PackageTreeError, package_tree_digest
-from .provider_resources import MarketplaceProviderName, provider_resource_name_contract
+from .package_format_resources import NativePackageFormatName, package_format_resource_name_contract
 from .resource_resolution import (
     PackageSourceError,
     decode_json_pointer,
@@ -74,6 +74,7 @@ class UserCopySemantics(str, Enum):
 
 
 class UserCopyBlockReason(str, Enum):
+    FORMAT_UNSUPPORTED = "format-unsupported"
     SOURCE_NOT_ALLOWED = "source-not-allowed"
     SOURCE_REFERENCE_INVALID = "source-reference-invalid"
     SOURCE_DOCUMENT_INVALID = "source-document-invalid"
@@ -128,10 +129,10 @@ class UserCopyDependencyPayload:
 
 
 USER_COPY_SOURCE_ALLOWLIST: dict[
-    MarketplaceProviderName,
+    NativePackageFormatName,
     tuple[UserCopySourceRule, ...],
 ] = {
-    "claude-code": (
+    "claude-native": (
         UserCopySourceRule(UserCopyResourceType.INSTRUCTIONS, "CLAUDE.md"),
         UserCopySourceRule(UserCopyResourceType.SKILL, "skills/<stable-id>/**"),
         UserCopySourceRule(UserCopyResourceType.SUBAGENT, "agents/**/*.md"),
@@ -149,7 +150,7 @@ USER_COPY_SOURCE_ALLOWLIST: dict[
             "canonical-claude-hook-owner",
         ),
     ),
-    "codex": (
+    "codex-native": (
         UserCopySourceRule(UserCopyResourceType.INSTRUCTIONS, "AGENTS.md"),
         UserCopySourceRule(UserCopyResourceType.SKILL, "skills/<stable-id>/**"),
         UserCopySourceRule(UserCopyResourceType.SUBAGENT, "agents/*.toml"),
@@ -246,7 +247,7 @@ class BlockedUserCopyResource:
 
 @dataclass(frozen=True)
 class UserCopyProfile:
-    provider: MarketplaceProviderName
+    package_format: NativePackageFormatName
     resources: tuple[UserCopyResource, ...]
     blocked_resources: tuple[BlockedUserCopyResource, ...] = ()
     profile_version: int = USER_COPY_PROFILE_VERSION
@@ -258,7 +259,7 @@ class UserCopyProfile:
     def canonical_dict(self) -> dict[str, Any]:
         return {
             "profileVersion": self.profile_version,
-            "provider": self.provider,
+            "packageFormat": self.package_format,
             "resources": [resource.canonical_dict() for resource in self.resources],
             "blockedResources": [
                 resource.canonical_dict() for resource in self.blocked_resources
@@ -296,10 +297,81 @@ def build_user_copy_profile_preview(
     authenticated sparse ZIP snapshot.
     """
 
-    resolved_profile = resolve_user_copy_profile(profile.provider, package_root)
+    resolved_profile = resolve_user_copy_profile(profile.package_format, package_root)
     if resolved_profile.profile_digest != profile.profile_digest:
         raise PackageSourceError("source-profile-mismatch", ".")
     return _build_user_copy_profile_preview(package_root, profile)
+
+
+def build_native_user_copy_source_preview(
+    package_format: NativePackageFormatName,
+    package_root: Path,
+) -> dict[str, Any]:
+    """Expose native discovery as a source-only compatibility boundary.
+
+    Target projection fields remain private to the legacy native resolver and
+    are deliberately absent from this return value.
+    """
+
+    profile = resolve_user_copy_profile(package_format, package_root)
+    preview = _build_user_copy_profile_preview(package_root, profile)
+    resources_by_identity = {
+        (resource["resourceType"], resource["resourceId"]): resource
+        for resource in preview["resources"]
+    }
+    dependency_references = [
+        {
+            "sourceLocator": item["sourceLocator"],
+            "sourceKind": item["sourceKind"],
+            "sourceDigest": item["contentDigest"],
+        }
+        for item in preview["dependencyPayloads"]
+    ]
+    resources: list[dict[str, Any]] = []
+    for resource in profile.resources:
+        proof = resources_by_identity[
+            (resource.resource_type.value, resource.resource_id)
+        ]
+        structured_value = None
+        if resource.copy_semantics is UserCopySemantics.MERGE_CONFIG_ENTRY:
+            if proof["dependencyPayloadRequired"]:
+                structured_value = proof["structuredValueTemplate"]
+            else:
+                structured_value = _structured_source_value(
+                    package_root,
+                    resolve_package_source(
+                        package_root,
+                        resource.source_locator,
+                    ),
+                    resource.json_pointer,
+                )
+        resources.append(
+            {
+                "resourceType": resource.resource_type.value,
+                "resourceId": resource.resource_id,
+                "sourceLocator": resource.source_locator,
+                "sourceKind": resource.source_kind.value,
+                "sourceDigest": proof["sourceDigest"],
+                "sourceJsonPointer": resource.json_pointer,
+                "structuredValue": structured_value,
+                "dependencyReferences": (
+                    dependency_references
+                    if proof["dependencyPayloadRequired"]
+                    else []
+                ),
+            }
+        )
+    return {
+        "resources": resources,
+        "diagnostics": [
+            {
+                "code": blocked.reason.value,
+                "sourceLocator": blocked.source_locator,
+                "resourceType": blocked.resource_type,
+            }
+            for blocked in profile.blocked_resources
+        ],
+    }
 
 
 def _build_user_copy_profile_preview(
@@ -339,7 +411,7 @@ def _build_user_copy_profile_preview(
                 resource_payloads,
             ) = _inspect_dependency_payloads(
                 source_value,
-                provider=profile.provider,
+                package_format=profile.package_format,
                 package_root=package_root,
             )
         proof["dependencyPayloadRequired"] = payload_required
@@ -349,14 +421,14 @@ def _build_user_copy_profile_preview(
         if payload_required and payload_projectable:
             proof["structuredValueTemplate"] = _structured_value_template(
                 source_value,
-                provider=profile.provider,
+                package_format=profile.package_format,
             )
         resources.append(proof)
         dependency_payloads.extend(resource_payloads)
 
     return {
         "profileVersion": profile.profile_version,
-        "provider": profile.provider,
+        "package_format": profile.package_format,
         "profileDigest": profile.profile_digest,
         "resources": resources,
         "dependencyPayloads": [
@@ -376,7 +448,7 @@ def user_copy_source_digest_from_preview(
 
     try:
         profile_version = preview["profileVersion"]
-        provider = preview["provider"]
+        package_format = preview["package_format"]
         profile_digest = preview["profileDigest"]
         raw_resources = preview["resources"]
         raw_dependency_payloads = preview["dependencyPayloads"]
@@ -386,8 +458,8 @@ def user_copy_source_digest_from_preview(
     if (
         type(profile_version) is not int
         or profile_version != USER_COPY_PROFILE_VERSION
-        or not isinstance(provider, str)
-        or provider not in {"claude-code", "codex"}
+        or not isinstance(package_format, str)
+        or package_format not in {"claude-native", "codex-native"}
         or not isinstance(profile_digest, str)
         or len(profile_digest) != 64
         or any(character not in "0123456789abcdef" for character in profile_digest)
@@ -576,6 +648,7 @@ def user_copy_source_digest_from_preview(
                 canonical_source_locator != source_locator
                 or reason
                 not in {
+                    "format-unsupported",
                     "source-not-allowed",
                     "source-reference-invalid",
                     "source-document-invalid",
@@ -598,7 +671,7 @@ def user_copy_source_digest_from_preview(
     payload = {
         "digestAlgorithm": "user-copy-source-sha256-v1",
         "profileVersion": profile_version,
-        "provider": provider,
+        "package_format": package_format,
         "profileDigest": profile_digest,
         "resources": sorted(
             resources,
@@ -749,7 +822,7 @@ def resolve_user_copy_dependency_payloads(
 ) -> tuple[UserCopyDependencyPayload, ...]:
     """Resolve the canonical safe dependency closure referenced by a profile."""
 
-    resolved_profile = resolve_user_copy_profile(profile.provider, package_root)
+    resolved_profile = resolve_user_copy_profile(profile.package_format, package_root)
     if resolved_profile.profile_digest != profile.profile_digest:
         raise PackageSourceError("source-profile-mismatch", ".")
     return _resolve_user_copy_dependency_payloads(package_root, profile)
@@ -774,7 +847,7 @@ def _resolve_user_copy_dependency_payloads(
         )
         _required, _projectable, resource_payloads = _inspect_dependency_payloads(
             source_value,
-            provider=profile.provider,
+            package_format=profile.package_format,
             package_root=package_root,
         )
         payloads.extend(resource_payloads)
@@ -784,12 +857,12 @@ def _resolve_user_copy_dependency_payloads(
 def _inspect_dependency_payloads(
     value: Any,
     *,
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
     package_root: Path,
 ) -> tuple[bool, bool, tuple[UserCopyDependencyPayload, ...]]:
     tokens = (
         ("${CLAUDE_PLUGIN_ROOT}",)
-        if provider == "claude-code"
+        if package_format == "claude-native"
         else ("PLUGIN_ROOT", "${PLUGIN_ROOT}", "${CODEX_PLUGIN_ROOT}")
     )
     required = False
@@ -896,13 +969,13 @@ def _inspect_dependency_payloads(
 def _structured_value_template(
     value: Any,
     *,
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
 ) -> Any:
-    """Replace exact provider root prefixes with one transport-safe sentinel."""
+    """Replace exact package_format root prefixes with one transport-safe sentinel."""
 
     tokens = (
         ("${CLAUDE_PLUGIN_ROOT}",)
-        if provider == "claude-code"
+        if package_format == "claude-native"
         else ("PLUGIN_ROOT", "${PLUGIN_ROOT}", "${CODEX_PLUGIN_ROOT}")
     )
 
@@ -1131,9 +1204,9 @@ def _dependency_file_digest(path: Path) -> str:
 
 
 def user_copy_source_allowlist(
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
 ) -> tuple[UserCopySourceRule, ...]:
-    return USER_COPY_SOURCE_ALLOWLIST[provider]
+    return USER_COPY_SOURCE_ALLOWLIST[package_format]
 
 
 def _resource_sort_key(resource: UserCopyResource) -> tuple[str, str, str, str]:
@@ -1178,11 +1251,11 @@ def _block(
 
 
 def _read_manifest(
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
     package_root: Path,
 ) -> dict[str, Any]:
     manifest_path = (
-        package_root / provider_resource_name_contract(provider).plugin_manifest_path
+        package_root / package_format_resource_name_contract(package_format).plugin_manifest_path
     )
     if not manifest_path.exists():
         return {}
@@ -1193,11 +1266,11 @@ def _read_manifest(
 
 
 def _add_root_instructions(
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
     package_root: Path,
     resources: list[UserCopyResource],
 ) -> None:
-    contract = provider_resource_name_contract(provider)
+    contract = package_format_resource_name_contract(package_format)
     source = package_root / contract.root_document_name
     if not source.is_file():
         return
@@ -1209,7 +1282,7 @@ def _add_root_instructions(
             source_locator=contract.root_document_name,
             target_resource=(
                 UserCopyTargetResource.AGENTS_MD
-                if provider == "codex"
+                if package_format == "codex-native"
                 else UserCopyTargetResource.CLAUDE_MD
             ),
             copy_semantics=UserCopySemantics.CREATE_FILE,
@@ -1218,13 +1291,13 @@ def _add_root_instructions(
 
 
 def _add_skills(
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
     package_root: Path,
     manifest: dict[str, Any],
     resources: list[UserCopyResource],
     blocked: list[BlockedUserCopyResource],
 ) -> None:
-    if provider == "claude-code" and "skills" in manifest:
+    if package_format == "claude-native" and "skills" in manifest:
         resolved = resolve_claude_plugin_resources(package_root)
         roots = sorted(
             {
@@ -1331,7 +1404,7 @@ def _add_codex_subagents(
             continue
         locator = path.relative_to(package_root).as_posix()
         if path.parent != root or path.suffix != ".toml":
-            _block(blocked, "subagent", locator, "source-not-allowed")
+            _block(blocked, "subagent", locator, "format-unsupported")
             continue
         resources.append(
             UserCopyResource(
@@ -1378,14 +1451,14 @@ def _add_codex_rules(
 
 
 def _add_structured_resources(
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
     package_root: Path,
     resources: list[UserCopyResource],
     blocked: list[BlockedUserCopyResource],
 ) -> None:
     resolved = (
         resolve_codex_plugin_resources(package_root)
-        if provider == "codex"
+        if package_format == "codex-native"
         else resolve_claude_plugin_resources(package_root)
     )
     for diagnostic in resolved.diagnostics:
@@ -1417,12 +1490,12 @@ def _add_structured_resources(
 
 
 def _add_unsupported_components(
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
     package_root: Path,
     manifest: dict[str, Any],
     blocked: list[BlockedUserCopyResource],
 ) -> None:
-    if provider == "claude-code":
+    if package_format == "claude-native":
         keys = {
             "lspServers": "lsp",
             "lsp_servers": "lsp",
@@ -1453,8 +1526,8 @@ def _add_unsupported_components(
     for key, resource_type in keys.items():
         value = manifest.get(key)
         if value not in (None, {}, [], ""):
-            manifest_path = provider_resource_name_contract(
-                provider
+            manifest_path = package_format_resource_name_contract(
+                package_format
             ).plugin_manifest_path
             _block(
                 blocked,
@@ -1520,10 +1593,10 @@ def _bounded_resources(
 
 
 def resolve_user_copy_profile(
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
     package_root: Path,
 ) -> UserCopyProfile:
-    provider_resource_name_contract(provider)
+    package_format_resource_name_contract(package_format)
     blocked: list[BlockedUserCopyResource] = []
     try:
         package_tree_digest(package_root)
@@ -1535,32 +1608,32 @@ def resolve_user_copy_profile(
             "source-reference-invalid",
         )
         return UserCopyProfile(
-            provider=provider,
+            package_format=package_format,
             resources=(),
             blocked_resources=tuple(sorted(blocked, key=_blocked_sort_key)),
         )
-    return _resolve_user_copy_profile(provider, package_root)
+    return _resolve_user_copy_profile(package_format, package_root)
 
 
 def resolve_user_copy_profile_with_dependency_payloads(
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
     package_root: Path,
 ) -> tuple[UserCopyProfile, tuple[UserCopyDependencyPayload, ...]]:
     """Resolve one validated profile and its dependency closure in one pass."""
 
-    profile = resolve_user_copy_profile(provider, package_root)
+    profile = resolve_user_copy_profile(package_format, package_root)
     return profile, _resolve_user_copy_dependency_payloads(package_root, profile)
 
 
 def build_user_copy_source_snapshot(
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
     package_root: Path,
 ) -> UserCopySourceSnapshot:
     """Build one immutable source snapshot without repeated tree validation."""
 
-    provider_resource_name_contract(provider)
+    package_format_resource_name_contract(package_format)
     tree_digest = package_tree_digest(package_root)
-    profile = _resolve_user_copy_profile(provider, package_root)
+    profile = _resolve_user_copy_profile(package_format, package_root)
     return UserCopySourceSnapshot(
         profile=profile,
         preview=_build_user_copy_profile_preview(package_root, profile),
@@ -1569,15 +1642,15 @@ def build_user_copy_source_snapshot(
 
 
 def _resolve_user_copy_profile(
-    provider: MarketplaceProviderName,
+    package_format: NativePackageFormatName,
     package_root: Path,
 ) -> UserCopyProfile:
     resources: list[UserCopyResource] = []
     blocked: list[BlockedUserCopyResource] = []
-    manifest = _read_manifest(provider, package_root)
-    _add_root_instructions(provider, package_root, resources)
-    _add_skills(provider, package_root, manifest, resources, blocked)
-    if provider == "claude-code":
+    manifest = _read_manifest(package_format, package_root)
+    _add_root_instructions(package_format, package_root, resources)
+    _add_skills(package_format, package_root, manifest, resources, blocked)
+    if package_format == "claude-native":
         _add_markdown_resources(
             package_root,
             directory_name="agents",
@@ -1613,11 +1686,11 @@ def _resolve_user_copy_profile(
             blocked=blocked,
         )
         _add_codex_rules(package_root, resources, blocked)
-    _add_structured_resources(provider, package_root, resources, blocked)
-    _add_unsupported_components(provider, package_root, manifest, blocked)
+    _add_structured_resources(package_format, package_root, resources, blocked)
+    _add_unsupported_components(package_format, package_root, manifest, blocked)
     deduplicated = _deduplicate(_bounded_resources(resources, blocked), blocked)
     return UserCopyProfile(
-        provider=provider,
+        package_format=package_format,
         resources=deduplicated,
         blocked_resources=tuple(sorted(set(blocked), key=_blocked_sort_key)),
     )

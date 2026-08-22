@@ -9,7 +9,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, List, Literal, Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 from pydantic import Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -102,13 +102,25 @@ class Settings(BaseSettings):
     PORT: int = Field(default=3001, description="Server port")
 
     # === DatabaseSettings ===
-    DATABASE_URL: str = Field(
-        default="postgresql://postgres@localhost:5432/aileron",
-        description="Non-secret database topology used when no mounted DSN is configured",
-    )
     DATABASE_URL_FILE: str = Field(
         default="",
         description="Mounted file containing the complete database connection URL",
+    )
+    RUNTIME_DATABASE_CA_SECRET_NAME: str = Field(
+        default="",
+        description="Installation-owned database CA Secret mounted into Kubernetes Runtime pods",
+    )
+    RUNTIME_DATABASE_CA_SECRET_KEY: str = Field(
+        default="",
+        description="Key in the installation-owned database CA Secret",
+    )
+    RUNTIME_DATABASE_CA_REVISION: str = Field(
+        default="",
+        description="Revision that rolls Kubernetes Runtime pods after CA rotation",
+    )
+    HOST_PLATFORM_DATABASE_CA_CERT_FILE: str = Field(
+        default="",
+        description="Host path mounted as the platform database CA in Docker Runtime containers",
     )
     AUTOMATION_SCHEDULER_POLL_SECONDS: float = Field(
         default=5,
@@ -117,8 +129,13 @@ class Settings(BaseSettings):
     )
 
     # === Redis Settings ===
-    REDIS_URL: str = Field(
-        default="redis://localhost:6379/0", description="Redis connection URL"
+    REDIS_URL_FILE: str = Field(
+        default="",
+        description="Mounted file containing the general Redis connection URL",
+    )
+    REDIS_CA_CERT_FILE: str = Field(
+        default="",
+        description="Mounted CA certificate for the general Redis connection",
     )
     PLATFORM_RESOURCE_SUMMARY_CACHE_TTL_SECONDS: int = Field(default=30, gt=0)
     PLATFORM_RESOURCE_TREND_CACHE_TTL_SECONDS: int = Field(default=300, gt=0)
@@ -143,6 +160,14 @@ class Settings(BaseSettings):
     WORKSPACE_RUNTIME_IMAGE: str = Field(
         default="",
         description="Default Runtime image selected for Docker Workspace provisioning",
+    )
+    WORKSPACE_BROWSER_IMAGE: str = Field(
+        default="",
+        description="Browser image selected for Docker Workspace provisioning",
+    )
+    WORKSPACE_CANVAS_IMAGE: str = Field(
+        default="",
+        description="Canvas image selected for Docker Workspace provisioning",
     )
     WORKSPACE_AVAILABILITY_CONTRACT_PATH: str = Field(
         default="",
@@ -489,11 +514,21 @@ class Settings(BaseSettings):
     )
 
     # === Celery Settings ===
-    CELERY_BROKER_URL: str = Field(
-        default="redis://localhost:6379/1", description="Celery broker URL"
+    CELERY_BROKER_URL_FILE: str = Field(
+        default="",
+        description="Mounted file containing the Celery broker Redis URL",
     )
-    CELERY_RESULT_BACKEND: str = Field(
-        default="redis://localhost:6379/1", description="Celery result backend"
+    CELERY_BROKER_CA_CERT_FILE: str = Field(
+        default="",
+        description="Mounted CA certificate for the Celery broker Redis connection",
+    )
+    CELERY_RESULT_BACKEND_FILE: str = Field(
+        default="",
+        description="Mounted file containing the Celery result Redis URL",
+    )
+    CELERY_RESULT_BACKEND_CA_CERT_FILE: str = Field(
+        default="",
+        description="Mounted CA certificate for the Celery result Redis connection",
     )
 
     # === FileSaveSettings ===
@@ -684,9 +719,7 @@ class Settings(BaseSettings):
         """Parse comma-separated OIDC list settings."""
         if isinstance(v, str):
             return [
-                item.strip()
-                for item in v.replace(",", " ").split()
-                if item.strip()
+                item.strip() for item in v.replace(",", " ").split() if item.strip()
             ]
         if isinstance(v, list):
             return [str(item).strip() for item in v if str(item).strip()]
@@ -753,6 +786,27 @@ class Settings(BaseSettings):
         return v
 
     @model_validator(mode="after")
+    def validate_runtime_database_trust(self) -> "Settings":
+        """Require an atomic Kubernetes Runtime database trust reference."""
+
+        values = {
+            "RUNTIME_DATABASE_CA_SECRET_NAME": self.RUNTIME_DATABASE_CA_SECRET_NAME,
+            "RUNTIME_DATABASE_CA_SECRET_KEY": self.RUNTIME_DATABASE_CA_SECRET_KEY,
+            "RUNTIME_DATABASE_CA_REVISION": self.RUNTIME_DATABASE_CA_REVISION,
+        }
+        configured = [name for name, value in values.items() if value.strip()]
+        if configured and len(configured) != len(values):
+            raise ValueError(
+                "Runtime database CA Secret name, key, and revision must be configured together"
+            )
+        for name, value in values.items():
+            setattr(self, name, value.strip())
+        self.HOST_PLATFORM_DATABASE_CA_CERT_FILE = (
+            self.HOST_PLATFORM_DATABASE_CA_CERT_FILE.strip()
+        )
+        return self
+
+    @model_validator(mode="after")
     def validate_k8s_component_resources(self) -> "Settings":
         """Require deployment-injected resources for Kubernetes provisioning."""
         if self.RUNTIME_PROVISIONER != "kubernetes":
@@ -782,14 +836,106 @@ class Settings(BaseSettings):
 
         secret_file = self.DATABASE_URL_FILE.strip()
         if not secret_file:
-            return self.DATABASE_URL
+            raise ValueError("DATABASE_URL_FILE must reference a readable file")
         try:
             value = Path(secret_file).read_text(encoding="utf-8").strip()
         except OSError as exc:
-            raise ValueError("DATABASE_URL_FILE must reference a readable file") from exc
+            raise ValueError(
+                "DATABASE_URL_FILE must reference a readable file"
+            ) from exc
         if not value:
             raise ValueError("DATABASE_URL_FILE must not be empty")
         return value
+
+    @staticmethod
+    def _redis_url_from_file(
+        *,
+        url_file: str,
+        ca_cert_file: str,
+        setting_name: str,
+    ) -> str:
+        """Resolve one standalone Redis URL and its optional mounted trust bundle."""
+
+        path_value = url_file.strip()
+        if not path_value:
+            raise ValueError(f"{setting_name}_FILE must reference a readable file")
+        try:
+            value = Path(path_value).read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ValueError(
+                f"{setting_name}_FILE must reference a readable file"
+            ) from exc
+        if not value:
+            raise ValueError(f"{setting_name}_FILE must not be empty")
+
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"redis", "rediss"} or not parsed.hostname:
+            raise ValueError(
+                f"{setting_name}_FILE must contain a standalone redis:// or rediss:// URL"
+            )
+        try:
+            parsed.port
+        except ValueError as exc:
+            raise ValueError(
+                f"{setting_name}_FILE must contain one standalone Redis endpoint"
+            ) from exc
+        logical_database = parsed.path.removeprefix("/")
+        if not logical_database.isdigit() or "/" in logical_database:
+            raise ValueError(
+                f"{setting_name}_FILE must select one numeric logical database"
+            )
+
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        if "ssl_ca_certs" in query or "ssl_cert_reqs" in query:
+            raise ValueError(
+                f"{setting_name}_FILE must not configure TLS trust in the URL"
+            )
+
+        ca_path = ca_cert_file.strip()
+        if parsed.scheme == "redis" and ca_path:
+            raise ValueError(f"{setting_name} cannot configure a CA for redis://")
+        if parsed.scheme == "rediss":
+            query["ssl_cert_reqs"] = "required"
+            if ca_path:
+                try:
+                    Path(ca_path).read_bytes()
+                except OSError as exc:
+                    raise ValueError(
+                        f"{setting_name}_CA_CERT_FILE must reference a readable file"
+                    ) from exc
+                query["ssl_ca_certs"] = ca_path
+
+        return urlunsplit(parsed._replace(query=urlencode(query)))
+
+    @property
+    def redis_url(self) -> str:
+        """Resolve the general Redis URL from its mounted Secret."""
+
+        return self._redis_url_from_file(
+            url_file=self.REDIS_URL_FILE,
+            ca_cert_file=self.REDIS_CA_CERT_FILE,
+            setting_name="REDIS_URL",
+        )
+
+    @property
+    def celery_broker_url(self) -> str:
+        """Resolve the Celery broker URL from its mounted Secret."""
+
+        return self._redis_url_from_file(
+            url_file=self.CELERY_BROKER_URL_FILE,
+            ca_cert_file=self.CELERY_BROKER_CA_CERT_FILE,
+            setting_name="CELERY_BROKER_URL",
+        )
+
+    @property
+    def celery_result_backend(self) -> str:
+        """Resolve the Celery result backend URL from its mounted Secret."""
+
+        return self._redis_url_from_file(
+            url_file=self.CELERY_RESULT_BACKEND_FILE,
+            ca_cert_file=self.CELERY_RESULT_BACKEND_CA_CERT_FILE,
+            setting_name="CELERY_RESULT_BACKEND",
+        )
 
     model_config = SettingsConfigDict(
         case_sensitive=True,

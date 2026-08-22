@@ -8,10 +8,13 @@ from aileron_git_core import OperationKind
 
 from app.modules.marketplace.models import (
     MarketplaceActivityAction,
+    MarketplaceActivityDetail,
     MarketplaceActivityListResult,
     MarketplaceActivityRecord,
     MarketplaceActivityStatus,
-    MarketplaceProvider,
+    MarketplacePackageFormat,
+    MarketplaceTargetClient,
+    MarketplacePluginCliCommand,
     MarketplaceRegistryCatalog,
     MarketplaceRegistryInitResult,
     MarketplaceRegistryRootMetadataSavePayload,
@@ -43,7 +46,7 @@ class MarketplaceSettingsActivityWorkflow(_MarketplaceRegistrySupport):
         with self._registry_lock:
             root = self._get_registry_root(user_id)
             created = not root.exists()
-            self._ensure_provider_roots(root)
+            self._ensure_target_client_roots(root)
             self._ensure_registry_gitignore(root, invalidation_key=user_id)
             metadata = metadata or self._default_metadata()
             catalog_path = self._catalog_path(root)
@@ -113,7 +116,8 @@ class MarketplaceSettingsActivityWorkflow(_MarketplaceRegistrySupport):
         page: int = 1,
         page_size: int = 50,
         workspace_id: str | None = None,
-        provider: MarketplaceProvider | None = None,
+        package_format: MarketplacePackageFormat | None = None,
+        target_client: MarketplaceTargetClient | None = None,
         package_id: str | None = None,
         action: MarketplaceActivityAction | None = None,
         status: MarketplaceActivityStatus | None = None,
@@ -130,7 +134,8 @@ class MarketplaceSettingsActivityWorkflow(_MarketplaceRegistrySupport):
             page=page,
             page_size=page_size,
             workspace_id=workspace_id,
-            provider=provider,
+            package_format=package_format,
+            target_client=target_client,
             package_id=package_id,
             action=action,
             status=status,
@@ -140,7 +145,8 @@ class MarketplaceSettingsActivityWorkflow(_MarketplaceRegistrySupport):
                 MarketplaceActivityRecord(
                     id=row.id,
                     action=row.action,
-                    provider=row.provider,
+                    package_format=row.package_format,
+                    target_client=row.target_client,
                     package_id=row.package_id,
                     operation_id=row.operation_id,
                     workspace_id=row.workspace_id,
@@ -163,12 +169,27 @@ class MarketplaceSettingsActivityWorkflow(_MarketplaceRegistrySupport):
         *,
         action: MarketplaceActivityAction,
         status: MarketplaceActivityStatus,
-        provider: MarketplaceProvider | None = None,
+        package_format: MarketplacePackageFormat | None = None,
+        target_client: MarketplaceTargetClient | None = None,
         package_id: str | None = None,
         operation_id: str | None = None,
         workspace_id: str | None = None,
         marketplace_id: str | None = None,
         error_code: str | None = None,
+        catalog_plugin_id: str | None = None,
+        release_revision: str | None = None,
+        profile_digest: str | None = None,
+        projection_digest: str | None = None,
+        materialization_digest: str | None = None,
+        projected_count: int | None = None,
+        skipped_count: int | None = None,
+        conflict_count: int | None = None,
+        created_count: int | None = None,
+        merged_count: int | None = None,
+        unchanged_count: int | None = None,
+        overwritten_count: int | None = None,
+        target_locators: tuple[str, ...] = (),
+        diagnostic_codes: tuple[str, ...] = (),
     ) -> MarketplaceActivityRecord | None:
         """Append an audit event without reversing an already completed operation."""
 
@@ -182,19 +203,35 @@ class MarketplaceSettingsActivityWorkflow(_MarketplaceRegistrySupport):
                 actor_user_id=user_id,
                 action=action,
                 status=status,
-                provider=provider,
+                package_format=package_format,
+                target_client=target_client,
                 package_id=package_id,
                 operation_id=operation_id,
                 workspace_id=workspace_id,
                 marketplace_id=marketplace_id,
                 error_code=error_code,
+                catalog_plugin_id=catalog_plugin_id,
+                release_revision=release_revision,
+                profile_digest=profile_digest,
+                projection_digest=projection_digest,
+                materialization_digest=materialization_digest,
+                projected_count=projected_count,
+                skipped_count=skipped_count,
+                conflict_count=conflict_count,
+                created_count=created_count,
+                merged_count=merged_count,
+                unchanged_count=unchanged_count,
+                overwritten_count=overwritten_count,
+                target_locators=target_locators,
+                diagnostic_codes=diagnostic_codes,
                 now=datetime.now(timezone.utc),
             )
             self.db.commit()
             return MarketplaceActivityRecord(
                 id=row.id,
                 action=row.action,
-                provider=row.provider,
+                package_format=row.package_format,
+                target_client=row.target_client,
                 package_id=row.package_id,
                 operation_id=row.operation_id,
                 workspace_id=row.workspace_id,
@@ -207,6 +244,67 @@ class MarketplaceSettingsActivityWorkflow(_MarketplaceRegistrySupport):
             self.db.rollback()
             _LOGGER.exception("Failed to append Marketplace activity")
             return None
+
+    def get_activity_detail(
+        self,
+        user_id: str,
+        activity_id: str,
+    ) -> MarketplaceActivityDetail | None:
+        """Return authorized proof and raw command detail for one activity."""
+
+        if self.db is None:
+            raise RuntimeError("Marketplace activity persistence is unavailable")
+        resolved = MarketplaceActivityRepository(self.db).get_detail(
+            user_id=user_id,
+            activity_id=activity_id,
+        )
+        if resolved is None:
+            return None
+        row, commands = resolved
+        return MarketplaceActivityDetail(
+            id=row.id,
+            action=row.action,
+            packageFormat=row.package_format,
+            targetClient=row.target_client,
+            packageId=row.package_id,
+            operationId=row.operation_id,
+            workspaceId=row.workspace_id,
+            marketplaceId=row.marketplace_id,
+            status=row.status,
+            errorCode=row.error_code,
+            createdAt=row.created_at.isoformat().replace("+00:00", "Z"),
+            workspaceIdSnapshot=row.workspace_id_snapshot,
+            catalogPluginId=row.catalog_plugin_id,
+            releaseRevision=row.release_revision,
+            profileDigest=row.profile_digest,
+            projectionDigest=row.projection_digest,
+            materializationDigest=row.materialization_digest,
+            projectedCount=row.projected_count,
+            skippedCount=row.skipped_count,
+            conflictCount=row.conflict_count,
+            createdCount=row.created_count,
+            mergedCount=row.merged_count,
+            unchangedCount=row.unchanged_count,
+            overwrittenCount=row.overwritten_count,
+            targetLocators=row.target_locators,
+            diagnosticCodes=row.diagnostic_codes,
+            commands=[
+                MarketplacePluginCliCommand(
+                    sequence=command.sequence,
+                    stage=command.stage,
+                    argvDisplay=command.argv_display,
+                    exitCode=command.exit_code,
+                    startedAt=command.started_at,
+                    endedAt=command.ended_at,
+                    stdout=command.stdout,
+                    stderr=command.stderr,
+                    stdoutOriginalByteCount=command.stdout_original_byte_count,
+                    stderrOriginalByteCount=command.stderr_original_byte_count,
+                    truncated=command.truncated,
+                )
+                for command in commands
+            ],
+        )
 
     @_registry_git_operation(OperationKind.WRITE, "save_settings")
     def save_settings(
@@ -225,7 +323,7 @@ class MarketplaceSettingsActivityWorkflow(_MarketplaceRegistrySupport):
 
             claude_written = False
             codex_written = False
-            partial_provider: MarketplaceProvider | None = None
+            partial_target_client: MarketplaceTargetClient | None = None
             error_code: str | None = None
 
             try:
@@ -246,9 +344,9 @@ class MarketplaceSettingsActivityWorkflow(_MarketplaceRegistrySupport):
                 self._invalidate_package_index(user_id)
             except Exception:
                 if claude_written and not codex_written:
-                    partial_provider = "claude-code"
+                    partial_target_client = "claude-code"
                 elif codex_written and not claude_written:
-                    partial_provider = "codex"
+                    partial_target_client = "codex"
                 if claude_written or codex_written:
                     self._invalidate_package_index(user_id)
                 error_code = "marketplace.settings.partial_write"
@@ -257,6 +355,6 @@ class MarketplaceSettingsActivityWorkflow(_MarketplaceRegistrySupport):
                 settings=self.get_settings(user_id),
                 claude_written=claude_written,
                 codex_written=codex_written,
-                partial_success_provider=partial_provider,
+                partial_success_target_client=partial_target_client,
                 error_code=error_code,
             )

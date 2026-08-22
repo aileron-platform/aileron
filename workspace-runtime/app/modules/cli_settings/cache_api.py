@@ -35,12 +35,12 @@ def clear_agent_settings_cache(
 
     if provider == "claude-code":
         from app.modules.claude_code.plugins.loader import get_plugin_loader
-        from app.modules.claude_code.plugins.provider_inventory import (
-            clear_claude_provider_inventory_cache,
+        from app.modules.claude_code.plugins.plugin_inventory import (
+            clear_claude_plugin_inventory_cache,
         )
         from app.modules.claude_code.settings.dependencies import get_settings_service
 
-        clear_claude_provider_inventory_cache()
+        clear_claude_plugin_inventory_cache()
         get_plugin_loader(get_settings_service()).clear_cache(workspace_id)
         if capability in {None, "subagents"}:
             from app.modules.cli_settings.subagents.config import SubagentTool
@@ -64,14 +64,14 @@ def clear_agent_settings_cache(
         clear_codex_hooks_cache,
     )
     from app.modules.cli_settings.codex.plugin_resources import (
-        clear_codex_provider_inventory_cache,
+        clear_codex_plugin_inventory_cache,
     )
     from app.modules.cli_settings.codex.settings import (
         CodexSettingsIntent,
         get_codex_agent_settings,
     )
 
-    clear_codex_provider_inventory_cache()
+    clear_codex_plugin_inventory_cache()
     get_codex_agent_settings().execute(
         CodexSettingsIntent.REFRESH_CACHE,
         workspace_id=workspace_id,

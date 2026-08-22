@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
-from claude_agent_sdk import ResultMessage, TextBlock, AssistantMessage
+from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
 from app.modules.thread.claude_sdk_agent_runner import ClaudeSdkAgentRunner
 from app.modules.thread.execution import (
@@ -208,6 +208,53 @@ async def test_stop_delegates_to_manager_and_cancels_running_task() -> None:
 
     await runner.stop(execution_id)
 
+    assert manager.stopped == [execution_id]
+    assert manager.finished == [execution_id]
+    assert runner.is_alive(execution_id) is False
+    assert runner._tasks == {}
+
+
+@pytest.mark.asyncio
+async def test_stop_awaits_local_task_and_preserves_manager_error_when_cleanup_fails() -> (
+    None
+):
+    stream_started = asyncio.Event()
+    stop_error = RuntimeError("manager stop failed")
+    cleanup_error = RuntimeError("task cleanup failed")
+
+    class StopFailingManager(FakeManager):
+        async def start_turn(self, **kwargs: Any) -> FakeTurnStart:
+            async def stream():
+                stream_started.set()
+                await asyncio.Event().wait()
+                yield None
+
+            return FakeTurnStart(stream=stream())
+
+        async def stop_execution(self, execution_id: str) -> None:
+            self.stopped.append(execution_id)
+            raise stop_error
+
+        async def finish_execution(self, execution_id: str) -> None:
+            await super().finish_execution(execution_id)
+            raise cleanup_error
+
+    manager = StopFailingManager()
+    runner = ClaudeSdkAgentRunner(
+        workspace_id="workspace-1",
+        manager=manager,
+        cwd_resolver=lambda _: "/workspace",
+    )
+    execution_id = runner.reserve()
+    await runner.start(request(), lambda event: None, execution_id)
+    await asyncio.wait_for(stream_started.wait(), timeout=1)
+    local_task = runner._tasks[execution_id]
+
+    with pytest.raises(RuntimeError, match="manager stop failed") as raised:
+        await runner.stop(execution_id)
+
+    assert raised.value is stop_error
+    assert local_task.done() is True
     assert manager.stopped == [execution_id]
     assert manager.finished == [execution_id]
     assert runner.is_alive(execution_id) is False

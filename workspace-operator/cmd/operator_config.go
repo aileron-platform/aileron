@@ -13,25 +13,26 @@ import (
 )
 
 type operatorConfiguration struct {
-	platformPublicOrigin           string
-	managerURL                     string
-	knowledgeBasesPVCName          string
-	platformStorageGID             *int64
-	workspaceStorageClass          string
-	runtimeHomeStorageClass        string
-	runtimeHomeAccessMode          corev1.PersistentVolumeAccessMode
-	workloadImagePullSecrets       []string
-	ciliumEnabled                  bool
-	turnProfile                    *controller.TURNReachabilityProfile
-	turnICEServersSecretName       string
-	turnBackendSecretKey           string
-	turnFrontendSecretKey          string
-	turnCredentialRevision         string
-	browserConnectivityProbeImage  string
-	connectivityEvidenceGatewayURL string
-	connectivityInstallationID     string
-	connectivityGatewayToken       string
-	browserCredentialKeyring       *controller.BrowserCredentialKeyring
+	platformPublicOrigin              string
+	managerURL                        string
+	knowledgeBasesPVCName             string
+	platformStorageGID                *int64
+	workspaceStorageClass             string
+	runtimeHomeStorageClass           string
+	runtimeHomeAccessMode             corev1.PersistentVolumeAccessMode
+	workloadImagePullSecrets          []string
+	ciliumEnabled                     bool
+	platformDatabaseEgressDestination *controller.TURNPolicyDestination
+	turnProfile                       *controller.TURNReachabilityProfile
+	turnICEServersSecretName          string
+	turnBackendSecretKey              string
+	turnFrontendSecretKey             string
+	turnCredentialRevision            string
+	browserConnectivityProbeImage     string
+	connectivityEvidenceGatewayURL    string
+	connectivityInstallationID        string
+	connectivityGatewayToken          string
+	browserCredentialKeyring          *controller.BrowserCredentialKeyring
 }
 
 type environmentReader func(string) string
@@ -108,6 +109,18 @@ func loadOperatorConfigurationFromEnvironment(
 	if err != nil {
 		return operatorConfiguration{}, err
 	}
+	platformDatabaseEgressValue := readEnvironment("PLATFORM_DATABASE_CILIUM_EGRESS_JSON")
+	if platformDatabaseEgressValue != strings.TrimSpace(platformDatabaseEgressValue) {
+		return operatorConfiguration{}, fmt.Errorf(
+			"PLATFORM_DATABASE_CILIUM_EGRESS_JSON must not contain surrounding whitespace",
+		)
+	}
+	platformDatabaseEgressDestination, err := controller.ParsePlatformDatabaseEgressDestination(
+		platformDatabaseEgressValue,
+	)
+	if err != nil {
+		return operatorConfiguration{}, fmt.Errorf("PLATFORM_DATABASE_CILIUM_EGRESS_JSON: %w", err)
+	}
 	turnProfile, err := loadOperatorTURNConfiguration(readEnvironment)
 	if err != nil {
 		return operatorConfiguration{}, err
@@ -171,25 +184,26 @@ func loadOperatorConfigurationFromEnvironment(
 	}
 
 	return operatorConfiguration{
-		platformPublicOrigin:           platformPublicOrigin,
-		managerURL:                     managerURL,
-		knowledgeBasesPVCName:          knowledgeBasesPVCName,
-		platformStorageGID:             platformStorageGID,
-		workspaceStorageClass:          workspaceStorageClass,
-		runtimeHomeStorageClass:        runtimeHomeStorageClass,
-		runtimeHomeAccessMode:          runtimeHomeAccessMode,
-		workloadImagePullSecrets:       workloadImagePullSecrets,
-		ciliumEnabled:                  ciliumEnabled,
-		turnProfile:                    turnProfile,
-		turnICEServersSecretName:       readEnvironment("TURN_ICE_SERVERS_SECRET_NAME"),
-		turnBackendSecretKey:           readEnvironment("TURN_BACKEND_ICE_SERVERS_SECRET_KEY"),
-		turnFrontendSecretKey:          readEnvironment("TURN_FRONTEND_ICE_SERVERS_SECRET_KEY"),
-		turnCredentialRevision:         readEnvironment("TURN_CREDENTIAL_REVISION"),
-		browserConnectivityProbeImage:  browserConnectivityProbeImage,
-		connectivityEvidenceGatewayURL: connectivityEvidenceGatewayURL,
-		connectivityInstallationID:     connectivityInstallationID,
-		connectivityGatewayToken:       connectivityGatewayToken,
-		browserCredentialKeyring:       browserCredentialKeyring,
+		platformPublicOrigin:              platformPublicOrigin,
+		managerURL:                        managerURL,
+		knowledgeBasesPVCName:             knowledgeBasesPVCName,
+		platformStorageGID:                platformStorageGID,
+		workspaceStorageClass:             workspaceStorageClass,
+		runtimeHomeStorageClass:           runtimeHomeStorageClass,
+		runtimeHomeAccessMode:             runtimeHomeAccessMode,
+		workloadImagePullSecrets:          workloadImagePullSecrets,
+		ciliumEnabled:                     ciliumEnabled,
+		platformDatabaseEgressDestination: platformDatabaseEgressDestination,
+		turnProfile:                       turnProfile,
+		turnICEServersSecretName:          readEnvironment("TURN_ICE_SERVERS_SECRET_NAME"),
+		turnBackendSecretKey:              readEnvironment("TURN_BACKEND_ICE_SERVERS_SECRET_KEY"),
+		turnFrontendSecretKey:             readEnvironment("TURN_FRONTEND_ICE_SERVERS_SECRET_KEY"),
+		turnCredentialRevision:            readEnvironment("TURN_CREDENTIAL_REVISION"),
+		browserConnectivityProbeImage:     browserConnectivityProbeImage,
+		connectivityEvidenceGatewayURL:    connectivityEvidenceGatewayURL,
+		connectivityInstallationID:        connectivityInstallationID,
+		connectivityGatewayToken:          connectivityGatewayToken,
+		browserCredentialKeyring:          browserCredentialKeyring,
 	}, nil
 }
 

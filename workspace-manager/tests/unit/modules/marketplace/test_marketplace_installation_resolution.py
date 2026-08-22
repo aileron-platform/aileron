@@ -1,21 +1,13 @@
-"""Published Marketplace package resolution tests."""
+"""Managed Marketplace package resolution tests."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-import pytest
-from aileron_git_core import GitCommandResult
-
-import app.modules.marketplace.workflows.installation as installation_module
 from app.modules.marketplace.workflows.installation import (
     MarketplaceInstallationWorkflow,
-)
-from app.modules.marketplace.workflows.registry_operations import (
-    MarketplaceImportSourceError,
 )
 
 
@@ -29,7 +21,8 @@ def _workflow(tmp_path: Path) -> tuple[MarketplaceInstallationWorkflow, Path]:
         SimpleNamespace(
             revision="a" * 64,
             lifecycle_status="ready",
-            registry_path="codex/plugins/github",
+            registry_path="codex/plugins/codex-native/github",
+            package_format="codex-native",
         )
     )
     workflow._get_registry_root = Mock(return_value=root)
@@ -47,88 +40,30 @@ def _workflow(tmp_path: Path) -> tuple[MarketplaceInstallationWorkflow, Path]:
     return workflow, root
 
 
-def _result(
-    args: tuple[str, ...],
-    *,
-    returncode: int = 0,
-    stdout: str = "",
-) -> GitCommandResult:
-    return GitCommandResult(
-        args=["git", *args],
-        returncode=returncode,
-        stdout=stdout,
-        stderr="",
-    )
-
-
-def test_resolve_published_package_uses_only_remote_tracking_reads(
+def test_resolve_managed_package_uses_registry_branch_without_remote_preflight(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     workflow, root = _workflow(tmp_path)
-    commands: list[tuple[str, ...]] = []
+    workflow._git_output.side_effect = [
+        "git@gitlab.example:team/marketplace.git",
+        "develop",
+    ]
 
-    def fake_git(_root: Path, *args: str) -> GitCommandResult:
-        commands.append(args)
-        if args[0] == "show":
-            return _result(
-                args,
-                stdout=json.dumps(
-                    {
-                        "name": "private-marketplace",
-                        "plugins": [{"name": "github"}],
-                    }
-                ),
-            )
-        return _result(args)
-
-    monkeypatch.setattr(installation_module, "git_allow_failure", fake_git)
-
-    resolved = workflow.resolve_published_package_for_install(
+    resolved = workflow.resolve_managed_package_for_install(
         "user-1",
         "codex",
+        "codex-native",
         "github",
-        "a" * 64,
+        "1.2.3",
     )
 
     assert resolved.marketplace_id == "private-marketplace"
     assert resolved.remote_url == "git@gitlab.example:team/marketplace.git"
-    assert resolved.publish_ref == "main"
-    assert {args[0] for args in commands} == {
-        "rev-parse",
-        "cat-file",
-        "diff",
-        "ls-files",
-        "show",
-    }
-    assert all(
-        command[0] not in {"add", "commit", "push", "rm"} for command in commands
-    )
-    workflow._git_output.assert_called_once_with(root, ["remote", "get-url", "origin"])
-
-
-def test_resolve_published_package_rejects_revision_absent_from_remote_tracking(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    workflow, _root = _workflow(tmp_path)
-
-    def fake_git(_root: Path, *args: str) -> GitCommandResult:
-        if args[0] == "diff":
-            return _result(args, returncode=1)
-        return _result(args)
-
-    monkeypatch.setattr(installation_module, "git_allow_failure", fake_git)
-
-    with pytest.raises(MarketplaceImportSourceError) as exc_info:
-        workflow.resolve_published_package_for_install(
-            "user-1",
-            "codex",
-            "github",
-            "a" * 64,
-        )
-
-    assert exc_info.value.code == "marketplace.install.package_not_published"
+    assert resolved.registry_ref == "develop"
+    assert [item.args for item in workflow._git_output.call_args_list] == [
+        (root, ["remote", "get-url", "origin"]),
+        (root, ["branch", "--show-current"]),
+    ]
 
 
 def test_old_publish_for_install_operation_is_removed() -> None:

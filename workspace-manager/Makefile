@@ -2,6 +2,7 @@
 	help \
 	test-setup test-teardown test-status \
 	test-all test-run test-unit test-integration test-coverage \
+	test-postgres-permission-matrix \
 	clean-test test-workspaces lint-workspaces verify-workspaces
 
 .DEFAULT_GOAL := help
@@ -21,11 +22,13 @@ help: ## Show help
 
 test-setup: ## Start test environment
 	@echo "$(GREEN)🚀 Starting test environment...$(NC)"
-	@docker compose -f docker-compose.test.yml up -d postgres-test redis-test
+	@docker compose -f docker-compose.test.yml up -d postgres-test postgres16-test redis-test
 	@echo "$(YELLOW)⏳ Waiting for service health checks...$(NC)"
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \
 		if docker compose -f docker-compose.test.yml exec -T postgres-test \
-				pg_isready -U test_user -d test_workspace_manager >/dev/null 2>&1 && \
+				pg_isready -U platform_login -d test_workspace_manager >/dev/null 2>&1 && \
+			docker compose -f docker-compose.test.yml exec -T postgres16-test \
+				pg_isready -U platform_login -d test_workspace_manager >/dev/null 2>&1 && \
 			[ "$$(docker compose -f docker-compose.test.yml exec -T redis-test \
 				redis-cli ping 2>/dev/null | tr -d '\r\n')" = "PONG" ]; then \
 			echo "$(GREEN)✅ Test environment is ready$(NC)"; \
@@ -82,6 +85,28 @@ test-integration: test-setup ## Run integration tests
 	@docker compose -f docker-compose.test.yml run --rm workspace-manager-test \
 		uv run pytest tests/integration/ -v --cov=app --cov-report=term-missing
 	@$(MAKE) test-teardown
+
+test-postgres-permission-matrix: test-setup ## Verify the non-superuser contract on PostgreSQL 15 and 16
+	@status=0; \
+	for target in \
+		"postgres-test postgresql://platform_login:platform_password@postgres-test:5432/test_workspace_manager" \
+		"postgres16-test postgresql://platform_login:platform_password@postgres16-test:5432/test_workspace_manager"; do \
+		set -- $$target; \
+		echo "$(GREEN)Testing non-superuser contract against $$1$(NC)"; \
+		docker compose -f docker-compose.test.yml run --rm \
+			-e DATABASE_URL="$$2" \
+			-e AUTOMATION_TEST_DATABASE_URL="$$2" \
+			workspace-manager-test \
+			uv run pytest \
+				tests/integration/modules/workspace/test_platform_database_permission_contract.py \
+				tests/integration/modules/workspace/test_data_service_preflight.py \
+				tests/integration/modules/workspace/test_workspace_runtime_database_isolation.py \
+				tests/integration/modules/application/test_fresh_init_schema.py \
+				tests/integration/modules/workspace/test_workspace_runtime_job_heartbeat_postgres.py \
+				-vv || status=1; \
+	done; \
+	$(MAKE) test-teardown; \
+	exit $$status
 
 test-coverage: test-setup ## Generate coverage report
 	@echo "$(GREEN)📊 Generating coverage report...$(NC)"

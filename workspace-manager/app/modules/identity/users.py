@@ -21,7 +21,7 @@ class UserService:
         """Convert database user to API model"""
         return User(
             id=db_user.id,
-            email=db_user.email or "",
+            email=db_user.email,
             username=db_user.username,
             first_name=db_user.first_name,
             last_name=db_user.last_name,

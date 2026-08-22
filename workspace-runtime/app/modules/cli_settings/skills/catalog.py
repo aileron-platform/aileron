@@ -11,15 +11,21 @@ import logging
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NoReturn, Optional
 
 import yaml
 
 from app.config.settings import get_workspace_path
 from app.modules.cli_settings.cache import ProcessTTLCache
+from app.modules.cli_settings.raw_file import (
+    RawFileError,
+    RawFileFailure,
+    read_raw_file,
+)
 from app.modules.file_system.base_operations import BaseFileService
 from app.modules.file_system.exceptions import (
     FileManagementException,
+    FileNotFoundException,
     InvalidScopeException,
 )
 
@@ -27,6 +33,7 @@ from .config import SkillScope, SkillToolConfig
 from .models import PluginSkillInfo
 
 logger = logging.getLogger(__name__)
+_RAW_PREVIEW_MAX_BYTES = 10 * 1024 * 1024
 _tree_cache: ProcessTTLCache[
     tuple[str, str, str, str, bool, int | None],
     dict,
@@ -214,16 +221,20 @@ class CliSkillService(BaseFileService):
         for child in node.get("children") or []:
             cls._apply_scope_metadata(child, scope)
 
+    def _require_plugin_skill_file(self, path: str) -> Path:
+        fs_path = self._resolve_plugin_skill_path(path)
+        if not fs_path.is_file():
+            raise FileManagementException(
+                "FILE_NOT_FOUND",
+                f"File not found: {path}",
+                {"path": path},
+                404,
+            )
+        return fs_path
+
     def read_file(self, path: str, scope: Optional[str] = None) -> dict:
         if scope == SkillScope.PLUGIN and self._config.supports_plugin:
-            fs_path = self._resolve_plugin_skill_path(path)
-            if not fs_path.is_file():
-                raise FileManagementException(
-                    "FILE_NOT_FOUND",
-                    f"File not found: {path}",
-                    {"path": path},
-                    404,
-                )
+            fs_path = self._require_plugin_skill_file(path)
             stat = fs_path.stat()
             content = fs_path.read_text(encoding="utf-8")
             return {
@@ -235,6 +246,60 @@ class CliSkillService(BaseFileService):
                 "revision": None,
             }
         return super().read_file(path, scope)
+
+    def read_file_binary(self, path: str, scope: Optional[str] = None) -> bytes:
+        normalized_scope = (
+            scope.value
+            if isinstance(scope, SkillScope)
+            else scope or SkillScope.PROJECT.value
+        )
+        try:
+            if not self.validate_scope(normalized_scope):
+                raise InvalidScopeException(normalized_scope)
+            if normalized_scope == SkillScope.PLUGIN and self._config.supports_plugin:
+                root, target_path = self._resolve_plugin_binary_file(path)
+            else:
+                root = self._scope_root(normalized_scope)
+                target_path = self._validate_relative_path(path).as_posix()
+            return read_raw_file(root, target_path, _RAW_PREVIEW_MAX_BYTES)
+        except FileManagementException:
+            raise
+        except RawFileError as exc:
+            self._raise_binary_file_error(exc, path, normalized_scope)
+        except Exception as exc:
+            raise FileManagementException(
+                "FILE_READ_FAILED",
+                "Unable to read requested file",
+                status_code=500,
+            ) from exc
+
+    @staticmethod
+    def _raise_binary_file_error(
+        error: RawFileError,
+        path: str,
+        scope: str,
+    ) -> NoReturn:
+        if error.failure is RawFileFailure.INVALID_PATH:
+            raise FileManagementException(
+                "INVALID_PATH",
+                "Path traversal not allowed",
+                {"path": path},
+                400,
+            ) from error
+        if error.failure is RawFileFailure.NOT_FOUND:
+            raise FileNotFoundException(path, scope) from error
+        if error.failure is RawFileFailure.TOO_LARGE:
+            raise FileManagementException(
+                "FILE_TOO_LARGE",
+                "Raw preview exceeds the configured size limit",
+                {"path": path, "maxSize": _RAW_PREVIEW_MAX_BYTES},
+                413,
+            ) from error
+        raise FileManagementException(
+            "FILE_READ_FAILED",
+            "Unable to read requested file",
+            status_code=500,
+        ) from error
 
     def _get_plugin_skill_tree(self, path: str = "/") -> Dict:
         """Build a read-only tree from enabled plugin skill directories."""
@@ -326,8 +391,28 @@ class CliSkillService(BaseFileService):
                 f"{skill.plugin_name}@{skill.marketplace_name}" == plugin_id
                 and skill.skill_name == skill_name
             ):
-                return Path(skill.directory_path) / tail
+                skill_root = Path(skill.directory_path).resolve(strict=False)
+                candidate = (skill_root / tail).resolve(strict=False)
+                if candidate.is_relative_to(skill_root):
+                    return candidate
+                break
         return Path("/__missing_plugin_skill__") / validated_path
+
+    def _resolve_plugin_binary_file(self, relative_path: str) -> tuple[Path, str]:
+        validated_path = self._validate_relative_path(relative_path)
+        parts = validated_path.parts
+        if len(parts) < 3:
+            raise FileNotFoundException(relative_path, SkillScope.PLUGIN.value)
+
+        plugin_id, skill_name = parts[0], parts[1]
+        tail = Path(*parts[2:]).as_posix()
+        for skill in self._plugin_loader().load_plugin_skills(self._workspace_id):
+            if (
+                f"{skill.plugin_name}@{skill.marketplace_name}" == plugin_id
+                and skill.skill_name == skill_name
+            ):
+                return Path(skill.directory_path), tail
+        raise FileNotFoundException(relative_path, SkillScope.PLUGIN.value)
 
     def _enrich_skill_nodes(self, nodes: List[Dict], scope: Optional[str]) -> None:
         """Recursively traverse nodes and embed skillName/skillDescription for SKILL.md file nodes"""

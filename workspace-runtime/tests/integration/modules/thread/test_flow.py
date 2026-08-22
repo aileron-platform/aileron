@@ -60,8 +60,11 @@ class FlowRunner:
     async def stop(self, execution_id: str) -> None:
         self.stopped.append(execution_id)
 
+    async def wait(self, execution_id: str) -> None:
+        return None
+
     def is_alive(self, execution_id: str) -> bool:
-        return True
+        return execution_id not in self.stopped
 
     async def destroy_thread(self, thread_id: str) -> None:
         return None
@@ -322,7 +325,7 @@ async def test_thread_http_flow_rebuilds_from_database_and_preserves_list_contra
         assert retried.json()["status"] == "queued"
 
         canceled = await client.post(
-            f"/api/v1/threads/{thread_id}/cancel", headers=headers
+            f"/api/v1/threads/{thread_id}/stop", headers=headers
         )
         assert canceled.json()["status"] == "canceled"
         archived = await client.post(

@@ -17,8 +17,8 @@ _RUNTIME_SECRET_ROOT = Path("/tmp/aileron-runtime-tests")
 _RUNTIME_SECRET_ROOT.mkdir(parents=True, exist_ok=True)
 _RUNTIME_DATABASE_FILE = Path(
     os.environ.get(
-        "AILERON_RUNTIME_STATE_DATABASE_URL_FILE",
-        _RUNTIME_SECRET_ROOT / "runtime-state-database-url",
+        "AILERON_RUNTIME_DATABASE_CONNECTION_FILE",
+        _RUNTIME_SECRET_ROOT / "runtime-database-connection",
     )
 )
 _RUNTIME_CONTROL_TOKEN_FILE = Path(
@@ -27,9 +27,9 @@ _RUNTIME_CONTROL_TOKEN_FILE = Path(
         _RUNTIME_SECRET_ROOT / "runtime-control-token",
     )
 )
-if "AILERON_RUNTIME_STATE_DATABASE_URL_FILE" not in os.environ:
+if "AILERON_RUNTIME_DATABASE_CONNECTION_FILE" not in os.environ:
     _RUNTIME_DATABASE_FILE.write_text(
-        "postgresql+asyncpg://test:test@127.0.0.1/test",
+        "postgresql://test:test@127.0.0.1/test",
         encoding="utf-8",
     )
 if "AILERON_RUNTIME_CONTROL_TOKEN_FILE" not in os.environ:
@@ -45,7 +45,7 @@ _PLATFORM_ENVIRONMENT = {
     "AILERON_RUNTIME_ACCESS_REVISION": "0",
     "AILERON_KB_MOUNT_REVISION": "0",
     "AILERON_WORKTREE_SUBDIR": ".worktrees",
-    "AILERON_RUNTIME_STATE_DATABASE_URL_FILE": str(_RUNTIME_DATABASE_FILE),
+    "AILERON_RUNTIME_DATABASE_CONNECTION_FILE": str(_RUNTIME_DATABASE_FILE),
     "AILERON_RUNTIME_CONTROL_TOKEN_FILE": str(_RUNTIME_CONTROL_TOKEN_FILE),
     "AILERON_MANAGER_INTERNAL_URL": "http://workspace-manager:8000",
     "AILERON_PLATFORM_PUBLIC_ORIGIN": "http://frontend.test",

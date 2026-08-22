@@ -67,7 +67,6 @@ async def test_internal_basic_routes_success() -> None:
     service.logout_codex.return_value = {"status": "loggedOut"}
     service.setup_git_settings.return_value = {"ok": True}
     service.apply_firewall_settings.return_value = {"status": "success"}
-    service.marketplace_provider_state_root_id = f"psr_{'0' * 64}"
     service.get_setup_status.return_value = {
         "ssh": {"status": "success", "message": "ok"}
     }
@@ -102,7 +101,6 @@ async def test_internal_basic_routes_success() -> None:
     health = await internal_health_check(service)
     assert health.success is True
     assert health.details is not None
-    assert health.details["providerStateRootId"] == f"psr_{'0' * 64}"
     assert (await get_workspace_setup_status(service)).checks["ssh"].status == "success"
 
 

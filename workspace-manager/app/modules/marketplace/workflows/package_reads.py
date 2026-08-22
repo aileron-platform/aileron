@@ -16,9 +16,15 @@ from aileron_file_core import (
 
 from app.modules.marketplace.models import (
     MarketplacePackageDetail,
+    MarketplacePackageFormat,
+    MarketplacePackageFormatOption,
     MarketplacePackageListResult,
     MarketplacePackageSummary,
-    MarketplaceProvider,
+    MarketplaceTargetClient,
+)
+from app.modules.marketplace.target_clients import (
+    create_package_format_adapters,
+    package_format_authoring_capabilities,
 )
 from app.modules.marketplace.resource_mutations import (
     canonical_entry_fingerprint,
@@ -35,7 +41,6 @@ from app.modules.marketplace.resource_resolvers import (
     resolve_mcp_owners,
     resolve_hook_sources,
 )
-
 from .kernel import _MarketplaceRegistrySupport
 from .registry_operations import (
     MarketplaceConflictError,
@@ -48,23 +53,37 @@ from .registry_operations import (
 class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
     """Query packages and produce immutable package projections."""
 
+    def list_package_format_options(self) -> list[MarketplacePackageFormatOption]:
+        """Return Manager-owned create and authoring capabilities by format."""
+
+        return [
+            MarketplacePackageFormatOption(
+                packageFormat=package_format,
+                targetClients=[adapter.target_client],
+                authoringCapabilities=package_format_authoring_capabilities(
+                    package_format
+                ),
+            )
+            for package_format, adapter in create_package_format_adapters().items()
+        ]
+
     def list_packages(
         self,
         user_id: str,
         *,
-        provider: MarketplaceProvider | None = None,
+        target_client: MarketplaceTargetClient | None = None,
         q: str | None = None,
         category: str | None = None,
         features: list[str] | None = None,
         page: int = 1,
         page_size: int = 12,
     ) -> MarketplacePackageListResult:
-        """Scan provider registry files and return package summaries."""
+        """Scan target_client registry files and return package summaries."""
         root = self._get_registry_root(user_id)
         items, fingerprint = self._get_package_index(user_id, root)
         filtered = self._filter_packages(
             items,
-            provider=provider,
+            target_client=target_client,
             q=q,
             category=category,
             features=features or [],
@@ -81,7 +100,6 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
             page_size=page_size,
             total_pages=total_pages,
             categories=sorted({item.category for item in items if item.category}),
-            source_types=sorted({item.source_type for item in items}),
             validation_severities=sorted({item.validation_severity for item in items}),
             registry_fingerprint=fingerprint,
         )
@@ -94,50 +112,53 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
     def refresh_package_overview(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
     ) -> dict[str, bool]:
         """Clear one package overview so the next GET reads the filesystem."""
         if (
             self.get_package_detail(
                 user_id,
-                provider,
+                target_client,
                 package_id,
                 use_cache=False,
             )
             is None
         ):
             raise FileNotFoundError("marketplace.package.not_found")
-        self._invalidate_package_overview(user_id, provider, package_id)
+        self._invalidate_package_overview(user_id, target_client, package_id)
         return {"refreshed": True}
 
     def get_package_operation_summary(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
+        package_format: MarketplacePackageFormat | None = None,
     ) -> MarketplacePackageSummary | None:
-        """Build one package summary using operation-gating lifecycle rules."""
+        """Build one package summary for an operation."""
 
-        candidate = self._get_package_candidate(user_id, provider, package_id)
+        candidate = self._get_package_candidate(
+            user_id, target_client, package_id, package_format
+        )
         if candidate is None:
             return None
-        return candidate.summary.model_copy(
-            update={
-                "lifecycle_status": candidate.operation_lifecycle_status,
-            }
-        )
+        return candidate.summary
 
     def get_package_detail(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
+        package_format: MarketplacePackageFormat | None = None,
         *,
         use_cache: bool = True,
     ) -> MarketplacePackageDetail | None:
         """Return a cached summary-first package overview."""
-        cache_key = self.cache.package_overview_key(provider, package_id)
+        package_format = package_format or self._requested_package_format()
+        cache_key = self.cache.package_overview_key(
+            target_client, package_id, package_format
+        )
         if use_cache:
             cached = self.cache.get_json(cache_key)
             if cached is not None:
@@ -146,21 +167,28 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
                 except (TypeError, ValueError):
                     pass
 
-        candidate = self._get_package_candidate(user_id, provider, package_id)
+        candidate = self._get_package_candidate(
+            user_id, target_client, package_id, package_format
+        )
         if candidate is None:
             if not use_cache:
-                self._invalidate_package_overview(user_id, provider, package_id)
+                self._invalidate_package_overview(user_id, target_client, package_id)
             return None
         typed_catalog_entry = self._catalog_entry(
             self._get_registry_root(user_id),
-            provider,
+            target_client,
+            candidate.summary.package_format,
             package_id,
         )
         summary = self._with_family_metadata(
             self._get_registry_root(user_id),
             [candidate.summary],
             package_manifests={
-                (provider, package_id): candidate.manifest,
+                (
+                    target_client,
+                    candidate.summary.package_format,
+                    package_id,
+                ): candidate.manifest,
             },
         )[0]
         catalog = {
@@ -192,11 +220,11 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
     def load_root_document(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
     ) -> dict[str, Any]:
-        package_path = self._resolve_package_path(user_id, provider, package_id)
-        path = load_root_document_path(provider, package_path)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
+        path = load_root_document_path(target_client, package_path)
         return {
             "path": path.name,
             "content": path.read_text(encoding="utf-8") if path.exists() else "",
@@ -205,12 +233,12 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
     def list_documents(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         resource_type: str,
     ) -> list[dict[str, Any]]:
-        package_path = self._resolve_package_path(user_id, provider, package_id)
-        root = document_resource_root(provider, resource_type)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
+        root = document_resource_root(target_client, resource_type)
         directory = package_path / root
         if not directory.is_dir():
             return []
@@ -230,14 +258,14 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
     def load_document(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         resource_type: str,
         path: str,
     ) -> dict[str, Any]:
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
         relative_path = validate_package_relative_path(path)
-        root = document_resource_root(provider, resource_type)
+        root = document_resource_root(target_client, resource_type)
         if not str(relative_path).startswith(f"{root}/"):
             raise MarketplacePathError("marketplace.package.path_escape")
         target = package_path / str(relative_path)
@@ -254,15 +282,15 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
     def list_mcp_servers(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
     ) -> list[dict[str, Any]]:
-        detail = self.get_package_detail(user_id, provider, package_id)
+        detail = self.get_package_detail(user_id, target_client, package_id)
         if detail is None:
             raise FileNotFoundError("marketplace.package.not_found")
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
         items: list[dict[str, Any]] = []
-        for binding in resolve_mcp_owners(package_path, provider):
+        for binding in resolve_mcp_owners(package_path, target_client):
             name = binding.name
             owner = binding.owner
             current = get_json_entry(
@@ -275,6 +303,7 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
                 {
                     "name": name,
                     "path": owner.file_path,
+                    "server": current,
                     "baseEntryFingerprint": canonical_entry_fingerprint(current),
                     "ownerFilePath": owner.file_path,
                 }
@@ -284,15 +313,15 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
     def get_mcp_server(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         name: str,
         owner_file_path: str,
     ) -> dict[str, Any]:
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
         owner = resolve_mcp_owner(
             package_path,
-            provider,
+            target_client,
             name,
             owner_file_path=owner_file_path,
         )
@@ -314,10 +343,10 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
     def get_basic_metadata(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
     ) -> dict[str, Any]:
-        detail = self.get_package_detail(user_id, provider, package_id)
+        detail = self.get_package_detail(user_id, target_client, package_id)
         if detail is None:
             raise FileNotFoundError("marketplace.package.not_found")
         return {
@@ -326,18 +355,17 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
             "description": detail.description or "",
             "catalogMetadata": detail.catalog_metadata,
             "manifestMetadata": detail.manifest_metadata,
-            "lifecycleStatus": detail.lifecycle_status,
             "validationResults": detail.validation_results,
         }
 
     def get_hooks(
-        self, user_id: str, provider: MarketplaceProvider, package_id: str
+        self, user_id: str, target_client: MarketplaceTargetClient, package_id: str
     ) -> dict[str, Any]:
-        detail = self.get_package_detail(user_id, provider, package_id)
+        detail = self.get_package_detail(user_id, target_client, package_id)
         if detail is None:
             raise FileNotFoundError("marketplace.package.not_found")
-        package_path = self._resolve_package_path(user_id, provider, package_id)
-        owners, diagnostics = resolve_hook_sources(package_path, provider)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
+        owners, diagnostics = resolve_hook_sources(package_path, target_client)
         fatal_codes = {
             "source-reference-invalid",
             "source-missing",
@@ -373,13 +401,24 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
                 )
             ]
             try:
-                raw_content, _, native_content = read_hook_source(
-                    package_path, owner
+                raw_content, _, native_content = read_hook_source(package_path, owner)
+            except (
+                OSError,
+                UnicodeError,
+                json.JSONDecodeError,
+                PackageSourceError,
+            ) as exc:
+                raw_content = (
+                    path.read_text(encoding="utf-8", errors="replace")
+                    if path.exists()
+                    else ""
                 )
-            except (OSError, UnicodeError, json.JSONDecodeError, PackageSourceError) as exc:
-                raw_content = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
                 native_content = None
-                code = exc.code if isinstance(exc, PackageSourceError) else "source-document-invalid"
+                code = (
+                    exc.code
+                    if isinstance(exc, PackageSourceError)
+                    else "source-document-invalid"
+                )
                 source_diagnostics.append(
                     {
                         "code": code,
@@ -388,8 +427,7 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
                     }
                 )
             if any(
-                item["code"] == "source-document-invalid"
-                for item in source_diagnostics
+                item["code"] == "source-document-invalid" for item in source_diagnostics
             ):
                 native_content = None
             sources.append(
@@ -416,14 +454,14 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
     def get_readme(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
     ) -> dict[str, Any]:
         """Load sanitized README content only when the UI opens it."""
-        detail = self.get_package_detail(user_id, provider, package_id)
+        detail = self.get_package_detail(user_id, target_client, package_id)
         if detail is None:
             raise FileNotFoundError("marketplace.package.not_found")
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
         readme_path = self._discover_readme_path(package_path)
         return {
             "revision": detail.revision,
@@ -436,9 +474,9 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
         }
 
     def list_skill_files(
-        self, user_id: str, provider: MarketplaceProvider, package_id: str
+        self, user_id: str, target_client: MarketplaceTargetClient, package_id: str
     ) -> dict[str, Any]:
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
         root = package_path / "skills"
         if not root.is_dir():
             return {"path": "skills", "scope": None, "nodes": [], "total": 0}
@@ -449,9 +487,13 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
         return {"path": "skills", "scope": None, "nodes": nodes, "total": len(nodes)}
 
     def read_skill_file(
-        self, user_id: str, provider: MarketplaceProvider, package_id: str, path: str
+        self,
+        user_id: str,
+        target_client: MarketplaceTargetClient,
+        package_id: str,
+        path: str,
     ) -> dict[str, Any]:
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
         relative_path = self._validate_skill_relative_path(path)
         target = package_path / relative_path
         if not target.is_file():
@@ -459,9 +501,9 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
         return self._marketplace_file_content_response(relative_path, target)
 
     def list_package_files_tree(
-        self, user_id: str, provider: MarketplaceProvider, package_id: str
+        self, user_id: str, target_client: MarketplaceTargetClient, package_id: str
     ) -> dict[str, Any]:
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
         nodes = [
             self._marketplace_file_node(package_path, path)
             for path in sorted(package_path.rglob("*"))
@@ -469,9 +511,13 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
         return {"path": "", "scope": None, "nodes": nodes, "total": len(nodes)}
 
     def read_package_file(
-        self, user_id: str, provider: MarketplaceProvider, package_id: str, path: str
+        self,
+        user_id: str,
+        target_client: MarketplaceTargetClient,
+        package_id: str,
+        path: str,
     ) -> dict[str, Any]:
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        package_path = self._resolve_package_path(user_id, target_client, package_id)
         relative_path = self._validate_package_read_relative_path(path)
         target = package_path / relative_path
         if not target.is_file():
@@ -481,21 +527,24 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
     def export_package(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         revision: str,
     ) -> bytes:
-        """Export a package as a provider-native import-source zip archive."""
-        detail = self.get_package_detail(user_id, provider, package_id)
+        """Export a package as a target_client-native import-source zip archive."""
+        detail = self.get_package_detail(user_id, target_client, package_id)
         if detail is None:
             raise FileNotFoundError("marketplace.package.not_found")
-        if detail.revision != revision:
-            raise MarketplaceConflictError("marketplace.package.revision_conflict")
-        package_path = self._resolve_package_path(user_id, provider, package_id)
+        package_path = self._resolve_package_path(
+            user_id,
+            target_client,
+            package_id,
+            detail.package_format,
+        )
         if not package_path.exists():
             raise FileNotFoundError("marketplace.package.not_found")
         registry_root = self._get_registry_root(user_id)
-        adapter = self._get_adapter(provider)
+        adapter = create_package_format_adapters()[detail.package_format]
         self._raise_if_validation_blocks(
             adapter.validate_package(package_path), "export"
         )
@@ -518,7 +567,7 @@ class MarketplacePackageReadModel(_MarketplaceRegistrySupport):
                     ).encode("utf-8"),
                 )
             )
-            archive_root = (Path("plugins") / package_id).as_posix()
+            archive_root = adapter.package_path(Path(), package_id).as_posix()
         path_exclusion = _marketplace_path_exclusion()
         selected_paths = sorted(
             child.name

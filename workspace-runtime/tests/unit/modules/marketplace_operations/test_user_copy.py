@@ -1,87 +1,57 @@
+"""Runtime contract tests for package-format-aware standalone User Copy."""
+
 from __future__ import annotations
 
 import os
 import stat
 import warnings
 import zipfile
-from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from aileron_marketplace_core import (
-    UserCopyApplyMetadataContract,
-    UserCopyPreflightRequestContract,
-    build_user_copy_profile_preview,
+    PluginPackageFormat,
+    PluginReleaseIdentity,
+    UserCopyProjectionApplyMetadataContract,
+    UserCopyProjectionPreflightRequestContract,
+    UserCopySourceProfilePreviewContract,
+    extract_user_copy_source_profile,
     package_tree_digest,
-    resolve_user_copy_profile,
-    user_copy_source_digest_from_preview,
 )
 
-from app.config.settings import Settings
-from app.modules.cli_settings.user_scope.materializer import (
-    UserCopyCrashPoint,
-    UserCopyInjectedCrash,
-    UserCopyMaterializer,
-)
 from app.modules.cli_settings.user_scope.planner import UserCopyInventory
 from app.modules.marketplace_operations.errors import MarketplaceOperationError
-from app.modules.marketplace_operations.gate import MarketplaceProviderGate
-from app.modules.marketplace_operations.state import MarketplaceMutationStore
-from app.modules.marketplace_operations.user_copy import (
-    MarketplaceUserCopyService,
-)
+from app.modules.marketplace_operations.user_copy import MarketplaceUserCopyService
 
 _RUNTIME_ID = "11111111-1111-4111-8111-111111111111"
 _REVISION = "b" * 64
 _OPERATION_ID = "a" * 32
-_CONTENT = b"# Marketplace instructions\n"
 
 
-class _CompleteInventoryProvider:
-    def inventory(
-        self,
-        provider: str,
-        *,
-        profile: Any = None,
-    ) -> UserCopyInventory:
+class _Inventory:
+    def inventory(self, target_client: str, *, profile: Any = None) -> UserCopyInventory:
+        assert target_client in {"claude-code", "codex"}
         assert profile is not None
-        assert profile.provider == provider
         return UserCopyInventory(complete=True)
 
 
-@dataclass(frozen=True)
-class _UserCopyCase:
-    settings: Settings
-    store: MarketplaceMutationStore
-    service: MarketplaceUserCopyService
-    inventory: _CompleteInventoryProvider
-    metadata: UserCopyApplyMetadataContract
-    bundle: bytes
-    target: Path
-    state_root: Path
-    gate: MarketplaceProviderGate
-
-
-def _settings(tmp_path: Path) -> Settings:
-    return Settings(
-        ENV="test",
+def _settings(tmp_path: Path) -> SimpleNamespace:
+    return SimpleNamespace(
         AILERON_WORKSPACE_ID="workspace-1",
-        AILERON_WORKSPACE_PATH=str(tmp_path / "workspace"),
+        AILERON_RUNTIME_INSTANCE_ID=_RUNTIME_ID,
         MARKETPLACE_OPERATION_JOURNAL_DIR=str(tmp_path / "state"),
     )
 
 
-def _archive_package(package_root: Path) -> bytes:
+def _archive(package_root: Path) -> bytes:
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
-        for source in sorted(
-            path for path in package_root.rglob("*") if path.is_file()
-        ):
-            relative = source.relative_to(package_root).as_posix()
-            info = zipfile.ZipInfo(relative)
+        for source in sorted(path for path in package_root.rglob("*") if path.is_file()):
+            info = zipfile.ZipInfo(source.relative_to(package_root).as_posix())
             info.create_system = 3
             info.compress_type = zipfile.ZIP_DEFLATED
             mode = 0o755 if os.access(source, os.X_OK) else 0o644
@@ -92,394 +62,248 @@ def _archive_package(package_root: Path) -> bytes:
     return buffer.getvalue()
 
 
-def _build_case(
+def _request(
+    package_root: Path,
+    *,
+    package_format: PluginPackageFormat,
+    target_client: str,
+    catalog_plugin_id: str = "managed/demo",
+) -> tuple[UserCopyProjectionPreflightRequestContract, Any]:
+    profile = extract_user_copy_source_profile(
+        package_format,
+        package_root,
+        release=PluginReleaseIdentity(
+            catalog_plugin_id=catalog_plugin_id,
+            revision=_REVISION,
+        ),
+    )
+    preview_payload = profile.canonical_dict()
+    preview_payload["profileDigest"] = profile.profile_digest
+    preview = UserCopySourceProfilePreviewContract.from_wire(preview_payload)
+    request = UserCopyProjectionPreflightRequestContract(
+        packageFormat=package_format.value,
+        targetClient=target_client,
+        catalogPluginId=catalog_plugin_id,
+        releaseRevision=_REVISION,
+        workspaceId="workspace-1",
+        runtimeInstanceId=_RUNTIME_ID,
+        expectedSourceDigest=package_tree_digest(package_root),
+        expectedProfileVersion=profile.profile_version,
+        expectedProfileDigest=profile.profile_digest,
+        sourceProfile=preview,
+    )
+    return request, profile
+
+
+def _service(tmp_path: Path) -> MarketplaceUserCopyService:
+    return MarketplaceUserCopyService(
+        settings=_settings(tmp_path),  # type: ignore[arg-type]
+        inventory_reader=_Inventory(),  # type: ignore[arg-type]
+    )
+
+
+def test_preflight_returns_exact_format_client_and_root_proofs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> _UserCopyCase:
-    user_home = tmp_path / "home"
-    user_home.mkdir(mode=0o700)
-    monkeypatch.setenv("HOME", str(user_home))
-
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
     package_root = tmp_path / "package"
-    package_root.mkdir(mode=0o700)
-    (package_root / "AGENTS.md").write_bytes(_CONTENT)
-    (package_root / "AGENTS.md").chmod(0o644)
-    profile = resolve_user_copy_profile("codex", package_root)
-    preview = build_user_copy_profile_preview(package_root, profile)
-    source_digest = user_copy_source_digest_from_preview(preview)
-
-    settings = _settings(tmp_path)
-    state_root = Path(settings.MARKETPLACE_OPERATION_JOURNAL_DIR)
-    store = MarketplaceMutationStore(state_root)
-    gate = MarketplaceProviderGate(store)
-    inventory = _CompleteInventoryProvider()
-    service = MarketplaceUserCopyService(
-        settings=settings,
-        mutation_store=store,
-        inventory_provider=inventory,  # type: ignore[arg-type]
-        gate=gate,
-    )
-    monkeypatch.setattr(service, "_clear_provider_caches", lambda _provider: None)
-
-    preflight = service.preflight(
-        UserCopyPreflightRequestContract.model_validate(
-            {
-                "provider": "codex",
-                "packageId": "demo",
-                "revision": _REVISION,
-                "workspaceId": settings.AILERON_WORKSPACE_ID,
-                "runtimeInstanceId": settings.AILERON_RUNTIME_INSTANCE_ID,
-                "expectedSourceDigest": source_digest,
-                "expectedProfileVersion": profile.profile_version,
-                "expectedProfileDigest": profile.profile_digest,
-                "userCopyProfilePreview": preview,
-            }
-        )
-    )
-    assert preflight.status == "ready"
-
-    bundle = _archive_package(package_root)
-    metadata = UserCopyApplyMetadataContract.model_validate(
-        {
-            "operationId": _OPERATION_ID,
-            "provider": "codex",
-            "packageId": "demo",
-            "revision": _REVISION,
-            "workspaceId": settings.AILERON_WORKSPACE_ID,
-            "runtimeInstanceId": settings.AILERON_RUNTIME_INSTANCE_ID,
-            "providerStateRootId": store.provider_state_root_id,
-            "expectedSourceDigest": source_digest,
-            "expectedArchiveDigest": sha256(bundle).hexdigest(),
-            "expectedPackageTreeDigest": package_tree_digest(package_root),
-            "expectedProfileVersion": profile.profile_version,
-            "expectedProfileDigest": profile.profile_digest,
-            "expectedMaterializationDigest": preflight.materialization_digest,
-            "overwriteApprovals": [],
-        }
-    )
-    return _UserCopyCase(
-        settings=settings,
-        store=store,
-        service=service,
-        inventory=inventory,
-        metadata=metadata,
-        bundle=bundle,
-        target=user_home / ".codex" / "AGENTS.md",
-        state_root=state_root,
-        gate=gate,
+    package_root.mkdir()
+    (package_root / "AGENTS.md").write_text("# Instructions\n", encoding="utf-8")
+    request, _ = _request(
+        package_root,
+        package_format=PluginPackageFormat.CODEX_NATIVE,
+        target_client="codex",
     )
 
+    result = _service(tmp_path).preflight(request)
 
-def _recovery_service(
-    case: _UserCopyCase,
-    monkeypatch: pytest.MonkeyPatch,
-) -> MarketplaceUserCopyService:
-    service = MarketplaceUserCopyService(
-        settings=case.settings,
-        mutation_store=case.store,
-        inventory_provider=case.inventory,  # type: ignore[arg-type]
-        gate=case.gate,
-    )
-    monkeypatch.setattr(service, "_clear_provider_caches", lambda _provider: None)
-    return service
-
-
-def _assert_operation_state_removed(case: _UserCopyCase) -> None:
-    assert not (case.state_root / "user-copy-snapshots" / _OPERATION_ID).exists()
-    assert not (case.state_root / "user-copy-transactions" / _OPERATION_ID).exists()
-    assert not (
-        case.state_root / "user-copy-recovery" / f"{_OPERATION_ID}.json"
-    ).exists()
-    assert not (case.state_root / "provider-resource-state.json").exists()
-
-
-def test_success_publishes_once_and_removes_all_transient_state(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    case = _build_case(tmp_path, monkeypatch)
-
-    result = case.service.apply(case.metadata, case.bundle)
-
-    assert case.target.read_bytes() == _CONTENT
-    assert result.created_count == 1
-    assert result.merged_count == 0
-    assert result.unchanged_count == 0
-    assert result.overwritten_count == 0
-    assert case.gate.generation("codex") == 1
-    _assert_operation_state_removed(case)
-
-
-@pytest.mark.parametrize("provider", ["claude-code", "codex"])
-def test_user_copy_clears_all_affected_user_scope_caches(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    provider: str,
-) -> None:
-    calls: list[dict[str, str]] = []
-    monkeypatch.setattr(
-        "app.modules.marketplace_operations.user_copy.clear_agent_settings_cache",
-        lambda **values: calls.append(values),
-    )
-    service = MarketplaceUserCopyService(settings=_settings(tmp_path))
-
-    service._clear_provider_caches(provider)
-
-    assert calls == [
-        {
-            "provider": provider,
-            "workspace_id": "workspace-1",
-            "scope": "user",
-        }
+    assert result.status == "ready"
+    assert result.package_format == "codex-native"
+    assert result.target_client == "codex"
+    assert result.target_client_state_root_id.startswith("tcsr_")
+    assert len(result.projection_digest) == 64
+    assert [resource.target_locator for resource in result.resources] == [
+        "~/.codex/AGENTS.md"
     ]
 
 
-def test_failure_before_generation_rolls_back_and_removes_transient_state(
+def test_preflight_returns_blocked_for_unregistered_projection_pair(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    case = _build_case(tmp_path, monkeypatch)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    package_root = tmp_path / "package"
+    package_root.mkdir()
+    (package_root / "plugin.json").write_text(
+        '{"$schema":"https://agent-plugins.org/schemas/1.0.0/'
+        'plugin.schema.json","name":"demo"}',
+        encoding="utf-8",
+    )
+    request, _ = _request(
+        package_root,
+        package_format=PluginPackageFormat.AGENT_PLUGIN_V1,
+        target_client="claude-code",
+    )
 
-    def fail_cache_clear(_provider: str) -> None:
-        raise RuntimeError("cache clear failed")
+    result = _service(tmp_path).preflight(request)
 
-    monkeypatch.setattr(case.service, "_clear_provider_caches", fail_cache_clear)
-
-    with pytest.raises(MarketplaceOperationError):
-        case.service.apply(case.metadata, case.bundle)
-
-    assert not case.target.exists()
-    assert case.gate.generation("codex") == 0
-    _assert_operation_state_removed(case)
+    assert result.status == "blocked"
+    assert [issue.code for issue in result.blocking_issues] == [
+        "marketplace.user_copy.projection_not_supported"
+    ]
 
 
-def test_publication_failure_rolls_back_and_retry_applies_cleanly(
+def test_preflight_reports_unsupported_codex_resource_type(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    case = _build_case(tmp_path, monkeypatch)
-    original_mark_published = UserCopyMaterializer.mark_published
-
-    def fail_mark_published(
-        self: UserCopyMaterializer,
-        operation_id: str,
-    ) -> None:
-        _ = (self, operation_id)
-        raise RuntimeError("publication journal unavailable")
-
-    monkeypatch.setattr(
-        UserCopyMaterializer,
-        "mark_published",
-        fail_mark_published,
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    package_root = tmp_path / "package"
+    package_root.mkdir()
+    (package_root / ".codex-plugin").mkdir()
+    (package_root / ".codex-plugin" / "plugin.json").write_text(
+        '{"name":"demo","apps":["./.app.json"]}',
+        encoding="utf-8",
     )
-    with pytest.raises(MarketplaceOperationError):
-        case.service.apply(case.metadata, case.bundle)
-
-    assert not case.target.exists()
-    assert case.gate.generation("codex") == 1
-    _assert_operation_state_removed(case)
-
-    monkeypatch.setattr(
-        UserCopyMaterializer,
-        "mark_published",
-        original_mark_published,
+    (package_root / ".app.json").write_text(
+        '{"apps":{"demo":{"id":"connector_demo"}}}',
+        encoding="utf-8",
     )
-    result = case.service.apply(case.metadata, case.bundle)
+    (package_root / "skills" / "review").mkdir(parents=True)
+    (package_root / "skills" / "review" / "SKILL.md").write_text(
+        "# Review\n",
+        encoding="utf-8",
+    )
+    (package_root / "agents").mkdir()
+    (package_root / "agents" / "reviewer.md").write_text(
+        "You are the review agent.\n",
+        encoding="utf-8",
+    )
+    request, _ = _request(
+        package_root,
+        package_format=PluginPackageFormat.CODEX_NATIVE,
+        target_client="codex",
+    )
 
+    result = _service(tmp_path).preflight(request)
+
+    assert result.status == "confirmation-required"
+    skipped = {
+        (resource.resource_type, resource.code)
+        for resource in result.skipped_resources
+    }
+    assert ("apps", "unsupported-resource") in skipped
+    assert ("subagent", "format-unsupported") in skipped
+    assert result.blocking_issues == []
+
+
+def test_partial_agent_plugin_apply_materializes_projectable_resources_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    package_root = tmp_path / "package"
+    package_root.mkdir()
+    (package_root / "plugin.json").write_text(
+        '{"$schema":"https://agent-plugins.org/schemas/1.0.0/'
+        'plugin.schema.json","name":"demo"}',
+        encoding="utf-8",
+    )
+    skill = package_root / "skills" / "deploy"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("# Deploy\n", encoding="utf-8")
+    (package_root / "mcp.json").write_text(
+        '{"$schema":"https://agent-plugins.org/schemas/1.0.0/'
+        'mcp.schema.json","mcpServers":{"legacy":{"type":"sse",'
+        '"url":"https://example.com/mcp"}}}',
+        encoding="utf-8",
+    )
+    request, profile = _request(
+        package_root,
+        package_format=PluginPackageFormat.AGENT_PLUGIN_V1,
+        target_client="codex",
+    )
+    service = _service(tmp_path)
+    monkeypatch.setattr(service, "_clear_target_client_caches", lambda _client: None)
+    preflight = service.preflight(request)
+    assert preflight.status == "confirmation-required"
+    assert [item.resource_id for item in preflight.skipped_resources] == ["legacy"]
+    bundle = _archive(package_root)
+    metadata = UserCopyProjectionApplyMetadataContract(
+        operationId=_OPERATION_ID,
+        packageFormat="agent-plugin/1.0.0",
+        targetClient="codex",
+        catalogPluginId="managed/demo",
+        releaseRevision=_REVISION,
+        workspaceId="workspace-1",
+        runtimeInstanceId=_RUNTIME_ID,
+        targetClientStateRootId=preflight.target_client_state_root_id,
+        expectedSourceDigest=package_tree_digest(package_root),
+        expectedArchiveDigest=sha256(bundle).hexdigest(),
+        expectedPackageTreeDigest=package_tree_digest(package_root),
+        expectedProfileVersion=profile.profile_version,
+        expectedProfileDigest=profile.profile_digest,
+        expectedProjectionDigest=preflight.projection_digest,
+        expectedMaterializationDigest=preflight.materialization_digest,
+        acceptPartialCopy=True,
+        expectedSkippedCount=1,
+        overwriteApprovals=[],
+    )
+
+    result = service.apply(metadata, bundle)
+
+    assert (home / ".codex" / "skills" / "deploy" / "SKILL.md").is_file()
     assert result.created_count == 1
-    assert case.target.read_bytes() == _CONTENT
-    assert case.gate.generation("codex") == 2
-    _assert_operation_state_removed(case)
+    assert result.skipped_count == 1
 
 
-def test_exact_retry_after_release_only_finishes_transient_cleanup(
+def test_apply_rejects_target_root_change_before_staging(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    case = _build_case(tmp_path, monkeypatch)
-    original_remove = case.service._snapshot_stager.remove
-    remove_calls = 0
-
-    def fail_first_remove(operation_id: str) -> None:
-        nonlocal remove_calls
-        remove_calls += 1
-        if remove_calls == 1:
-            raise RuntimeError("snapshot cleanup unavailable")
-        original_remove(operation_id)
-
-    monkeypatch.setattr(
-        case.service._snapshot_stager,
-        "remove",
-        fail_first_remove,
+    first_home = tmp_path / "home-one"
+    first_home.mkdir()
+    monkeypatch.setenv("HOME", str(first_home))
+    package_root = tmp_path / "package"
+    package_root.mkdir()
+    (package_root / "AGENTS.md").write_text("# Instructions\n", encoding="utf-8")
+    request, profile = _request(
+        package_root,
+        package_format=PluginPackageFormat.CODEX_NATIVE,
+        target_client="codex",
     )
-    with pytest.raises(MarketplaceOperationError):
-        case.service.apply(case.metadata, case.bundle)
-
-    inode_before_retry = case.target.stat().st_ino
-    assert case.gate.generation("codex") == 1
-
-    monkeypatch.setattr(
-        case.service._snapshot_stager,
-        "remove",
-        original_remove,
+    service = _service(tmp_path)
+    preflight = service.preflight(request)
+    bundle = _archive(package_root)
+    metadata = UserCopyProjectionApplyMetadataContract(
+        operationId=_OPERATION_ID,
+        packageFormat="codex-native",
+        targetClient="codex",
+        catalogPluginId="managed/demo",
+        releaseRevision=_REVISION,
+        workspaceId="workspace-1",
+        runtimeInstanceId=_RUNTIME_ID,
+        targetClientStateRootId=preflight.target_client_state_root_id,
+        expectedSourceDigest=package_tree_digest(package_root),
+        expectedArchiveDigest=sha256(bundle).hexdigest(),
+        expectedPackageTreeDigest=package_tree_digest(package_root),
+        expectedProfileVersion=profile.profile_version,
+        expectedProfileDigest=profile.profile_digest,
+        expectedProjectionDigest=preflight.projection_digest,
+        expectedMaterializationDigest=preflight.materialization_digest,
+        acceptPartialCopy=False,
+        expectedSkippedCount=0,
+        overwriteApprovals=[],
     )
-    result = case.service.apply(case.metadata, case.bundle)
+    second_home = tmp_path / "home-two"
+    second_home.mkdir()
+    monkeypatch.setenv("HOME", str(second_home))
 
-    assert result.created_count == 1
-    assert case.target.stat().st_ino == inode_before_retry
-    assert case.gate.generation("codex") == 1
-    _assert_operation_state_removed(case)
-
-
-@pytest.mark.parametrize(
-    "crash_point",
-    [
-        UserCopyCrashPoint.AFTER_PREPARED,
-        UserCopyCrashPoint.AFTER_BACKUP,
-        UserCopyCrashPoint.AFTER_TARGET_WRITE_BEFORE_JOURNAL,
-        UserCopyCrashPoint.AFTER_TARGET_APPLY,
-        UserCopyCrashPoint.BEFORE_VERIFY,
-        UserCopyCrashPoint.AFTER_VERIFY,
-        UserCopyCrashPoint.BEFORE_FINALIZE,
-    ],
-)
-def test_startup_rolls_back_every_unpublished_transaction_phase(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    crash_point: UserCopyCrashPoint,
-) -> None:
-    case = _build_case(tmp_path, monkeypatch)
-    original_apply = UserCopyMaterializer.apply
-
-    def crashing_apply(
-        self: UserCopyMaterializer,
-        *args: Any,
-        **kwargs: Any,
-    ) -> Any:
-        def crash(point: UserCopyCrashPoint, _target_locator: str | None) -> None:
-            if point is crash_point:
-                raise UserCopyInjectedCrash()
-
-        self._crash_hook = crash
-        return original_apply(self, *args, **kwargs)
-
-    monkeypatch.setattr(UserCopyMaterializer, "apply", crashing_apply)
-    with pytest.raises(UserCopyInjectedCrash):
-        case.service.apply(case.metadata, case.bundle)
-    assert (case.state_root / "user-copy-transactions" / _OPERATION_ID).is_dir()
-
-    monkeypatch.setattr(UserCopyMaterializer, "apply", original_apply)
-    _recovery_service(case, monkeypatch).recover_incomplete_operations()
-
-    assert not case.target.exists()
-    assert case.gate.generation("codex") == 0
-    _assert_operation_state_removed(case)
-
-
-def test_startup_rolls_back_when_publication_marker_was_not_written(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    case = _build_case(tmp_path, monkeypatch)
-    original = UserCopyMaterializer.mark_published
-
-    def crash_before_publication_marker(
-        self: UserCopyMaterializer,
-        operation_id: str,
-    ) -> None:
-        _ = (self, operation_id)
-        raise UserCopyInjectedCrash()
-
-    monkeypatch.setattr(
-        UserCopyMaterializer,
-        "mark_published",
-        crash_before_publication_marker,
-    )
-    with pytest.raises(UserCopyInjectedCrash):
-        case.service.apply(case.metadata, case.bundle)
-    monkeypatch.setattr(UserCopyMaterializer, "mark_published", original)
-
-    assert case.gate.generation("codex") == 1
-    _recovery_service(case, monkeypatch).recover_incomplete_operations()
-
-    assert not case.target.exists()
-    assert case.gate.generation("codex") == 1
-    _assert_operation_state_removed(case)
-
-
-def test_startup_completes_published_transaction_without_rewriting_target(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    case = _build_case(tmp_path, monkeypatch)
-    original_remove = case.service._snapshot_stager.remove
-
-    def crash_after_publication(_operation_id: str) -> None:
-        raise UserCopyInjectedCrash()
-
-    monkeypatch.setattr(
-        case.service._snapshot_stager,
-        "remove",
-        crash_after_publication,
-    )
-    with pytest.raises(UserCopyInjectedCrash):
-        case.service.apply(case.metadata, case.bundle)
-    monkeypatch.setattr(
-        case.service._snapshot_stager,
-        "remove",
-        original_remove,
-    )
-
-    inode_before_recovery = case.target.stat().st_ino
-    _recovery_service(case, monkeypatch).recover_incomplete_operations()
-
-    assert case.target.read_bytes() == _CONTENT
-    assert case.target.stat().st_ino == inode_before_recovery
-    assert case.gate.generation("codex") == 1
-    _assert_operation_state_removed(case)
-
-
-def test_startup_cleans_exact_stale_recovery_temp(
-    tmp_path: Path,
-) -> None:
-    settings = _settings(tmp_path)
-    recovery_root = (
-        Path(settings.MARKETPLACE_OPERATION_JOURNAL_DIR) / "user-copy-recovery"
-    )
-    recovery_root.mkdir(parents=True, mode=0o700)
-    stale = recovery_root / f".{_OPERATION_ID}.json.{'0' * 16}.tmp"
-    stale.write_text("partial", encoding="utf-8")
-
-    MarketplaceUserCopyService(
-        settings=settings,
-        inventory_provider=_CompleteInventoryProvider(),  # type: ignore[arg-type]
-    ).recover_incomplete_operations()
-
-    assert tuple(recovery_root.iterdir()) == ()
-
-
-@pytest.mark.parametrize("artifact_kind", ["unknown", "symlink"])
-def test_startup_rejects_unknown_or_symlink_recovery_artifact(
-    tmp_path: Path,
-    artifact_kind: str,
-) -> None:
-    settings = _settings(tmp_path)
-    recovery_root = (
-        Path(settings.MARKETPLACE_OPERATION_JOURNAL_DIR) / "user-copy-recovery"
-    )
-    recovery_root.mkdir(parents=True, mode=0o700)
-    artifact = recovery_root / "unexpected"
-    if artifact_kind == "unknown":
-        artifact.write_text("unexpected", encoding="utf-8")
-    else:
-        target = tmp_path / "external"
-        target.write_text("external", encoding="utf-8")
-        artifact.symlink_to(target)
-
-    with pytest.raises(MarketplaceOperationError) as exc_info:
-        MarketplaceUserCopyService(
-            settings=settings,
-            inventory_provider=_CompleteInventoryProvider(),  # type: ignore[arg-type]
-        ).recover_incomplete_operations()
-
-    assert exc_info.value.code == "marketplace.user_copy.runtime_state_invalid"
+    with pytest.raises(MarketplaceOperationError) as error:
+        service.apply(metadata, bundle)
+    assert error.value.code == "marketplace.user_copy.plan_stale"

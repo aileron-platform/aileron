@@ -11,11 +11,18 @@ type WorkspaceResourceSpec struct {
 	Resources         *corev1.ResourceRequirements  `json:"resources,omitempty"`
 	Assertion         WorkspaceRuntimeAssertionSpec `json:"assertion"`
 	RuntimeSecretName string                        `json:"runtimeSecretName"`
+	DatabaseTrust     *WorkspaceDatabaseTrustSpec   `json:"databaseTrust,omitempty"`
 	DesiredState      string                        `json:"desiredState"`
 	InstanceID        string                        `json:"instanceId"`
 	Revision          int64                         `json:"revision"`
 	MountRevision     int64                         `json:"mountRevision"`
 	AccessRevision    int64                         `json:"accessRevision"`
+}
+
+type WorkspaceDatabaseTrustSpec struct {
+	SecretName string `json:"secretName"`
+	SecretKey  string `json:"secretKey"`
+	Revision   string `json:"revision"`
 }
 
 type WorkspaceRuntimeAssertionSpec struct {
@@ -244,6 +251,10 @@ func (in *Workspace) DeepCopyObject() runtime.Object {
 	}
 	if in.Spec.Runtime.Resources != nil {
 		out.Spec.Runtime.Resources = in.Spec.Runtime.Resources.DeepCopy()
+	}
+	if in.Spec.Runtime.DatabaseTrust != nil {
+		databaseTrust := *in.Spec.Runtime.DatabaseTrust
+		out.Spec.Runtime.DatabaseTrust = &databaseTrust
 	}
 	if in.Spec.Browser.Resources != nil {
 		out.Spec.Browser.Resources = in.Spec.Browser.Resources.DeepCopy()

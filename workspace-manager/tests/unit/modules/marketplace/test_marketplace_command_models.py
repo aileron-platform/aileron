@@ -13,20 +13,71 @@ from app.modules.marketplace.models import (
     MarketplacePluginInstallRequest,
     MarketplaceRegistryCatalog,
     MarketplaceRegistrySettings,
-    MarketplaceUserCopyApplyResult,
     MarketplaceUserCopyApplyRequest,
+    MarketplaceUserCopyApplyResult,
     MarketplaceUserCopyBlockingIssue,
     MarketplaceUserCopyConflict,
     MarketplaceUserCopyPreflightResult,
     MarketplaceUserCopyRequest,
     MarketplaceUserCopyResource,
+    MarketplaceSkippedUserCopyResource,
+    MarketplaceImportRequest,
 )
+
+
+def test_import_request_requires_version_and_explicit_overwrite_choice() -> None:
+    candidate = {
+        "id": "codex:superpowers",
+        "target_client": "codex",
+        "packageFormat": "codex-native",
+        "packageId": "superpowers",
+        "version": "5.1.3",
+        "displayName": "Superpowers",
+        "sourcePath": "plugins/superpowers",
+        "duplicate": False,
+        "variantStatus": "new-family",
+        "variants": [],
+        "validationSeverity": "none",
+        "validationResults": [],
+    }
+    payload = {
+        "source": {
+            "target_client": "codex",
+            "sourceKind": "git",
+            "source": "https://github.com/openai/plugins.git",
+        },
+        "candidates": [
+            {
+                **candidate,
+                "import": {
+                    "version": "5.1.3",
+                    "overwrite": False,
+                },
+            }
+        ],
+    }
+
+    request = MarketplaceImportRequest.model_validate(payload)
+
+    assert request.candidates[0].import_options is not None
+    assert request.candidates[0].import_options.version == "5.1.3"
+    for invalid_candidate in (
+        candidate,
+        {
+            **candidate,
+            "import": {**payload["candidates"][0]["import"], "version": "latest"},
+        },
+    ):
+        with pytest.raises(ValidationError):
+            MarketplaceImportRequest.model_validate(
+                {**payload, "candidates": [invalid_candidate]}
+            )
 
 
 def _plugin_result_payload(*, status: str = "installed") -> dict[str, object]:
     return {
         "status": status,
-        "provider": "codex",
+        "targetClient": "codex",
         "packageId": "review-helper",
         "marketplaceId": "aileron-team-tools",
         "workspaceId": "workspace-1",
@@ -42,9 +93,10 @@ def _plugin_result_payload(*, status: str = "installed") -> dict[str, object]:
 
 def test_plugin_request_has_no_installation_mode_compatibility_field() -> None:
     payload = {
-        "provider": "codex",
+        "targetClient": "codex",
+        "packageFormat": "codex-native",
         "packageId": "review-helper",
-        "revision": "a" * 64,
+        "version": "1.2.3",
         "workspaceId": "workspace-1",
     }
 
@@ -55,25 +107,48 @@ def test_plugin_request_has_no_installation_mode_compatibility_field() -> None:
         MarketplacePluginInstallRequest.model_validate(
             {**payload, "installationMode": "plugin"}
         )
+    with pytest.raises(ValidationError):
+        MarketplacePluginInstallRequest.model_validate(
+            {**payload, "version": None, "revision": "a" * 40}
+        )
+    source_request = MarketplacePluginInstallRequest.model_validate(
+        {
+            "targetClient": "codex",
+            "packageFormat": "codex-native",
+            "packageId": "review-helper",
+            "sourceId": "codex:tools:repository",
+            "revision": "b" * 40,
+            "workspaceId": "workspace-1",
+        }
+    )
+    assert source_request.revision == "b" * 40
 
 
 def test_user_copy_request_and_approval_proofs_are_bounded() -> None:
     payload = {
-        "provider": "claude-code",
-        "packageId": "document-skills",
-        "revision": "a" * 64,
+        "packageFormat": "claude-native",
+        "targetClient": "claude-code",
+        "catalogPluginId": "managed/document-skills",
+        "releaseRevision": "a" * 64,
         "workspaceId": "workspace-1",
     }
 
-    assert MarketplaceUserCopyRequest.model_validate(payload).revision == "a" * 64
+    assert (
+        MarketplaceUserCopyRequest.model_validate(payload).release_revision == "a" * 64
+    )
     for invalid in ("", "A" * 64, "a" * 63, "revision-1"):
         with pytest.raises(ValidationError):
-            MarketplaceUserCopyRequest.model_validate({**payload, "revision": invalid})
+            MarketplaceUserCopyRequest.model_validate(
+                {**payload, "releaseRevision": invalid}
+            )
 
     apply_payload = {
         **payload,
+        "expectedProfileDigest": "f" * 64,
         "expectedSourceDigest": "b" * 64,
+        "expectedProjectionDigest": "e" * 64,
         "expectedMaterializationDigest": "c" * 64,
+        "acceptPartialCopy": False,
         "overwriteApprovals": [
             {
                 "targetIdentity": "claude:skill:pdf",
@@ -98,12 +173,14 @@ def test_user_copy_request_and_approval_proofs_are_bounded() -> None:
         )
     assert (
         MarketplaceUserCopyRequest.model_validate(
-            {**payload, "packageId": "p" * 128}
-        ).package_id
-        == "p" * 128
+            {**payload, "catalogPluginId": "p" * 1024}
+        ).catalog_plugin_id
+        == "p" * 1024
     )
     with pytest.raises(ValidationError):
-        MarketplaceUserCopyRequest.model_validate({**payload, "packageId": "p" * 129})
+        MarketplaceUserCopyRequest.model_validate(
+            {**payload, "catalogPluginId": "p" * 1025}
+        )
     assert (
         MarketplaceUserCopyRequest.model_validate(
             {**payload, "workspaceId": "w" * 255}
@@ -165,47 +242,78 @@ def test_user_copy_conflicts_are_explicitly_overwritable() -> None:
                 "errorCode": "marketplace.user_copy.unknown",
             }
         )
+    assert (
+        MarketplaceUserCopyBlockingIssue.model_validate(
+            {
+                "resourceType": "apps",
+                "resourceId": "apps",
+                "sourceLocator": ".codex-plugin/plugin.json#/apps",
+                "errorCode": "marketplace.user_copy.unsupported_resource",
+            }
+        ).resource_type
+        == "apps"
+    )
+    assert MarketplaceUserCopyBlockingIssue.model_validate(
+        {
+            "resourceType": "structured",
+            "sourceLocator": ".app.json",
+            "errorCode": "marketplace.user_copy.source_missing",
+        }
+    ).error_code == "marketplace.user_copy.source_missing"
 
 
 def test_user_copy_models_reject_scalar_coercion_at_public_boundaries() -> None:
     request = {
-        "provider": "claude-code",
-        "packageId": "document-skills",
-        "revision": "a" * 64,
+        "packageFormat": "claude-native",
+        "targetClient": "claude-code",
+        "catalogPluginId": "managed/document-skills",
+        "releaseRevision": "a" * 64,
         "workspaceId": "workspace-1",
     }
     apply_request = {
         **request,
+        "expectedProfileDigest": "f" * 64,
         "expectedSourceDigest": "b" * 64,
+        "expectedProjectionDigest": "e" * 64,
         "expectedMaterializationDigest": "c" * 64,
+        "acceptPartialCopy": False,
         "overwriteApprovals": [],
     }
     preflight = {
         "status": "ready",
-        "provider": "claude-code",
-        "packageId": "document-skills",
+        "packageFormat": "claude-native",
+        "targetClient": "claude-code",
+        "catalogPluginId": "managed/document-skills",
+        "releaseRevision": "a" * 64,
         "workspaceId": "workspace-1",
         "sourceDigest": "b" * 64,
         "profileDigest": "c" * 64,
         "materializationDigest": "d" * 64,
+        "projectionDigest": "e" * 64,
         "resources": [],
+        "skippedResources": [],
         "conflicts": [],
         "blockingIssues": [],
     }
     result = {
         "status": "completed",
         "operationId": "1" * 32,
-        "provider": "claude-code",
-        "packageId": "document-skills",
+        "packageFormat": "claude-native",
+        "targetClient": "claude-code",
+        "catalogPluginId": "managed/document-skills",
+        "releaseRevision": "a" * 64,
         "workspaceId": "workspace-1",
         "createdCount": 1,
         "mergedCount": 0,
         "unchangedCount": 0,
         "overwrittenCount": 0,
+        "skippedCount": 0,
     }
 
     with pytest.raises(ValidationError):
-        MarketplaceUserCopyRequest.model_validate({**request, "revision": b"a" * 64})
+        MarketplaceUserCopyRequest.model_validate(
+            {**request, "releaseRevision": b"a" * 64}
+        )
     with pytest.raises(ValidationError):
         MarketplaceUserCopyApplyRequest.model_validate(
             {**apply_request, "expectedSourceDigest": b"b" * 64}
@@ -260,15 +368,32 @@ def test_user_copy_models_reject_scalar_coercion_at_public_boundaries() -> None:
         )
 
 
+def test_skipped_user_copy_resource_accepts_non_projectable_source_type() -> None:
+    skipped = MarketplaceSkippedUserCopyResource.model_validate(
+        {
+            "code": "unsupported-resource",
+            "resourceType": "apps",
+            "resourceId": "apps",
+            "sourceLocator": ".codex-plugin/plugin.json#/apps",
+        }
+    )
+
+    assert skipped.resource_type == "apps"
+
+
 def test_user_copy_preflight_status_matches_issues() -> None:
     base = {
-        "provider": "claude-code",
-        "packageId": "document-skills",
+        "packageFormat": "claude-native",
+        "targetClient": "claude-code",
+        "catalogPluginId": "managed/document-skills",
+        "releaseRevision": "a" * 64,
         "workspaceId": "workspace-1",
         "sourceDigest": "a" * 64,
         "profileDigest": "b" * 64,
         "materializationDigest": "c" * 64,
+        "projectionDigest": "d" * 64,
         "resources": [],
+        "skippedResources": [],
         "conflicts": [],
         "blockingIssues": [],
     }
@@ -290,12 +415,15 @@ def test_user_copy_preflight_status_matches_issues() -> None:
 def test_user_copy_preflight_bounds_total_resources_and_casefold_identities() -> None:
     base = {
         "status": "confirmation-required",
-        "provider": "claude-code",
-        "packageId": "document-skills",
+        "packageFormat": "claude-native",
+        "targetClient": "claude-code",
+        "catalogPluginId": "managed/document-skills",
+        "releaseRevision": "a" * 64,
         "workspaceId": "workspace-1",
         "sourceDigest": "a" * 64,
         "profileDigest": "b" * 64,
         "materializationDigest": "c" * 64,
+        "projectionDigest": "f" * 64,
         "resources": [
             {
                 "resourceType": "skill",
@@ -305,6 +433,7 @@ def test_user_copy_preflight_bounds_total_resources_and_casefold_identities() ->
                 "operation": "create",
             }
         ],
+        "skippedResources": [],
         "conflicts": [
             {
                 "resourceType": "skill",
@@ -343,13 +472,16 @@ def test_user_copy_apply_result_bounds_total_resource_count() -> None:
     payload = {
         "status": "completed",
         "operationId": "1" * 32,
-        "provider": "claude-code",
-        "packageId": "document-skills",
+        "packageFormat": "claude-native",
+        "targetClient": "claude-code",
+        "catalogPluginId": "managed/document-skills",
+        "releaseRevision": "a" * 64,
         "workspaceId": "workspace-1",
         "createdCount": 500,
         "mergedCount": 0,
         "unchangedCount": 0,
         "overwrittenCount": 0,
+        "skippedCount": 0,
     }
 
     assert MarketplaceUserCopyApplyResult.model_validate(payload).created_count == 500
@@ -384,8 +516,8 @@ def test_plugin_result_is_terminal_cli_output_and_rejects_lifecycle_fields() -> 
         ("marketplaceId", "Invalid-Marketplace"),
         ("workspaceId", ""),
         ("cliMessage", "x" * 4097),
-        ("stdout", "x" * 65537),
-        ("stderr", "x" * 65537),
+        ("stdout", "x" * 262145),
+        ("stderr", "x" * 262145),
     ),
 )
 def test_plugin_result_rejects_out_of_contract_fields(
@@ -424,7 +556,8 @@ def test_activity_exposes_terminal_audit_without_installation_projection() -> No
         {
             "id": "activity-1",
             "action": "copy",
-            "provider": "claude-code",
+            "packageFormat": "claude-native",
+            "targetClient": "claude-code",
             "packageId": "document-skills",
             "operationId": "operation-1",
             "workspaceId": "workspace-1",

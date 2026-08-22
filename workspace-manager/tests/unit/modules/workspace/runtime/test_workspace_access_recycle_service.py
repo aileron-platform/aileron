@@ -10,10 +10,7 @@ from sqlalchemy import select
 
 from app.config.settings import get_settings
 from app.db import models as db_models
-from app.modules.workspace.orchestrator.models import (
-    RuntimeContext,
-    RuntimeInfo,
-)
+from app.modules.workspace.orchestrator.models import RuntimeContext
 from app.modules.workspace.runtime.provisioning import (
     WorkspaceExecutionPlaneIdentity,
     WorkspaceExecutionPlanePlan,
@@ -23,8 +20,8 @@ from app.modules.workspace.access_recycle import (
 )
 from app.modules.workspace.custom_resources import (
     WorkspaceCustomResourceExecutionPlan,
-    WorkspaceCustomResourceNotReadyError,
 )
+from app.modules.workspace.execution_plane import GenerationOutcome, GenerationState
 from app.modules.workspace.runtime.database import RuntimeDatabaseCredential
 from app.modules.workspace.runtime.job_execution import WorkspaceRuntimeJobRunResult
 
@@ -38,7 +35,7 @@ def _database_credential(workspace_id: str, runtime_instance_id: str):
         role_prefix="wsr_test_",
         password="scoped-password",
         database_url="postgresql://runtime:scoped@postgres/app",
-        secret_name="workspace-runtime-db-test",
+        secret_name="workspace-generation-0123456789abcdef",
     )
 
 
@@ -123,14 +120,6 @@ def _seed_access_job(
     return workspace_id, job_id
 
 
-def _runtime_info(identifier: str, port: int) -> RuntimeInfo:
-    return RuntimeInfo(
-        identifier=identifier,
-        internal_url=f"http://{identifier}:{port}",
-        extra_info={"container_name": identifier},
-    )
-
-
 def _plan(workspace: db_models.Workspace) -> WorkspaceExecutionPlanePlan:
     runtime_instance_id = str(uuid4())
     workspace.runtime_control_instance_id = runtime_instance_id
@@ -197,6 +186,31 @@ def _service(
         assertion_service_factory=MagicMock(),
     )
     service.best_effort_drain = MagicMock()
+
+    def reconcile(claim, *, attempt):
+        assert claim.runtime_instance_id == attempt.runtime_instance_id
+        assert claim.identity.runtime_instance_id != claim.runtime_instance_id
+        claim.assert_owned()
+        return GenerationOutcome(
+            state=GenerationState.READY,
+            workspace_id=claim.workspace_id,
+            generation_id=claim.runtime_instance_id,
+            runtime_url=f"http://runtime-{claim.runtime_instance_id}:3002",
+        )
+
+    def stage_ready(workspace, outcome):
+        generation_id = outcome.generation_id
+        workspace.runtime_instance_id = generation_id
+        workspace.runtime_control_instance_id = generation_id
+        workspace.runtime_container_id = f"runtime-{generation_id}"
+        workspace.browser_instance_id = generation_id
+        workspace.browser_container_id = f"browser-{generation_id}"
+        workspace.canvas_instance_id = generation_id
+        workspace.canvas_container_id = f"canvas-{generation_id}"
+
+    service.reconcile = MagicMock(side_effect=reconcile)
+    service._stage_ready = MagicMock(side_effect=stage_ready)
+    service._discard_ready = MagicMock()
     return service
 
 
@@ -211,33 +225,11 @@ def test_access_recycle_updates_observed_only_after_complete_generation(
             workspace_id,
         ).runtime_instance_id
         runtime_provision = MagicMock()
-        runtime_provision.prepare_execution_plane.side_effect = (
+        runtime_provision._prepare_generation.side_effect = (
             lambda workspace, **_: _plan(workspace)
         )
-        runtime_result = _runtime_info("runtime-new", 3002)
-
-        def apply_runtime(plan, *, assert_claim):
-            assert not db.in_transaction()
-            with session_factory() as state_db:
-                state_workspace = state_db.get(db_models.Workspace, workspace_id)
-                assert state_workspace.runtime_instance_id == plan.runtime_instance_id
-                assert (
-                    state_workspace.runtime_control_instance_id
-                    == plan.runtime_instance_id
-                )
-                assert state_workspace.runtime_control_token_hash == "b" * 64
-            assert_claim()
-            return runtime_result
-
-        runtime_provision.apply_prepared_runtime_component.side_effect = apply_runtime
-
-        def stage(workspace, *, component, result):
-            assert component == "runtime"
-            workspace.runtime_container_id = result.identifier
-
-        runtime_provision.apply_component_result.side_effect = stage
-
-        result = _service(db, runtime_provision).reconcile_job(job_id)
+        service = _service(db, runtime_provision)
+        result = service.reconcile_job(job_id)
 
     assert result == WorkspaceRuntimeJobRunResult.SUCCEEDED
     with session_factory() as db:
@@ -255,9 +247,11 @@ def test_access_recycle_updates_observed_only_after_complete_generation(
         assert workspace.runtime_access_observed_revision == 1
         assert workspace.runtime_instance_id != old_instance_id
         assert workspace.runtime_instance_id == workspace.runtime_control_instance_id
-        assert workspace.runtime_container_id == "runtime-new"
-        assert workspace.browser_container_id == "browser-old"
-        assert workspace.canvas_container_id == "canvas-old"
+        assert workspace.runtime_instance_id == workspace.browser_instance_id
+        assert workspace.runtime_instance_id == workspace.canvas_instance_id
+        assert old_instance_id not in workspace.runtime_container_id
+        assert old_instance_id not in workspace.browser_container_id
+        assert old_instance_id not in workspace.canvas_container_id
         assert workspace.runtime_desired_revision == 2
         assert workspace.runtime_observed_revision == 2
         assert workspace.knowledge_base_mount_desired_revision == 2
@@ -267,7 +261,7 @@ def test_access_recycle_updates_observed_only_after_complete_generation(
         }
 
 
-def test_kubernetes_access_recycle_uses_custom_resource_execution_api(
+def test_kubernetes_access_recycle_uses_provider_neutral_generation_boundary(
     test_app,
 ) -> None:
     _, session_factory = test_app
@@ -282,59 +276,27 @@ def test_kubernetes_access_recycle_uses_custom_resource_execution_api(
         ).runtime_instance_id
         runtime_provision = MagicMock()
         custom_resources = MagicMock()
-        custom_resources.prepare_execution_plane.side_effect = (
+        custom_resources._prepare_generation.side_effect = (
             lambda workspace, **_: _custom_resource_plan(workspace)
         )
-
-        def apply(
-            workspace,
-            *,
-            component,
-            assert_claim,
-            runtime_plan,
-            max_attempts,
-        ):
-            assert not db.in_transaction()
-            assert component == "runtime"
-            assert isinstance(runtime_plan, WorkspaceCustomResourceExecutionPlan)
-            assert max_attempts == 1
-            with session_factory() as state_db:
-                state_workspace = state_db.get(db_models.Workspace, workspace_id)
-                assert (
-                    state_workspace.runtime_instance_id
-                    == runtime_plan.runtime_instance_id
-                )
-                assert (
-                    state_workspace.runtime_control_instance_id
-                    == runtime_plan.runtime_instance_id
-                )
-                assert state_workspace.runtime_control_token_hash == "b" * 64
-            assert_claim()
-
-        custom_resources.apply_component_desired_revision.side_effect = apply
-
-        result = _service(
+        service = _service(
             db,
             runtime_provision,
             custom_resources,
-        ).reconcile_job(job_id)
+        )
+        result = service.reconcile_job(job_id)
 
     assert result == WorkspaceRuntimeJobRunResult.SUCCEEDED
-    custom_resources.prepare_execution_plane.assert_called_once()
-    custom_resources.apply_component_desired_revision.assert_called_once()
-    custom_resources.apply_execution_plane.assert_not_called()
-    custom_resources.apply_execution_plane_result.assert_not_called()
-    custom_resources.abandon_execution_plane_generation.assert_not_called()
-    runtime_provision.prepare_execution_plane.assert_not_called()
-    runtime_provision.apply_prepared_runtime_component.assert_not_called()
+    service.reconcile.assert_called_once()
+    service._stage_ready.assert_called_once()
+    service._discard_ready.assert_not_called()
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
         assert workspace.runtime_access_observed_revision == 1
         assert workspace.runtime_instance_id != old_instance_id
         assert workspace.runtime_instance_id == workspace.runtime_control_instance_id
-        assert workspace.runtime_container_id == "runtime-old"
-        assert workspace.browser_container_id == "browser-old"
-        assert workspace.canvas_container_id == "canvas-old"
+        assert workspace.runtime_instance_id == workspace.browser_instance_id
+        assert workspace.runtime_instance_id == workspace.canvas_instance_id
         assert workspace.runtime_desired_revision == 2
         assert workspace.runtime_observed_revision == 2
 
@@ -344,13 +306,19 @@ def test_access_recycle_failure_enters_fail_closed_lifecycle_error(test_app) -> 
     workspace_id, job_id = _seed_access_job(session_factory)
     with session_factory() as db:
         runtime_provision = MagicMock()
-        runtime_provision.prepare_execution_plane.side_effect = (
+        runtime_provision._prepare_generation.side_effect = (
             lambda workspace, **_: _plan(workspace)
         )
-        runtime_provision.apply_prepared_runtime_component.side_effect = RuntimeError(
-            "sensitive failure"
+        service = _service(db, runtime_provision)
+        service.reconcile.side_effect = None
+        service.reconcile.return_value = GenerationOutcome(
+            state=GenerationState.FAILED,
+            workspace_id=workspace_id,
+            generation_id="failed-generation",
+            error_code="WORKSPACE_RUNTIME_ACCESS_RECYCLE_FAILED",
+            _error=RuntimeError("sensitive failure"),
         )
-        result = _service(db, runtime_provision).reconcile_job(job_id)
+        result = service.reconcile_job(job_id)
 
     assert result == WorkspaceRuntimeJobRunResult.FAILED
     with session_factory() as db:
@@ -374,7 +342,7 @@ def test_access_recycle_failure_enters_fail_closed_lifecycle_error(test_app) -> 
         }
 
 
-def test_kubernetes_stale_access_evidence_never_advances_observed_revision(
+def test_failed_kubernetes_generation_never_advances_observed_revision(
     test_app,
 ) -> None:
     _, session_factory = test_app
@@ -385,20 +353,19 @@ def test_kubernetes_stale_access_evidence_never_advances_observed_revision(
     with session_factory() as db:
         runtime_provision = MagicMock()
         custom_resources = MagicMock()
-        custom_resources.prepare_execution_plane.side_effect = (
+        custom_resources._prepare_generation.side_effect = (
             lambda workspace, **_: _custom_resource_plan(workspace)
         )
-        custom_resources.apply_component_desired_revision.side_effect = (
-            WorkspaceCustomResourceNotReadyError(
-                "Kubernetes runtime access revision is stale"
-            )
+        service = _service(db, runtime_provision, custom_resources)
+        service.reconcile.side_effect = None
+        service.reconcile.return_value = GenerationOutcome(
+            state=GenerationState.FAILED,
+            workspace_id=workspace_id,
+            generation_id="stale-generation",
+            error_code="WORKSPACE_CUSTOM_RESOURCE_NOT_READY",
+            _error=RuntimeError("Kubernetes generation evidence is stale"),
         )
-
-        result = _service(
-            db,
-            runtime_provision,
-            custom_resources,
-        ).reconcile_job(job_id)
+        result = service.reconcile_job(job_id)
 
     assert result == WorkspaceRuntimeJobRunResult.FAILED
     with session_factory() as db:
@@ -450,7 +417,7 @@ def test_stale_access_target_is_replaced_without_side_effect(test_app) -> None:
         result = _service(db, runtime_provision).reconcile_job(stale_job_id)
 
     assert result == WorkspaceRuntimeJobRunResult.SUPERSEDED
-    runtime_provision.prepare_execution_plane.assert_not_called()
+    runtime_provision._prepare_generation.assert_not_called()
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
         stale_job = db.get(db_models.WorkspaceRuntimeJob, stale_job_id)
@@ -478,4 +445,4 @@ def test_inactive_workspace_access_recycle_remains_queued(test_app) -> None:
     assert result == WorkspaceRuntimeJobRunResult.NOT_CLAIMED
     with session_factory() as db:
         assert db.get(db_models.WorkspaceRuntimeJob, job_id).status == "queued"
-    runtime_provision.prepare_execution_plane.assert_not_called()
+    runtime_provision._prepare_generation.assert_not_called()

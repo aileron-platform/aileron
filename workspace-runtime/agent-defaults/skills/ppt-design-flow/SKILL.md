@@ -66,7 +66,7 @@ phases/60-review.md
 
 If unsure, list them first:
 ```bash
-ls /workspace/.codex/skills/ppt-design-flow/phases
+ls phases
 ```
 
 `assets/canvas/build.py --phase=...` refuses to run when preconditions are unmet; its stderr names the missing gate and the exact `stage.py` command to run next. Always pass `--workspace /workspace` to `build.py` as well.

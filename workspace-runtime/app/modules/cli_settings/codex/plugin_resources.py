@@ -478,7 +478,7 @@ def run_codex_plugin_cli(
     )
 
 
-def clear_codex_provider_inventory_cache(
+def clear_codex_plugin_inventory_cache(
     *,
     codex_home: Path | None = None,
     cwd: Path | None = None,

@@ -102,13 +102,9 @@ func NewConnectivityEvidenceGateway(
 		if _, err := decodeTURNURLs(server.URLs); err != nil {
 			return nil, fmt.Errorf("external probe ICE server %d requires TURN URLs", index)
 		}
-		if profile.CredentialIssuer.Kind == TURNCredentialIssuerStaticSecret &&
-			(strings.TrimSpace(server.Username) == "" || strings.TrimSpace(server.Credential) == "") {
-			return nil, fmt.Errorf("external probe ICE server %d requires username and credential", index)
-		}
 	}
 	turnRESTSharedSecret = strings.TrimSpace(turnRESTSharedSecret)
-	if profile.CredentialIssuer.Kind == TURNCredentialIssuerTURNREST && turnRESTSharedSecret == "" {
+	if turnRESTSharedSecret == "" {
 		return nil, fmt.Errorf("TURN REST shared secret is required")
 	}
 	var agentTokens map[string]string

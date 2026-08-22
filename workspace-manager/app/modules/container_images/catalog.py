@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.config.settings import get_settings
 
@@ -36,15 +36,8 @@ class ContainerImageConfig(BaseModel):
 
     version: str = Field(default="1.0", description="Configuration file version")
     default_image: str = Field(..., description="Default image ID")
-    browser_image: str = Field(
-        default="ailerondocker/workspace-chrome:dev",
-        description="Browser container image",
-    )
-    canvas_image: str = Field(
-        default="ailerondocker/workspace-canvas:dev",
-        description="Canvas container image",
-    )
     images: List[ContainerImage] = Field(default_factory=list, description="Image list")
+    model_config = ConfigDict(extra="forbid")
 
 
 class ContainerImageService:
@@ -54,12 +47,18 @@ class ContainerImageService:
         self,
         config_path: Optional[str] = None,
         runtime_image_override: str = "",
+        *,
+        browser_image: str,
+        canvas_image: str,
     ):
         """
         Initialize container image service
 
         Args:
             config_path: Configuration file path, use default path if not provided
+            runtime_image_override: Deployment-selected default Runtime image
+            browser_image: Deployment-selected Browser image
+            canvas_image: Deployment-selected Canvas image
         """
         if config_path is None:
             # Default configuration file path
@@ -67,6 +66,8 @@ class ContainerImageService:
 
         self.config_path = Path(config_path)
         self.runtime_image_override = runtime_image_override.strip()
+        self.browser_image = browser_image.strip()
+        self.canvas_image = canvas_image.strip()
         self._config: Optional[ContainerImageConfig] = None
 
     def _load_config(self) -> ContainerImageConfig:
@@ -167,11 +168,15 @@ class ContainerImageService:
 
     def get_browser_image_name(self) -> str:
         """Get browser container image name"""
-        return self.config.browser_image
+        if not self.browser_image:
+            raise ValueError("WORKSPACE_BROWSER_IMAGE must not be empty")
+        return self.browser_image
 
     def get_canvas_image_name(self) -> str:
         """Get canvas container image name"""
-        return self.config.canvas_image
+        if not self.canvas_image:
+            raise ValueError("WORKSPACE_CANVAS_IMAGE must not be empty")
+        return self.canvas_image
 
     def validate_image_id(self, image_id: str) -> bool:
         """
@@ -189,6 +194,9 @@ class ContainerImageService:
 @lru_cache()
 def get_container_image_service() -> ContainerImageService:
     """Get container image service instance (singleton)"""
+    settings = get_settings()
     return ContainerImageService(
-        runtime_image_override=get_settings().WORKSPACE_RUNTIME_IMAGE,
+        runtime_image_override=settings.WORKSPACE_RUNTIME_IMAGE,
+        browser_image=settings.WORKSPACE_BROWSER_IMAGE,
+        canvas_image=settings.WORKSPACE_CANVAS_IMAGE,
     )

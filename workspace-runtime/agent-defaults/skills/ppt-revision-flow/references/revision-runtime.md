@@ -1,6 +1,6 @@
 # Revision Runtime
 
-`ppt-revision-flow` uses the shared runtime in `/workspace/.codex/skills/ppt-design-flow/`.
+`ppt-revision-flow` uses the shared runtime in the sibling skill directory (`../../ppt-design-flow/` relative to this file).
 
 Shared files:
 

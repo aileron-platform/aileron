@@ -7,8 +7,10 @@ import os
 import pytest
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch, mock_open
 
+import app.modules.internal.commands as internal_commands
 from app.modules.internal.commands import InternalService
 from app.modules.internal.models import (
     SSHKeysRequest,
@@ -26,7 +28,9 @@ def internal_service(tmp_path):
     """Internal service fixture with mocked paths"""
     with patch("app.modules.internal.commands.Path.home", return_value=tmp_path):
         with patch("app.modules.internal.commands.get_settings") as mock_settings:
-            mock_settings.return_value = MagicMock(AILERON_WORKSPACE_ID="test-workspace")
+            mock_settings.return_value = MagicMock(
+                AILERON_WORKSPACE_ID="test-workspace"
+            )
             service = InternalService()
             service.home_dir = tmp_path
             service.ssh_dir = tmp_path / ".ssh"
@@ -55,7 +59,9 @@ class TestInternalServiceInitialization:
         """Test service initialization"""
         # Act
         with patch("app.modules.internal.commands.get_settings") as mock_settings:
-            mock_settings.return_value = MagicMock(AILERON_WORKSPACE_ID="test-workspace")
+            mock_settings.return_value = MagicMock(
+                AILERON_WORKSPACE_ID="test-workspace"
+            )
             service = InternalService()
 
         # Assert
@@ -522,6 +528,67 @@ class TestSetupCodex:
         status = internal_service._check_codex_status()
 
         assert status["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_codex_account_sdk_paths_use_bundled_binary_default(
+        self,
+        internal_service,
+        tmp_paths,
+        monkeypatch,
+    ):
+        captured_configs = []
+        requests = []
+        instances = []
+
+        class FakeAppServerClient:
+            async def request(self, method, params, *, response_model):
+                requests.append((method, params, response_model))
+                if method == "account/login/start":
+                    return SimpleNamespace(
+                        root=SimpleNamespace(
+                            login_id="login-1",
+                            verification_url="https://example.test/device",
+                            user_code="CODE-1",
+                            type="chatgptDeviceCode",
+                        )
+                    )
+                if method == "account/read":
+                    return SimpleNamespace(account=None)
+                return SimpleNamespace()
+
+        class CapturingAsyncCodex:
+            def __init__(self, *, config):
+                captured_configs.append(config)
+                instances.append(self)
+                self._client = FakeAppServerClient()
+                self.initialized = False
+                self.closed = False
+
+            async def _ensure_initialized(self):
+                self.initialized = True
+
+            async def close(self):
+                self.closed = True
+
+        monkeypatch.setattr(internal_commands, "AsyncCodex", CapturingAsyncCodex)
+        monkeypatch.setattr(internal_commands, "_codex_login_sessions", {})
+        internal_service.codex_auth_dir = tmp_paths["codex"]
+
+        login = await internal_service.start_codex_login()
+        status = await internal_service.get_codex_login_status()
+        logout = await internal_service.logout_codex()
+
+        assert login["loginId"] == "login-1"
+        assert status == {"loginStatus": "notConnected", "account": None}
+        assert logout == {"status": "loggedOut"}
+        assert [config.codex_bin for config in captured_configs] == [None, None, None]
+        assert [method for method, _params, _model in requests] == [
+            "account/login/start",
+            "account/read",
+            "account/logout",
+        ]
+        assert all(instance.initialized for instance in instances)
+        assert all(instance.closed for instance in instances)
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_api_key(self, internal_service, tmp_paths):

@@ -56,6 +56,25 @@ def test_fastapi_restart_tears_down_its_whole_process_group(config_name: str) ->
 
 @pytest.mark.parametrize(
     "config_name",
+    ["supervisord.conf", "supervisord.dev.conf", "supervisord.kubernetes.conf"],
+)
+def test_supervised_service_logs_are_forwarded_to_container_stdout(
+    config_name: str,
+) -> None:
+    root = Path(__file__).resolve().parents[4]
+    parser = ConfigParser(interpolation=None)
+    parser.read(root / config_name)
+
+    for program in ("fastapi", "celery-worker", "celery-beat", "celery-flower"):
+        section = parser[f"program:{program}"]
+        assert section.get("redirect_stderr") == "true"
+        assert section.get("stdout_logfile") == "/dev/fd/1"
+        assert section.get("stdout_logfile_maxbytes") == "0"
+        assert "stderr_logfile" not in section
+
+
+@pytest.mark.parametrize(
+    "config_name",
     ["supervisord.conf", "supervisord.dev.conf"],
 )
 def test_runtime_terminal_supervisor_does_not_restore_removed_session_state(

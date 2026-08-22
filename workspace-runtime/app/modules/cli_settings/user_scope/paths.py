@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+from hashlib import sha256
 from pathlib import Path
 
 from app.config.settings import get_workspace_path
@@ -177,6 +179,8 @@ class UserScopePathResolver:
     """Resolve typed logical locators and runtime paths from one user home."""
 
     user_home: Path = field(default_factory=runtime_user_home)
+    codex_home: Path | None = None
+    claude_config_dir: Path | None = None
 
     def resolve_root(self, agent: UserScopeAgent | str) -> UserScopeLocation:
         resolved_agent = UserScopeAgent(agent)
@@ -210,12 +214,46 @@ class UserScopePathResolver:
         *,
         resource: UserScopeResource | None = None,
     ) -> UserScopeLocation:
+        runtime_path = self.user_home / relative_path
+        logical_locator = f"~/{relative_path.as_posix()}"
+        if (
+            agent is UserScopeAgent.CODEX
+            and self.codex_home is not None
+            and relative_path.parts
+            and relative_path.parts[0] == ".codex"
+        ):
+            runtime_path = self.codex_home.joinpath(*relative_path.parts[1:])
+            logical_locator = f"$CODEX_HOME/{Path(*relative_path.parts[1:]).as_posix()}"
+        elif agent is UserScopeAgent.CLAUDE_CODE and self.claude_config_dir is not None:
+            if relative_path == Path(".claude"):
+                runtime_path = self.claude_config_dir
+                logical_locator = "$CLAUDE_CONFIG_DIR"
+            elif relative_path.parts and relative_path.parts[0] == ".claude":
+                suffix = Path(*relative_path.parts[1:])
+                runtime_path = self.claude_config_dir / suffix
+                logical_locator = f"$CLAUDE_CONFIG_DIR/{suffix.as_posix()}"
+            elif relative_path == Path(".claude.json"):
+                runtime_path = self.claude_config_dir / ".claude.json"
+                logical_locator = "$CLAUDE_CONFIG_DIR/.claude.json"
         return UserScopeLocation(
             agent=agent,
             resource=resource,
-            runtime_path=self.user_home / relative_path,
-            logical_locator=f"~/{relative_path.as_posix()}",
+            runtime_path=runtime_path,
+            logical_locator=logical_locator,
         )
+
+
+def target_client_state_root_id(
+    target_client: str,
+    *,
+    paths: UserScopePathResolver,
+) -> str:
+    """Return an opaque proof for one client's effective user-scope root."""
+
+    agent = UserScopeAgent(target_client)
+    root = paths.resolve_root(agent).runtime_path.resolve(strict=False)
+    identity = f"{target_client}\0{root.as_posix()}".encode("utf-8")
+    return f"tcsr_{sha256(identity).hexdigest()}"
 
 
 @dataclass(frozen=True)
@@ -294,11 +332,15 @@ class CodexPathResolver:
 
     user_home: Path = field(default_factory=runtime_user_home)
     workspace_root: Path = Path("/workspace")
+    codex_home_override: Path | None = None
 
     @property
     def codex_home(self) -> Path:
         return (
-            UserScopePathResolver(self.user_home)
+            UserScopePathResolver(
+                self.user_home,
+                codex_home=self.codex_home_override,
+            )
             .resolve_root(UserScopeAgent.CODEX)
             .runtime_path
         )
@@ -308,7 +350,10 @@ class CodexPathResolver:
         codex_resource = CodexResource(resource)
         if codex_layer == CodexLayer.USER:
             return (
-                UserScopePathResolver(self.user_home)
+                UserScopePathResolver(
+                    self.user_home,
+                    codex_home=self.codex_home_override,
+                )
                 .resolve(
                     UserScopeAgent.CODEX,
                     _CODEX_USER_RESOURCES[codex_resource],
@@ -331,15 +376,25 @@ class CodexPathResolver:
 def get_user_scope_path_resolver() -> UserScopePathResolver:
     """Return a resolver bound to the current runtime user home."""
 
-    return UserScopePathResolver(user_home=runtime_user_home())
+    configured_codex_home = os.environ.get("CODEX_HOME")
+    configured_claude_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+    return UserScopePathResolver(
+        user_home=runtime_user_home(),
+        codex_home=(Path(configured_codex_home) if configured_codex_home else None),
+        claude_config_dir=(
+            Path(configured_claude_dir) if configured_claude_dir else None
+        ),
+    )
 
 
 def get_codex_path_resolver() -> CodexPathResolver:
     """Return the runtime Codex path resolver."""
 
+    user_paths = get_user_scope_path_resolver()
     return CodexPathResolver(
-        user_home=runtime_user_home(),
+        user_home=user_paths.user_home,
         workspace_root=Path(get_workspace_path()),
+        codex_home_override=user_paths.codex_home,
     )
 
 

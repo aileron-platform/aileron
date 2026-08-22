@@ -294,10 +294,10 @@ class SettingsService:
     def _invalidate_provider_cache(workspace_id: str) -> None:
         from app.modules.cli_settings.cache_api import clear_agent_settings_cache
         from app.modules.marketplace_operations.gate import (
-            get_marketplace_provider_gate,
+            get_marketplace_target_client_gate,
         )
 
-        get_marketplace_provider_gate().advance_generation("claude-code")
+        get_marketplace_target_client_gate().advance_generation("claude-code")
         clear_agent_settings_cache(
             provider="claude-code",
             workspace_id=workspace_id,

@@ -14,36 +14,55 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
 from app.config.settings import get_settings
+from app.core.strings import snake_case
 from app.db import models as db_models
+from app.modules.audit.events import AuditEventService
+from app.modules.authorization.actor import AuthorizationActor
 from app.modules.authorization.operation_policy import (
     AuthorizationOperationPolicy,
     OperationId,
     allowed_workspace_operations,
 )
-from app.modules.authorization.actor import AuthorizationActor
 from app.modules.authorization.resource_access import (
     ResourceAccessRole,
     ResourceAccessSource,
 )
 from app.modules.identity.user_authorization_policy import UserAuthorizationPolicy
+from app.modules.settings.models import UserSettings
 from app.modules.workspace.access_repository import (
     WorkspaceAccessResolver,
     visible_workspace_ids,
 )
+from app.modules.workspace.advisory_lock import (
+    acquire_workspace_transaction_lock,
+)
+from app.modules.workspace.browser_credentials import (
+    BROWSER_CREDENTIAL_ALGORITHM,
+    BrowserCredentialService,
+)
+from app.modules.workspace.capabilities import (
+    WORKSPACE_TOOL_CAPABILITY_IDS,
+    WorkspaceCapabilities,
+    build_capabilities_from_settings,
+    reconcile_workspace_capabilities,
+)
+from app.modules.workspace.firewall_command_repository import (
+    WorkspaceFirewallSyncCommandRepository,
+)
 from app.modules.workspace.firewall_contract import FirewallConfig
 from app.modules.workspace.models import (
-    Pagination,
     BrowserConnectivityStatus,
+    Pagination,
     RuntimeStatus,
     WorkspaceAccessSource,
     WorkspaceBootstrapStatus,
     WorkspaceComponents,
     WorkspaceComponentStatus,
     WorkspaceCreateRequest,
-    WorkspaceReadDetail,
     WorkspaceKnowledgeBaseAttachment,
     WorkspaceListResponse,
     WorkspaceOwner,
+    WorkspaceReadDetail,
     WorkspaceRuntimeJobSummary,
     WorkspaceSensitiveEnvVar,
     WorkspaceSensitiveSettings,
@@ -57,29 +76,12 @@ from app.modules.workspace.models import (
     WorkspaceUpdateRequest,
 )
 from app.modules.workspace.public_urls import WorkspacePublicUrls
-from app.modules.workspace.capabilities import (
-    WorkspaceCapabilities,
-    build_capabilities_from_settings,
-)
-from app.modules.settings.models import UserSettings
-from app.modules.workspace.firewall_command_repository import (
-    WorkspaceFirewallSyncCommandRepository,
-)
+from app.modules.workspace.runtime.command_auth import runtime_command_headers
 from app.modules.workspace.runtime.job_repository import (
     RUNTIME_RESTART,
     WORKSPACE_START,
     WorkspaceRuntimeJobRepository,
 )
-from app.modules.audit.events import AuditEventService
-from app.modules.workspace.browser_credentials import (
-    BROWSER_CREDENTIAL_ALGORITHM,
-    BrowserCredentialService,
-)
-from app.modules.workspace.advisory_lock import (
-    acquire_workspace_transaction_lock,
-)
-from app.modules.workspace.runtime.command_auth import runtime_command_headers
-from app.core.strings import snake_case
 
 if TYPE_CHECKING:
     from app.modules.automation.repository import RunningCancellation
@@ -107,6 +109,16 @@ class WorkspaceError(ValueError):
         super().__init__(message)
         self.code = code
         self.params = params or {}
+
+
+class WorkspaceCapabilitiesSelectionError(WorkspaceError):
+    """A capability snapshot cannot serve the workspace's selected tools."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Capabilities snapshot does not define a selected workspace tool",
+            code="WORKSPACE_CAPABILITIES_SELECTION_MISMATCH",
+        )
 
 
 class WorkspaceNotFoundError(WorkspaceError):
@@ -144,6 +156,49 @@ class WorkspaceAuthorizationContext:
     access_role: ResourceAccessRole
     access_source: WorkspaceAccessSource
     capabilities: WorkspaceCapabilities
+
+
+@dataclass(frozen=True)
+class WorkspaceCapabilitiesSyncTarget:
+    """Post-commit target for converging a running Docker Runtime."""
+
+    workspace_id: str
+    runtime_url: str
+
+
+@dataclass
+class WorkspaceUpdatePostCommitEffects:
+    """Effects discovered while applying one locked workspace update."""
+
+    capabilities_sync_target: WorkspaceCapabilitiesSyncTarget | None = None
+
+
+def _require_workspace_capabilities_selection(
+    capabilities: object,
+    agentic_tools: object,
+) -> None:
+    try:
+        snapshot = WorkspaceCapabilities.model_validate(capabilities)
+    except ValueError as exc:
+        raise WorkspaceCapabilitiesSelectionError() from exc
+
+    selected_capability_ids = (
+        {
+            WORKSPACE_TOOL_CAPABILITY_IDS[tool]
+            for tool in agentic_tools
+            if isinstance(tool, str) and tool in WORKSPACE_TOOL_CAPABILITY_IDS
+        }
+        if isinstance(agentic_tools, list)
+        else set()
+    )
+    snapshot_tool_ids = {tool.id for tool in snapshot.tools}
+    if not selected_capability_ids.issubset(snapshot_tool_ids):
+        raise WorkspaceCapabilitiesSelectionError()
+
+    try:
+        reconcile_workspace_capabilities(snapshot, agentic_tools)
+    except ValueError as exc:
+        raise WorkspaceCapabilitiesSelectionError() from exc
 
 
 class WorkspaceService:
@@ -279,9 +334,15 @@ class WorkspaceService:
             workspace_id,
             OperationId.WORKSPACE_SENSITIVE_SETTINGS_MANAGE,
         )
-        if workspace.agentic_capabilities is None:
-            return build_capabilities_from_settings(UserSettings())
-        return WorkspaceCapabilities.model_validate(workspace.agentic_capabilities)
+        capabilities = (
+            build_capabilities_from_settings(UserSettings())
+            if workspace.agentic_capabilities is None
+            else WorkspaceCapabilities.model_validate(workspace.agentic_capabilities)
+        )
+        return reconcile_workspace_capabilities(
+            capabilities,
+            workspace.agentic_tools,
+        )
 
     def get_sensitive_settings(
         self,
@@ -356,6 +417,10 @@ class WorkspaceService:
             if workspace.agentic_capabilities is None
             else WorkspaceCapabilities.model_validate(workspace.agentic_capabilities)
         )
+        capabilities = reconcile_workspace_capabilities(
+            capabilities,
+            workspace.agentic_tools,
+        )
         return WorkspaceAuthorizationContext(
             access_role=access.access_role,
             access_source=access.access_source,
@@ -392,6 +457,10 @@ class WorkspaceService:
                 actor,
                 workspace_id,
                 OperationId.WORKSPACE_SENSITIVE_SETTINGS_MANAGE,
+            )
+            _require_workspace_capabilities_selection(
+                capabilities,
+                workspace.agentic_tools,
             )
             snapshot = capabilities.model_dump(by_alias=True)
             workspace.agentic_capabilities = snapshot
@@ -575,7 +644,10 @@ class WorkspaceService:
         *,
         actor: AuthorizationActor,
         correlation_id: str | None = None,
+        post_commit_effects: WorkspaceUpdatePostCommitEffects | None = None,
     ) -> Optional[WorkspaceReadDetail]:
+        if post_commit_effects is not None:
+            post_commit_effects.capabilities_sync_target = None
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if workspace is None:
             return None
@@ -595,7 +667,20 @@ class WorkspaceService:
             )
 
         previous_worktree_subdir = workspace.worktree_subdir
+        previous_agentic_tools = list(workspace.agentic_tools or [])
         data = payload.model_dump(exclude_unset=True, by_alias=True)
+        agentic_tools_changed = (
+            "agenticTools" in data and data["agenticTools"] != previous_agentic_tools
+        )
+        if agentic_tools_changed and workspace.agentic_capabilities is not None:
+            try:
+                _require_workspace_capabilities_selection(
+                    workspace.agentic_capabilities,
+                    data["agenticTools"],
+                )
+            except WorkspaceCapabilitiesSelectionError:
+                self.db.rollback()
+                raise
         kubernetes_runtime_fields = {
             "runtime",
             "agenticTools",
@@ -662,6 +747,24 @@ class WorkspaceService:
         workspace.updated_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(workspace)
+        runtime_url = workspace.runtime_internal_url
+        runtime_instance_id = workspace.runtime_instance_id
+        if (
+            post_commit_effects is not None
+            and agentic_tools_changed
+            and workspace.provisioner == "docker"
+            and workspace.runtime_status == "running"
+            and isinstance(runtime_url, str)
+            and bool(runtime_url.strip())
+            and isinstance(runtime_instance_id, str)
+            and bool(runtime_instance_id.strip())
+        ):
+            post_commit_effects.capabilities_sync_target = (
+                WorkspaceCapabilitiesSyncTarget(
+                    workspace_id=workspace.id,
+                    runtime_url=runtime_url,
+                )
+            )
         if (
             "worktreeSubdir" in data
             and workspace.worktree_subdir != previous_worktree_subdir
@@ -823,8 +926,9 @@ class WorkspaceService:
             workspace_id,
             OperationId.WORKSPACE_ACCESS_MANAGE,
         )
-        if payload.target_type == "user" and not UserAuthorizationPolicy().is_authorized(
-            target
+        if (
+            payload.target_type == "user"
+            and not UserAuthorizationPolicy().is_authorized(target)
         ):
             raise WorkspaceError(
                 WORKSPACE_SHARE_TARGET_NOT_FOUND_MESSAGE,
@@ -1016,8 +1120,8 @@ class WorkspaceService:
         root_correlation_id: str,
         reason: str,
     ) -> list[RunningCancellation]:
-        from app.modules.automation.repository import AutomationRepository
         from app.modules.automation.execution import AutomationExecutionService
+        from app.modules.automation.repository import AutomationRepository
 
         service = AutomationExecutionService(AutomationRepository(self.db))
         cancellations = service.converge_principal_authorization_in_transaction(
@@ -1058,8 +1162,8 @@ class WorkspaceService:
     ) -> None:
         if not cancellations:
             return
-        from app.modules.automation.repository import AutomationRepository
         from app.modules.automation.execution import AutomationExecutionService
+        from app.modules.automation.repository import AutomationRepository
 
         service = AutomationExecutionService(AutomationRepository(self.db))
         service.cancel_running_after_commit(cancellations)

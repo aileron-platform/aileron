@@ -49,6 +49,7 @@ from app.modules.workspace.runtime.database import (
 from app.modules.workspace.runtime.job_repository import (
     KNOWLEDGE_BASE_MOUNT_RECONCILE,
 )
+from app.modules.workspace.service_identities import workspace_service_identity
 
 logger = logging.getLogger(__name__)
 
@@ -218,12 +219,11 @@ class WorkspaceCustomResourceExecutionResult:
 
     @property
     def runtime_internal_url(self) -> str:
-        return _kubernetes_service_url(
+        return workspace_service_identity(
             "runtime",
             self.workspace_id,
             self.target_namespace,
-            3002,
-        )
+        ).url
 
 
 @dataclass(frozen=True)
@@ -248,15 +248,6 @@ class WorkspaceCustomResourceStatusSnapshot:
     custom_resource: dict[str, object]
 
 
-def _kubernetes_service_url(
-    component: str,
-    workspace_id: str,
-    namespace: str,
-    port: int,
-) -> str:
-    return f"http://{component}-{workspace_id}.{namespace}.svc.cluster.local:{port}"
-
-
 class WorkspaceCustomResourceService:
     """Responsible for generating and updating Kubernetes workspace custom resource descriptions."""
 
@@ -269,11 +260,13 @@ class WorkspaceCustomResourceService:
         self.db = db
         self.settings = get_settings()
         self.runtime_database_service = (
-            runtime_database_service or WorkspaceRuntimeDatabaseService()
+            runtime_database_service
+            if runtime_database_service is not None
+            else WorkspaceRuntimeDatabaseService()
         )
         self.capacity = PlatformResourceCapacityAdministration(db)
 
-    def prepare_execution_plane(
+    def _prepare_generation(
         self,
         workspace: db_models.Workspace,
         *,
@@ -291,6 +284,9 @@ class WorkspaceCustomResourceService:
             runtime_instance_id=canonical_instance_id,
         )
         control_token = issue_runtime_control_token()
+        # Keep both constrained generation IDs aligned before manifest construction,
+        # which can trigger a Session flush.
+        workspace.runtime_instance_id = canonical_instance_id
         workspace.runtime_control_instance_id = canonical_instance_id
         workspace.runtime_control_token_hash = control_token.digest
         manifest = self._build_workspace_custom_resource(
@@ -312,7 +308,7 @@ class WorkspaceCustomResourceService:
             manifest=manifest,
         )
 
-    def apply_execution_plane(
+    def _apply_generation(
         self,
         plan: WorkspaceCustomResourceExecutionPlan,
         *,
@@ -350,7 +346,7 @@ class WorkspaceCustomResourceService:
             )
         except Exception:
             try:
-                self.abandon_execution_plane_generation(
+                self._discard_generation(
                     WorkspaceCustomResourceExecutionIdentity(
                         workspace_id=plan.workspace_id,
                         target_namespace=plan.target_namespace,
@@ -371,7 +367,7 @@ class WorkspaceCustomResourceService:
                 )
             raise
 
-    def apply_execution_plane_result(
+    def _stage_generation(
         self,
         workspace: db_models.Workspace,
         result: WorkspaceCustomResourceExecutionResult,
@@ -459,7 +455,7 @@ class WorkspaceCustomResourceService:
             3004,
         )
 
-    def abandon_execution_plane_generation(
+    def _discard_generation(
         self,
         execution: (
             WorkspaceCustomResourceExecutionIdentity
@@ -487,7 +483,7 @@ class WorkspaceCustomResourceService:
             raise WorkspaceRuntimeTerminationUnconfirmedError(
                 "Kubernetes workspace generation changed before cleanup"
             )
-        self.prove_execution_plane_absent(
+        self._prove_generation_absent(
             execution,
             assert_claim=assert_claim,
             max_attempts=max_attempts,
@@ -495,7 +491,7 @@ class WorkspaceCustomResourceService:
         )
         self._cleanup_runtime_generation(execution)
 
-    def delete_persisted_workspace(
+    def _delete_persisted_workspace(
         self,
         identity: WorkspaceCustomResourceExecutionIdentity,
         *,
@@ -538,7 +534,7 @@ class WorkspaceCustomResourceService:
         )
         self.runtime_database_service.deactivate(credential)
 
-    def stop_persisted_execution_plane(
+    def _stop_persisted_generation(
         self,
         workspace: db_models.Workspace,
         *,
@@ -546,7 +542,7 @@ class WorkspaceCustomResourceService:
     ) -> None:
         """Stop compute and revoke its generation while retaining the CR and PVCs."""
 
-        self.abandon_execution_plane_generation(
+        self._discard_generation(
             WorkspaceCustomResourceExecutionIdentity(
                 workspace_id=workspace.id,
                 target_namespace=self.settings.RUNTIME_K8S_NAMESPACE,
@@ -865,7 +861,7 @@ class WorkspaceCustomResourceService:
         else:
             assert_claim()
 
-    def prove_execution_plane_absent(
+    def _prove_generation_absent(
         self,
         identity: (
             WorkspaceCustomResourceExecutionIdentity
@@ -1415,6 +1411,9 @@ class WorkspaceCustomResourceService:
         for error_code, image in images.items():
             if not _IMMUTABLE_IMAGE_REFERENCE_PATTERN.fullmatch(image):
                 raise ValueError(error_code)
+        firewall_delivery_id = workspace.firewall_target_delivery_id
+        if not isinstance(firewall_delivery_id, str) or not firewall_delivery_id:
+            raise ValueError("Firewall delivery identifier is required")
         storage = self.capacity.desired_storage_spec(workspace)
 
         return {
@@ -1423,6 +1422,9 @@ class WorkspaceCustomResourceService:
             "metadata": {
                 "name": metadata_name,
                 "namespace": cr_namespace,
+                "annotations": {
+                    "platform.aileron.io/firewall-delivery-id": (firewall_delivery_id),
+                },
                 "labels": {
                     "app.kubernetes.io/part-of": "aileron",
                     "aileron.io/workspace-id": workspace.id,
@@ -1450,6 +1452,17 @@ class WorkspaceCustomResourceService:
                         ),
                     },
                     "runtimeSecretName": runtime_secret_name,
+                    **(
+                        {
+                            "databaseTrust": {
+                                "secretName": self.settings.RUNTIME_DATABASE_CA_SECRET_NAME,
+                                "secretKey": self.settings.RUNTIME_DATABASE_CA_SECRET_KEY,
+                                "revision": self.settings.RUNTIME_DATABASE_CA_REVISION,
+                            }
+                        }
+                        if self.settings.RUNTIME_DATABASE_CA_SECRET_NAME
+                        else {}
+                    ),
                 },
                 "canvas": {
                     "enabled": True,
@@ -1717,21 +1730,17 @@ class WorkspaceCustomResourceService:
         *,
         namespace: str,
     ) -> None:
-        workspace.runtime_internal_url = _kubernetes_service_url(
-            "runtime", workspace.id, namespace, 3002
-        )
-        workspace.runtime_internal_port = 3002
-        workspace.terminal_internal_url = _kubernetes_service_url(
-            "runtime", workspace.id, namespace, 3004
-        )
-        workspace.browser_webrtc_internal_url = _kubernetes_service_url(
-            "browser", workspace.id, namespace, 6080
-        )
-        workspace.browser_webrtc_internal_port = 6080
-        workspace.canvas_internal_url = _kubernetes_service_url(
-            "canvas", workspace.id, namespace, 3003
-        )
-        workspace.canvas_internal_port = 3003
+        runtime = workspace_service_identity("runtime", workspace.id, namespace)
+        terminal = workspace_service_identity("terminal", workspace.id, namespace)
+        browser = workspace_service_identity("browser", workspace.id, namespace)
+        canvas = workspace_service_identity("canvas", workspace.id, namespace)
+        workspace.runtime_internal_url = runtime.url
+        workspace.runtime_internal_port = runtime.port
+        workspace.terminal_internal_url = terminal.url
+        workspace.browser_webrtc_internal_url = browser.url
+        workspace.browser_webrtc_internal_port = browser.port
+        workspace.canvas_internal_url = canvas.url
+        workspace.canvas_internal_port = canvas.port
 
     @staticmethod
     def _apply_browser_connectivity_status(
@@ -1919,7 +1928,7 @@ class WorkspaceCustomResourceService:
                 },
             ),
             string_data={
-                "state-database-url": credential.database_url,
+                "runtime-database-connection": credential.database_url,
                 "runtime-control-token": runtime_control_token,
                 "custom-setup.sh": setup_script,
             },

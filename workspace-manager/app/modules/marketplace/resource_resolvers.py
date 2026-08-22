@@ -13,7 +13,7 @@ from aileron_marketplace_core import (
     resolve_codex_plugin_resources,
 )
 
-from app.modules.marketplace.models import MarketplaceProvider
+from app.modules.marketplace.models import MarketplaceTargetClient
 
 
 @dataclass(frozen=True)
@@ -25,19 +25,19 @@ class MarketplaceResourceOwner:
 
 @dataclass(frozen=True)
 class MarketplaceMcpOwnerBinding:
-    """One MCP server name and its canonical provider-native owner."""
+    """One MCP server name and its canonical target_client-native owner."""
 
     name: str
     owner: MarketplaceResourceOwner
 
 
-def _provider_resolved_mcp_owners(
+def _target_client_resolved_mcp_owners(
     package_root: Path,
-    provider: MarketplaceProvider,
+    target_client: MarketplaceTargetClient,
 ) -> tuple[MarketplaceMcpOwnerBinding, ...]:
     resources = (
         resolve_claude_plugin_resources(package_root)
-        if provider == "claude-code"
+        if target_client == "claude-code"
         else resolve_codex_plugin_resources(package_root)
     )
     return tuple(
@@ -55,16 +55,16 @@ def _provider_resolved_mcp_owners(
 
 def resolve_mcp_owners(
     package_root: Path,
-    provider: MarketplaceProvider,
+    target_client: MarketplaceTargetClient,
 ) -> tuple[MarketplaceMcpOwnerBinding, ...]:
-    """Resolve the canonical provider-native owner for each MCP server name."""
+    """Resolve the canonical target_client-native owner for each MCP server name."""
 
-    return _provider_resolved_mcp_owners(package_root, provider)
+    return _target_client_resolved_mcp_owners(package_root, target_client)
 
 
 def resolve_mcp_owner(
     package_root: Path,
-    provider: MarketplaceProvider,
+    target_client: MarketplaceTargetClient,
     server_name: str,
     *,
     owner_file_path: str,
@@ -73,7 +73,7 @@ def resolve_mcp_owner(
 
     matches = [
         binding.owner
-        for binding in resolve_mcp_owners(package_root, provider)
+        for binding in resolve_mcp_owners(package_root, target_client)
         if binding.name == server_name and binding.owner.file_path == owner_file_path
     ]
     if len(matches) != 1:
@@ -83,13 +83,13 @@ def resolve_mcp_owner(
 
 def resolve_hook_sources(
     package_root: Path,
-    provider: MarketplaceProvider,
+    target_client: MarketplaceTargetClient,
 ) -> tuple[tuple[PluginResourceOwner, ...], tuple[dict[str, str], ...]]:
-    """Resolve every provider-native hooks source without flattening them."""
+    """Resolve every target_client-native hooks source without flattening them."""
 
     resources = (
         resolve_claude_plugin_resources(package_root)
-        if provider == "claude-code"
+        if target_client == "claude-code"
         else resolve_codex_plugin_resources(package_root)
     )
     owners = tuple(resources.hook_sources)

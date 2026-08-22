@@ -1071,6 +1071,34 @@
     const SKILL_EVENT_TYPE = 'REVIEW_FEEDBACK_SUBMITTED';
     const MAX_SKILL_EVENT_BYTES = 32 * 1024;
 
+    // A sandboxed iframe without allow-same-origin throws SecurityError on
+    // any localStorage access, so every call must fail silently and let the
+    // review shell keep working without persisted draft state.
+    const safeStorage = {
+      getItem(key) {
+        try {
+          return localStorage.getItem(key);
+        } catch {
+          return null;
+        }
+      },
+      setItem(key, value) {
+        try {
+          localStorage.setItem(key, value);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      removeItem(key) {
+        try {
+          localStorage.removeItem(key);
+        } catch {
+          // Ignore: nothing to clear when storage is unavailable.
+        }
+      },
+    };
+
     const translations = {
       'zh-TW': {
         'sidebar.title': '頁面縮圖',
@@ -1106,6 +1134,7 @@
         'actions.delete': '刪除',
         'status.savedInitial': '草稿已自動儲存在瀏覽器快取中。',
         'status.savedAt': '草稿已自動儲存在瀏覽器快取中 · {{time}}',
+        'status.saveUnavailable': '此頁面無法使用瀏覽器快取，草稿不會保留，但功能仍可正常使用。',
         'status.cacheCleared': '本機快取已清空。',
         'status.noFeedback': '尚未有可送出的內容：請先標記、加註解或填寫本頁總評。',
         'status.sentCurrent': '已送出目前頁 feedback 到 AI Chat 草稿。',
@@ -1157,6 +1186,7 @@
         'actions.delete': 'Delete',
         'status.savedInitial': 'Draft is autosaved in browser storage.',
         'status.savedAt': 'Draft is autosaved in browser storage · {{time}}',
+        'status.saveUnavailable': 'Browser storage is unavailable on this page. The draft will not persist, but everything else still works.',
         'status.cacheCleared': 'Local cache cleared.',
         'status.noFeedback': 'Nothing to send yet: add markup, a note, or a page comment first.',
         'status.sentCurrent': 'Current page feedback was sent to the AI Chat draft.',
@@ -1281,7 +1311,7 @@
 
     function loadState() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = safeStorage.getItem(STORAGE_KEY);
         if (!raw) return deepClone(defaultState);
         const parsed = JSON.parse(raw);
         return {
@@ -1295,10 +1325,12 @@
     }
 
     function saveState() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      draftStatus.textContent = t('status.savedAt', {
-        time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-      });
+      const persisted = safeStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      draftStatus.textContent = persisted
+        ? t('status.savedAt', {
+          time: new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        })
+        : t('status.saveUnavailable');
     }
 
     function isActionPanelOpen() {
@@ -1819,7 +1851,7 @@
     actionPanelToggle.addEventListener('click', () => setActionPanelOpen(!isActionPanelOpen()));
     actionPanelClose.addEventListener('click', () => setActionPanelOpen(false));
     document.getElementById('clearStorageButton').addEventListener('click', () => {
-      localStorage.removeItem(STORAGE_KEY);
+      safeStorage.removeItem(STORAGE_KEY);
       state = deepClone(defaultState);
       renderStage();
       draftStatus.textContent = t('status.cacheCleared');

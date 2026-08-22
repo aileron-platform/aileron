@@ -1,1 +1,0 @@
-"""Draw.io unit tests."""

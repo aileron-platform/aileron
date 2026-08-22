@@ -19,11 +19,8 @@ from app.modules.thread.opencode_acp_event_mapper import (
 def test_runtime_paths_follow_dynamic_home(monkeypatch, tmp_path: Path) -> None:
     managed_home = tmp_path / "uid-1000860000"
     monkeypatch.setenv("HOME", str(managed_home))
+    monkeypatch.setenv("PATH", str(tmp_path / "path-codex-bin"))
     monkeypatch.delenv("OPENCODE_DB_PATH", raising=False)
-    monkeypatch.setattr(
-        "app.modules.thread.codex_sdk_client_manager.shutil.which",
-        lambda _name: "/opt/aileron/npm/bin/codex",
-    )
     opencode_db = managed_home / ".local" / "share" / "opencode" / "opencode.db"
     opencode_db.parent.mkdir(parents=True)
     with sqlite3.connect(opencode_db) as connection:
@@ -64,7 +61,7 @@ def test_runtime_paths_follow_dynamic_home(monkeypatch, tmp_path: Path) -> None:
     assert memory._memory_dir == (
         managed_home / ".claude" / "projects" / "-workspace" / "memory"
     )
-    assert manager._codex_bin == "/opt/aileron/npm/bin/codex"
+    assert manager._codex_bin is None
     assert manager._codex_home == str(managed_home / ".codex")
     assert internal.home_dir == managed_home
     assert internal.ssh_dir == managed_home / ".ssh"

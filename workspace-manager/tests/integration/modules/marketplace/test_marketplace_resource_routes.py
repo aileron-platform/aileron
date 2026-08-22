@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 
 from app.config.settings import get_settings
 from app.modules.marketplace.models import (
-    MarketplacePackageDeleteResult,
     MarketplacePackageMutationResult,
 )
 from tests.helpers.manager_session import authenticate_client_as
@@ -44,16 +43,18 @@ def _create_codex_package_with_mcp(
     created = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": package_id,
             "displayName": "Demo",
+            "version": "1.0.0",
             "description": "Demo package",
         },
     )
     assert created.status_code == 201
     revision = created.json()["revision"]
     mcp = client.post(
-        f"/api/v1/marketplace/packages/codex/{package_id}/mcp-servers",
+        f"/api/v1/marketplace/packages/codex/{package_id}/mcp-servers?packageFormat=codex-native",
         json={
             "revision": revision,
             "name": server_name,
@@ -62,35 +63,6 @@ def _create_codex_package_with_mcp(
     )
     assert mcp.status_code == 200
     return mcp.json()["revision"]
-
-
-def test_draft_discard_does_not_require_revision(
-    test_app, create_user, monkeypatch
-) -> None:
-    calls: list[tuple[str, str, str]] = []
-    client = _marketplace_client_with_roles(
-        test_app,
-        create_user,
-        monkeypatch,
-        roles=["admin"],
-        user_id="marketplace-resource-user",
-    )
-
-    def discard_draft(self, user_id: str, provider: str, package_id: str):
-        calls.append((user_id, provider, package_id))
-        return MarketplacePackageDeleteResult(deleted=True, revision="rev2")
-
-    monkeypatch.setattr(
-        "app.modules.marketplace.workflows.package_mutations.MarketplacePackageMutationWorkflow.discard_draft_package",
-        discard_draft,
-        raising=False,
-    )
-
-    response = client.delete("/api/v1/marketplace/packages/codex/demo/draft")
-
-    assert response.status_code == 200
-    assert response.json()["deleted"] is True
-    assert calls == [("marketplace-resource-user", "codex", "demo")]
 
 
 def test_package_refresh_not_found_does_not_leave_ghost_detail(
@@ -104,10 +76,14 @@ def test_package_refresh_not_found_does_not_leave_ghost_detail(
         user_id="marketplace-refresh-missing-user",
     )
 
-    response = client.post("/api/v1/marketplace/packages/codex/does-not-exist/refresh")
+    response = client.post(
+        "/api/v1/marketplace/packages/codex/does-not-exist/refresh?packageFormat=codex-native"
+    )
 
     assert response.status_code == 404
-    detail_response = client.get("/api/v1/marketplace/packages/codex/does-not-exist")
+    detail_response = client.get(
+        "/api/v1/marketplace/packages/codex/does-not-exist?packageFormat=codex-native"
+    )
     assert detail_response.status_code == 404
 
 
@@ -122,14 +98,16 @@ def test_root_document_route_exists(test_app, create_user, monkeypatch) -> None:
 
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_reads.MarketplacePackageReadModel.load_root_document",
-        lambda self, user_id, provider, package_id: {
+        lambda self, user_id, target_client, package_id: {
             "path": "AGENTS.md",
             "content": "# Rules",
         },
         raising=False,
     )
 
-    response = client.get("/api/v1/marketplace/packages/codex/demo/root-document")
+    response = client.get(
+        "/api/v1/marketplace/packages/codex/demo/root-document?packageFormat=codex-native"
+    )
 
     assert response.status_code == 200
     assert response.json()["path"] == "AGENTS.md"
@@ -148,7 +126,7 @@ def test_command_content_route_uses_query_path(
 
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_reads.MarketplacePackageReadModel.load_document",
-        lambda self, user_id, provider, package_id, resource_type, path: {
+        lambda self, user_id, target_client, package_id, resource_type, path: {
             "id": path,
             "title": "review",
             "path": path,
@@ -159,7 +137,7 @@ def test_command_content_route_uses_query_path(
     )
 
     response = client.get(
-        "/api/v1/marketplace/packages/codex/demo/commands/content?path=commands%2Fteam%2Freview.md"
+        "/api/v1/marketplace/packages/codex/demo/commands/content?path=commands%2Fteam%2Freview.md&packageFormat=codex-native"
     )
 
     assert response.status_code == 200
@@ -179,7 +157,7 @@ def test_create_document_returns_canonical_mutation_payload(
 
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_mutations.MarketplacePackageMutationWorkflow.create_document",
-        lambda self, user_id, provider, package_id, resource_type, payload: (
+        lambda self, user_id, target_client, package_id, resource_type, payload: (
             MarketplacePackageMutationResult(
                 path="commands/hello.md",
                 revision="rev2",
@@ -189,7 +167,7 @@ def test_create_document_returns_canonical_mutation_payload(
     )
 
     response = client.post(
-        "/api/v1/marketplace/packages/codex/demo/commands",
+        "/api/v1/marketplace/packages/codex/demo/commands?packageFormat=codex-native",
         json={
             "revision": "rev1",
             "path": "commands/hello.md",
@@ -219,7 +197,7 @@ def test_move_document_endpoint(test_app, create_user, monkeypatch) -> None:
 
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_mutations.MarketplacePackageMutationWorkflow.move_document",
-        lambda self, user_id, provider, package_id, resource_type, payload: (
+        lambda self, user_id, target_client, package_id, resource_type, payload: (
             MarketplacePackageMutationResult(
                 path="commands/new.md",
                 revision="rev2",
@@ -229,7 +207,7 @@ def test_move_document_endpoint(test_app, create_user, monkeypatch) -> None:
     )
 
     response = client.post(
-        "/api/v1/marketplace/packages/codex/demo/commands/move",
+        "/api/v1/marketplace/packages/codex/demo/commands/move?packageFormat=codex-native",
         json={
             "revision": "rev1",
             "previousPath": "commands/old.md",
@@ -252,7 +230,7 @@ def test_rename_endpoint_gone(test_app, create_user, monkeypatch) -> None:
     )
 
     response = client.post(
-        "/api/v1/marketplace/packages/codex/demo/commands/rename",
+        "/api/v1/marketplace/packages/codex/demo/commands/rename?packageFormat=codex-native",
         json={},
     )
 
@@ -274,7 +252,9 @@ def test_command_create_rejects_unrooted_path(
         user_id="marketplace-create-path-user",
     )
 
-    def _raise_path_error(self, user_id, provider, package_id, resource_type, payload):
+    def _raise_path_error(
+        self, user_id, target_client, package_id, resource_type, payload
+    ):
         raise MarketplacePathError("marketplace.package.path_escape")
 
     monkeypatch.setattr(
@@ -284,7 +264,7 @@ def test_command_create_rejects_unrooted_path(
     )
 
     response = client.post(
-        "/api/v1/marketplace/packages/codex/demo/commands",
+        "/api/v1/marketplace/packages/codex/demo/commands?packageFormat=codex-native",
         json={
             "revision": "rev1",
             "path": "ASDF/ASDF",
@@ -313,11 +293,11 @@ def test_mcp_get_put_delete_by_path_name(test_app, create_user, monkeypatch) -> 
             base_entry_fingerprint="fp",
         )
 
-    def create_server(self, user_id, provider, package_id, payload):
+    def create_server(self, user_id, target_client, package_id, payload):
         calls.append(("create", payload.name))
         return mutation_result("rev2")
 
-    def get_server(self, user_id, provider, package_id, name, owner_file_path):
+    def get_server(self, user_id, target_client, package_id, name, owner_file_path):
         calls.append(("get", name))
         assert owner_file_path == ".mcp.json"
         return {
@@ -328,11 +308,11 @@ def test_mcp_get_put_delete_by_path_name(test_app, create_user, monkeypatch) -> 
             "ownerFilePath": ".mcp.json",
         }
 
-    def save_server(self, user_id, provider, package_id, name, payload):
+    def save_server(self, user_id, target_client, package_id, name, payload):
         calls.append(("put", name))
         return mutation_result("rev3")
 
-    def delete_server(self, user_id, provider, package_id, name, payload):
+    def delete_server(self, user_id, target_client, package_id, name, payload):
         calls.append(("delete", name))
         assert payload.owner_file_path == ".mcp.json"
         assert payload.base_entry_fingerprint == "fp-next"
@@ -365,17 +345,17 @@ def test_mcp_get_put_delete_by_path_name(test_app, create_user, monkeypatch) -> 
     )
 
     create = client.post(
-        "/api/v1/marketplace/packages/codex/demo/mcp-servers",
+        "/api/v1/marketplace/packages/codex/demo/mcp-servers?packageFormat=codex-native",
         json={"revision": "rev1", "name": "db", "server": {"command": "x"}},
     )
     assert create.status_code == 200
     got = client.get(
-        "/api/v1/marketplace/packages/codex/demo/mcp-servers/db",
-        params={"ownerFilePath": ".mcp.json"},
+        "/api/v1/marketplace/packages/codex/demo/mcp-servers/db?packageFormat=codex-native",
+        params={"packageFormat": "codex-native", "ownerFilePath": ".mcp.json"},
     )
     assert got.status_code == 200
     put = client.put(
-        "/api/v1/marketplace/packages/codex/demo/mcp-servers/db",
+        "/api/v1/marketplace/packages/codex/demo/mcp-servers/db?packageFormat=codex-native",
         json={
             "revision": "rev2",
             "server": {"command": "y"},
@@ -386,7 +366,7 @@ def test_mcp_get_put_delete_by_path_name(test_app, create_user, monkeypatch) -> 
     assert put.status_code == 200
     delete = client.request(
         "DELETE",
-        "/api/v1/marketplace/packages/codex/demo/mcp-servers/db",
+        "/api/v1/marketplace/packages/codex/demo/mcp-servers/db?packageFormat=codex-native",
         json={
             "revision": "rev3",
             "ownerFilePath": ".mcp.json",
@@ -413,7 +393,7 @@ def test_mcp_server_route_exists(test_app, create_user, monkeypatch) -> None:
 
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_reads.MarketplacePackageReadModel.get_mcp_server",
-        lambda self, user_id, provider, package_id, name, owner_file_path: {
+        lambda self, user_id, target_client, package_id, name, owner_file_path: {
             "name": name,
             "path": owner_file_path,
             "server": {"command": "node"},
@@ -424,8 +404,8 @@ def test_mcp_server_route_exists(test_app, create_user, monkeypatch) -> None:
     )
 
     response = client.get(
-        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local",
-        params={"ownerFilePath": ".mcp.json"},
+        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local?packageFormat=codex-native",
+        params={"packageFormat": "codex-native", "ownerFilePath": ".mcp.json"},
     )
 
     assert response.status_code == 200
@@ -446,10 +426,10 @@ def test_mcp_http_contract_requires_owner_tokens_and_forbids_create_tokens(
     )
 
     missing_get_owner = client.get(
-        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local"
+        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local?packageFormat=codex-native"
     )
     create_with_owner = client.post(
-        "/api/v1/marketplace/packages/codex/demo/mcp-servers",
+        "/api/v1/marketplace/packages/codex/demo/mcp-servers?packageFormat=codex-native",
         json={
             "revision": "rev1",
             "name": "local",
@@ -459,14 +439,14 @@ def test_mcp_http_contract_requires_owner_tokens_and_forbids_create_tokens(
         },
     )
     update_without_owner = client.put(
-        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local",
+        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local?packageFormat=codex-native",
         json={
             "revision": "rev1",
             "server": {"command": "node"},
         },
     )
     update_with_body_name = client.put(
-        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local",
+        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local?packageFormat=codex-native",
         json={
             "revision": "rev1",
             "name": "different",
@@ -477,12 +457,12 @@ def test_mcp_http_contract_requires_owner_tokens_and_forbids_create_tokens(
     )
     delete_without_owner = client.request(
         "DELETE",
-        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local",
+        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local?packageFormat=codex-native",
         json={"revision": "rev1"},
     )
     delete_with_body_name = client.request(
         "DELETE",
-        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local",
+        "/api/v1/marketplace/packages/codex/demo/mcp-servers/local?packageFormat=codex-native",
         json={
             "revision": "rev1",
             "name": "different",
@@ -511,20 +491,23 @@ def test_mcp_list_emits_token_for_source_capture(
     )
     _create_codex_package_with_mcp(client, package_id="mcp-list-token")
 
-    listed = client.get("/api/v1/marketplace/packages/codex/mcp-list-token/mcp-servers")
+    listed = client.get(
+        "/api/v1/marketplace/packages/codex/mcp-list-token/mcp-servers?packageFormat=codex-native"
+    )
     wrong_owner = client.get(
-        "/api/v1/marketplace/packages/codex/mcp-list-token/mcp-servers/db",
-        params={"ownerFilePath": "config/other.json"},
+        "/api/v1/marketplace/packages/codex/mcp-list-token/mcp-servers/db?packageFormat=codex-native",
+        params={"packageFormat": "codex-native", "ownerFilePath": "config/other.json"},
     )
 
     assert listed.status_code == 200
     body = listed.json()
     assert any("baseEntryFingerprint" in item for item in body)
     assert any("ownerFilePath" in item for item in body)
+    assert any(item.get("server", {}).get("command") == "x" for item in body)
     assert wrong_owner.status_code == 404
 
 
-def test_mcp_save_stale_entry_fingerprint_conflicts(
+def test_mcp_save_uses_last_writer_wins_for_stale_entry_fingerprint(
     test_app, create_user, monkeypatch
 ) -> None:
     client = _marketplace_client_with_roles(
@@ -540,7 +523,7 @@ def test_mcp_save_stale_entry_fingerprint_conflicts(
     )
 
     response = client.put(
-        "/api/v1/marketplace/packages/codex/mcp-stale-token/mcp-servers/db",
+        "/api/v1/marketplace/packages/codex/mcp-stale-token/mcp-servers/db?packageFormat=codex-native",
         json={
             "revision": revision,
             "server": {"command": "y"},
@@ -549,7 +532,7 @@ def test_mcp_save_stale_entry_fingerprint_conflicts(
         },
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 200
 
 
 def test_basic_endpoint_exists(test_app, create_user, monkeypatch) -> None:
@@ -562,18 +545,19 @@ def test_basic_endpoint_exists(test_app, create_user, monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_reads.MarketplacePackageReadModel.get_basic_metadata",
-        lambda self, user_id, provider, package_id: {
+        lambda self, user_id, target_client, package_id: {
             "revision": "rev1",
             "displayName": "Demo",
             "description": "",
             "catalogMetadata": {},
             "manifestMetadata": {},
-            "lifecycleStatus": "draft",
             "validationResults": [],
         },
         raising=False,
     )
-    response = client.get("/api/v1/marketplace/packages/codex/demo/basic")
+    response = client.get(
+        "/api/v1/marketplace/packages/codex/demo/basic?packageFormat=codex-native"
+    )
     assert response.status_code == 200
 
 
@@ -587,48 +571,17 @@ def test_hooks_endpoint_exists(test_app, create_user, monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_reads.MarketplacePackageReadModel.get_hooks",
-        lambda self, user_id, provider, package_id: {
+        lambda self, user_id, target_client, package_id: {
             "revision": "rev1",
             "sources": [],
             "hookCapabilities": {"mode": "sources", "groups": []},
         },
         raising=False,
     )
-    response = client.get("/api/v1/marketplace/packages/codex/demo/hooks")
+    response = client.get(
+        "/api/v1/marketplace/packages/codex/demo/hooks?packageFormat=codex-native"
+    )
     assert response.status_code == 200
-
-
-def test_root_document_revision_conflict_maps_409(
-    test_app, create_user, monkeypatch
-) -> None:
-    from app.modules.marketplace.workflows.registry_operations import (
-        MarketplaceConflictError,
-    )
-
-    client = _marketplace_client_with_roles(
-        test_app,
-        create_user,
-        monkeypatch,
-        roles=["admin"],
-        user_id="marketplace-root-conflict-user",
-    )
-
-    def raise_conflict(self, user_id, provider, package_id, revision, content):
-        raise MarketplaceConflictError("marketplace.package.revision_conflict")
-
-    monkeypatch.setattr(
-        "app.modules.marketplace.workflows.package_mutations.MarketplacePackageMutationWorkflow.save_root_document",
-        raise_conflict,
-        raising=False,
-    )
-
-    response = client.put(
-        "/api/v1/marketplace/packages/codex/demo/root-document",
-        json={"revision": "stale-revision", "content": "x"},
-    )
-
-    assert response.status_code == 409
-    assert response.json()["detail"]
 
 
 def test_skill_write_invalid_path_maps_400(test_app, create_user, monkeypatch) -> None:
@@ -644,7 +597,9 @@ def test_skill_write_invalid_path_maps_400(test_app, create_user, monkeypatch) -
         user_id="marketplace-skill-path-user",
     )
 
-    def raise_path_error(self, user_id, provider, package_id, revision, path, content):
+    def raise_path_error(
+        self, user_id, target_client, package_id, revision, path, content
+    ):
         raise MarketplacePathError("marketplace.package.path_escape")
 
     monkeypatch.setattr(
@@ -654,7 +609,7 @@ def test_skill_write_invalid_path_maps_400(test_app, create_user, monkeypatch) -
     )
 
     response = client.put(
-        "/api/v1/marketplace/packages/codex/demo/skills/content?path=../escape.md",
+        "/api/v1/marketplace/packages/codex/demo/skills/content?path=../escape.md&packageFormat=codex-native",
         json={"revision": "rev1", "content": "x"},
     )
 
@@ -671,7 +626,7 @@ def test_skills_tree_endpoint_exists(test_app, create_user, monkeypatch) -> None
     )
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_reads.MarketplacePackageReadModel.list_skill_files",
-        lambda self, user_id, provider, package_id: {
+        lambda self, user_id, target_client, package_id: {
             "path": "skills",
             "scope": None,
             "nodes": [],
@@ -679,7 +634,9 @@ def test_skills_tree_endpoint_exists(test_app, create_user, monkeypatch) -> None
         },
         raising=False,
     )
-    response = client.get("/api/v1/marketplace/packages/codex/demo/skills/tree")
+    response = client.get(
+        "/api/v1/marketplace/packages/codex/demo/skills/tree?packageFormat=codex-native"
+    )
     assert response.status_code == 200
 
 
@@ -695,7 +652,7 @@ def test_skills_tree_endpoint_returns_entry_type(
     )
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_reads.MarketplacePackageReadModel.list_skill_files",
-        lambda self, user_id, provider, package_id: {
+        lambda self, user_id, target_client, package_id: {
             "path": "skills",
             "scope": None,
             "nodes": [
@@ -717,7 +674,9 @@ def test_skills_tree_endpoint_returns_entry_type(
         raising=False,
     )
 
-    response = client.get("/api/v1/marketplace/packages/codex/demo/skills/tree")
+    response = client.get(
+        "/api/v1/marketplace/packages/codex/demo/skills/tree?packageFormat=codex-native"
+    )
 
     assert response.status_code == 200
     assert response.json()["nodes"] == [
@@ -747,6 +706,7 @@ def test_skills_tree_returns_unified_nodes_shape(
         / "registry"
         / "codex"
         / "plugins"
+        / "codex-native"
         / "demo"
         / "skills"
         / "demo"
@@ -754,7 +714,9 @@ def test_skills_tree_returns_unified_nodes_shape(
     package_path.mkdir(parents=True, exist_ok=True)
     (package_path / "SKILL.md").write_text("# Demo", encoding="utf-8")
 
-    response = client.get("/api/v1/marketplace/packages/codex/demo/skills/tree")
+    response = client.get(
+        "/api/v1/marketplace/packages/codex/demo/skills/tree?packageFormat=codex-native"
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -779,6 +741,7 @@ def test_skill_content_returns_filecontentresponse_shape(
         / "registry"
         / "codex"
         / "plugins"
+        / "codex-native"
         / "demo"
         / "skills"
         / "demo"
@@ -787,7 +750,7 @@ def test_skill_content_returns_filecontentresponse_shape(
     (package_path / "SKILL.md").write_text("# Demo", encoding="utf-8")
 
     response = client.get(
-        "/api/v1/marketplace/packages/codex/demo/skills/content?path=skills/demo/SKILL.md"
+        "/api/v1/marketplace/packages/codex/demo/skills/content?path=skills/demo/SKILL.md&packageFormat=codex-native"
     )
 
     assert response.status_code == 200
@@ -808,8 +771,8 @@ def test_missing_skill_content_maps_to_not_found(
     )
 
     response = client.get(
-        "/api/v1/marketplace/packages/codex/demo/skills/content"
-        "?path=skills%2Fdemo%2Fmissing.yaml"
+        "/api/v1/marketplace/packages/codex/demo/skills/content?packageFormat=codex-native"
+        "&path=skills%2Fdemo%2Fmissing.yaml"
     )
 
     assert response.status_code == 404
@@ -828,7 +791,7 @@ def test_invalid_skill_content_path_maps_to_bad_request(
     )
 
     response = client.get(
-        "/api/v1/marketplace/packages/codex/demo/skills/content?path=..%2Fescape.yaml"
+        "/api/v1/marketplace/packages/codex/demo/skills/content?path=..%2Fescape.yaml&packageFormat=codex-native"
     )
 
     assert response.status_code == 400
@@ -845,7 +808,7 @@ def test_files_tree_endpoint_exists(test_app, create_user, monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_reads.MarketplacePackageReadModel.list_package_files_tree",
-        lambda self, user_id, provider, package_id: {
+        lambda self, user_id, target_client, package_id: {
             "path": "",
             "scope": None,
             "nodes": [],
@@ -853,7 +816,9 @@ def test_files_tree_endpoint_exists(test_app, create_user, monkeypatch) -> None:
         },
         raising=False,
     )
-    response = client.get("/api/v1/marketplace/packages/codex/demo/files/tree")
+    response = client.get(
+        "/api/v1/marketplace/packages/codex/demo/files/tree?packageFormat=codex-native"
+    )
     assert response.status_code == 200
 
 
@@ -869,7 +834,7 @@ def test_files_tree_endpoint_returns_entry_type(
     )
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_reads.MarketplacePackageReadModel.list_package_files_tree",
-        lambda self, user_id, provider, package_id: {
+        lambda self, user_id, target_client, package_id: {
             "path": "",
             "scope": None,
             "nodes": [
@@ -886,7 +851,9 @@ def test_files_tree_endpoint_returns_entry_type(
         raising=False,
     )
 
-    response = client.get("/api/v1/marketplace/packages/codex/demo/files/tree")
+    response = client.get(
+        "/api/v1/marketplace/packages/codex/demo/files/tree?packageFormat=codex-native"
+    )
 
     assert response.status_code == 200
     assert response.json()["nodes"] == [
@@ -914,15 +881,17 @@ def test_file_content_endpoint_reads_managed_resource_files(
     created = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "claude-code",
+            "packageFormat": "claude-native",
+            "targetClients": ["claude-code"],
             "packageId": "managed-read-demo",
             "displayName": "Demo",
+            "version": "1.0.0",
             "description": "Demo package",
         },
     )
     assert created.status_code == 201, created.text
     created_style = client.post(
-        "/api/v1/marketplace/packages/claude-code/managed-read-demo/output-styles",
+        "/api/v1/marketplace/packages/claude-code/managed-read-demo/output-styles?packageFormat=claude-native",
         json={
             "revision": created.json()["revision"],
             "path": "output-styles/ASF.md",
@@ -932,8 +901,8 @@ def test_file_content_endpoint_reads_managed_resource_files(
     assert created_style.status_code == 200, created_style.text
 
     response = client.get(
-        "/api/v1/marketplace/packages/claude-code/managed-read-demo/files/content"
-        "?path=output-styles%2FASF.md"
+        "/api/v1/marketplace/packages/claude-code/managed-read-demo/files/content?packageFormat=claude-native"
+        "&path=output-styles%2FASF.md"
     )
 
     assert response.status_code == 200, response.text
@@ -951,7 +920,7 @@ def test_skill_move_endpoint_exists(test_app, create_user, monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_mutations.MarketplacePackageMutationWorkflow.move_skill_entry",
-        lambda self, user_id, provider, package_id, revision, previous_path, next_path: (
+        lambda self, user_id, target_client, package_id, revision, previous_path, next_path: (
             MarketplacePackageMutationResult(
                 path=next_path,
                 revision="rev2",
@@ -961,7 +930,7 @@ def test_skill_move_endpoint_exists(test_app, create_user, monkeypatch) -> None:
     )
 
     response = client.post(
-        "/api/v1/marketplace/packages/codex/demo/skills/move",
+        "/api/v1/marketplace/packages/codex/demo/skills/move?packageFormat=codex-native",
         json={
             "revision": "rev1",
             "previousPath": "skills/example/SKILL.md",
@@ -982,7 +951,7 @@ def test_file_move_endpoint_exists(test_app, create_user, monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_mutations.MarketplacePackageMutationWorkflow.move_package_file_entry",
-        lambda self, user_id, provider, package_id, revision, previous_path, next_path: (
+        lambda self, user_id, target_client, package_id, revision, previous_path, next_path: (
             MarketplacePackageMutationResult(
                 path=next_path,
                 revision="rev2",
@@ -992,7 +961,7 @@ def test_file_move_endpoint_exists(test_app, create_user, monkeypatch) -> None:
     )
 
     response = client.post(
-        "/api/v1/marketplace/packages/codex/demo/files/move",
+        "/api/v1/marketplace/packages/codex/demo/files/move?packageFormat=codex-native",
         json={
             "revision": "rev1",
             "previousPath": "docs/readme.md",
@@ -1016,16 +985,18 @@ def test_file_upload_endpoint_writes_package_file(
     created = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "upload-demo",
             "displayName": "Demo",
+            "version": "1.0.0",
             "description": "Demo package",
         },
     )
     assert created.status_code == 201, created.text
 
     uploaded = client.post(
-        "/api/v1/marketplace/packages/codex/upload-demo/files/upload",
+        "/api/v1/marketplace/packages/codex/upload-demo/files/upload?packageFormat=codex-native",
         data={
             "revision": created.json()["revision"],
             "targetPath": "docs",
@@ -1038,7 +1009,9 @@ def test_file_upload_endpoint_writes_package_file(
     assert uploaded.status_code == 200, uploaded.text
     assert uploaded.json()["succeeded"] == 1
     assert uploaded.json()["items"][0]["status"] == "created"
-    tree = client.get("/api/v1/marketplace/packages/codex/upload-demo/files/tree")
+    tree = client.get(
+        "/api/v1/marketplace/packages/codex/upload-demo/files/tree?packageFormat=codex-native"
+    )
     assert tree.status_code == 200, tree.text
     assert any(node["path"] == "docs/readme.bin" for node in tree.json()["nodes"])
 
@@ -1056,16 +1029,18 @@ def test_file_upload_endpoint_rejects_managed_roots(
     created = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "upload-managed-demo",
             "displayName": "Demo",
+            "version": "1.0.0",
             "description": "Demo package",
         },
     )
     assert created.status_code == 201, created.text
 
     uploaded = client.post(
-        "/api/v1/marketplace/packages/codex/upload-managed-demo/files/upload",
+        "/api/v1/marketplace/packages/codex/upload-managed-demo/files/upload?packageFormat=codex-native",
         data={
             "revision": created.json()["revision"],
             "targetPath": ".",
@@ -1091,16 +1066,18 @@ def test_skill_upload_endpoint_enforces_skills_scope(
     created = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "codex",
+            "packageFormat": "codex-native",
+            "targetClients": ["codex"],
             "packageId": "upload-skill-demo",
             "displayName": "Demo",
+            "version": "1.0.0",
             "description": "Demo package",
         },
     )
     assert created.status_code == 201, created.text
 
     rejected = client.post(
-        "/api/v1/marketplace/packages/codex/upload-skill-demo/skills/upload",
+        "/api/v1/marketplace/packages/codex/upload-skill-demo/skills/upload?packageFormat=codex-native",
         data={
             "revision": created.json()["revision"],
             "targetPath": "docs",
@@ -1112,7 +1089,7 @@ def test_skill_upload_endpoint_enforces_skills_scope(
     assert rejected.status_code == 400
 
     accepted = client.post(
-        "/api/v1/marketplace/packages/codex/upload-skill-demo/skills/upload",
+        "/api/v1/marketplace/packages/codex/upload-skill-demo/skills/upload?packageFormat=codex-native",
         data={
             "revision": created.json()["revision"],
             "targetPath": "skills/demo",
@@ -1126,9 +1103,11 @@ def test_skill_upload_endpoint_enforces_skills_scope(
     archive_buffer = BytesIO()
     with ZipFile(archive_buffer, "w") as archive:
         archive.writestr("archived/SKILL.md", "# Archived")
-    current = client.get("/api/v1/marketplace/packages/codex/upload-skill-demo")
+    current = client.get(
+        "/api/v1/marketplace/packages/codex/upload-skill-demo?packageFormat=codex-native"
+    )
     stored = client.post(
-        "/api/v1/marketplace/packages/codex/upload-skill-demo/skills/upload",
+        "/api/v1/marketplace/packages/codex/upload-skill-demo/skills/upload?packageFormat=codex-native",
         data={
             "revision": current.json()["revision"],
             "targetPath": "skills",
@@ -1145,9 +1124,11 @@ def test_skill_upload_endpoint_enforces_skills_scope(
     )
     assert stored.status_code == 200, stored.text
 
-    current = client.get("/api/v1/marketplace/packages/codex/upload-skill-demo")
+    current = client.get(
+        "/api/v1/marketplace/packages/codex/upload-skill-demo?packageFormat=codex-native"
+    )
     extracted = client.post(
-        "/api/v1/marketplace/packages/codex/upload-skill-demo/skills/extract",
+        "/api/v1/marketplace/packages/codex/upload-skill-demo/skills/extract?packageFormat=codex-native",
         json={
             "revision": current.json()["revision"],
             "archivePath": "skills/skills.zip",
@@ -1158,7 +1139,7 @@ def test_skill_upload_endpoint_enforces_skills_scope(
     )
     assert extracted.status_code == 200, extracted.text
     tree = client.get(
-        "/api/v1/marketplace/packages/codex/upload-skill-demo/skills/tree"
+        "/api/v1/marketplace/packages/codex/upload-skill-demo/skills/tree?packageFormat=codex-native"
     )
     assert "skills/archived/SKILL.md" in str(tree.json())
 
@@ -1175,11 +1156,11 @@ def test_existing_export_endpoint_is_not_captured_by_document_resource_route(
     )
     monkeypatch.setattr(
         "app.modules.marketplace.workflows.package_reads.MarketplacePackageReadModel.export_package",
-        lambda self, user_id, provider, package_id, revision: b"zip",
+        lambda self, user_id, target_client, package_id, revision: b"zip",
         raising=False,
     )
     response = client.get(
-        "/api/v1/marketplace/packages/codex/demo/export?revision=rev1"
+        "/api/v1/marketplace/packages/codex/demo/export?revision=rev1&packageFormat=codex-native"
     )
     assert response.status_code == 200
 
@@ -1196,7 +1177,7 @@ def test_whole_package_save_route_rejects_legacy_payload_shape(
     )
 
     response = client.put(
-        "/api/v1/marketplace/packages/codex/demo",
+        "/api/v1/marketplace/packages/codex/demo?packageFormat=codex-native",
         json={
             "revision": "rev1",
             "displayName": "Demo",
@@ -1228,16 +1209,18 @@ def _create_claude_package_with_mcp(
     created = client.post(
         "/api/v1/marketplace/packages",
         json={
-            "provider": "claude-code",
+            "packageFormat": "claude-native",
+            "targetClients": ["claude-code"],
             "packageId": package_id,
             "displayName": "Demo",
+            "version": "1.0.0",
             "description": "Demo package",
         },
     )
     assert created.status_code == 201, created.text
     revision = created.json()["revision"]
     mcp = client.post(
-        f"/api/v1/marketplace/packages/claude-code/{package_id}/mcp-servers",
+        f"/api/v1/marketplace/packages/claude-code/{package_id}/mcp-servers?packageFormat=claude-native",
         json={
             "revision": revision,
             "name": server_name,
@@ -1262,13 +1245,13 @@ def test_mcp_save_roundtrip_persists_changes(
     revision = _create_claude_package_with_mcp(client, package_id="mcp-roundtrip")
 
     listed = client.get(
-        "/api/v1/marketplace/packages/claude-code/mcp-roundtrip/mcp-servers"
+        "/api/v1/marketplace/packages/claude-code/mcp-roundtrip/mcp-servers?packageFormat=claude-native"
     )
     assert listed.status_code == 200, listed.text
     item = next(entry for entry in listed.json() if entry["name"] == "ASDF")
 
     save = client.put(
-        "/api/v1/marketplace/packages/claude-code/mcp-roundtrip/mcp-servers/ASDF",
+        "/api/v1/marketplace/packages/claude-code/mcp-roundtrip/mcp-servers/ASDF?packageFormat=claude-native",
         json={
             "revision": revision,
             "server": {
@@ -1286,8 +1269,11 @@ def test_mcp_save_roundtrip_persists_changes(
     assert save.status_code == 200, save.text
 
     reread = client.get(
-        "/api/v1/marketplace/packages/claude-code/mcp-roundtrip/mcp-servers/ASDF",
-        params={"ownerFilePath": item["ownerFilePath"]},
+        "/api/v1/marketplace/packages/claude-code/mcp-roundtrip/mcp-servers/ASDF?packageFormat=claude-native",
+        params={
+            "packageFormat": "claude-native",
+            "ownerFilePath": item["ownerFilePath"],
+        },
     )
     assert reread.status_code == 200, reread.text
     updated = reread.json()
@@ -1309,9 +1295,9 @@ def test_whole_package_save_route_requires_package_files(
     revision = _create_codex_package_with_mcp(client, package_id="demo")
 
     response = client.put(
-        "/api/v1/marketplace/packages/codex/demo",
+        "/api/v1/marketplace/packages/codex/demo?packageFormat=codex-native",
         json={
-            "provider": "codex",
+            "targetClient": "codex",
             "packageId": "demo",
             "revision": revision,
             "listing": {

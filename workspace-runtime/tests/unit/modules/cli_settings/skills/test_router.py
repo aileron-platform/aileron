@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.modules.cli_settings.skills import router as skills_router_module
 from app.modules.cli_settings.skills.config import SkillTool
 from app.modules.cli_settings.skills.router import create_skills_router
 from app.modules.file_system.exceptions import FileManagementException
@@ -16,6 +18,9 @@ class FakeSkillService:
         self.upload_calls = []
         self.extract_calls = []
         self.preflight_calls = []
+        self.read_calls = []
+        self.binary_calls = []
+        self.binary_content = b"\x89PNG\r\n\x1a\n"
 
     def _maybe_fail(self):
         if self.fail_with:
@@ -27,6 +32,7 @@ class FakeSkillService:
 
     def read_file(self, path, scope):
         self._maybe_fail()
+        self.read_calls.append((path, scope))
         return {
             "path": path,
             "scope": scope,
@@ -34,6 +40,11 @@ class FakeSkillService:
             "size": 5,
             "updatedAt": "2026-03-28T00:00:00Z",
         }
+
+    def read_file_binary(self, path, scope):
+        self._maybe_fail()
+        self.binary_calls.append((path, scope))
+        return self.binary_content
 
     def write_file(self, path, content, scope, expected_version_id):
         self._maybe_fail()
@@ -225,6 +236,161 @@ def test_skills_router_write_takes_content_in_body(monkeypatch) -> None:
     assert service.write_calls == [("skills/demo/SKILL.md", "# demo", None, None)]
 
 
+def test_skills_router_raw_false_preserves_json_content(monkeypatch) -> None:
+    service = FakeSkillService()
+    client = _client(service, monkeypatch)
+
+    response = client.get(
+        "/workspaces/ws-1/cli-settings/codex/skills/content",
+        params={"path": "review/SKILL.md", "scope": "project", "raw": "false"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "path": "review/SKILL.md",
+        "scope": "project",
+        "content": "hello",
+        "size": 5,
+        "updatedAt": "2026-03-28T00:00:00Z",
+        "revision": None,
+        "readOnly": None,
+        "editable": None,
+    }
+    assert service.read_calls == [("review/SKILL.md", "project")]
+    assert service.binary_calls == []
+
+
+@pytest.mark.parametrize("scope", ["project", "user"])
+def test_skills_router_returns_png_bytes_for_project_and_user_raw_reads(
+    monkeypatch, scope: str
+) -> None:
+    threadpool_calls = []
+
+    async def inline_threadpool(operation, *args, **kwargs):
+        threadpool_calls.append((operation, args, kwargs))
+        return operation(*args, **kwargs)
+
+    monkeypatch.setattr(skills_router_module, "run_in_threadpool", inline_threadpool)
+    service = FakeSkillService()
+    client = _client(service, monkeypatch)
+
+    response = client.get(
+        "/workspaces/ws-1/cli-settings/codex/skills/content",
+        params={"path": "review/assets/logo.png", "scope": scope, "raw": "true"},
+    )
+
+    assert response.status_code == 200
+    assert response.content == service.binary_content
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["content-disposition"] == 'inline; filename="logo.png"'
+    documented_content = client.app.openapi()["paths"][
+        "/workspaces/{workspace_id}/cli-settings/codex/skills/content"
+    ]["get"]["responses"]["200"]["content"]
+    assert response.headers["content-type"] in documented_content
+    assert service.binary_calls == [("review/assets/logo.png", scope)]
+    assert service.read_calls == []
+    assert len(threadpool_calls) == 1
+
+
+def test_skills_router_openapi_advertises_json_and_binary_content(
+    monkeypatch,
+) -> None:
+    service = FakeSkillService()
+    client = _client(service, monkeypatch)
+
+    operation = client.app.openapi()["paths"][
+        "/workspaces/{workspace_id}/cli-settings/codex/skills/content"
+    ]["get"]
+    success_content = operation["responses"]["200"]["content"]
+
+    assert success_content["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/SkillFileContentResponse"
+    }
+    assert success_content["application/octet-stream"]["schema"] == {
+        "type": "string",
+        "format": "binary",
+    }
+    assert success_content["image/png"]["schema"] == {
+        "type": "string",
+        "format": "binary",
+    }
+    assert operation["responses"]["413"]["description"] == (
+        "Raw preview exceeds the configured size limit."
+    )
+    assert operation["responses"]["413"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/APIErrorDetail"
+    }
+
+
+def test_skills_router_raw_read_uses_safe_filename_and_mime_fallback(
+    monkeypatch,
+) -> None:
+    service = FakeSkillService()
+    client = _client(service, monkeypatch)
+
+    response = client.get(
+        "/workspaces/ws-1/cli-settings/codex/skills/content",
+        params={"path": "review/assets/圖 示.unknown-binary", "raw": "true"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/octet-stream"
+    assert response.headers["content-disposition"] == (
+        "inline; filename*=utf-8''%E5%9C%96%20%E7%A4%BA.unknown-binary"
+    )
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_status", "expected_code"),
+    [
+        (
+            FileManagementException(
+                "FILE_NOT_FOUND", "File not found", status_code=404
+            ),
+            404,
+            "FILE_NOT_FOUND",
+        ),
+        (
+            FileManagementException(
+                "INVALID_PATH", "Path traversal not allowed", status_code=400
+            ),
+            400,
+            "INVALID_PATH",
+        ),
+        (
+            FileManagementException(
+                "FILE_TOO_LARGE",
+                "Raw preview exceeds the configured size limit",
+                status_code=413,
+            ),
+            413,
+            "FILE_TOO_LARGE",
+        ),
+    ],
+)
+def test_skills_router_raw_read_preserves_file_error_mapping(
+    monkeypatch,
+    error: FileManagementException,
+    expected_status: int,
+    expected_code: str,
+) -> None:
+    service = FakeSkillService()
+    service.fail_with = error
+    client = _client(service, monkeypatch)
+
+    response = client.get(
+        "/workspaces/ws-1/cli-settings/codex/skills/content",
+        params={"path": "../private/logo.png", "scope": "project", "raw": "true"},
+    )
+
+    assert response.status_code == expected_status
+    assert response.json()["detail"] == {
+        "errorCode": expected_code,
+        "message": error.message,
+    }
+    assert "/home/" not in response.text
+
+
 def test_skills_router_create_takes_content_in_body(monkeypatch) -> None:
     service = FakeSkillService()
     client = _client(service, monkeypatch)
@@ -371,9 +537,7 @@ def test_skills_router_streams_uploads_and_extracts_stored_archives(
     )
     assert extracted.status_code == 200, extracted.text
     assert extracted.json()["items"][0]["finalPath"] == "demo/demo/SKILL.md"
-    assert service.extract_calls == [
-        ("demo.zip", "demo", "keep-both", [], "project")
-    ]
+    assert service.extract_calls == [("demo.zip", "demo", "keep-both", [], "project")]
 
 
 def test_skills_router_error_mapping(monkeypatch) -> None:
@@ -425,6 +589,25 @@ def test_skills_router_plugin_endpoint_present_for_claude(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"workspaceId": "ws-1", "plugins": []}
+
+
+def test_skills_router_claude_plugin_scope_supports_raw_content(monkeypatch) -> None:
+    service = FakeClaudeSkillService()
+    client = _client(service, monkeypatch, tool=SkillTool.CLAUDE)
+
+    response = client.get(
+        "/workspaces/ws-1/cli-settings/claude-code/skills/content",
+        params={
+            "path": "/demo@local/review/assets/logo.png",
+            "scope": "plugin",
+            "raw": "true",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.content == service.binary_content
+    assert response.headers["content-type"] == "image/png"
+    assert service.binary_calls == [("/demo@local/review/assets/logo.png", "plugin")]
 
 
 def test_skills_router_plugin_endpoint_exception_returns_empty(monkeypatch) -> None:

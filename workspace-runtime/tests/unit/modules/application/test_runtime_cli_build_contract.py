@@ -103,7 +103,7 @@ def test_runtime_compose_services_use_only_scoped_state_and_control_credentials(
             checked_services += 1
             names = _environment_names(service.get("environment"))
             assert {
-                "AILERON_RUNTIME_STATE_DATABASE_URL_FILE",
+                "AILERON_RUNTIME_DATABASE_CONNECTION_FILE",
                 "AILERON_RUNTIME_CONTROL_TOKEN_FILE",
                 "AILERON_RUNTIME_INSTANCE_ID",
             } <= names

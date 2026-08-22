@@ -8,9 +8,15 @@ from typing import Any
 import httpx
 import pytest
 from aileron_marketplace_core import (
-    MarketplaceUserCopyProfilePreview,
-    UserCopyApplyMetadataContract,
-    UserCopyPreflightRequestContract,
+    PluginPackageFormat,
+    PluginReleaseIdentity,
+    UserCopyProjectionApplyMetadataContract,
+    UserCopyProjectionPreflightRequestContract,
+    UserCopyResourceType,
+    UserCopySourceKind,
+    UserCopySourceProfile,
+    UserCopySourceProfilePreviewContract,
+    UserCopySourceResource,
 )
 
 import app.modules.marketplace.runtime_client as runtime_client_module
@@ -57,44 +63,51 @@ def _client(
 
 
 def _user_copy_contracts() -> tuple[
-    UserCopyPreflightRequestContract,
-    UserCopyApplyMetadataContract,
+    UserCopyProjectionPreflightRequestContract,
+    UserCopyProjectionApplyMetadataContract,
 ]:
-    preview = MarketplaceUserCopyProfilePreview.model_validate(
-        {
-            "profileVersion": 1,
-            "provider": "claude-code",
-            "profileDigest": "b" * 64,
-            "resources": [],
-            "dependencyPayloads": [],
-            "blockedResources": [],
-        }
+    profile = UserCopySourceProfile(
+        package_format=PluginPackageFormat.CLAUDE_NATIVE,
+        release_identity=PluginReleaseIdentity(
+            catalog_plugin_id="managed/document-skills",
+            revision="a" * 64,
+        ),
+        resources=(),
     )
-    request = UserCopyPreflightRequestContract(
-        provider="claude-code",
-        packageId="document-skills",
-        revision="a" * 64,
+    preview = UserCopySourceProfilePreviewContract.model_validate(
+        {**profile.canonical_dict(), "profileDigest": profile.profile_digest}
+    )
+    request = UserCopyProjectionPreflightRequestContract(
+        packageFormat="claude-native",
+        targetClient="claude-code",
+        catalogPluginId="managed/document-skills",
+        releaseRevision="a" * 64,
         workspaceId="workspace-1",
         runtimeInstanceId="11111111-1111-4111-8111-111111111111",
-        expectedSourceDigest=preview.source_digest,
-        expectedProfileVersion=1,
-        expectedProfileDigest="b" * 64,
-        userCopyProfilePreview=preview,
+        expectedSourceDigest="9" * 64,
+        expectedProfileVersion=2,
+        expectedProfileDigest=profile.profile_digest,
+        sourceProfile=preview,
     )
-    metadata = UserCopyApplyMetadataContract(
+    metadata = UserCopyProjectionApplyMetadataContract(
         operationId="d" * 32,
-        provider="claude-code",
-        packageId="document-skills",
-        revision="a" * 64,
+        packageFormat="claude-native",
+        targetClient="claude-code",
+        catalogPluginId="managed/document-skills",
+        releaseRevision="a" * 64,
         workspaceId="workspace-1",
         runtimeInstanceId="11111111-1111-4111-8111-111111111111",
-        providerStateRootId=f"psr_{'e' * 64}",
-        expectedSourceDigest=preview.source_digest,
+        targetClientStateRootId=f"tcsr_{'e' * 64}",
+        expectedSourceDigest="9" * 64,
         expectedArchiveDigest="c" * 64,
         expectedPackageTreeDigest="d" * 64,
-        expectedProfileVersion=1,
-        expectedProfileDigest="b" * 64,
+        expectedProfileVersion=2,
+        expectedProfileDigest=profile.profile_digest,
+        expectedProjectionDigest="8" * 64,
         expectedMaterializationDigest="f" * 64,
+        acceptPartialCopy=False,
+        expectedSkippedCount=0,
+        overwriteApprovals=[],
     )
     return request, metadata
 
@@ -116,11 +129,11 @@ def test_runtime_client_uses_one_shot_install_path_and_action(monkeypatch) -> No
 
     payload = {
         "operationId": "operation-1",
-        "provider": "codex",
+        "target_client": "codex",
         "packageId": "github",
         "marketplaceId": "private-marketplace",
         "remoteUrl": "git@gitlab.example:team/marketplace.git",
-        "publishRef": "main",
+        "registryRef": "main",
         "workspaceId": "workspace-1",
         "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
     }
@@ -157,17 +170,20 @@ def test_runtime_client_user_copy_uses_exact_paths_and_multipart(
     request, metadata = _user_copy_contracts()
     preflight_response = {
         "status": "ready",
-        "provider": "claude-code",
-        "packageId": "document-skills",
-        "revision": "a" * 64,
+        "packageFormat": "claude-native",
+        "targetClient": "claude-code",
+        "catalogPluginId": "managed/document-skills",
+        "releaseRevision": "a" * 64,
         "workspaceId": "workspace-1",
         "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
-        "providerStateRootId": f"psr_{'e' * 64}",
+        "targetClientStateRootId": f"tcsr_{'e' * 64}",
         "sourceDigest": request.expected_source_digest,
-        "profileVersion": 1,
-        "profileDigest": "b" * 64,
+        "profileVersion": 2,
+        "profileDigest": request.expected_profile_digest,
+        "projectionDigest": "8" * 64,
         "materializationDigest": "f" * 64,
         "resources": [],
+        "skippedResources": [],
         "conflicts": [],
         "blockingIssues": [],
     }
@@ -180,14 +196,16 @@ def test_runtime_client_user_copy_uses_exact_paths_and_multipart(
             json={
                 "status": "completed",
                 "operationId": "d" * 32,
-                "provider": "claude-code",
-                "packageId": "document-skills",
-                "revision": "a" * 64,
+                "packageFormat": "claude-native",
+                "targetClient": "claude-code",
+                "catalogPluginId": "managed/document-skills",
+                "releaseRevision": "a" * 64,
                 "workspaceId": "workspace-1",
                 "createdCount": 0,
                 "mergedCount": 0,
                 "unchangedCount": 0,
                 "overwrittenCount": 0,
+                "skippedCount": 0,
             },
         )
     )
@@ -236,56 +254,56 @@ def test_user_copy_preflight_omits_unset_structured_resource_fields(
         "runtime_command_headers",
         lambda **_kwargs: {},
     )
-    preview = MarketplaceUserCopyProfilePreview.model_validate(
-        {
-            "profileVersion": 1,
-            "provider": "claude-code",
-            "profileDigest": "b" * 64,
-            "resources": [
-                {
-                    "resourceType": "skill",
-                    "resourceId": "claude-api",
-                    "sourceKind": "plugin-component",
-                    "sourceLocator": "skills/claude-api",
-                    "targetResource": "skills",
-                    "copySemantics": "create-directory",
-                    "relativeTarget": "claude-api",
-                    "sourceDigest": "c" * 64,
-                    "dependencyPayloadRequired": False,
-                    "dependencyPayloadProjectable": True,
-                }
-            ],
-            "dependencyPayloads": [],
-            "blockedResources": [],
-        }
+    profile = UserCopySourceProfile(
+        package_format=PluginPackageFormat.CLAUDE_NATIVE,
+        release_identity=PluginReleaseIdentity(
+            catalog_plugin_id="managed/claude-api",
+            revision="a" * 64,
+        ),
+        resources=(
+            UserCopySourceResource(
+                resource_type=UserCopyResourceType.SKILL,
+                resource_id="claude-api",
+                source_kind=UserCopySourceKind.PLUGIN_COMPONENT,
+                source_locator="skills/claude-api",
+                source_digest="c" * 64,
+            ),
+        ),
     )
-    request = UserCopyPreflightRequestContract(
-        provider="claude-code",
-        packageId="claude-api",
-        revision="a" * 64,
+    preview = UserCopySourceProfilePreviewContract.model_validate(
+        {**profile.canonical_dict(), "profileDigest": profile.profile_digest}
+    )
+    request = UserCopyProjectionPreflightRequestContract(
+        packageFormat="claude-native",
+        targetClient="claude-code",
+        catalogPluginId="managed/claude-api",
+        releaseRevision="a" * 64,
         workspaceId="workspace-1",
         runtimeInstanceId="11111111-1111-4111-8111-111111111111",
-        expectedSourceDigest=preview.source_digest,
-        expectedProfileVersion=1,
-        expectedProfileDigest="b" * 64,
-        userCopyProfilePreview=preview,
+        expectedSourceDigest="9" * 64,
+        expectedProfileVersion=2,
+        expectedProfileDigest=profile.profile_digest,
+        sourceProfile=preview,
     )
     client, requests = _client(
         httpx.Response(
             200,
             json={
                 "status": "ready",
-                "provider": "claude-code",
-                "packageId": "claude-api",
-                "revision": "a" * 64,
+                "packageFormat": "claude-native",
+                "targetClient": "claude-code",
+                "catalogPluginId": "managed/claude-api",
+                "releaseRevision": "a" * 64,
                 "workspaceId": "workspace-1",
                 "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
-                "providerStateRootId": f"psr_{'e' * 64}",
-                "sourceDigest": preview.source_digest,
-                "profileVersion": 1,
-                "profileDigest": "b" * 64,
+                "targetClientStateRootId": f"tcsr_{'e' * 64}",
+                "sourceDigest": "9" * 64,
+                "profileVersion": 2,
+                "profileDigest": profile.profile_digest,
+                "projectionDigest": "8" * 64,
                 "materializationDigest": "f" * 64,
                 "resources": [],
+                "skippedResources": [],
                 "conflicts": [],
                 "blockingIssues": [],
             },
@@ -299,9 +317,9 @@ def test_user_copy_preflight_omits_unset_structured_resource_fields(
         request=request,
     )
 
-    resource_payload = requests[0]["json"]["userCopyProfilePreview"]["resources"][0]
-    assert "structuredValueType" not in resource_payload
-    assert "structuredValueTemplate" not in resource_payload
+    resource_payload = requests[0]["json"]["sourceProfile"]["resources"][0]
+    assert "structuredValue" not in resource_payload
+    assert "sourceJsonPointer" not in resource_payload
 
 
 def test_runtime_client_preserves_canonical_runtime_error(monkeypatch) -> None:

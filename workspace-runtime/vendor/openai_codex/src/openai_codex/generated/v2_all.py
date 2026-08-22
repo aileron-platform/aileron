@@ -3607,6 +3607,12 @@ class SpendControlLimitSnapshot(BaseModel):
     used: str
 
 
+class SubAgentActivityKind(Enum):
+    started = "started"
+    interacted = "interacted"
+    interrupted = "interrupted"
+
+
 class SubAgentSourceValue(Enum):
     review = "review"
     compact = "compact"
@@ -6669,6 +6675,19 @@ class CollabAgentToolCallThreadItem(BaseModel):
     ]
 
 
+class SubAgentActivityThreadItem(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    agent_path: Annotated[str, Field(alias="agentPath")]
+    agent_thread_id: Annotated[str, Field(alias="agentThreadId")]
+    id: str
+    kind: SubAgentActivityKind
+    type: Annotated[
+        Literal["subAgentActivity"], Field(title="SubAgentActivityThreadItemType")
+    ]
+
+
 class WebSearchThreadItem(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
@@ -6691,6 +6710,7 @@ class ThreadItem(
         | McpToolCallThreadItem
         | DynamicToolCallThreadItem
         | CollabAgentToolCallThreadItem
+        | SubAgentActivityThreadItem
         | WebSearchThreadItem
         | ImageViewThreadItem
         | ImageGenerationThreadItem
@@ -6713,6 +6733,7 @@ class ThreadItem(
         | McpToolCallThreadItem
         | DynamicToolCallThreadItem
         | CollabAgentToolCallThreadItem
+        | SubAgentActivityThreadItem
         | WebSearchThreadItem
         | ImageViewThreadItem
         | ImageGenerationThreadItem

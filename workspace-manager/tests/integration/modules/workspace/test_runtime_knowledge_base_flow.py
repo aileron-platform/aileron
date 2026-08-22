@@ -80,6 +80,7 @@ def kb_runtime_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 def test_execution_plan_uses_latest_read_only_candidate_snapshot(
     test_app,
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ):
     _, session_factory = test_app
     owner_id, workspace_id = _create_owner_and_workspace(session_factory)
@@ -100,12 +101,15 @@ def test_execution_plan_uses_latest_read_only_candidate_snapshot(
         "app.modules.container_images.catalog.get_container_image_service",
         lambda: fake_image_service,
     )
+    runtime_database_url_file = tmp_path / "runtime-database-url"
+    runtime_database_url_file.write_text(
+        "postgresql://test_user:test_password@postgres-test:5432/"
+        "test_workspace_manager",
+        encoding="utf-8",
+    )
     runtime_database_service = WorkspaceRuntimeDatabaseService(
         settings=Settings(
-            DATABASE_URL=(
-                "postgresql://test_user:test_password@postgres-test:5432/"
-                "test_workspace_manager"
-            ),
+            DATABASE_URL_FILE=str(runtime_database_url_file),
             RUNTIME_DATABASE_CREDENTIAL_KEY_FILE="/unused",
         ),
         credential_key=b"test-runtime-database-credential-key",
@@ -138,7 +142,7 @@ def test_execution_plan_uses_latest_read_only_candidate_snapshot(
         plan = RuntimeProvisionService(
             session,
             runtime_database_service=runtime_database_service,
-        ).prepare_execution_plane(
+        )._prepare_generation(
             workspace,
             runtime_instance_id="f1e4b143-628e-46e2-8ab0-df8687eb163c",
         )
@@ -165,7 +169,7 @@ def test_execution_plan_uses_latest_read_only_candidate_snapshot(
         plan = RuntimeProvisionService(
             session,
             runtime_database_service=runtime_database_service,
-        ).prepare_execution_plane(
+        )._prepare_generation(
             workspace,
             runtime_instance_id="998d9f26-279d-4b6f-9ae4-31c146025bba",
         )
@@ -188,7 +192,7 @@ def test_execution_plan_uses_latest_read_only_candidate_snapshot(
         plan = RuntimeProvisionService(
             session,
             runtime_database_service=runtime_database_service,
-        ).prepare_execution_plane(
+        )._prepare_generation(
             workspace,
             runtime_instance_id="a1a55307-256d-480c-b1d8-b92398cb5035",
         )

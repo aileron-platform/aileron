@@ -1,4 +1,4 @@
-"""Shared public models and sanitizers for provider plugin resources."""
+"""Shared public models and sanitizers for target_client plugin resources."""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class PluginResourceProvenance(BaseModel):
-    """Stable logical provenance for a read-only provider plugin resource."""
+    """Stable logical provenance for a read-only target_client plugin resource."""
 
     origin: Literal["marketplace-plugin"] = "marketplace-plugin"
-    provider: Literal["claude-code", "codex"]
+    target_client: Literal["claude-code", "codex"] = Field(alias="targetClient")
     plugin_id: str = Field(alias="pluginId")
     marketplace_id: str = Field(alias="marketplaceId")
 
@@ -35,14 +35,14 @@ _REDACTED = "[REDACTED]"
 
 def plugin_resource_provenance(
     *,
-    provider: Literal["claude-code", "codex"],
+    target_client: Literal["claude-code", "codex"],
     plugin_id: str,
     marketplace_id: str,
 ) -> PluginResourceProvenance:
-    """Build logical provenance without exposing a provider installation path."""
+    """Build logical provenance without exposing a target_client installation path."""
 
     return PluginResourceProvenance(
-        provider=provider,
+        target_client=target_client,
         pluginId=plugin_id,
         marketplaceId=marketplace_id,
     )
@@ -53,7 +53,7 @@ def sanitize_plugin_definition(
     *,
     installed_root: Path | None = None,
 ) -> Any:
-    """Redact secrets and replace the provider installation root with a token."""
+    """Redact secrets and replace the target_client installation root with a token."""
 
     root = (
         str(installed_root.resolve(strict=False))
@@ -68,11 +68,11 @@ def _sanitize_value(value: Any, *, installed_root: str | None) -> Any:
         normalized = value
         if installed_root:
             normalized = normalized.replace(installed_root, "${PLUGIN_ROOT}")
-        for provider_placeholder in (
+        for root_placeholder in (
             "${CLAUDE_PLUGIN_ROOT}",
             "${CODEX_PLUGIN_ROOT}",
         ):
-            normalized = normalized.replace(provider_placeholder, "${PLUGIN_ROOT}")
+            normalized = normalized.replace(root_placeholder, "${PLUGIN_ROOT}")
         return _sanitize_url(normalized)
     if isinstance(value, list):
         return [_sanitize_value(item, installed_root=installed_root) for item in value]

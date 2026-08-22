@@ -1,4 +1,4 @@
-"""Provider mutation locks and user-copy state helpers."""
+"""Target client mutation locks and user-copy state helpers."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def write_json_atomic(path: Path, value: Mapping[str, Any]) -> None:
 
 
 class MarketplaceMutationStore:
-    """Shared provider mutation lock and one-shot user-copy recovery root."""
+    """Shared target_client mutation lock and one-shot user-copy recovery root."""
 
     def __init__(self, root: Path, *, lock_timeout_seconds: float = 10.0) -> None:
         self.root = root
@@ -78,75 +78,27 @@ class MarketplaceMutationStore:
         for path in (self.root, self.locks_root):
             if path.is_symlink() or (path.exists() and not path.is_dir()):
                 raise MarketplaceOperationError(
-                    "marketplace.install.provider_state_not_isolated",
+                    "marketplace.install.target_client_state_not_isolated",
                     http_status=503,
                 )
             path.mkdir(parents=True, exist_ok=True, mode=0o700)
             os.chmod(path, 0o700)
 
-    @property
-    def provider_state_root_id(self) -> str:
-        """Return the opaque identity used by the user-copy stale-plan proof."""
-
-        self.ensure()
-        identity_path = self.root / "identity.json"
-        if identity_path.is_symlink():
-            raise MarketplaceOperationError(
-                "marketplace.install.provider_state_not_isolated",
-                http_status=503,
-            )
-        if identity_path.exists():
-            return self._read_provider_state_root_id(identity_path)
-        root_id = f"psr_{secrets.token_hex(32)}"
-        temporary = identity_path.with_name(
-            f".{identity_path.name}.{secrets.token_hex(8)}.tmp"
-        )
-        payload = {
-            "identityVersion": 1,
-            "providerStateRootId": root_id,
-        }
-        try:
-            descriptor = os.open(
-                temporary,
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-                0o600,
-            )
-            with os.fdopen(descriptor, "wb") as handle:
-                handle.write(
-                    json.dumps(
-                        payload,
-                        ensure_ascii=False,
-                        separators=(",", ":"),
-                        sort_keys=True,
-                    ).encode("utf-8")
-                )
-                handle.flush()
-                os.fsync(handle.fileno())
-            try:
-                os.link(temporary, identity_path)
-            except FileExistsError:
-                return self._read_provider_state_root_id(identity_path)
-            os.chmod(identity_path, 0o600)
-            fsync_directory(identity_path.parent)
-            return root_id
-        finally:
-            temporary.unlink(missing_ok=True)
-
     @contextmanager
-    def provider_lock(
+    def target_client_lock(
         self,
         *,
-        provider: str,
+        target_client: str,
     ) -> Iterator[None]:
-        """Serialize all provider settings and CLI mutations."""
+        """Serialize all target_client settings and CLI mutations."""
 
-        if provider not in {"claude-code", "codex"}:
+        if target_client not in {"claude-code", "codex"}:
             raise MarketplaceOperationError(
-                "marketplace.install.provider_invalid",
+                "marketplace.install.target_client_invalid",
                 http_status=422,
             )
         self.ensure()
-        key = f"provider:{provider}"
+        key = f"target_client:{target_client}"
         lock_path = self.locks_root / (
             f"{sha256(key.encode('utf-8')).hexdigest()}.lock"
         )
@@ -181,36 +133,15 @@ class MarketplaceMutationStore:
             value = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise MarketplaceOperationError(
-                "marketplace.install.provider_state_not_isolated",
+                "marketplace.install.target_client_state_not_isolated",
                 http_status=503,
             ) from exc
         if not isinstance(value, dict):
             raise MarketplaceOperationError(
-                "marketplace.install.provider_state_not_isolated",
+                "marketplace.install.target_client_state_not_isolated",
                 http_status=503,
             )
         return value
-
-    @classmethod
-    def _read_provider_state_root_id(cls, path: Path) -> str:
-        identity = cls._read_json(path)
-        root_id = identity.get("providerStateRootId")
-        if (
-            identity.get("identityVersion") == 1
-            and isinstance(root_id, str)
-            and root_id.startswith("psr_")
-            and len(root_id) == 68
-            and all(
-                character in "0123456789abcdef"
-                for character in root_id.removeprefix("psr_")
-            )
-        ):
-            return root_id
-        raise MarketplaceOperationError(
-            "marketplace.install.provider_state_not_isolated",
-            http_status=503,
-        )
-
 
 __all__ = [
     "MarketplaceMutationStore",

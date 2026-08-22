@@ -301,12 +301,18 @@ def test_real_beat_recovers_broker_failure_and_expired_worker_once(
     _seed_expired_running_job(engine)
     worker_log = tmp_path / "celery-worker.log"
     beat_log = tmp_path / "celery-beat.log"
+    broker_url_file = tmp_path / "celery-broker-url"
+    result_backend_file = tmp_path / "celery-result-backend-url"
+    broker_url_file.write_text(broker_url, encoding="utf-8")
+    result_backend_file.write_text(broker_url, encoding="utf-8")
+    worker_database_url_file = tmp_path / "worker-database-url"
+    worker_database_url_file.write_text(worker_database_url, encoding="utf-8")
     worker_environment = os.environ.copy()
     worker_environment.update(
         {
-            "CELERY_BROKER_URL": broker_url,
-            "CELERY_RESULT_BACKEND": broker_url,
-            "DATABASE_URL": worker_database_url,
+            "CELERY_BROKER_URL_FILE": str(broker_url_file),
+            "CELERY_RESULT_BACKEND_FILE": str(result_backend_file),
+            "DATABASE_URL_FILE": str(worker_database_url_file),
             "PYTHONPATH": "/workspace-manager",
             "RUNTIME_JOB_CLAIM_TIMEOUT_SECONDS": "31",
             "RUNTIME_JOB_DISPATCH_BASE_DELAY_SECONDS": "1",

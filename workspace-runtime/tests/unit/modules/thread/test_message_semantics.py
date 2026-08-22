@@ -94,8 +94,11 @@ class FakeRunner:
     async def stop(self, execution_id: str) -> None:
         self.stopped.append(execution_id)
 
+    async def wait(self, execution_id: str) -> None:
+        return None
+
     def is_alive(self, execution_id: str) -> bool:
-        return True
+        return execution_id not in self.stopped
 
 
 @dataclass
@@ -115,6 +118,14 @@ class FailingStopRunner(FakeRunner):
 
     def is_alive(self, execution_id: str) -> bool:
         return self.alive
+
+
+@dataclass
+class StuckRunner(FakeRunner):
+    """A runner that never confirms termination after `stop()`."""
+
+    def is_alive(self, execution_id: str) -> bool:
+        return True
 
 
 class TransitionBeforeLockRepository:
@@ -221,6 +232,7 @@ async def create_thread(
     error_code: str | None = None,
     error_info: dict[str, Any] | None = None,
     error_message: str | None = None,
+    queued_messages: list[dict[str, Any]] | None = None,
 ) -> ThreadModel:
     thread = await ThreadRepository(session, workspace_id="workspace-a").create(
         ThreadModel(
@@ -233,7 +245,7 @@ async def create_thread(
             model="claude-opus-4-8",
             claude_mode="execute",
             status=status.value,
-            queued_messages=[],
+            queued_messages=queued_messages or [],
             draft_message=None,
             error_code=error_code,
             error_info=error_info,
@@ -323,6 +335,26 @@ async def test_post_message_queues_payload_while_thread_is_running(
     ]
     assert len(runner.requests) == 0
     assert sink.events[-1]["type"] == "messages_updated"
+
+
+@pytest.mark.asyncio
+async def test_post_message_queues_payload_while_thread_is_stopping(
+    message_session: AsyncSession,
+) -> None:
+    service, runner, _sink = await make_service(message_session)
+    thread = await create_thread(message_session, status=ThreadStatus.STOPPING)
+
+    updated = await service.post_message(
+        thread_id=thread.id,
+        user_id="user-a",
+        message={"text": "arrived mid-stop", "attachments": []},
+    )
+
+    assert updated.status == ThreadStatus.STOPPING.value
+    assert [message["text"] for message in updated.queued_messages] == [
+        "arrived mid-stop"
+    ]
+    assert len(runner.requests) == 0
 
 
 @pytest.mark.asyncio
@@ -606,54 +638,56 @@ async def test_list_threads_does_not_reconcile_stopping_thread_as_runtime_restar
 
 
 @pytest.mark.asyncio
-async def test_cancel_rejects_non_running_thread(
+async def test_stop_rejects_non_running_thread(
     message_session: AsyncSession,
 ) -> None:
     service, _runner, _sink = await make_service(message_session)
     thread = await create_thread(message_session, status=ThreadStatus.COMPLETE)
 
     with pytest.raises(ThreadApiError) as exc_info:
-        await service.cancel_thread(thread_id=thread.id, user_id="user-a")
+        await service.stop_thread(thread_id=thread.id, user_id="user-a")
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.error_code == "invalid_state"
 
 
 @pytest.mark.asyncio
-async def test_cancel_queued_thread_goes_directly_to_canceled_and_stops_runner(
+async def test_stop_queued_thread_transitions_through_stopping_to_canceled_and_stops_runner(
     message_session: AsyncSession,
 ) -> None:
     service, runner, sink = await make_service(message_session)
     thread = await create_thread(message_session, status=ThreadStatus.QUEUED)
 
-    updated = await service.cancel_thread(thread_id=thread.id, user_id="user-a")
+    updated = await service.stop_thread(thread_id=thread.id, user_id="user-a")
 
     assert updated.status == ThreadStatus.CANCELED.value
     assert runner.stopped == ["execution-1"]
-    assert sink.events[-1]["user_id"] == "user-a"
-    assert sink.events[-1]["workspace_id"] == "workspace-a"
-    assert sink.events[-1]["thread_id"] == thread.id
-    assert sink.events[-1]["type"] == "timeline_updated"
-    assert sink.events[-1]["status"] == "canceled"
-    assert sink.events[-1]["turns"][0]["id"] == f"{thread.id}-turn"
+    status_events = [event for event in sink.events if event["type"] == "status_updated"]
+    assert [event["status"] for event in status_events[-2:]] == ["stopping", "canceled"]
+    timeline_events = [event for event in sink.events if event["type"] == "timeline_updated"]
+    assert timeline_events[-1]["user_id"] == "user-a"
+    assert timeline_events[-1]["workspace_id"] == "workspace-a"
+    assert timeline_events[-1]["thread_id"] == thread.id
+    assert timeline_events[-1]["turns"][0]["id"] == f"{thread.id}-turn"
 
 
 @pytest.mark.asyncio
-async def test_cancel_working_thread_emits_stopping_then_canceled_and_stops_runner(
+async def test_stop_working_thread_transitions_through_stopping_to_canceled_and_stops_runner(
     message_session: AsyncSession,
 ) -> None:
     service, runner, sink = await make_service(message_session)
     thread = await create_thread(message_session, status=ThreadStatus.WORKING)
 
-    updated = await service.cancel_thread(thread_id=thread.id, user_id="user-a")
+    updated = await service.stop_thread(thread_id=thread.id, user_id="user-a")
 
     assert updated.status == ThreadStatus.CANCELED.value
     assert runner.stopped == ["execution-1"]
-    assert [event["status"] for event in sink.events[-2:]] == ["stopping", "canceled"]
+    status_events = [event for event in sink.events if event["type"] == "status_updated"]
+    assert [event["status"] for event in status_events[-2:]] == ["stopping", "canceled"]
 
 
 @pytest.mark.asyncio
-async def test_cancel_working_thread_finalizes_canceled_after_runner_stop_failure(
+async def test_stop_working_thread_finalizes_canceled_after_runner_stop_failure(
     message_session: AsyncSession,
     postgres_engine,
 ) -> None:
@@ -670,7 +704,7 @@ async def test_cancel_working_thread_finalizes_canceled_after_runner_stop_failur
     thread = await create_thread(message_session, status=ThreadStatus.WORKING)
     thread_id = thread.id
 
-    updated = await service.cancel_thread(thread_id=thread_id, user_id="user-a")
+    updated = await service.stop_thread(thread_id=thread_id, user_id="user-a")
     detail = await service.get_thread(thread_id, user_id="user-a")
     stored = await ThreadRepository(
         message_session,
@@ -684,4 +718,134 @@ async def test_cancel_working_thread_finalizes_canceled_after_runner_stop_failur
     assert stored.status == ThreadStatus.CANCELED.value
     assert stored.active_turn_execution_id is None
     assert runner.stopped == ["execution-1"]
-    assert [event["status"] for event in sink.events[-2:]] == ["stopping", "canceled"]
+    status_events = [event for event in sink.events if event["type"] == "status_updated"]
+    assert [event["status"] for event in status_events[-2:]] == ["stopping", "canceled"]
+
+
+@pytest.mark.asyncio
+async def test_stop_dequeues_next_message_and_keeps_remainder_in_fifo_order(
+    message_session: AsyncSession,
+) -> None:
+    service, runner, sink = await make_service(message_session)
+    thread = await create_thread(
+        message_session,
+        status=ThreadStatus.WORKING,
+        queued_messages=[
+            {"id": "second", "text": "second message"},
+            {"id": "third", "text": "third message"},
+        ],
+    )
+
+    updated = await service.stop_thread(thread_id=thread.id, user_id="user-a")
+
+    assert updated.status == ThreadStatus.QUEUED.value
+    assert [message["id"] for message in updated.queued_messages] == ["third"]
+    assert runner.stopped == ["execution-1"]
+    assert len(runner.reserved) == 1
+    next_execution_id = runner.reserved[0]
+    assert runner.requests[-1].prompt_text == "second message"
+    assert next_execution_id in runner.callbacks
+
+    stored = await ThreadRepository(
+        message_session, workspace_id="workspace-a"
+    ).get(thread.id, user_id="user-a")
+    assert stored is not None
+    assert stored.status == ThreadStatus.QUEUED.value
+    assert stored.active_turn_execution_id == next_execution_id
+    assert [message["id"] for message in stored.queued_messages] == ["third"]
+
+    old_execution = await ThreadTurnRepository(message_session).get_execution(
+        "execution-1"
+    )
+    assert old_execution is not None
+    assert old_execution.status == "canceled"
+
+
+@pytest.mark.asyncio
+async def test_stop_confirms_runner_stopped_before_dequeuing_next_message(
+    message_session: AsyncSession,
+) -> None:
+    @dataclass
+    class OrderTrackingRunner(FakeRunner):
+        call_order: list[str] = field(default_factory=list)
+
+        def reserve(self) -> str:
+            self.call_order.append("reserve")
+            return super().reserve()
+
+        async def stop(self, execution_id: str) -> None:
+            self.call_order.append("stop")
+            await super().stop(execution_id)
+
+        async def wait(self, execution_id: str) -> None:
+            self.call_order.append("wait")
+            await super().wait(execution_id)
+
+    tracking_runner = OrderTrackingRunner()
+    service, runner, _sink = await make_service(message_session, runner=tracking_runner)
+    thread = await create_thread(
+        message_session,
+        status=ThreadStatus.WORKING,
+        queued_messages=[{"id": "second", "text": "second message"}],
+    )
+
+    await service.stop_thread(thread_id=thread.id, user_id="user-a")
+
+    assert runner.call_order.index("stop") < runner.call_order.index("reserve")
+    assert runner.call_order.index("wait") < runner.call_order.index("reserve")
+
+
+@pytest.mark.asyncio
+async def test_stop_confirmation_timeout_keeps_thread_stopping_with_queue_intact(
+    message_session: AsyncSession,
+) -> None:
+    service, runner, sink = await make_service(message_session, runner=StuckRunner())
+    thread = await create_thread(
+        message_session,
+        status=ThreadStatus.WORKING,
+        queued_messages=[{"id": "second", "text": "second message"}],
+    )
+
+    with pytest.raises(ThreadApiError) as exc_info:
+        await service.stop_thread(thread_id=thread.id, user_id="user-a")
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.error_code == "stop_confirmation_failed"
+
+    stored = await ThreadRepository(
+        message_session, workspace_id="workspace-a"
+    ).get(thread.id, user_id="user-a")
+    assert stored is not None
+    assert stored.status == ThreadStatus.STOPPING.value
+    assert stored.active_turn_execution_id == "execution-1"
+    assert [message["id"] for message in stored.queued_messages] == ["second"]
+    assert runner.reserved == []
+    status_events = [event for event in sink.events if event["type"] == "status_updated"]
+    assert status_events[-1]["status"] == "stopping"
+
+
+@pytest.mark.asyncio
+async def test_repeated_stop_finalize_for_same_execution_is_idempotent(
+    message_session: AsyncSession,
+) -> None:
+    service, runner, _sink = await make_service(message_session)
+    thread = await create_thread(
+        message_session,
+        status=ThreadStatus.WORKING,
+        queued_messages=[{"id": "second", "text": "second message"}],
+    )
+
+    first = await service._execution.stop_current_turn(thread.id, "execution-1")
+    second = await service._execution.stop_current_turn(thread.id, "execution-1")
+
+    assert first is True
+    assert second is False
+    assert len(runner.reserved) == 1
+    assert len(runner.requests) == 1
+
+    stored = await ThreadRepository(
+        message_session, workspace_id="workspace-a"
+    ).get(thread.id, user_id="user-a")
+    assert stored is not None
+    assert stored.status == ThreadStatus.QUEUED.value
+    assert stored.queued_messages == []

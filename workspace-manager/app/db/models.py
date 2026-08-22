@@ -64,6 +64,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
     )
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
@@ -1769,11 +1770,32 @@ class MarketplaceActivity(Base):
     workspace_id: Mapped[Optional[str]] = mapped_column(
         String(64), ForeignKey("workspaces.id", ondelete="SET NULL")
     )
-    provider: Mapped[Optional[str]] = mapped_column(String(32))
+    workspace_id_snapshot: Mapped[Optional[str]] = mapped_column(String(64))
+    package_format: Mapped[Optional[str]] = mapped_column(String(32))
+    target_client: Mapped[Optional[str]] = mapped_column(String(32))
     package_id: Mapped[Optional[str]] = mapped_column(String(255))
+    catalog_plugin_id: Mapped[Optional[str]] = mapped_column(String(1024))
+    release_revision: Mapped[Optional[str]] = mapped_column(String(64))
+    profile_digest: Mapped[Optional[str]] = mapped_column(String(64))
+    projection_digest: Mapped[Optional[str]] = mapped_column(String(64))
+    materialization_digest: Mapped[Optional[str]] = mapped_column(String(64))
+    projected_count: Mapped[Optional[int]] = mapped_column(Integer)
+    skipped_count: Mapped[Optional[int]] = mapped_column(Integer)
+    conflict_count: Mapped[Optional[int]] = mapped_column(Integer)
+    created_count: Mapped[Optional[int]] = mapped_column(Integer)
+    merged_count: Mapped[Optional[int]] = mapped_column(Integer)
+    unchanged_count: Mapped[Optional[int]] = mapped_column(Integer)
+    overwritten_count: Mapped[Optional[int]] = mapped_column(Integer)
+    target_locators: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'"), nullable=False
+    )
+    diagnostic_codes: Mapped[list[str]] = mapped_column(
+        JSON, default=list, server_default=text("'[]'"), nullable=False
+    )
     action: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     marketplace_id: Mapped[Optional[str]] = mapped_column(String(64))
+    source_id: Mapped[Optional[str]] = mapped_column(String(255))
     error_code: Mapped[Optional[str]] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
@@ -1781,8 +1803,13 @@ class MarketplaceActivity(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "provider IS NULL OR provider IN ('claude-code', 'codex')",
-            name="marketplace_activities_provider_check",
+            "package_format IS NULL OR package_format IN "
+            "('codex-native', 'claude-native', 'agent-plugin/1.0.0')",
+            name="marketplace_activities_package_format_check",
+        ),
+        CheckConstraint(
+            "target_client IS NULL OR target_client IN ('claude-code', 'codex')",
+            name="marketplace_activities_target_client_check",
         ),
         CheckConstraint(
             "action IN ('install', 'copy', 'import', 'delete')",
@@ -1804,4 +1831,36 @@ class MarketplaceActivity(Base):
             "created_at",
             "id",
         ),
+    )
+
+
+class MarketplaceCommandResult(Base):
+    """Append-only child receipt for one target-client CLI invocation."""
+
+    __tablename__ = "marketplace_command_results"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    activity_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("marketplace_activities.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    operation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    argv_display: Mapped[str] = mapped_column(String(4096), nullable=False)
+    exit_code: Mapped[Optional[int]] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    stdout: Mapped[Optional[str]] = mapped_column(Text)
+    stderr: Mapped[Optional[str]] = mapped_column(Text)
+    stdout_original_byte_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    stderr_original_byte_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    truncated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "activity_id", "sequence", name="uq_marketplace_command_results_sequence"
+        ),
+        Index("ix_marketplace_command_results_operation", "operation_id", "sequence"),
     )

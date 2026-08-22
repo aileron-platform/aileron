@@ -26,11 +26,11 @@ from app.config.settings import get_settings
 from app.modules.marketplace.cache import MarketplaceCache
 from app.modules.marketplace.models import (
     MarketplacePackageSummary,
-    MarketplaceProvider,
+    MarketplaceTargetClient,
     MarketplaceValidationResult,
 )
-from app.modules.marketplace.providers import (
-    MarketplaceProviderAdapter,
+from app.modules.marketplace.target_clients import (
+    MarketplaceTargetClientAdapter,
     create_marketplace_adapters,
 )
 from app.modules.marketplace.runtime_client import MarketplaceRuntimeClient
@@ -44,7 +44,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class MarketplacePathError(ValueError):
-    """Raised when a Marketplace path would leave its provider root."""
+    """Raised when a Marketplace path would leave its target_client root."""
 
 
 class MarketplaceConflictError(ValueError):
@@ -52,7 +52,7 @@ class MarketplaceConflictError(ValueError):
 
 
 class MarketplaceValidationError(ValueError):
-    """Raised when provider-native package validation blocks a mutation."""
+    """Raised when target_client-native package validation blocks a mutation."""
 
     def __init__(self, results: list[dict[str, Any]]) -> None:
         self.results = results
@@ -65,12 +65,12 @@ class MarketplaceValidationError(ValueError):
 
 
 @dataclass(frozen=True)
-class MarketplacePublishedPackageResolution:
-    """Provider CLI source resolved from the canonical published registry."""
+class MarketplaceManagedPackageResolution:
+    """TargetClient CLI source resolved from the configured managed registry."""
 
     marketplace_id: str
     remote_url: str
-    publish_ref: str
+    registry_ref: str
 
 
 @dataclass(frozen=True)
@@ -78,7 +78,6 @@ class _MarketplacePackageCandidate:
     """Single-package data shared by targeted and registry summary reads."""
 
     summary: MarketplacePackageSummary
-    operation_lifecycle_status: str
     manifest: dict[str, Any]
     validation_results: list[MarketplaceValidationResult]
 
@@ -92,7 +91,7 @@ class _MarketplaceMutationHooks:
         registry_root: Path,
         local_history: ManagerLocalHistoryService,
         invalidation_key: str,
-        package_targets: set[tuple[MarketplaceProvider, str]] | None = None,
+        package_targets: set[tuple[MarketplaceTargetClient, str]] | None = None,
     ) -> None:
         self.service = service
         self.root = root
@@ -118,10 +117,13 @@ class _MarketplaceMutationHooks:
         finally:
             keys = [self.service.cache.registry_index_key()]
             keys.extend(
-                self.service.cache.package_overview_key(provider, package_id)
-                for provider, package_id in sorted(self._package_targets)
+                self.service.cache.package_overview_key(target_client, package_id)
+                for target_client, package_id in sorted(self._package_targets)
             )
             self.service.cache.delete(*keys)
+            self.service.cache.delete_pattern(
+                self.service.cache.package_overview_pattern()
+            )
 
     def check_quota(self, locator: FileLocator, delta_bytes: int) -> None:
         _ = (locator, delta_bytes)
@@ -210,16 +212,53 @@ def _is_generated_marketplace_registry_path(relative_path: str) -> bool:
 
 
 class MarketplaceImportSourceError(ValueError):
-    """Raised when an import source fails safety validation."""
+    """Structured failure in one Marketplace importing stage."""
 
-    def __init__(self, code: str, params: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        code: str,
+        params: dict[str, Any] | None = None,
+        *,
+        stage: str | None = None,
+        source: str | None = None,
+        destination: str | None = None,
+        category: str | None = None,
+    ) -> None:
         self.code = code
         self.params = params or {}
+        self.stage = stage or self._infer_stage(code)
+        self.source = source
+        self.destination = destination
+        self.category = category or self._infer_category(code)
         super().__init__(code)
+
+    @staticmethod
+    def _infer_stage(code: str) -> str:
+        if "clone_failed" in code:
+            return "clone"
+        if "write_failed" in code:
+            return "copy"
+        if "ssh" in code or "token" in code or "credential" in code:
+            return "authenticate"
+        if code.startswith("marketplace.git."):
+            return "publish"
+        return "validate"
+
+    @staticmethod
+    def _infer_category(code: str) -> str:
+        if "clone_failed" in code or code.startswith("marketplace.git."):
+            return "git"
+        if "ssh" in code or "token" in code or "credential" in code:
+            return "authentication"
+        if "path" in code or "symlink" in code:
+            return "path"
+        if "write_failed" in code:
+            return "filesystem"
+        return "validation"
 
 
 MarketplaceValidationAction = Literal[
-    "create", "save", "export", "install", "importCopy"
+    "create", "save", "export", "importSelectors", "importCopy"
 ]
 
 _resource_write_locks = ResourceWriteLockManager()
@@ -269,20 +308,27 @@ class _MarketplaceRegistryContext:
     """Mutable infrastructure shared by one Marketplace workflow graph."""
 
     settings: Any
+    request: Any | None
     db: Session | None
     storage_root: Path
     local_history: ManagerLocalHistoryService
-    adapters: dict[MarketplaceProvider, MarketplaceProviderAdapter]
+    adapters: dict[MarketplaceTargetClient, MarketplaceTargetClientAdapter]
     marketplace_runtime_client: MarketplaceRuntimeClient
     cache: MarketplaceCache
     _generating_publish_manifests: bool
     _stale_threshold: int
 
     @classmethod
-    def create(cls, db: Session | None = None) -> _MarketplaceRegistryContext:
+    def create(
+        cls,
+        db: Session | None = None,
+        *,
+        request: Any | None = None,
+    ) -> _MarketplaceRegistryContext:
         settings = get_settings()
         return cls(
             settings=settings,
+            request=request,
             db=db,
             storage_root=Path(settings.MARKETPLACE_STORAGE_PATH),
             local_history=ManagerLocalHistoryService(
@@ -290,7 +336,7 @@ class _MarketplaceRegistryContext:
             ),
             adapters=create_marketplace_adapters(),
             marketplace_runtime_client=MarketplaceRuntimeClient(),
-            cache=MarketplaceCache(settings.REDIS_URL),
+            cache=MarketplaceCache(settings.redis_url),
             _generating_publish_manifests=False,
             _stale_threshold=settings.GIT_STALE_LOCK_THRESHOLD_SECONDS,
         )

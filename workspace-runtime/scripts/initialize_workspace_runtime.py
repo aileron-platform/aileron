@@ -20,6 +20,9 @@ from urllib.parse import SplitResult, urlsplit, urlunsplit
 from aileron_git_core import build_git_command
 
 
+AGENT_DEFAULTS_DIAGNOSTIC_MAX_BYTES = 4096
+
+
 class BootstrapError(RuntimeError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
@@ -385,12 +388,20 @@ class WorkspaceRuntimeInitializer:
                 env=environment,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
                 check=False,
             )
         except OSError as exc:
             raise BootstrapError("AGENT_DEFAULTS_INIT_FAILED") from exc
         if result.returncode != 0:
+            diagnostic = (result.stderr or "").strip()
+            if diagnostic:
+                print(
+                    "Agent defaults initializer diagnostics: "
+                    f"{diagnostic[-AGENT_DEFAULTS_DIAGNOSTIC_MAX_BYTES:]}",
+                    file=sys.stderr,
+                )
             raise BootstrapError("AGENT_DEFAULTS_INIT_FAILED")
 
     def _run_custom_setup(self) -> None:

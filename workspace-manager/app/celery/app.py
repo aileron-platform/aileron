@@ -13,8 +13,8 @@ CELERY_TIMEZONE = settings.TZ
 
 celery_app = Celery(
     "workspace-manager",
-    broker=settings.CELERY_BROKER_URL,
-    backend=settings.CELERY_RESULT_BACKEND,
+    broker=settings.celery_broker_url,
+    backend=settings.celery_result_backend,
     include=[
         "app.modules.auth.tasks",
         "app.modules.knowledge_base.tasks",

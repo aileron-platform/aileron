@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -94,6 +95,14 @@ func TestTURNReachabilityProfileRejectsUnknownContractVersion(t *testing.T) {
 	profile.ContractVersion = "browser-connectivity/v2"
 	if err := profile.Validate(); err == nil {
 		t.Fatal("unknown contractVersion was accepted")
+	}
+}
+
+func TestTURNReachabilityProfileRejectsStaticCredentialIssuer(t *testing.T) {
+	profile := validTURNProfile()
+	profile.CredentialIssuer.Kind = "staticSecret"
+	if err := profile.Validate(); err == nil || !strings.Contains(err.Error(), "unsupported TURN credential issuer kind") {
+		t.Fatalf("error = %v, want static credential issuer rejection", err)
 	}
 }
 

@@ -2,15 +2,18 @@
 
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.models import TimestampMixin
+from app.modules.identity.provider_email import ProviderEmailStr
 
 
 class UserBase(BaseModel):
     """User basic fields"""
 
-    email: Optional[EmailStr] = Field(default=None, description="Email address")
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    email: Optional[ProviderEmailStr] = Field(default=None, description="Email address")
     username: str = Field(description="Username")
     first_name: Optional[str] = Field(default=None, description="First name")
     last_name: Optional[str] = Field(default=None, description="Last name")

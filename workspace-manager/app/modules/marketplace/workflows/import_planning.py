@@ -1,4 +1,4 @@
-"""Private Marketplace import planning support mixin."""
+"""Managed Registry importing planning support mixin."""
 
 from __future__ import annotations
 
@@ -7,16 +7,18 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from app.modules.marketplace.target_clients import create_package_format_adapters
 from app.modules.marketplace.models import (
-    MarketplaceImportCandidate,
-    MarketplaceImportFailedCandidate,
-    MarketplaceImportSource,
     MarketplacePackageFamiliesDocument,
     MarketplacePackageFamily,
     MarketplacePackageFamilySource,
+    MarketplacePackageFormat,
     MarketplacePackageSummary,
-    MarketplaceProvider,
-    MarketplaceProviderVariant,
+    MarketplaceTargetClient,
+    MarketplacePackageVariant,
+    MarketplaceImportCandidate,
+    MarketplaceImportFailedCandidate,
+    MarketplaceImportSource,
 )
 
 from .registry_operations import (
@@ -25,19 +27,21 @@ from .registry_operations import (
 
 
 class _MarketplaceImportPlanningSupport:
-    """Provide import planning support behavior to the composed private kernel."""
+    """Provide importing planning behavior to the composed registry kernel."""
 
     def _scan_import_candidates(
         self,
         source: MarketplaceImportSource,
         source_root: Path,
     ) -> list[dict[str, Any]]:
-        providers = (
-            list(self.adapters) if source.provider == "all" else [source.provider]
+        target_clients = (
+            list(self.adapters)
+            if source.target_client == "all"
+            else [source.target_client]
         )
         candidates: list[dict[str, Any]] = []
-        for provider in providers:
-            adapter = self._get_adapter(provider)
+        for target_client in target_clients:
+            adapter = self._get_adapter(target_client)
             try:
                 candidates.extend(adapter.scan_external_source(source_root))
             except NotImplementedError:
@@ -62,17 +66,17 @@ class _MarketplaceImportPlanningSupport:
         if family is None and source_identity:
             family = self._find_family_by_source_identity(root, source_identity)
 
-        try:
-            package_path = self._resolve_package_path(
-                user_id, candidate.provider, candidate.package_id
-            )
-        except MarketplacePathError:
-            return candidate
-        existing_same_variant = package_path.exists()
+        summaries, _ = self._get_package_index(user_id, root)
+        existing = next(
+            (item for item in summaries if item.package_id == candidate.package_id),
+            None,
+        )
+        existing_same_variant = existing is not None
         unrelated_duplicate = False
         if existing_same_variant and family is not None:
             unrelated_duplicate = not any(
-                variant.provider == candidate.provider
+                variant.target_client == candidate.target_client
+                and variant.package_format == candidate.package_format
                 and variant.package_id == candidate.package_id
                 for variant in family.variants
             )
@@ -96,15 +100,11 @@ class _MarketplaceImportPlanningSupport:
             )
         if not existing_same_variant:
             return candidate.model_copy(update=family_updates)
-        detail = self._get_package_detail_for_mutation(
-            user_id, candidate.provider, candidate.package_id
-        )
         return candidate.model_copy(
             update={
                 **family_updates,
                 "duplicate": True,
-                "duplicate_action": "skip",
-                "local_revision": detail.revision if detail else None,
+                "local_revision": existing.revision if existing else None,
             }
         )
 
@@ -118,17 +118,21 @@ class _MarketplaceImportPlanningSupport:
         if not source_identity:
             return candidates
 
-        # Group peer candidates by package_id: cross-provider builds of the same
-        # logical package are real variants. Distinct package_ids from the same
-        # scan source are unrelated and must not become each other's variants.
-        peers_by_package_id: dict[str, list[MarketplaceProviderVariant]] = {}
+        # Group peers by package_id: distinct target-client/package-format builds
+        # are variants, while unrelated package IDs from one source stay separate.
+        peers_by_package_id: dict[str, list[MarketplacePackageVariant]] = {}
         for candidate in candidates:
             bucket = peers_by_package_id.setdefault(candidate.package_id, [])
-            if any(item.provider == candidate.provider for item in bucket):
+            if any(
+                item.target_client == candidate.target_client
+                and item.package_format == candidate.package_format
+                for item in bucket
+            ):
                 continue
             bucket.append(
-                MarketplaceProviderVariant(
-                    provider=candidate.provider,
+                MarketplacePackageVariant(
+                    target_client=candidate.target_client,
+                    package_format=candidate.package_format,
                     package_id=candidate.package_id,
                     display_name=candidate.display_name,
                 )
@@ -137,7 +141,7 @@ class _MarketplaceImportPlanningSupport:
         merged: list[MarketplaceImportCandidate] = []
         for candidate in candidates:
             peer_variants = peers_by_package_id.get(candidate.package_id, [])
-            variants = self._merge_provider_variants(candidate.variants, peer_variants)
+            variants = self._merge_variants(candidate.variants, peer_variants)
             merged.append(
                 candidate.model_copy(
                     update={
@@ -151,15 +155,15 @@ class _MarketplaceImportPlanningSupport:
             )
         return merged
 
-    def _merge_provider_variants(
+    def _merge_variants(
         self,
-        existing: list[MarketplaceProviderVariant],
-        incoming: list[MarketplaceProviderVariant],
-    ) -> list[MarketplaceProviderVariant]:
-        merged: list[MarketplaceProviderVariant] = []
+        existing: list[MarketplacePackageVariant],
+        incoming: list[MarketplacePackageVariant],
+    ) -> list[MarketplacePackageVariant]:
+        merged: list[MarketplacePackageVariant] = []
         seen: set[tuple[str, str]] = set()
         for variant in [*existing, *incoming]:
-            key = (variant.provider, variant.package_id)
+            key = (variant.target_client, variant.package_format)
             if key in seen:
                 continue
             seen.add(key)
@@ -187,7 +191,7 @@ class _MarketplaceImportPlanningSupport:
     def _import_candidate_key(
         self, candidate: MarketplaceImportCandidate
     ) -> tuple[str, str, str]:
-        return (candidate.provider, candidate.package_id, candidate.source_path)
+        return (candidate.target_client, candidate.package_id, candidate.source_path)
 
     def _merge_import_candidate_action(
         self,
@@ -198,8 +202,7 @@ class _MarketplaceImportPlanningSupport:
             return requested
         return scanned.model_copy(
             update={
-                "duplicate_action": requested.duplicate_action,
-                "new_package_id": requested.new_package_id,
+                "import_options": requested.import_options,
                 "local_revision": requested.local_revision or scanned.local_revision,
             }
         )
@@ -208,11 +211,20 @@ class _MarketplaceImportPlanningSupport:
         self,
         candidate: MarketplaceImportCandidate,
         error_code: str,
+        *,
+        stage: str,
+        source: str | None,
+        destination: str | None,
+        category: str,
     ) -> MarketplaceImportFailedCandidate:
         return MarketplaceImportFailedCandidate.model_validate(
             {
                 **candidate.model_dump(by_alias=True),
                 "errorCode": error_code,
+                "stage": stage,
+                "source": source,
+                "destination": destination,
+                "category": category,
             }
         )
 
@@ -222,25 +234,33 @@ class _MarketplaceImportPlanningSupport:
         packages: list[MarketplacePackageSummary],
         existing: MarketplacePackageFamiliesDocument,
         *,
-        package_manifests: (
-            dict[tuple[MarketplaceProvider, str], dict[str, Any]] | None
-        ) = None,
+        package_manifests: dict[
+            tuple[MarketplaceTargetClient, MarketplacePackageFormat, str],
+            dict[str, Any],
+        ] = None,
     ) -> list[MarketplacePackageFamily]:
         existing_ids = {family.family_id for family in existing.families}
         grouped: dict[str, MarketplacePackageFamily] = {}
         for item in packages:
-            if item.source_type != "imported":
-                continue
-            adapter = self._get_adapter(item.provider)
+            adapter = create_package_format_adapters()[item.package_format]
             manifest = (
-                package_manifests.get((item.provider, item.package_id))
+                package_manifests.get(
+                    (item.target_client, item.package_format, item.package_id)
+                )
                 if package_manifests is not None
                 else None
             )
+            package_path = adapter.package_path(root, item.package_id)
             if manifest is None:
-                package_path = adapter.package_path(root, item.package_id)
                 manifest = adapter.read_manifest(package_path)  # type: ignore[attr-defined]
             import_source = manifest.get("importSource")
+            if (
+                not isinstance(import_source, dict)
+                and item.package_format == "agent-plugin/1.0.0"
+            ):
+                import_source = self._read_json(
+                    package_path / ".aileron" / "import.json"
+                )
             if not isinstance(import_source, dict):
                 continue
             source_kind = str(import_source.get("sourceKind") or "git")
@@ -248,11 +268,16 @@ class _MarketplaceImportPlanningSupport:
             if source_kind not in {"git", "local"} or not source_value:
                 continue
             source = MarketplaceImportSource(
-                provider=item.provider,
+                target_client=item.target_client,
                 sourceKind=source_kind,
                 source=source_value,
             )
-            source_identity = self._source_identity_for_import(source, {})
+            stored_identity = import_source.get("sourceIdentity")
+            source_identity = (
+                stored_identity.strip()
+                if isinstance(stored_identity, str) and stored_identity.strip()
+                else self._source_identity_for_import(source, {})
+            )
             if not source_identity or source_identity in existing_ids:
                 continue
             family = grouped.get(source_identity)
@@ -273,9 +298,10 @@ class _MarketplaceImportPlanningSupport:
 
     def _variant_for_summary(
         self, item: MarketplacePackageSummary
-    ) -> MarketplaceProviderVariant:
-        return MarketplaceProviderVariant(
-            provider=item.provider,
+    ) -> MarketplacePackageVariant:
+        return MarketplacePackageVariant(
+            target_client=item.target_client,
+            package_format=item.package_format,
             packageId=item.package_id,
             registryPath=item.registry_path,
             displayName=item.display_name,
@@ -317,17 +343,17 @@ class _MarketplaceImportPlanningSupport:
             if not family.family_id or family.family_id in seen_family_ids:
                 continue
             seen_family_ids.add(family.family_id)
-            variants: list[MarketplaceProviderVariant] = []
+            variants: list[MarketplacePackageVariant] = []
             seen_variants: set[tuple[str, str]] = set()
             for variant in family.variants:
-                key = (variant.provider, variant.package_id)
+                key = (variant.target_client, variant.package_format)
                 if key in seen_variants:
                     continue
                 seen_variants.add(key)
                 try:
-                    package_path = self._get_adapter(variant.provider).package_path(
-                        root, variant.package_id
-                    )
+                    package_path = create_package_format_adapters()[
+                        variant.package_format
+                    ].package_path(root, variant.package_id)
                     self._assert_relative_to(package_path, root)
                 except (MarketplacePathError, ValueError):
                     continue

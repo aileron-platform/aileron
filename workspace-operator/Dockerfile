@@ -15,6 +15,9 @@ COPY . .
 
 FROM base AS test
 
+ARG SOURCE_REVISION=development
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
+
 CMD ["go", "test", "-v", "./..."]
 
 FROM base AS builder

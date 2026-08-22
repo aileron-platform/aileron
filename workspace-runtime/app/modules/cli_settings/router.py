@@ -8,6 +8,8 @@ from .cache_api import router as cache_router
 from .codex.router import router as codex_router
 from .mcp.router import create_mcp_router
 from .mcp.configuration import McpTool
+from .prompt_invocations.config import PromptInvocationTool
+from .prompt_invocations.router import create_prompt_invocations_router
 from .skills.config import SkillTool
 from .skills.router import create_skills_router
 from .slash_commands.config import SlashCommandTool
@@ -23,6 +25,9 @@ router.include_router(create_agents_md_router(AgentsMdTool.CODEX))
 router.include_router(create_agents_md_router(AgentsMdTool.OPENCODE))
 router.include_router(create_mcp_router(McpTool.OPENCODE))
 router.include_router(create_mcp_router(McpTool.CODEX))
+router.include_router(create_prompt_invocations_router(PromptInvocationTool.CLAUDE))
+router.include_router(create_prompt_invocations_router(PromptInvocationTool.CODEX))
+router.include_router(create_prompt_invocations_router(PromptInvocationTool.OPENCODE))
 router.include_router(create_skills_router(SkillTool.CLAUDE))
 router.include_router(create_skills_router(SkillTool.OPENCODE))
 router.include_router(create_skills_router(SkillTool.CODEX))

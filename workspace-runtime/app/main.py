@@ -28,8 +28,8 @@ from app.database.session import (
 from app.middleware.auth import AuthenticationMiddleware
 from app.middleware.error_handler import ErrorHandlerMiddleware, internal_error_content
 from app.middleware.i18n import I18nMiddleware
-from app.middleware.provider_settings_lock import (
-    ProviderSettingsMutationMiddleware,
+from app.middleware.target_client_settings_lock import (
+    TargetClientSettingsMutationMiddleware,
 )
 from app.middleware.request_id import RequestIDMiddleware
 from app.modules.audio.router import router as audio_router
@@ -43,7 +43,6 @@ from app.modules.cli_settings.router import router as cli_settings_router
 from app.modules.client_browser_relay.router import (
     router as client_browser_relay_router,
 )
-from app.modules.drawio.router import router as drawio_router
 from app.modules.file_system.router import router as file_system_router
 from app.modules.health.router import router as health_router
 from app.modules.internal.router import router as internal_router
@@ -104,7 +103,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         get_runtime_route_inventory()
         logger.info("✅ Basic service initialization complete")
         marketplace_user_copies = MarketplaceUserCopyService(settings=settings)
-        _ = marketplace_user_copies.provider_state_root_id
         marketplace_user_copies.recover_incomplete_operations()
         subdir = settings.AILERON_WORKTREE_SUBDIR
 
@@ -259,10 +257,6 @@ app = FastAPI(
             "name": "Version Control",
             "description": "Git version control operations",
         },
-        {
-            "name": "Draw.io Integration",
-            "description": "Draw.io diagram viewing and editing integration",
-        },
         # Workspace management
         {
             "name": "Preview Service",
@@ -329,7 +323,7 @@ app = FastAPI(
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(I18nMiddleware)
 app.add_middleware(ErrorHandlerMiddleware)
-app.add_middleware(ProviderSettingsMutationMiddleware)
+app.add_middleware(TargetClientSettingsMutationMiddleware)
 app.add_middleware(AuthenticationMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -357,9 +351,6 @@ app.include_router(version_control_router, prefix="/api/v1")
 # Client Browser Relay routes
 logger.info("🟢 [MAIN] Registering client_browser_relay_router...")
 app.include_router(client_browser_relay_router, prefix="/api/v1")
-
-app.include_router(drawio_router, prefix="/api/v1")
-
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:

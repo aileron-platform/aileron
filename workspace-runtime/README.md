@@ -27,7 +27,7 @@ Runtime 不提供獨立 `.env` 安裝介面。Docker 由 Manager Provisioner 注
 | `AILERON_WORKTREE_SUBDIR` | 受管理的 Git worktree 子目錄 |
 | `AILERON_MANAGER_INTERNAL_URL` | Manager 內部 Service URL |
 | `AILERON_PLATFORM_PUBLIC_ORIGIN` | 瀏覽器可見的唯一精確 Origin |
-| `AILERON_RUNTIME_STATE_DATABASE_URL_FILE` | Workspace-scoped database URL 的唯讀 Secret 檔案 |
+| `AILERON_RUNTIME_DATABASE_CONNECTION_FILE` | generation-scoped Runtime database connection 的唯讀 Secret 檔案 |
 | `AILERON_RUNTIME_CONTROL_TOKEN_FILE` | generation-scoped Manager control token 的唯讀 Secret 檔案 |
 | `AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE` | Manager assertion public JWKS 的唯讀檔案 |
 | `AILERON_RUNTIME_ASSERTION_ISSUER` | Manager assertion issuer |

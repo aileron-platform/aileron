@@ -9,6 +9,12 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from aileron_runtime_database_connection import (
+    CallbackRuntimeConnectionSink,
+    RuntimeDatabaseConnections,
+    RuntimeLoginGrant,
+    SensitivePostgresDsn,
+)
 from sqlalchemy import Engine, text
 from sqlalchemy.engine import make_url
 
@@ -23,7 +29,7 @@ class WorkspaceRuntimeDatabaseError(RuntimeError):
     """Workspace database isolation could not be established safely."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class RuntimeDatabaseCredential:
     workspace_id: str
     runtime_instance_id: str
@@ -33,6 +39,15 @@ class RuntimeDatabaseCredential:
     password: str
     database_url: str
     secret_name: str
+
+    def __repr__(self) -> str:
+        return (
+            "RuntimeDatabaseCredential("
+            f"workspace_id={self.workspace_id!r}, "
+            f"runtime_instance_id={self.runtime_instance_id!r}, "
+            "role_name='[REDACTED]', password='[REDACTED]', "
+            "database_url='[REDACTED]')"
+        )
 
 
 class WorkspaceRuntimeDatabaseService:
@@ -85,17 +100,31 @@ class WorkspaceRuntimeDatabaseService:
             role_prefix=role_prefix,
             password=password,
             database_url=database_url,
-            secret_name=f"workspace-runtime-db-{workspace_digest[:32]}",
+            secret_name=f"workspace-generation-{workspace_digest[:16]}",
         )
 
     def activate(self, credential: RuntimeDatabaseCredential) -> None:
-        """Create the new login, transfer ownership, and revoke older logins."""
+        """Fence the old generation before enabling the new generation login."""
 
         self._require_postgresql()
         role = self._quote(credential.role_name)
         schema = self._quote(credential.schema_name)
         database_name = self._database_name()
         database = self._quote_database_name(database_name)
+
+        # This transaction is intentionally separate. PostgreSQL role changes roll
+        # back, but terminated sessions do not. Committing NOLOGIN first preserves
+        # break-before-make when new-generation creation later fails.
+        with self._engine.begin() as connection:
+            self._lock(connection, credential.workspace_id)
+            existing_roles = self._workspace_roles(connection, credential.role_prefix)
+            for old_role_name in existing_roles:
+                old_role = self._quote(old_role_name)
+                self._assert_runtime_role_flags(connection, old_role_name)
+                self._grant_role_membership(connection, old_role_name)
+                self._terminate_role_sessions(connection, old_role_name)
+                connection.execute(text(f"ALTER ROLE {old_role} NOLOGIN"))
+
         with self._engine.begin() as connection:
             self._lock(connection, credential.workspace_id)
             connection.execute(text("REVOKE CREATE ON SCHEMA public FROM PUBLIC"))
@@ -105,10 +134,10 @@ class WorkspaceRuntimeDatabaseService:
             ).scalar_one()
             existing_roles = self._workspace_roles(connection, credential.role_prefix)
             if credential.role_name in existing_roles:
+                self._assert_runtime_role_flags(connection, credential.role_name)
                 connection.execute(
                     text(
-                        f"ALTER ROLE {role} WITH LOGIN NOSUPERUSER NOCREATEDB "
-                        "NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS "
+                        f"ALTER ROLE {role} WITH LOGIN NOINHERIT "
                         f"PASSWORD {quoted_password}"
                     )
                 )
@@ -120,15 +149,16 @@ class WorkspaceRuntimeDatabaseService:
                         f"PASSWORD {quoted_password}"
                     )
                 )
+            self._grant_role_membership(connection, credential.role_name)
 
             for old_role_name in existing_roles:
                 if old_role_name == credential.role_name:
                     continue
                 old_role = self._quote(old_role_name)
-                self._terminate_role_sessions(connection, old_role_name)
+                self._assert_runtime_role_flags(connection, old_role_name)
+                self._grant_role_membership(connection, old_role_name)
                 connection.execute(text(f"REASSIGN OWNED BY {old_role} TO {role}"))
                 connection.execute(text(f"DROP OWNED BY {old_role}"))
-                connection.execute(text(f"ALTER ROLE {old_role} NOLOGIN"))
                 connection.execute(text(f"DROP ROLE {old_role}"))
 
             connection.execute(
@@ -156,6 +186,8 @@ class WorkspaceRuntimeDatabaseService:
                 connection, credential.role_prefix
             ):
                 return
+            self._assert_runtime_role_flags(connection, credential.role_name)
+            self._grant_role_membership(connection, credential.role_name)
             self._terminate_role_sessions(connection, credential.role_name)
             connection.execute(text(f"ALTER ROLE {role} NOLOGIN"))
 
@@ -173,26 +205,35 @@ class WorkspaceRuntimeDatabaseService:
             connection.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
             for role_name in self._workspace_roles(connection, placeholder.role_prefix):
                 role = self._quote(role_name)
+                self._assert_runtime_role_flags(connection, role_name)
+                self._grant_role_membership(connection, role_name)
                 self._terminate_role_sessions(connection, role_name)
                 connection.execute(text(f"DROP OWNED BY {role}"))
                 connection.execute(text(f"ALTER ROLE {role} NOLOGIN"))
                 connection.execute(text(f"DROP ROLE {role}"))
 
     def _scoped_database_url(self, *, role_name: str, password: str) -> str:
-        url = make_url(self._settings.database_url)
-        if not url.drivername.startswith("postgresql") or not url.database:
+        wire_values: list[str] = []
+        try:
+            RuntimeDatabaseConnections().issue(
+                platform=SensitivePostgresDsn.from_platform(
+                    self._settings.database_url
+                ),
+                login=RuntimeLoginGrant(role_name=role_name, password=password),
+                sink=CallbackRuntimeConnectionSink(
+                    location="runtime-database-connection",
+                    writer=wire_values.append,
+                ),
+            )
+        except Exception as exc:
             raise WorkspaceRuntimeDatabaseError(
                 "Workspace Runtime state requires PostgreSQL"
+            ) from exc
+        if len(wire_values) != 1:
+            raise WorkspaceRuntimeDatabaseError(
+                "Runtime database connection materialization failed"
             )
-        query = dict(url.query)
-        query.pop("options", None)
-        scoped = url.set(
-            drivername="postgresql",
-            username=role_name,
-            password=password,
-            query=query,
-        )
-        return scoped.render_as_string(hide_password=False)
+        return wire_values[0]
 
     def _workspace_roles(self, connection, role_prefix: str) -> list[str]:
         rows = connection.execute(text("SELECT rolname FROM pg_roles")).scalars()
@@ -201,6 +242,31 @@ class WorkspaceRuntimeDatabaseService:
             for role_name in rows
             if isinstance(role_name, str) and role_name.startswith(role_prefix)
         )
+
+    def _assert_runtime_role_flags(self, connection, role_name: str) -> None:
+        flags = connection.execute(
+            text(
+                "SELECT rolsuper, rolcreatedb, rolcreaterole, rolinherit, "
+                "rolreplication, rolbypassrls FROM pg_roles WHERE rolname=:role_name"
+            ),
+            {"role_name": role_name},
+        ).one_or_none()
+        if flags != (False, False, False, False, False, False):
+            raise WorkspaceRuntimeDatabaseError(
+                "Runtime database role attributes are invalid"
+            )
+
+    def _grant_role_membership(self, connection, role_name: str) -> None:
+        role = self._quote(role_name)
+        server_version_num = int(
+            connection.execute(
+                text("SELECT current_setting('server_version_num')::integer")
+            ).scalar_one()
+        )
+        membership_options = (
+            " WITH SET TRUE, INHERIT TRUE" if server_version_num >= 160000 else ""
+        )
+        connection.execute(text(f"GRANT {role} TO CURRENT_USER{membership_options}"))
 
     @staticmethod
     def _lock(connection, workspace_id: str) -> None:

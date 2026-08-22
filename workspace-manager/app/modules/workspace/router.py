@@ -48,6 +48,7 @@ from app.modules.knowledge_base.errors import KnowledgeBaseError
 from app.modules.knowledge_base.mount_reconcile import (
     KnowledgeBaseMountReconcileService,
 )
+from app.modules.workspace.advisory_lock import acquire_workspace_transaction_lock
 from app.modules.workspace.availability import (
     WorkspaceAvailabilityError,
     WorkspaceAvailabilityService,
@@ -67,9 +68,11 @@ from app.modules.workspace.browser_credential_models import (
 from app.modules.workspace.capabilities import WorkspaceCapabilities
 from app.modules.workspace.catalog import (
     WorkspaceAccessDeniedError,
+    WorkspaceCapabilitiesSelectionError,
     WorkspaceError,
     WorkspaceNotFoundError,
     WorkspaceService,
+    WorkspaceUpdatePostCommitEffects,
 )
 from app.modules.workspace.dependencies import (
     get_runtime_provision_service,
@@ -131,10 +134,8 @@ from app.modules.workspace.runtime.assertions import (
     RuntimeAssertionContextError,
     RuntimeAssertionService,
 )
+from app.modules.workspace.runtime.job_repository import WORKSPACE_DELETE_PHASE_QUEUED
 from app.modules.workspace.runtime.provisioning import RuntimeProvisionService
-from app.modules.workspace.runtime.job_repository import (
-    WORKSPACE_DELETE_PHASE_QUEUED,
-)
 from app.modules.workspace.runtime.sync import RuntimeSyncService
 
 logger = logging.getLogger(__name__)
@@ -1324,9 +1325,13 @@ def update_workspace_capabilities(
                 _sync_capabilities_to_runtime,
                 workspace_id,
                 runtime_url,
-                capabilities.model_dump(),
             )
         return capabilities
+    except WorkspaceCapabilitiesSelectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"errorCode": exc.code},
+        ) from exc
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1337,26 +1342,59 @@ def update_workspace_capabilities(
 async def _sync_capabilities_to_runtime(
     workspace_id: str,
     runtime_url: str,
-    capabilities: dict,
 ) -> None:
     """Background task: Sync workspace capabilities to workspace-runtime."""
     logger.info(f"Starting background capabilities sync - workspace_id: {workspace_id}")
 
     db = SessionLocal()
     try:
+        acquire_workspace_transaction_lock(db, workspace_id)
+        workspace = db.get(
+            db_models.Workspace,
+            workspace_id,
+            populate_existing=True,
+        )
+        current_runtime_url = (
+            workspace.runtime_internal_url if workspace is not None else None
+        )
+        if (
+            workspace is None
+            or workspace.runtime_status != "running"
+            or not isinstance(current_runtime_url, str)
+            or not current_runtime_url.strip()
+        ):
+            db.rollback()
+            logger.warning(
+                "Capabilities sync skipped because the current Runtime target is "
+                "unavailable - workspace_id: %s",
+                workspace_id,
+            )
+            return
+        if current_runtime_url != runtime_url:
+            logger.info(
+                "Capabilities sync target refreshed from current Workspace state - "
+                "workspace_id: %s",
+                workspace_id,
+            )
         sync_service = RuntimeSyncService(db)
+        effective_capabilities = sync_service.resolve_workspace_capabilities(
+            workspace_id
+        )
         result = await sync_service.sync_capabilities_to_runtime_url(
             workspace_id,
-            runtime_url,
-            capabilities,
+            current_runtime_url,
+            effective_capabilities,
         )
         if result.get("success"):
+            db.commit()
             logger.info(f"Capabilities sync succeeded - workspace_id: {workspace_id}")
         else:
+            db.rollback()
             logger.warning(
                 f"Capabilities sync skipped - workspace_id: {workspace_id}, reason: {result.get('message')}"
             )
     except Exception as e:
+        db.rollback()
         logger.error(
             f"Capabilities sync failed - workspace_id: {workspace_id}, error: {e}",
             exc_info=True,
@@ -1434,6 +1472,7 @@ def get_workspace_runtime_logs(
 async def update_workspace(
     workspace_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     actor: AuthorizationActor = Depends(get_authorization_actor),
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceReadDetail:
@@ -1453,11 +1492,13 @@ async def update_workspace(
             translate=request.state.translate,
         ) from exc
     try:
+        post_commit_effects = WorkspaceUpdatePostCommitEffects()
         workspace = service.update(
             workspace_id,
             payload,
             actor=actor,
             correlation_id=request.state.correlation_id,
+            post_commit_effects=post_commit_effects,
         )
         if not workspace:
             raise HTTPException(
@@ -1465,7 +1506,20 @@ async def update_workspace(
                 detail=request.state.translate("workspace.not_found"),
             )
 
+        capabilities_sync_target = post_commit_effects.capabilities_sync_target
+        if capabilities_sync_target is not None:
+            background_tasks.add_task(
+                _sync_capabilities_to_runtime,
+                capabilities_sync_target.workspace_id,
+                capabilities_sync_target.runtime_url,
+            )
+
         return workspace
+    except WorkspaceCapabilitiesSelectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"errorCode": exc.code},
+        ) from exc
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

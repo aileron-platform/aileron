@@ -9,12 +9,12 @@ from app.modules.marketplace.resource_resolvers import (
 
 def _write_manifest(
     package_root: Path,
-    provider: str,
+    target_client: str,
     data: dict,
 ) -> None:
     manifest_path = package_root / (
         ".claude-plugin/plugin.json"
-        if provider == "claude-code"
+        if target_client == "claude-code"
         else ".codex-plugin/plugin.json"
     )
     manifest_path.parent.mkdir(parents=True)

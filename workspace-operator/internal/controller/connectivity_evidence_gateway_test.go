@@ -12,7 +12,6 @@ import (
 func newGatewayForTest(t *testing.T) (*ConnectivityEvidenceGateway, time.Time) {
 	t.Helper()
 	profile := validTURNProfile()
-	profile.CredentialIssuer.Kind = TURNCredentialIssuerStaticSecret
 	profile.Evidence.RequiredFrontendVantages = []string{"host"}
 	profile.Evidence.TTLSeconds = 90
 	profile.CredentialIssuer.TTLSeconds = 300
@@ -28,7 +27,7 @@ func newGatewayForTest(t *testing.T) (*ConnectivityEvidenceGateway, time.Time) {
 		iceServers,
 		`{"host":"agent-token"}`,
 		"internal-token",
-		"",
+		"turn-rest-shared-secret",
 	)
 	if err != nil {
 		t.Fatalf("NewConnectivityEvidenceGateway() error = %v", err)

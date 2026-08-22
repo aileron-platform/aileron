@@ -1,4 +1,4 @@
-"""Provider mutation serialization and cache generation."""
+"""Target client mutation serialization and cache generation."""
 
 from __future__ import annotations
 
@@ -17,98 +17,98 @@ from .errors import MarketplaceOperationError
 from .state import MarketplaceMutationStore, write_json_atomic
 
 T = TypeVar("T")
-_settings_lock_provider: ContextVar[str | None] = ContextVar(
-    "marketplace_settings_lock_provider",
+_settings_lock_target_client: ContextVar[str | None] = ContextVar(
+    "marketplace_settings_lock_target_client",
     default=None,
 )
 
 
-class MarketplaceProviderGate:
+class MarketplaceTargetClientGate:
     """Expose only a shared mutation lock and cache generation."""
 
     def __init__(self, store: MarketplaceMutationStore) -> None:
         self._store = store
-        self._state_path = store.root / "provider-cache-generation.json"
+        self._state_path = store.root / "target-client-cache-generation.json"
 
     def run_settings_mutation(
         self,
-        provider: str,
+        target_client: str,
         mutation: Callable[[], T],
     ) -> tuple[T, int]:
         """Run one settings mutation and advance its cache generation."""
 
-        if _settings_lock_provider.get() == provider:
+        if _settings_lock_target_client.get() == target_client:
             result = mutation()
-            return result, self.advance_generation(provider)
-        with self.settings_mutation_scope(provider):
+            return result, self.advance_generation(target_client)
+        with self.settings_mutation_scope(target_client):
             result = mutation()
-            return result, self.advance_generation(provider)
+            return result, self.advance_generation(target_client)
 
     @contextmanager
-    def settings_mutation_scope(self, provider: str) -> Iterator[None]:
-        """Serialize one public provider settings request."""
+    def settings_mutation_scope(self, target_client: str) -> Iterator[None]:
+        """Serialize one public target_client settings request."""
 
-        current = _settings_lock_provider.get()
-        if current == provider:
+        current = _settings_lock_target_client.get()
+        if current == target_client:
             yield
             return
         if current is not None:
             raise MarketplaceOperationError(
-                "marketplace.install.provider_invalid",
+                "marketplace.install.target_client_invalid",
                 http_status=409,
             )
-        with self._store.provider_lock(
-            provider=provider,
+        with self._store.target_client_lock(
+            target_client=target_client,
         ):
-            token = _settings_lock_provider.set(provider)
+            token = _settings_lock_target_client.set(target_client)
             try:
                 yield
             finally:
-                _settings_lock_provider.reset(token)
+                _settings_lock_target_client.reset(token)
 
     def complete_settings_mutation(
         self,
-        provider: str,
+        target_client: str,
         *,
         previous_generation: int,
     ) -> int:
         """Advance once for a successful public mutation request."""
 
-        if _settings_lock_provider.get() != provider:
+        if _settings_lock_target_client.get() != target_client:
             raise MarketplaceOperationError(
                 "marketplace.install.runtime_state_missing",
                 http_status=409,
             )
-        current = self.generation(provider)
+        current = self.generation(target_client)
         if current != previous_generation:
             return current
-        return self.advance_generation(provider)
+        return self.advance_generation(target_client)
 
-    def advance_generation(self, provider: str) -> int:
-        """Advance provider cache invalidation after a mutation attempt."""
+    def advance_generation(self, target_client: str) -> int:
+        """Advance target_client cache invalidation after a mutation attempt."""
 
         with self._mutation_lock():
             state = self._read_state()
-            provider_state = self._ensure_provider(state, provider)
-            provider_state["generation"] = int(provider_state["generation"]) + 1
+            client_state = self._ensure_target_client(state, target_client)
+            client_state["generation"] = int(client_state["generation"]) + 1
             self._write_state(state)
-            return int(provider_state["generation"])
+            return int(client_state["generation"])
 
-    def generation(self, provider: str) -> int:
-        """Read the current provider cache generation."""
+    def generation(self, target_client: str) -> int:
+        """Read the current target_client cache generation."""
 
         with self._mutation_lock():
             return int(
-                self._ensure_provider(
+                self._ensure_target_client(
                     self._read_state(),
-                    provider,
+                    target_client,
                 )["generation"]
             )
 
     def _read_state(self) -> dict[str, Any]:
         self._store.ensure()
         if not self._state_path.exists():
-            return {"stateVersion": 1, "providers": {}}
+            return {"stateVersion": 1, "targetClients": {}}
         if self._state_path.is_symlink() or not self._state_path.is_file():
             raise MarketplaceOperationError(
                 "marketplace.install.runtime_state_missing",
@@ -124,7 +124,7 @@ class MarketplaceProviderGate:
         if (
             not isinstance(state, dict)
             or state.get("stateVersion") != 1
-            or not isinstance(state.get("providers"), dict)
+            or not isinstance(state.get("targetClients"), dict)
         ):
             raise MarketplaceOperationError(
                 "marketplace.install.runtime_state_missing",
@@ -140,7 +140,7 @@ class MarketplaceProviderGate:
         """Serialize the cache generation document across processes."""
 
         self._store.ensure()
-        lock_path = self._store.locks_root / "provider-cache-generation.lock"
+        lock_path = self._store.locks_root / "target-client-cache-generation.lock"
         with lock_path.open("a+", encoding="utf-8") as handle:
             os.chmod(lock_path, 0o600)
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
@@ -150,34 +150,34 @@ class MarketplaceProviderGate:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
     @staticmethod
-    def _ensure_provider(
+    def _ensure_target_client(
         state: dict[str, Any],
-        provider: str,
+        target_client: str,
     ) -> dict[str, Any]:
-        if provider not in {"claude-code", "codex"}:
+        if target_client not in {"claude-code", "codex"}:
             raise MarketplaceOperationError(
-                "marketplace.install.provider_invalid",
+                "marketplace.install.target_client_invalid",
                 http_status=422,
             )
-        providers = state.setdefault("providers", {})
-        provider_state = providers.setdefault(provider, {"generation": 0})
+        target_clients = state.setdefault("targetClients", {})
+        client_state = target_clients.setdefault(target_client, {"generation": 0})
         if (
-            not isinstance(provider_state, dict)
-            or type(provider_state.get("generation")) is not int
-            or int(provider_state["generation"]) < 0
+            not isinstance(client_state, dict)
+            or type(client_state.get("generation")) is not int
+            or int(client_state["generation"]) < 0
         ):
             raise MarketplaceOperationError(
                 "marketplace.install.runtime_state_missing",
                 http_status=503,
             )
-        return cast(dict[str, Any], provider_state)
+        return cast(dict[str, Any], client_state)
 
 
 @lru_cache
-def get_marketplace_provider_gate() -> MarketplaceProviderGate:
+def get_marketplace_target_client_gate() -> MarketplaceTargetClientGate:
     settings = get_settings()
     store = MarketplaceMutationStore(Path(settings.MARKETPLACE_OPERATION_JOURNAL_DIR))
-    return MarketplaceProviderGate(store)
+    return MarketplaceTargetClientGate(store)
 
 
-__all__ = ["MarketplaceProviderGate", "get_marketplace_provider_gate"]
+__all__ = ["MarketplaceTargetClientGate", "get_marketplace_target_client_gate"]

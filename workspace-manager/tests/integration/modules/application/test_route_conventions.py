@@ -84,19 +84,19 @@ def test_restful_replacement_routes_are_registered() -> None:
         ("/api/v1/knowledge-bases/{kb_id}/files/paste", "POST"),
         ("/api/v1/knowledge-bases/{kb_id}/files/extract", "POST"),
         (
-            "/api/v1/marketplace/packages/{provider}/{package_id}/files/conflicts/preflight",
+            "/api/v1/marketplace/packages/{target_client}/{package_id}/files/conflicts/preflight",
             "POST",
         ),
         (
-            "/api/v1/marketplace/packages/{provider}/{package_id}/files/upload",
+            "/api/v1/marketplace/packages/{target_client}/{package_id}/files/upload",
             "POST",
         ),
         (
-            "/api/v1/marketplace/packages/{provider}/{package_id}/files/paste",
+            "/api/v1/marketplace/packages/{target_client}/{package_id}/files/paste",
             "POST",
         ),
         (
-            "/api/v1/marketplace/packages/{provider}/{package_id}/files/extract",
+            "/api/v1/marketplace/packages/{target_client}/{package_id}/files/extract",
             "POST",
         ),
         ("/api/v1/knowledge-bases/{kb_id}/version-control/repository", "GET"),

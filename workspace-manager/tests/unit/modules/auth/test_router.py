@@ -92,6 +92,7 @@ def test_session_bootstrap_returns_stable_csrf_across_tabs(
     assert second_response.status_code == 200
     payload = first_response.json()
     assert payload["user"]["id"] == user.id
+    assert payload["user"]["subject"] == user.oidc_subject
     assert payload["user"]["platform_role"] == "admin"
     assert "platform_resources.read" in payload["user"]["allowed_operations"]
     assert len(payload["csrf_token"]) >= 43
@@ -207,6 +208,44 @@ def test_callback_redirects_to_validated_frontend_origin(
     )
 
 
+def test_callback_issues_sandbox_compatible_workspace_gateway_cookie_for_loopback_http(
+    test_app,
+    monkeypatch,
+) -> None:
+    client, _ = test_app
+    completion = LoginCompletion(
+        user=SimpleNamespace(),
+        session=IssuedManagerSession(
+            handle="opaque-session-handle",
+            absolute_expires_at=SimpleNamespace(),
+        ),
+        return_path="/workspaces",
+    )
+    monkeypatch.setattr(
+        "app.modules.auth.router.OIDCCore.complete_callback",
+        AsyncMock(return_value=completion),
+    )
+    monkeypatch.setattr(
+        "app.modules.auth.router.get_settings",
+        lambda: SimpleNamespace(PLATFORM_PUBLIC_ORIGIN="http://127.0.0.1:8082"),
+    )
+
+    response = client.get(
+        "/api/v1/oauth2/callback?code=code-1&state=state-1",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    gateway_cookie = next(
+        cookie
+        for cookie in response.headers.get_list("set-cookie")
+        if cookie.startswith("aileron_workspace_gateway_session=opaque-session-handle")
+    )
+    assert "Path=/workspaces" in gateway_cookie
+    assert "SameSite=none" in gateway_cookie
+    assert "Secure" in gateway_cookie
+
+
 def test_cors_preflight_accepts_frontend_language_header(test_app) -> None:
     client, _ = test_app
 
@@ -272,3 +311,51 @@ def test_logout_is_post_and_revokes_local_session(
     )
     with session_factory() as db:
         assert find_session_for_handle(db, issued.handle) is None
+
+
+def test_logout_clears_sandbox_compatible_workspace_gateway_cookie_for_loopback_http(
+    test_app,
+    create_user,
+    monkeypatch,
+) -> None:
+    client, session_factory = test_app
+    user = create_user(
+        id="local-user-1",
+        username="nova",
+        platform_role="member",
+        role_status="valid",
+    )
+    monkeypatch.setattr("app.modules.auth.middleware.SessionLocal", session_factory)
+    monkeypatch.setattr(
+        "app.modules.auth.router.OIDCCore.provider_logout_url",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        "app.modules.auth.router.get_settings",
+        lambda: SimpleNamespace(PLATFORM_PUBLIC_ORIGIN="http://127.0.0.1:8082"),
+    )
+    with session_factory() as db:
+        issued = ManagerSessionService(db).create(
+            user_id=user.id,
+            issuer=user.oidc_issuer,
+            subject=user.oidc_subject,
+            authentication_context={},
+        )
+        csrf = csrf_token_for_handle(db, issued.handle)
+    client.cookies.set("aileron_session", issued.handle)
+
+    response = client.post(
+        "/api/v1/oauth2/logout",
+        headers={"Origin": "https://aileron.test", "X-CSRF-Token": csrf},
+    )
+
+    assert response.status_code == 200
+    gateway_cookie = next(
+        cookie
+        for cookie in response.headers.get_list("set-cookie")
+        if cookie.startswith("aileron_workspace_gateway_session=")
+    )
+    assert "Max-Age=0" in gateway_cookie
+    assert "Path=/workspaces" in gateway_cookie
+    assert "SameSite=none" in gateway_cookie
+    assert "Secure" in gateway_cookie

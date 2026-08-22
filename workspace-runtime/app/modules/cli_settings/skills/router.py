@@ -8,8 +8,10 @@ supports_plugin=True.
 
 from __future__ import annotations
 
+import mimetypes
 from pathlib import Path as FilePath
 from typing import List, NoReturn, Optional
+from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -22,10 +24,11 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 from starlette.concurrency import run_in_threadpool
 
-from app.core.openapi import build_responses
+from app.core.openapi import APIErrorDetail, build_responses
 from app.core.resource_envelope import raise_resource_error
 from app.modules.file_system.exceptions import FileManagementException
 from app.modules.file_system.models import (
@@ -37,11 +40,15 @@ from app.modules.file_system.models import (
     FileConflictResolution,
     FileOperationResponse,
 )
+
+from .catalog import CliSkillService
 from .config import SkillTool
 from .dependencies import make_skill_service_dependency
-from .models import PluginSkillsResponse
-from .models import SkillFileContentResponse, SkillFileTreeResponse
-from .catalog import CliSkillService
+from .models import (
+    PluginSkillsResponse,
+    SkillFileContentResponse,
+    SkillFileTreeResponse,
+)
 
 
 class SkillWriteRequest(BaseModel):
@@ -65,6 +72,20 @@ class SkillExtractArchiveRequest(BaseModel):
 
 
 _FILE_CONFLICT_RESOLUTIONS = TypeAdapter(list[FileConflictResolution])
+_RAW_BINARY_MEDIA_TYPES = (
+    "application/octet-stream",
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/svg+xml",
+    "image/*",
+    "text/*",
+    "audio/*",
+    "video/*",
+    "*/*",
+)
 
 
 def _raise_file_management_error(error: FileManagementException) -> NoReturn:
@@ -85,6 +106,20 @@ def _upload_size(file: UploadFile) -> int:
     size = file.file.tell()
     file.file.seek(current_position)
     return size
+
+
+def _inline_content_disposition(filename: str) -> str:
+    encoded_filename = quote(filename, safe="")
+    if encoded_filename != filename:
+        return f"inline; filename*=utf-8''{encoded_filename}"
+    return f'inline; filename="{filename}"'
+
+
+def _raw_binary_openapi_content() -> dict[str, dict[str, dict[str, str]]]:
+    return {
+        media_type: {"schema": {"type": "string", "format": "binary"}}
+        for media_type in _RAW_BINARY_MEDIA_TYPES
+    }
 
 
 def create_skills_router(tool: SkillTool) -> APIRouter:
@@ -166,16 +201,50 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
         "/content",
         response_model=SkillFileContentResponse,
         summary="Read skill file",
-        responses=build_responses(400, 401, 404, 422, 500),
+        responses={
+            **build_responses(400, 401, 404, 422, 500),
+            200: {
+                "description": "JSON file content or raw binary preview content.",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/SkillFileContentResponse",
+                        }
+                    },
+                    **_raw_binary_openapi_content(),
+                },
+            },
+            413: {
+                "model": APIErrorDetail,
+                "description": "Raw preview exceeds the configured size limit.",
+            },
+        },
     )
     async def read_skill(
         path: str = Query(description="File path"),
         scope: Optional[str] = Query(
             default=None, description="Scope (project/user/plugin)"
         ),
+        raw: bool = Query(
+            default=False, description="Whether to return raw binary content"
+        ),
         service: CliSkillService = Depends(get_service),
-    ) -> SkillFileContentResponse:
+    ) -> SkillFileContentResponse | Response:
         try:
+            if raw:
+                binary_content = await run_in_threadpool(
+                    service.read_file_binary, path, scope
+                )
+                mime_type, _ = mimetypes.guess_type(path)
+                return Response(
+                    content=binary_content,
+                    media_type=mime_type or "application/octet-stream",
+                    headers={
+                        "Content-Disposition": _inline_content_disposition(
+                            FilePath(path).name
+                        )
+                    },
+                )
             return SkillFileContentResponse.model_validate(
                 service.read_file(path, scope)
             )

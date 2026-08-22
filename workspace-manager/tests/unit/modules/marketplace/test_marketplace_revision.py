@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.modules.marketplace.providers import ClaudeCodeMarketplaceAdapter
+from app.modules.marketplace.target_clients import ClaudeCodeMarketplaceAdapter
 
 
 def test_marketplace_revision_changes_for_same_size_out_of_band_edit(

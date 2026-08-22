@@ -50,7 +50,7 @@ COPY packages/ /packages/
 COPY contracts/ /contracts/
 
 # Install dependencies with uv (including dev dependencies)
-RUN uv sync --dev
+RUN uv sync --frozen --dev
 
 # Create the app directory structure. Code is mounted at runtime.
 RUN mkdir -p /workspace-manager/app
@@ -74,6 +74,17 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # Run FastAPI, Celery Worker and Flower using Supervisor
 CMD ["/workspace-manager/scripts/start_services.sh"]
 
+# Test stage: bake the verified source tree into the runner image.
+FROM development AS test
+
+ARG SOURCE_REVISION=development
+LABEL org.opencontainers.image.revision=${SOURCE_REVISION}
+
+COPY workspace-manager/app/ ./app/
+COPY workspace-manager/tests/ ./tests/
+COPY workspace-manager/Dockerfile ./Dockerfile
+COPY workspace-manager/supervisord.kubernetes.conf ./supervisord.kubernetes.conf
+
 # Production stage: package the application into the container.
 FROM base AS production
 
@@ -83,7 +94,7 @@ COPY packages/ /packages/
 COPY contracts/ /contracts/
 
 # Install dependencies with uv (production only, no dev dependencies)
-RUN uv sync --no-dev
+RUN uv sync --frozen --no-dev
 
 # Copy the full application code into the container.
 COPY workspace-manager/app/ ./app/
@@ -142,6 +153,7 @@ RUN --mount=type=cache,target=/root/.npm \
 FROM ${PYTHON_IMAGE} AS kubernetes
 
 ARG TZ=Asia/Taipei
+ARG RELEASE_TAG
 
 ENV TZ=${TZ} \
     AILERON_EXECUTION_PROFILE=kubernetes \
@@ -161,6 +173,7 @@ RUN apt-get update \
         git \
         grep \
         openssh-client \
+        coturn \
         tzdata \
     && rm -rf /var/lib/apt/lists/* \
     && ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime \
@@ -181,7 +194,11 @@ COPY contracts/ /contracts/
 COPY workspace-manager/supervisord.kubernetes.conf ./supervisord.kubernetes.conf
 
 RUN chmod -R a+rX ./app ./scripts /packages \
+    && chmod 0444 ./supervisord.kubernetes.conf \
     && chmod 0555 ./scripts/*.sh \
+    && mkdir -p /workspace-manager/acceptance \
+    && printf '%s\n' "${RELEASE_TAG#git-}" > /workspace-manager/acceptance/source-commit \
+    && chmod 0444 /workspace-manager/acceptance/source-commit \
     && ln -s /workspace-manager/supervisord.kubernetes.conf /workspace-manager/supervisord.conf \
     && ln -s /workspace-manager/.venv/bin/supervisord /usr/bin/supervisord \
     && ln -s /workspace-manager/.venv/bin/supervisorctl /usr/bin/supervisorctl \

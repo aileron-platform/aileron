@@ -19,7 +19,7 @@ from app.modules.authorization.operation_policy import (
     OperationId,
 )
 from app.modules.marketplace.user_copy import MarketplaceUserCopyError
-from app.modules.marketplace.workflows.imports import MarketplaceImportWorkflow
+from app.modules.marketplace.workflows.importing import MarketplaceImportWorkflow
 from app.modules.marketplace.workflows.installation import (
     MarketplaceInstallationWorkflow,
 )
@@ -47,6 +47,7 @@ from app.modules.version_control.remote import VersionControlRemoteError
 MARKETPLACE_OPERATION_IDS = MappingProxyType(
     {
         "list_packages": OperationId.MARKETPLACE_CATALOG_READ,
+        "list_package_format_options": OperationId.MARKETPLACE_CATALOG_READ,
         "refresh_package_index": OperationId.MARKETPLACE_CATALOG_READ,
         "refresh_package_overview": OperationId.MARKETPLACE_CATALOG_READ,
         "get_package_operation_summary": OperationId.MARKETPLACE_CATALOG_READ,
@@ -66,6 +67,7 @@ MARKETPLACE_OPERATION_IDS = MappingProxyType(
         "export_package": OperationId.MARKETPLACE_CATALOG_READ,
         "get_settings": OperationId.MARKETPLACE_REGISTRY_MANAGE,
         "list_activity": OperationId.MARKETPLACE_CATALOG_READ,
+        "get_activity_detail": OperationId.MARKETPLACE_CATALOG_READ,
         "list_registry_file_history": OperationId.MARKETPLACE_REGISTRY_MANAGE,
         "get_registry_repository_status": OperationId.MARKETPLACE_REGISTRY_MANAGE,
         "remote_branches": OperationId.MARKETPLACE_REGISTRY_MANAGE,
@@ -113,10 +115,9 @@ MARKETPLACE_OPERATION_IDS = MappingProxyType(
         "save_uploaded_import_source": OperationId.MARKETPLACE_CONTENT_PUBLISH,
         "record_activity": OperationId.MARKETPLACE_CONTENT_MANAGE,
         "delete_package": OperationId.MARKETPLACE_DELETE_EXECUTE,
-        "discard_draft_package": OperationId.MARKETPLACE_DELETE_EXECUTE,
         "preflight_user_copy": OperationId.MARKETPLACE_USER_COPY_MANAGE,
         "apply_user_copy": OperationId.MARKETPLACE_USER_COPY_MANAGE,
-        "resolve_published_package_for_install": OperationId.MARKETPLACE_INSTALL_EXECUTE,
+        "resolve_managed_package_for_install": OperationId.MARKETPLACE_INSTALL_EXECUTE,
         "resolve_install_runtime": OperationId.MARKETPLACE_INSTALL_EXECUTE,
         "initialize_registry": OperationId.MARKETPLACE_REGISTRY_MANAGE,
         "save_settings": OperationId.MARKETPLACE_REGISTRY_MANAGE,
@@ -159,7 +160,7 @@ class MarketplaceRequest:
         request: Request | None = None,
         actor: AuthorizationActor | None = None,
     ) -> None:
-        context = _MarketplaceRegistryContext.create(db)
+        context = _MarketplaceRegistryContext.create(db, request=request)
         package_reads = MarketplacePackageReadModel(_context=context)
         settings_activity = MarketplaceSettingsActivityWorkflow(_context=context)
         self._db = db
@@ -227,6 +228,10 @@ class MarketplaceRequest:
                 detail={
                     "errorCode": exc.code,
                     "message": self._translate(exc.code, **exc.params),
+                    "stage": exc.stage,
+                    "source": exc.source,
+                    "destination": exc.destination,
+                    "category": exc.category,
                 },
             ) from exc
         except VersionControlRemoteError as exc:

@@ -48,6 +48,27 @@ class TestUserDirectory:
         assert result.total == 0
         assert result.items == []
 
+    def test_list_users_accepts_provider_email_and_preserves_none(
+        self,
+        user_service,
+        mock_db_session,
+        user_factory,
+    ):
+        users = [
+            user_factory(email="person@identity.invalid"),
+            user_factory(email=None),
+        ]
+        mock_db_session.query.return_value.order_by.return_value.all.return_value = (
+            users
+        )
+
+        result = user_service.list()
+
+        assert [item.email for item in result.items] == [
+            "person@identity.invalid",
+            None,
+        ]
+
     def test_list_users_applies_query_and_limit(
         self,
         user_service,

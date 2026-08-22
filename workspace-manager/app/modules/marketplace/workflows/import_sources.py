@@ -1,4 +1,4 @@
-"""Private Marketplace import source support mixin."""
+"""Managed Registry importing source support mixin."""
 
 from __future__ import annotations
 
@@ -20,13 +20,13 @@ from app.modules.marketplace.models import (
 from app.modules.version_control.remote import user_git_environment
 
 from .registry_operations import (
-    MarketplaceImportSourceError,
     MarketplacePathError,
+    MarketplaceImportSourceError,
 )
 
 
 class _MarketplaceImportSourceSupport:
-    """Provide import source support behavior to the composed private kernel."""
+    """Provide importing source behavior to the composed registry kernel."""
 
     def _resolve_import_candidate_source(
         self,
@@ -41,19 +41,9 @@ class _MarketplaceImportSourceSupport:
                 candidate,
                 import_metadata,
             )
-        if self._get_adapter(candidate.provider).is_remote_source_value(
+        if self._get_adapter(candidate.target_client).is_remote_source_value(
             candidate.source_path
         ):
-            legacy_metadata = self._legacy_remote_source_metadata(candidate.source_path)
-            if legacy_metadata:
-                candidate = candidate.model_copy(
-                    update={"source_metadata": legacy_metadata}
-                )
-                return self._resolve_nested_remote_import_candidate_source(
-                    user_id,
-                    candidate,
-                    import_metadata,
-                )
             raise MarketplaceImportSourceError(
                 "marketplace.import.validation.source_path_not_found"
             )
@@ -121,21 +111,6 @@ class _MarketplaceImportSourceSupport:
         except Exception:
             shutil.rmtree(checkout_parent, ignore_errors=True)
             raise
-
-    def _legacy_remote_source_metadata(self, source_path: str) -> dict[str, Any] | None:
-        if ".git:" in source_path:
-            url, path = source_path.split(".git:", 1)
-            return {
-                "kind": "git",
-                "sourceType": "url",
-                "url": f"{url}.git",
-                "path": path,
-            }
-        return {
-            "kind": "git",
-            "sourceType": "url",
-            "url": source_path,
-        }
 
     def _optional_string(self, value: Any) -> str | None:
         return value.strip() if isinstance(value, str) and value.strip() else None

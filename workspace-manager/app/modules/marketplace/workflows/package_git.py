@@ -1,4 +1,4 @@
-"""Private Marketplace git support mixin."""
+"""Managed Registry git support mixin."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ from .registry_operations import (
 
 
 class _MarketplaceGitSupport:
-    """Provide git support behavior to the composed private kernel."""
+    """Provide git support behavior to the composed registry kernel."""
 
     def _registry_operation_key(self, user_id: str) -> str:
         """Return the operation key for the shared Marketplace registry."""
@@ -253,7 +253,7 @@ class _MarketplaceGitSupport:
         *,
         invalidation_key: str,
     ) -> None:
-        """Keep Manager-private Registry state outside every published commit."""
+        """Keep Manager-private Registry state outside user-created commits."""
 
         path = root / ".gitignore"
         existing = path.read_text(encoding="utf-8") if path.is_file() else ""

@@ -54,6 +54,7 @@ from app.modules.thread.execution import (
     AgentRunner,
     AsyncSessionFactory,
     InvalidationSink,
+    RunnerStopTimeoutError,
     _ThreadExecution,
 )
 from app.modules.thread.invalidation_emitter import (
@@ -724,9 +725,18 @@ class ThreadService:
             changed_item_ids=[str(question.id)],
         )
 
-    async def cancel_thread(
+    async def stop_thread(
         self, *, thread_id: str, user_id: str
     ) -> ThreadDetailResponse:
+        """Stop the thread's current turn only.
+
+        Partial output already produced by the turn is kept and the turn is
+        marked canceled/interrupted. If a message is waiting in the FIFO
+        queue, it is dequeued and started as the next turn on this same
+        thread once the runner confirms it stopped; otherwise the thread
+        ends as canceled. Repeated stop calls for the same active execution
+        are idempotent and never dequeue or start a turn twice.
+        """
         thread = await self.thread_repo.get(thread_id, user_id=user_id)
         if thread is None:
             raise ThreadApiError(404, "thread_not_found", {"thread_id": thread_id})
@@ -735,91 +745,7 @@ class ThreadService:
         if status_value not in RUNNING_STATUSES:
             raise ThreadApiError(409, "invalid_state", {"thread_id": thread_id})
 
-        if self.event_session_factory is not None:
-            return await self._cancel_thread_with_committed_state(
-                thread=thread,
-                status_value=status_value,
-                user_id=user_id,
-            )
-
-        if status_value == ThreadStatus.QUEUED:
-            if thread.active_turn_execution_id:
-                await self._execution.stop(thread.active_turn_execution_id)
-
-            def cancel_queued(model: ThreadModel) -> None:
-                model.status = ThreadStatus.CANCELED.value
-                model.queued_messages = []
-
-            updated = await self.thread_repo.locked_update(
-                thread_id,
-                cancel_queued,
-            )
-            if updated is None:
-                raise ThreadApiError(404, "thread_not_found", {"thread_id": thread_id})
-            turn_id = await self._finish_canceled_turn(
-                self.db, updated, thread.active_turn_execution_id
-            )
-            await self._emit_for_thread(
-                updated,
-                "timeline_updated",
-                updated.status,
-                turn_ids=[turn_id] if turn_id else [],
-            )
-            return await self._to_detail(updated)
-
-        stopping = await self.thread_repo.locked_update(
-            thread_id,
-            lambda model: setattr(model, "status", ThreadStatus.STOPPING.value),
-        )
-        if stopping is None:
-            raise ThreadApiError(404, "thread_not_found", {"thread_id": thread_id})
-        await self._emit_for_thread(stopping, "status_updated", stopping.status)
-        if stopping.active_turn_execution_id:
-            await self._execution.stop(stopping.active_turn_execution_id)
-
-        def cancel_stopped(model: ThreadModel) -> None:
-            model.status = ThreadStatus.CANCELED.value
-            model.queued_messages = []
-
-        canceled = await self.thread_repo.locked_update(thread_id, cancel_stopped)
-        if canceled is None:
-            raise ThreadApiError(404, "thread_not_found", {"thread_id": thread_id})
-        turn_id = await self._finish_canceled_turn(
-            self.db, canceled, thread.active_turn_execution_id
-        )
-        await self._emit_for_thread(
-            canceled,
-            "timeline_updated",
-            canceled.status,
-            turn_ids=[turn_id] if turn_id else [],
-        )
-        return await self._to_detail(canceled)
-
-    async def _cancel_thread_with_committed_state(
-        self,
-        *,
-        thread: ThreadModel,
-        status_value: ThreadStatus,
-        user_id: str,
-    ) -> ThreadDetailResponse:
         active_execution_id = thread.active_turn_execution_id
-        if status_value == ThreadStatus.QUEUED:
-            canceled = await self._commit_cancel_final_state(
-                thread_id=thread.id,
-                user_id=user_id,
-                active_execution_id=active_execution_id,
-            )
-            self.db.expire_all()
-            turn_id = await self._turn_id_for_execution(active_execution_id)
-            await self._emit_for_thread(
-                canceled,
-                "timeline_updated",
-                canceled.status,
-                turn_ids=[turn_id] if turn_id else [],
-            )
-            if active_execution_id:
-                await self._stop_runner_for_cancel(thread.id, active_execution_id)
-            return await self._to_detail(canceled)
 
         stopping = await self._commit_stop_intent(
             thread_id=thread.id,
@@ -827,30 +753,40 @@ class ThreadService:
             active_execution_id=active_execution_id,
         )
         await self._emit_for_thread(stopping, "status_updated", stopping.status)
-        try:
-            if active_execution_id:
-                await self._stop_runner_for_cancel(thread.id, active_execution_id)
-        finally:
-            canceled = await self._commit_cancel_final_state(
-                thread_id=thread.id,
-                user_id=user_id,
-                active_execution_id=active_execution_id,
-            )
-            self.db.expire_all()
-            turn_id = await self._turn_id_for_execution(active_execution_id)
-            await self._emit_for_thread(
-                canceled,
-                "timeline_updated",
-                canceled.status,
-                turn_ids=[turn_id] if turn_id else [],
-            )
-        return await self._to_detail(canceled)
 
-    async def _turn_id_for_execution(self, execution_id: str | None) -> str | None:
-        if execution_id is None:
-            return None
-        execution = await self.turn_repo.get_execution(execution_id)
-        return execution.turn_id if execution is not None else None
+        if active_execution_id is None:
+            # A running thread always owns an active execution; this is a
+            # defensive fallback only, with no in-flight turn to preserve.
+            def cancel_without_execution(model: ThreadModel) -> None:
+                model.status = ThreadStatus.CANCELED.value
+                model.queued_messages = []
+
+            canceled = await self.thread_repo.locked_update(
+                thread_id, cancel_without_execution
+            )
+            if canceled is None:
+                raise ThreadApiError(
+                    404, "thread_not_found", {"thread_id": thread_id}
+                )
+            await self._emit_for_thread(canceled, "timeline_updated", canceled.status)
+            return await self._to_detail(canceled)
+
+        try:
+            await self._execution.stop_and_confirm_for_turn_stop(active_execution_id)
+        except RunnerStopTimeoutError:
+            raise ThreadApiError(
+                503,
+                "stop_confirmation_failed",
+                {"thread_id": thread_id},
+            ) from None
+
+        await self._execution.stop_current_turn(thread.id, active_execution_id)
+
+        self.db.expire_all()
+        refreshed = await self.thread_repo.get(thread_id, user_id=user_id)
+        if refreshed is None:
+            raise ThreadApiError(404, "thread_not_found", {"thread_id": thread_id})
+        return await self._to_detail(refreshed)
 
     async def _commit_stop_intent(
         self,
@@ -859,8 +795,21 @@ class ThreadService:
         user_id: str,
         active_execution_id: str | None,
     ) -> ThreadModel:
+        def mutate(model: ThreadModel) -> None:
+            if ThreadStatus(model.status) not in RUNNING_STATUSES:
+                raise ThreadApiError(409, "invalid_state", {"thread_id": thread_id})
+            if model.active_turn_execution_id != active_execution_id:
+                raise ThreadApiError(409, "thread_busy", {"thread_id": thread_id})
+            model.status = ThreadStatus.STOPPING.value
+
         if self.event_session_factory is None:
-            raise RuntimeError("event_session_factory_required")
+            updated = await self.thread_repo.locked_update(thread_id, mutate)
+            if updated is None:
+                raise ThreadApiError(
+                    404, "thread_not_found", {"thread_id": thread_id}
+                )
+            return updated
+
         async with self.event_session_factory() as db:
             async with db.begin():
                 repo = ThreadRepository(db, workspace_id=self.workspace_id)
@@ -869,122 +818,12 @@ class ThreadService:
                     raise ThreadApiError(
                         404, "thread_not_found", {"thread_id": thread_id}
                     )
-
-                def mutate(model: ThreadModel) -> None:
-                    if ThreadStatus(model.status) not in RUNNING_STATUSES:
-                        raise ThreadApiError(
-                            409,
-                            "invalid_state",
-                            {"thread_id": thread_id},
-                        )
-                    if model.active_turn_execution_id != active_execution_id:
-                        raise ThreadApiError(
-                            409,
-                            "thread_busy",
-                            {"thread_id": thread_id},
-                        )
-                    model.status = ThreadStatus.STOPPING.value
-
                 updated = await repo.locked_update(thread_id, mutate)
                 if updated is None:
                     raise ThreadApiError(
                         404, "thread_not_found", {"thread_id": thread_id}
                     )
                 return updated
-
-    async def _commit_cancel_final_state(
-        self,
-        *,
-        thread_id: str,
-        user_id: str,
-        active_execution_id: str | None,
-    ) -> ThreadModel:
-        if self.event_session_factory is None:
-            raise RuntimeError("event_session_factory_required")
-        async with self.event_session_factory() as db:
-            async with db.begin():
-                repo = ThreadRepository(db, workspace_id=self.workspace_id)
-                existing = await repo.get(thread_id, user_id=user_id)
-                if existing is None:
-                    raise ThreadApiError(
-                        404, "thread_not_found", {"thread_id": thread_id}
-                    )
-
-                def mutate(model: ThreadModel) -> None:
-                    status = ThreadStatus(model.status)
-                    if status not in RUNNING_STATUSES:
-                        if status != ThreadStatus.CANCELED:
-                            raise ThreadApiError(
-                                409,
-                                "invalid_state",
-                                {"thread_id": thread_id},
-                            )
-                    if (
-                        model.active_turn_execution_id is not None
-                        and model.active_turn_execution_id != active_execution_id
-                    ):
-                        raise ThreadApiError(
-                            409,
-                            "thread_busy",
-                            {"thread_id": thread_id},
-                        )
-                    model.status = ThreadStatus.CANCELED.value
-                    model.queued_messages = []
-
-                updated = await repo.locked_update(thread_id, mutate)
-                if updated is None:
-                    raise ThreadApiError(
-                        404, "thread_not_found", {"thread_id": thread_id}
-                    )
-                await self._finish_canceled_turn(db, updated, active_execution_id)
-                return updated
-
-    @staticmethod
-    async def _finish_canceled_turn(
-        db: AsyncSession,
-        thread: ThreadModel,
-        active_execution_id: str | None,
-    ) -> str | None:
-        if active_execution_id is None:
-            thread.active_turn_id = None
-            thread.active_turn_execution_id = None
-            await db.flush()
-            return None
-        turn_repo = ThreadTurnRepository(db)
-        execution = await turn_repo.get_execution(active_execution_id)
-        if execution is None:
-            thread.active_turn_id = None
-            thread.active_turn_execution_id = None
-            await db.flush()
-            return None
-        turn = await turn_repo.get_turn(thread.id, execution.turn_id)
-        if turn is None:
-            thread.active_turn_id = None
-            thread.active_turn_execution_id = None
-            await db.flush()
-            return None
-        await turn_repo.finish(
-            thread=thread,
-            execution=execution,
-            turn=turn,
-            status="canceled",
-        )
-        return turn.id
-
-    async def _stop_runner_for_cancel(
-        self,
-        thread_id: str,
-        active_execution_id: str,
-    ) -> None:
-        try:
-            await self._execution.stop(active_execution_id)
-        except Exception:
-            logger.warning(
-                "Agent runner stop failed during thread cancellation: thread_id=%s active_execution_id=%s",
-                thread_id,
-                active_execution_id,
-                exc_info=True,
-            )
 
     async def retry_thread(
         self, *, thread_id: str, user_id: str

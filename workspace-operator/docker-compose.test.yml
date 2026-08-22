@@ -1,15 +1,21 @@
 services:
   workspace-operator-test:
-    image: ailerondocker/workspace-operator-test:dev
-    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: test
+      args:
+        SOURCE_REVISION: ${AILERON_SOURCE_REVISION:-development}
+        BUILDPLATFORM: linux/amd64
+        TARGETOS: linux
+        TARGETARCH: amd64
+        GO_IMAGE: golang:1.22-alpine@sha256:6d405dfc5fdf3a45df1529cf060b920041f52ce523487e0f36f02765af294a51
+        RUNTIME_IMAGE: alpine:3.20@sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e
+    image: ${AILERON_OPERATOR_TEST_IMAGE:-ailerondocker/workspace-operator-suite:development}
+    platform: linux/amd64
     working_dir: /workspace-operator
     volumes:
-      # Test the working tree rather than the sources baked into the image.
-      - ./api:/workspace-operator/api:ro
-      - ./cmd:/workspace-operator/cmd:ro
-      - ./internal:/workspace-operator/internal:ro
-      - ./go.mod:/workspace-operator/go.mod:ro
-      - ./go.sum:/workspace-operator/go.sum:ro
-      - ../contracts:/contracts:ro
-      - ../helm:/helm:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/contracts:/contracts:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/helm:/helm:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/workspace-manager/app/modules/workspace:/workspace-manager/app/modules/workspace:ro
     command: go test -v ./...

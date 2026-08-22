@@ -28,6 +28,7 @@ from app.modules.marketplace.models import (
     MarketplaceDocumentRenameRequest,
     MarketplaceImportRequest,
     MarketplaceImportSource,
+    MarketplaceImportMetadata,
     MarketplaceMcpServerCreateRequest,
     MarketplaceMcpServerDeleteRequest,
     MarketplaceMcpServerMutationRequest,
@@ -38,7 +39,24 @@ from app.modules.marketplace.models import (
     MarketplaceRegistryCloneRequest,
     MarketplaceRegistryRootMetadataSavePayload,
 )
-from app.modules.marketplace.request import MarketplaceRequest
+
+
+def _with_import_metadata(
+    candidate,
+    *,
+    overwrite: bool = False,
+):
+    return candidate.model_copy(
+        update={
+            "import_options": MarketplaceImportMetadata(
+                version="1.0.0-internal.1",
+                overwrite=overwrite,
+            )
+        }
+    )
+
+
+from app.modules.marketplace.request import MarketplaceRequest  # noqa: E402
 
 
 class _RecordingResourceWriteLocks:
@@ -132,9 +150,11 @@ def test_document_mutations_return_canonical_identity(
     created = marketplace_workflows.create_package(
         "user-1",
         MarketplacePackageCreateRequest(
-            provider="codex",
+            package_format="codex-native",
+            target_clients=["codex"],
             package_id="documents",
             display_name="Documents",
+            version="1.0.0",
             description="Document mutation contract",
         ),
     )
@@ -190,9 +210,11 @@ def test_hooks_sources_round_trip_without_relocating_manifest_referenced_files(
     marketplace_workflows.create_package(
         "user-1",
         MarketplacePackageCreateRequest(
-            provider="codex",
+            package_format="codex-native",
+            target_clients=["codex"],
             package_id="hooks",
             display_name="Hooks",
+            version="1.0.0",
             description="Marketplace hooks source contract",
         ),
     )
@@ -201,6 +223,7 @@ def test_hooks_sources_round_trip_without_relocating_manifest_referenced_files(
         / "registry"
         / "codex"
         / "plugins"
+        / "codex-native"
         / "hooks"
     )
     manifest_path = package_path / ".codex-plugin" / "plugin.json"
@@ -262,9 +285,11 @@ def test_mcp_mutations_return_owner_and_entry_fingerprint(
     created = marketplace_workflows.create_package(
         "user-1",
         MarketplacePackageCreateRequest(
-            provider="codex",
+            package_format="codex-native",
+            target_clients=["codex"],
             package_id="mcp-contract",
             display_name="MCP Contract",
+            version="1.0.0",
             description="MCP mutation contract",
         ),
     )
@@ -425,9 +450,7 @@ def test_remote_branches_uses_user_credentials_and_returns_default_branch(
 
     assert recorded["db"] is marketplace_workflows._db
     assert recorded["user_id"] == "user-1"
-    assert recorded["remote_url"] == (
-        "git@example.invalid:team/marketplace.git"
-    )
+    assert recorded["remote_url"] == ("git@example.invalid:team/marketplace.git")
     assert Path(recorded["repo_root"]).is_dir()
     assert result.branches == ["main", "develop"]
     assert result.default_branch == "main"
@@ -449,9 +472,11 @@ def test_save_package_uses_manifest_as_description_authority(marketplace_workflo
     created = marketplace_workflows.create_package(
         "user-1",
         MarketplacePackageCreateRequest(
-            provider="codex",
+            package_format="codex-native",
+            target_clients=["codex"],
             package_id="figma-context",
             display_name="Figma Context",
+            version="1.0.0",
             description="Original package",
         ),
     )
@@ -461,7 +486,7 @@ def test_save_package_uses_manifest_as_description_authority(marketplace_workflo
         "codex",
         "figma-context",
         MarketplacePackageSaveRequest(
-            provider="codex",
+            target_client="codex",
             packageId="figma-context",
             revision=created.revision,
             listing={
@@ -507,13 +532,80 @@ def test_save_package_uses_manifest_as_description_authority(marketplace_workflo
     assert detail.manifest_metadata["description"] == "Manifest description"
 
 
+def test_catalog_lists_agent_plugin_artifact_without_codex_native_wrapper(
+    marketplace_workflows,
+) -> None:
+    marketplace_workflows.create_package(
+        "user-1",
+        MarketplacePackageCreateRequest(
+            package_format="codex-native",
+            target_clients=["codex"],
+            package_id="bootstrap",
+            display_name="Bootstrap",
+            version="1.0.0",
+            description="Initialize registry",
+        ),
+    )
+    root = Path(get_settings().MARKETPLACE_STORAGE_PATH) / "registry"
+    package_path = root / "codex" / "plugins" / "agent-plugin-1.0.0" / "portable-review"
+    package_path.mkdir(parents=True)
+    (package_path / "plugin.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                "name": "portable-review",
+                "version": "1.0.0",
+                "description": "Portable review workflows",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (package_path / "skills" / "review").mkdir(parents=True)
+    (package_path / "skills" / "review" / "SKILL.md").write_text(
+        "# Review\n",
+        encoding="utf-8",
+    )
+    catalog_path = root / "marketplace" / "catalog.json"
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    catalog["packages"].append(
+        {
+            "targetClient": "codex",
+            "packageFormat": "agent-plugin/1.0.0",
+            "userCopyTargetClient": "codex",
+            "catalogPluginId": "aileron-internal/portable-review",
+            "packageId": "portable-review",
+            "category": "quality",
+            "tags": ["portable"],
+            "policy": {
+                "installation": "AVAILABLE",
+                "authentication": "ON_INSTALL",
+            },
+        }
+    )
+    catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+    marketplace_workflows.refresh_package_index("user-1")
+
+    result = marketplace_workflows.list_packages("user-1")
+    package = next(
+        item for item in result.items if item.package_id == "portable-review"
+    )
+
+    assert package.package_format == "agent-plugin/1.0.0"
+    assert package.user_copy_target_client == "codex"
+    assert package.catalog_plugin_id == "aileron-internal/portable-review"
+    assert package.lifecycle_status == "ready"
+    assert package.indexed_resource_names == ["skill", "skills"]
+
+
 def test_marketplace_tree_lists_include_entry_type(marketplace_workflows):
     created = marketplace_workflows.create_package(
         "user-1",
         MarketplacePackageCreateRequest(
-            provider="codex",
+            package_format="codex-native",
+            target_clients=["codex"],
             package_id="figma-context",
             display_name="Figma Context",
+            version="1.0.0",
             description="Figma MCP package",
         ),
     )
@@ -584,7 +676,7 @@ def test_validate_import_source_rejects_unsafe_git_inputs(marketplace_workflows)
         marketplace_workflows.validate_import_source(
             "user-1",
             MarketplaceImportSource(
-                provider="codex",
+                target_client="codex",
                 sourceKind="git",
                 source="https://token@example.com/org/repo.git",
             ),
@@ -593,7 +685,7 @@ def test_validate_import_source_rejects_unsafe_git_inputs(marketplace_workflows)
         marketplace_workflows.validate_import_source(
             "user-1",
             MarketplaceImportSource(
-                provider="codex",
+                target_client="codex",
                 sourceKind="git",
                 source="-----BEGIN OPENSSH PRIVATE KEY-----",
             ),
@@ -634,7 +726,7 @@ def test_scan_import_source_clones_github_tree_url_as_repository_url(
     candidates = marketplace_workflows.scan_import_source(
         "user-1",
         MarketplaceImportSource(
-            provider="claude-code",
+            target_client="claude-code",
             sourceKind="git",
             source=(
                 "https://github.com/anthropics/claude-code/"
@@ -676,7 +768,7 @@ def test_scan_import_source_rejects_missing_github_tree_subpath(
         marketplace_workflows.scan_import_source(
             "user-1",
             MarketplaceImportSource(
-                provider="claude-code",
+                target_client="claude-code",
                 sourceKind="git",
                 source=(
                     "https://github.com/anthropics/claude-code/"
@@ -708,34 +800,35 @@ def test_save_uploaded_import_source_rejects_zip_slip_entry(marketplace_workflow
     assert exc_info.value.detail["errorCode"] == "marketplace.validation.path_escape"
 
 
-def test_export_package_requires_current_revision(marketplace_workflows):
+def test_export_package_uses_current_working_tree(marketplace_workflows):
     created = marketplace_workflows.create_package(
         "user-1",
         MarketplacePackageCreateRequest(
-            provider="codex",
+            package_format="codex-native",
+            target_clients=["codex"],
             package_id="figma-context",
             display_name="Figma Context",
+            version="1.0.0",
             description="Figma MCP package",
         ),
     )
 
-    with pytest.raises(HTTPException) as exc_info:
-        marketplace_workflows.export_package(
-            "user-1", "codex", created.package_id, "stale"
-        )
-
-    assert exc_info.value.status_code == 409
-    assert exc_info.value.detail == "marketplace.package.revision_conflict"
+    archive = marketplace_workflows.export_package(
+        "user-1", "codex", created.package_id, "stale"
+    )
+    assert archive
 
 
 def test_export_package_allows_created_scaffold_package(marketplace_workflows):
     created = marketplace_workflows.create_package(
         "user-1",
         MarketplacePackageCreateRequest(
-            provider="codex",
-            package_id="draft-only",
-            display_name="Draft Only",
-            description="Draft package",
+            package_format="codex-native",
+            target_clients=["codex"],
+            package_id="created-package",
+            display_name="Created Package",
+            version="1.0.0",
+            description="Created package",
         ),
     )
 
@@ -747,14 +840,14 @@ def test_export_package_allows_created_scaffold_package(marketplace_workflows):
 
 
 @pytest.mark.parametrize(
-    ("provider", "package_id", "expected_entries"),
+    ("target_client", "package_id", "expected_entries"),
     [
         (
             "claude-code",
             "review-assistant",
             {
                 ".claude-plugin/marketplace.json",
-                "plugins/review-assistant/.claude-plugin/plugin.json",
+                "claude-code/plugins/claude-native/review-assistant/.claude-plugin/plugin.json",
             },
         ),
         (
@@ -762,28 +855,32 @@ def test_export_package_allows_created_scaffold_package(marketplace_workflows):
             "figma-context",
             {
                 ".agents/plugins/marketplace.json",
-                "plugins/figma-context/.codex-plugin/plugin.json",
+                "codex/plugins/codex-native/figma-context/.codex-plugin/plugin.json",
             },
         ),
     ],
 )
 def test_export_package_archives_scan_and_import_round_trip(
     marketplace_workflows,
-    provider,
+    target_client,
     package_id,
     expected_entries,
 ):
     created = marketplace_workflows.create_package(
         "user-1",
         MarketplacePackageCreateRequest(
-            provider=provider,
+            package_format=(
+                "claude-native" if target_client == "claude-code" else "codex-native"
+            ),
+            target_clients=[target_client],
             package_id=package_id,
             display_name="Exported Package",
+            version="1.0.0",
             description="Exported package",
         ),
     )
     archive_bytes = marketplace_workflows.export_package(
-        "user-1", provider, package_id, created.revision
+        "user-1", target_client, package_id, created.revision
     )
 
     with zipfile.ZipFile(BytesIO(archive_bytes)) as archive:
@@ -793,39 +890,47 @@ def test_export_package_archives_scan_and_import_round_trip(
     marketplace_workflows.delete_package(
         "user-1",
         MarketplacePackageDeleteRequest(
-            provider=provider,
+            target_client=target_client,
             package_id=package_id,
-            revision=created.revision,
         ),
     )
     upload = marketplace_workflows.save_uploaded_import_source(
         "user-1",
-        provider,
-        f"{provider}-{package_id}.zip",
+        target_client,
+        f"{target_client}-{package_id}.zip",
         archive_bytes,
     )
     candidates = marketplace_workflows.scan_import_source("user-1", upload.source)
     result = marketplace_workflows.import_candidates(
         "user-1",
-        MarketplaceImportRequest(source=upload.source, candidates=candidates),
+        MarketplaceImportRequest(
+            source=upload.source,
+            candidates=[_with_import_metadata(candidates[0])],
+        ),
     )
 
     assert [candidate.package_id for candidate in candidates] == [package_id]
+    assert result.failed == [], result.failed[0].error_code if result.failed else None
     assert [item.package_id for item in result.imported] == [package_id]
-    assert result.failed == []
     assert (
-        marketplace_workflows.get_package_detail("user-1", provider, package_id)
+        marketplace_workflows.get_package_detail(
+            "user-1", target_client, package_id
+        )
         is not None
     )
 
 
-def test_exported_archive_duplicate_actions_use_import_flow(marketplace_workflows):
+def test_imported_internal_package_requires_explicit_overwrite(
+    marketplace_workflows,
+):
     created = marketplace_workflows.create_package(
         "user-1",
         MarketplacePackageCreateRequest(
-            provider="codex",
+            package_format="codex-native",
+            target_clients=["codex"],
             package_id="figma-context",
             display_name="Figma Context",
+            version="1.0.0",
             description="Figma MCP package",
         ),
     )
@@ -839,51 +944,87 @@ def test_exported_archive_duplicate_actions_use_import_flow(marketplace_workflow
         archive_bytes,
     )
 
-    skipped_candidate = marketplace_workflows.scan_import_source(
-        "user-1", upload.source
-    )[0]
-    skipped = marketplace_workflows.import_candidates(
+    candidate = marketplace_workflows.scan_import_source("user-1", upload.source)[0]
+    duplicate = marketplace_workflows.import_candidates(
         "user-1",
-        MarketplaceImportRequest(source=upload.source, candidates=[skipped_candidate]),
+        MarketplaceImportRequest(
+            source=upload.source,
+            candidates=[_with_import_metadata(candidate)],
+        ),
     )
-    assert skipped.imported == []
-    assert [candidate.package_id for candidate in skipped.skipped] == ["figma-context"]
+    assert duplicate.imported == []
+    assert duplicate.failed
 
     overwrite_candidate = marketplace_workflows.scan_import_source(
         "user-1", upload.source
-    )[0].model_copy(
-        update={
-            "duplicate_action": "overwrite",
-        }
+    )[0]
+    internal_detail = marketplace_workflows.get_package_detail(
+        "user-1", "codex", "figma-context"
     )
+    assert internal_detail is not None
     overwritten = marketplace_workflows.import_candidates(
         "user-1",
         MarketplaceImportRequest(
-            source=upload.source, candidates=[overwrite_candidate]
+            source=upload.source,
+            candidates=[
+                _with_import_metadata(
+                    overwrite_candidate,
+                    overwrite=True,
+                )
+            ],
         ),
     )
-    assert [item.package_id for item in overwritten.imported] == ["figma-context"]
-
-    copy_candidate = marketplace_workflows.scan_import_source("user-1", upload.source)[
-        0
-    ].model_copy(
-        update={
-            "duplicate_action": "import-as-new",
-            "new_package_id": "figma-context-copy",
-        }
-    )
-    copied = marketplace_workflows.import_candidates(
-        "user-1",
-        MarketplaceImportRequest(source=upload.source, candidates=[copy_candidate]),
-    )
-
-    assert [item.package_id for item in copied.imported] == ["figma-context-copy"]
+    assert [item.package_id for item in overwritten.imported] == [
+        "figma-context"
+    ]
     assert (
         marketplace_workflows.get_package_detail(
-            "user-1", "codex", "figma-context-copy"
+            "user-1", "codex", "figma-context"
         )
         is not None
     )
+
+
+def test_import_failure_reports_stage_source_destination_and_category(
+    marketplace_workflows,
+):
+    created = marketplace_workflows.create_package(
+        "user-1",
+        MarketplacePackageCreateRequest(
+            package_format="codex-native",
+            target_clients=["codex"],
+            package_id="review-tools",
+            display_name="Review Tools",
+            version="1.0.0",
+            description="Review tools",
+        ),
+    )
+    archive_bytes = marketplace_workflows.export_package(
+        "user-1", "codex", "review-tools", created.revision
+    )
+    upload = marketplace_workflows.save_uploaded_import_source(
+        "user-1", "codex", "review-tools.zip", archive_bytes
+    )
+    candidate = marketplace_workflows.scan_import_source("user-1", upload.source)[
+        0
+    ].model_copy(update={"source_path": "plugins/missing"})
+
+    result = marketplace_workflows.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(
+            source=upload.source,
+            candidates=[_with_import_metadata(candidate)],
+        ),
+    )
+
+    assert len(result.failed) == 1
+    assert result.failed[0].error_code == (
+        "marketplace.import.validation.candidate_not_found"
+    )
+    assert result.failed[0].stage == "validate"
+    assert result.failed[0].source == upload.source.source
+    assert result.failed[0].destination is None
+    assert result.failed[0].category == "validation"
 
 
 @pytest.mark.unit

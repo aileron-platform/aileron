@@ -1,4 +1,4 @@
-"""Marketplace provider adapter tests."""
+"""Marketplace target_client adapter tests."""
 
 from __future__ import annotations
 
@@ -9,13 +9,45 @@ import pytest
 
 from app.modules.marketplace.models import (
     MarketplacePackageCreateRequest,
+    MarketplacePackageVariant,
 )
-from app.modules.marketplace.providers import (
-    BaseMarketplaceProviderAdapter,
+from app.modules.marketplace.target_clients import (
+    AgentPluginMarketplaceAdapter,
+    BaseMarketplaceTargetClientAdapter,
     ClaudeCodeMarketplaceAdapter,
     CodexMarketplaceAdapter,
     create_marketplace_adapters,
 )
+from app.modules.marketplace.workflows.import_planning import (
+    _MarketplaceImportPlanningSupport,
+)
+
+
+def test_variant_identity_keeps_same_client_different_package_formats() -> None:
+    support = _MarketplaceImportPlanningSupport()
+    variants = support._merge_variants(
+        [
+            MarketplacePackageVariant(
+                targetClient="codex",
+                packageFormat="codex-native",
+                packageId="review",
+                displayName="Review",
+            )
+        ],
+        [
+            MarketplacePackageVariant(
+                targetClient="codex",
+                packageFormat="agent-plugin/1.0.0",
+                packageId="review",
+                displayName="Review",
+            )
+        ],
+    )
+
+    assert [(item.target_client, item.package_format) for item in variants] == [
+        ("codex", "codex-native"),
+        ("codex", "agent-plugin/1.0.0"),
+    ]
 
 
 def _write_json(path: Path, data: dict) -> None:
@@ -24,13 +56,13 @@ def _write_json(path: Path, data: dict) -> None:
 
 
 def _create_package_scaffold(
-    adapter: BaseMarketplaceProviderAdapter,
+    adapter: BaseMarketplaceTargetClientAdapter,
     package_path: Path,
     request: MarketplacePackageCreateRequest,
 ) -> None:
     manifest_path = adapter.manifest_path(package_path)
     manifest = {"name": request.package_id}
-    if request.provider == "codex":
+    if request.target_client == "codex":
         manifest.update(
             {
                 "version": "0.1.0",
@@ -46,7 +78,7 @@ def _create_package_scaffold(
 
 
 def _upsert_listing_entry(
-    adapter: BaseMarketplaceProviderAdapter,
+    adapter: BaseMarketplaceTargetClientAdapter,
     registry_root: Path,
     package_id: str,
     entry: dict,
@@ -71,12 +103,39 @@ def _upsert_listing_entry(
     _write_json(manifest_path, document)
 
 
-def test_adapter_registry_exposes_all_supported_providers():
+def test_adapter_registry_exposes_all_supported_target_clients():
     adapters = create_marketplace_adapters()
 
     assert sorted(adapters.keys()) == ["claude-code", "codex"]
     assert isinstance(adapters["claude-code"], ClaudeCodeMarketplaceAdapter)
     assert isinstance(adapters["codex"], CodexMarketplaceAdapter)
+
+
+def test_agent_plugin_adapter_validates_portable_root_without_native_wrapper(
+    tmp_path: Path,
+) -> None:
+    adapter = AgentPluginMarketplaceAdapter()
+    package_path = tmp_path / "agent-plugin" / "plugins" / "review-assistant"
+    package_path.mkdir(parents=True)
+    _write_json(
+        package_path / "plugin.json",
+        {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "review-assistant",
+            "version": "1.0.0",
+            "description": "Portable review workflows",
+        },
+    )
+    (package_path / "skills" / "review").mkdir(parents=True)
+    (package_path / "skills" / "review" / "SKILL.md").write_text(
+        "# Review\n",
+        encoding="utf-8",
+    )
+
+    assert adapter.package_format == "agent-plugin/1.0.0"
+    assert adapter.manifest_path(package_path) == package_path / "plugin.json"
+    assert adapter.validate_package(package_path, package_id="review-assistant") == []
+    assert adapter.indexed_resource_names(package_path) == ["skill", "skills"]
 
 
 def test_claude_adapter_paths_scaffold_and_resource_index(tmp_path):
@@ -89,9 +148,11 @@ def test_claude_adapter_paths_scaffold_and_resource_index(tmp_path):
         adapter,
         package_path,
         MarketplacePackageCreateRequest(
-            provider="claude-code",
+            package_format="claude-native",
+            target_clients=["claude-code"],
             package_id="review-assistant",
             display_name="Review Assistant",
+            version="1.0.0",
             description="Review package",
         ),
     )
@@ -123,9 +184,11 @@ def test_codex_adapter_paths_and_hooks_variants(tmp_path):
         adapter,
         package_path,
         MarketplacePackageCreateRequest(
-            provider="codex",
+            package_format="codex-native",
+            target_clients=["codex"],
             package_id="figma-context",
             display_name="Figma Context",
+            version="1.0.0",
             description="Figma package",
         ),
     )
@@ -146,7 +209,7 @@ def test_codex_adapter_indexes_only_native_root_document(tmp_path: Path) -> None
     adapter = CodexMarketplaceAdapter()
     package_path = tmp_path / "package"
     package_path.mkdir()
-    (package_path / "CLAUDE.md").write_text("# Wrong provider\n", encoding="utf-8")
+    (package_path / "CLAUDE.md").write_text("# Wrong target_client\n", encoding="utf-8")
 
     assert "agentsMd" not in adapter.indexed_resource_names(package_path)
 
@@ -226,7 +289,7 @@ def test_listing_projection_write_forces_current_package_name(tmp_path):
     assert updated_manifest["plugins"][0]["name"] == "figma-context"
 
 
-def test_provider_validation_reports_manifest_shape_identity_and_required_fields(
+def test_target_client_validation_reports_manifest_shape_identity_and_required_fields(
     tmp_path,
 ):
     codex = CodexMarketplaceAdapter()
@@ -330,9 +393,11 @@ def test_claude_adapter_scans_external_marketplace_candidates(tmp_path):
         adapter,
         package_path,
         MarketplacePackageCreateRequest(
-            provider="claude-code",
+            package_format="claude-native",
+            target_clients=["claude-code"],
             package_id="review-assistant",
             display_name="Review Assistant",
+            version="1.0.0",
             description="Manifest description",
         ),
     )
@@ -349,12 +414,12 @@ def test_claude_adapter_scans_external_marketplace_candidates(tmp_path):
     assert candidates == [
         {
             "id": "claude-code:review-assistant",
-            "provider": "claude-code",
+            "target_client": "claude-code",
+            "packageFormat": "claude-native",
             "packageId": "review-assistant",
             "displayName": "review-assistant",
             "sourcePath": "plugins/review-assistant",
             "duplicate": False,
-            "duplicateAction": "skip",
             "validationSeverity": "warning",
             "validationResults": [
                 {
@@ -558,9 +623,11 @@ def test_codex_adapter_scans_external_marketplace_candidates(tmp_path):
         adapter,
         package_path,
         MarketplacePackageCreateRequest(
-            provider="codex",
+            package_format="codex-native",
+            target_clients=["codex"],
             package_id="figma-context",
             display_name="Manifest Name",
+            version="1.0.0",
             description="Manifest description",
         ),
     )
@@ -570,12 +637,12 @@ def test_codex_adapter_scans_external_marketplace_candidates(tmp_path):
     assert candidates == [
         {
             "id": "codex:figma-context",
-            "provider": "codex",
+            "target_client": "codex",
+            "packageFormat": "codex-native",
             "packageId": "figma-context",
             "displayName": "Catalog Name",
             "sourcePath": "plugins/figma-context",
             "duplicate": False,
-            "duplicateAction": "skip",
             "validationSeverity": "warning",
             "validationResults": [
                 {
@@ -646,17 +713,42 @@ def test_codex_external_scan_detects_root_plugin_without_marketplace_manifest(tm
     assert candidates == [
         {
             "id": "codex:superpowers",
-            "provider": "codex",
+            "target_client": "codex",
+            "packageFormat": "codex-native",
             "packageId": "superpowers",
             "displayName": "superpowers",
             "sourcePath": ".",
             "duplicate": False,
-            "duplicateAction": "skip",
             "validationSeverity": "none",
             "validationResults": [],
             "sourceMetadata": {},
         }
     ]
+
+
+def test_codex_external_scan_identifies_portable_agent_plugin_format(
+    tmp_path: Path,
+) -> None:
+    _write_json(
+        tmp_path / "plugin.json",
+        {
+            "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "portable-review",
+        },
+    )
+    (tmp_path / "skills" / "review").mkdir(parents=True)
+    (tmp_path / "skills" / "review" / "SKILL.md").write_text(
+        "# Review\n",
+        encoding="utf-8",
+    )
+
+    candidates = CodexMarketplaceAdapter().scan_external_source(tmp_path)
+
+    assert len(candidates) == 1
+    assert candidates[0]["target_client"] == "codex"
+    assert candidates[0]["packageFormat"] == "agent-plugin/1.0.0"
+    assert candidates[0]["packageId"] == "portable-review"
+    assert candidates[0]["validationSeverity"] == "none"
 
 
 def test_codex_import_listing_entry_falls_back_to_root_plugin_manifest(tmp_path):
@@ -740,7 +832,7 @@ def test_codex_external_scan_keeps_nested_remote_source_metadata(tmp_path):
 
 
 def test_adapter_unsupported_future_methods_are_explicit(tmp_path):
-    adapter = BaseMarketplaceProviderAdapter()
+    adapter = BaseMarketplaceTargetClientAdapter()
 
     with pytest.raises(NotImplementedError, match="marketplace.import.not_implemented"):
         adapter.scan_external_source(tmp_path)

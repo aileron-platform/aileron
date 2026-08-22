@@ -52,7 +52,7 @@ services:
       AILERON_RUNTIME_ACCESS_REVISION: "0"
       AILERON_KB_MOUNT_REVISION: "0"
       AILERON_WORKTREE_SUBDIR: .worktrees
-      AILERON_RUNTIME_STATE_DATABASE_URL_FILE: /tmp/aileron-secrets/runtime-state-database-url
+      AILERON_RUNTIME_DATABASE_CONNECTION_FILE: /tmp/aileron-secrets/runtime-database-connection
       AILERON_RUNTIME_CONTROL_TOKEN_FILE: /tmp/aileron-secrets/runtime-control-token
       AILERON_MANAGER_INTERNAL_URL: http://workspace-manager:8000
       AILERON_PLATFORM_PUBLIC_ORIGIN: http://frontend.test
@@ -105,9 +105,9 @@ services:
     command: >
       sh -c "
         install -d -m 0700 /tmp/aileron-secrets &&
-        printf '%s' 'postgresql+asyncpg://test_user:test_password@postgres-test:5432/test_workspace_runtime' > /tmp/aileron-secrets/runtime-state-database-url &&
+        printf '%s' 'postgresql://test_user:test_password@postgres-test:5432/test_workspace_runtime' > /tmp/aileron-secrets/runtime-database-connection &&
         printf '%s' 'test-runtime-control-token' > /tmp/aileron-secrets/runtime-control-token &&
-        chmod 0400 /tmp/aileron-secrets/runtime-state-database-url /tmp/aileron-secrets/runtime-control-token &&
+        chmod 0400 /tmp/aileron-secrets/runtime-database-connection /tmp/aileron-secrets/runtime-control-token &&
         echo '🔧 Installing dependencies...' &&
         uv sync --all-extras &&
         echo '🧪 Running tests...' &&

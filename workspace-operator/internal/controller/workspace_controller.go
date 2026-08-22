@@ -33,6 +33,7 @@ import (
 
 	workspacev1alpha1 "workspace-operator/api/v1alpha1"
 	controllerdependencies "workspace-operator/internal/controllerdependencies"
+	workspaceserviceidentities "workspace-operator/internal/workspaceserviceidentities"
 )
 
 const workspaceFinalizer = "platform.aileron.io/workspace-finalizer"
@@ -44,6 +45,7 @@ var immutableImageReferencePattern = regexp.MustCompile(
 const (
 	runtimeInstanceAnnotation            = "aileron.io/runtime-instance-id"
 	runtimeAccessRevisionAnnotation      = "aileron.io/runtime-access-revision"
+	runtimeDatabaseCARevisionAnnotation  = "aileron.io/runtime-database-ca-revision"
 	mountRevisionAnnotation              = "aileron.io/knowledge-base-mount-revision"
 	componentRevisionAnnotation          = "aileron.io/component-revision"
 	componentInstanceAnnotation          = "aileron.io/component-instance-id"
@@ -100,7 +102,7 @@ const (
 	runtimeSetupMountPath          = "/scripts/custom-setup.sh"
 	runtimeSecretsVolumeName       = "runtime-secrets"
 	runtimeSecretsMountPath        = "/etc/aileron/runtime-secrets"
-	runtimeStateDatabaseSecretKey  = "state-database-url"
+	runtimeDatabaseConnectionKey   = "runtime-database-connection"
 	runtimeControlTokenSecretKey   = "runtime-control-token"
 	runtimeCodexTmpVolumeName      = "codex-tmp"
 	runtimeCodexTmpMountPath       = runtimeHomeMountPath + "/.codex/tmp"
@@ -108,6 +110,9 @@ const (
 	runtimeAssertionJWKSSecretKey  = "jwks.json"
 	runtimeAssertionJWKSMountPath  = "/etc/aileron/runtime-assertions"
 	runtimeAssertionJWKSFilePath   = runtimeAssertionJWKSMountPath + "/" + runtimeAssertionJWKSSecretKey
+	runtimeDatabaseCAVolumeName    = "platform-database-ca"
+	runtimeDatabaseCAMountPath     = "/etc/aileron/data-service-ca/platform-database"
+	runtimeDatabaseCAFileName      = "ca.crt"
 	browserCredentialsVolumeName   = "browser-credentials"
 	browserCredentialsMountPath    = "/run/secrets/browser-credentials"
 	browserTURNVolumeName          = "browser-turn-ice"
@@ -141,7 +146,12 @@ generated_config="${state_dir}/neko.generated.yaml"
 generated_supervisor="${state_dir}/supervisord.generated.conf"
 umask 0077
 mkdir -p "${state_dir}"
-cp /etc/neko/neko.kubernetes.yaml "${generated_config}"
+install -m 0600 /dev/null "${generated_config}"
+awk '
+  /^(member|webrtc):[[:space:]]*$/ { skipping = 1; next }
+  skipping && /^[^[:space:]#]/ { skipping = 0 }
+  !skipping { print }
+' /etc/neko/neko.kubernetes.yaml >"${generated_config}"
 cat >>"${generated_config}" <<EOF
 
 member:
@@ -149,6 +159,11 @@ member:
   multiuser:
     user_password: "${browser_user_password}"
     admin_password: "${browser_admin_password}"
+webrtc:
+  icelite: false
+  udpmux: 0
+  nat1to1: []
+  ip_retrieval_url: ""
 EOF
 
 if [ -n "${NEKO_WEBRTC_ICESERVERS_BACKEND_FILE:-}" ] || [ -n "${NEKO_WEBRTC_ICESERVERS_FRONTEND_FILE:-}" ]; then
@@ -161,8 +176,6 @@ if [ -n "${NEKO_WEBRTC_ICESERVERS_BACKEND_FILE:-}" ] || [ -n "${NEKO_WEBRTC_ICES
   case "${backend_ice_servers}" in \[*\]) ;; *) fail ;; esac
   case "${frontend_ice_servers}" in \[*\]) ;; *) fail ;; esac
   cat >>"${generated_config}" <<EOF
-
-webrtc:
   iceservers:
     backend: ${backend_ice_servers}
     frontend: ${frontend_ice_servers}
@@ -208,13 +221,14 @@ var (
 
 type WorkspaceReconciler struct {
 	client.Client
-	APIReader                 client.Reader
-	Scheme                    *runtime.Scheme
-	ConfigNamespace           string
-	CiliumEnabled             bool
-	FirewallAttestationMaxAge time.Duration
-	PlatformPublicOrigin      string
-	ManagerURL                string
+	APIReader                         client.Reader
+	Scheme                            *runtime.Scheme
+	ConfigNamespace                   string
+	CiliumEnabled                     bool
+	PlatformDatabaseEgressDestination *TURNPolicyDestination
+	FirewallAttestationMaxAge         time.Duration
+	PlatformPublicOrigin              string
+	ManagerURL                        string
 	// TURN configuration for the Browser component.
 	TURNProfile                    *TURNReachabilityProfile
 	TURNICEServersSecretName       string
@@ -282,7 +296,7 @@ func (r *WorkspaceReconciler) Reconcile(
 		}
 	}
 	if workspace.Spec.Runtime.RuntimeSecretName != runtimeSecretName(workspace.Spec.WorkspaceID) {
-		return ctrl.Result{}, fmt.Errorf("Runtime Secret name does not match workspace identity")
+		return ctrl.Result{}, fmt.Errorf("Workspace generation Secret name does not match workspace identity")
 	}
 	if err := validateLifecycleSpec(&workspace); err != nil {
 		logger.Error(err, "invalid workspace lifecycle contract")
@@ -793,6 +807,10 @@ func deploymentMatchesDesiredRevision(
 		return false
 	}
 	if component == runtimeComponent {
+		databaseCARevision := ""
+		if workspace.Spec.Runtime.DatabaseTrust != nil {
+			databaseCARevision = workspace.Spec.Runtime.DatabaseTrust.Revision
+		}
 		return annotations[runtimeInstanceAnnotation] == workspace.Spec.Runtime.InstanceID &&
 			annotations[runtimeAccessRevisionAnnotation] == fmt.Sprintf(
 				"%d",
@@ -801,7 +819,8 @@ func deploymentMatchesDesiredRevision(
 			annotations[mountRevisionAnnotation] == fmt.Sprintf(
 				"%d",
 				workspace.Spec.Runtime.MountRevision,
-			)
+			) &&
+			annotations[runtimeDatabaseCARevisionAnnotation] == databaseCARevision
 	}
 	if component == browserComponent {
 		return annotations[browserCredentialRevisionAnnotation] == fmt.Sprintf(
@@ -919,7 +938,7 @@ func (r *WorkspaceReconciler) reconcileRuntimeDeployment(
 				{Name: "http", ContainerPort: 3002, Protocol: corev1.ProtocolTCP},
 				{Name: "terminal", ContainerPort: 3004, Protocol: corev1.ProtocolTCP},
 			},
-			Env:             append(runtimeEnvVars(workspace, r), toEnvVars(workspace.Spec.EnvVars)...),
+			Env:             append(runtimeEnvVars(workspace, r, namespace), toEnvVars(workspace.Spec.EnvVars)...),
 			VolumeMounts:    runtimeVolumeMounts(workspace),
 			StartupProbe:    runtimeHealthProbe(5, 2, 60),
 			ReadinessProbe:  runtimeAndTerminalReadinessProbe(),
@@ -980,10 +999,11 @@ func (r *WorkspaceReconciler) reconcileRuntimeService(
 	workspace *workspacev1alpha1.Workspace,
 	namespace string,
 ) error {
-	name := resourceName(runtimeComponent, workspace.Spec.WorkspaceID)
+	runtimeIdentity := workspaceserviceidentities.MustResolve("runtime", workspace.Spec.WorkspaceID, namespace)
+	terminalIdentity := workspaceserviceidentities.MustResolve("terminal", workspace.Spec.WorkspaceID, namespace)
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      runtimeIdentity.ServiceName,
 			Namespace: namespace,
 		},
 	}
@@ -998,8 +1018,8 @@ func (r *WorkspaceReconciler) reconcileRuntimeService(
 		}
 		svc.Spec.Selector = selector
 		svc.Spec.Ports = []corev1.ServicePort{
-			{Name: "http", Port: 3002, TargetPort: intstrFromInt32(3002), Protocol: corev1.ProtocolTCP},
-			{Name: "terminal", Port: 3004, TargetPort: intstrFromInt32(3004), Protocol: corev1.ProtocolTCP},
+			{Name: "http", Port: int32(runtimeIdentity.Port), TargetPort: intstrFromInt32(int32(runtimeIdentity.Port)), Protocol: corev1.ProtocolTCP},
+			{Name: "terminal", Port: int32(terminalIdentity.Port), TargetPort: intstrFromInt32(int32(terminalIdentity.Port)), Protocol: corev1.ProtocolTCP},
 		}
 		return nil
 	})
@@ -1086,11 +1106,6 @@ func (r *WorkspaceReconciler) reconcileBrowserDeployment(
 			turnICESecretItems := []corev1.KeyToPath{
 				{Key: r.TURNBackendSecretKey, Path: "backend-ice-servers.json"},
 			}
-			if r.TURNProfile.CredentialIssuer.Kind == TURNCredentialIssuerStaticSecret {
-				turnICESecretItems = append(turnICESecretItems, corev1.KeyToPath{
-					Key: r.TURNFrontendSecretKey, Path: "frontend-ice-servers.json",
-				})
-			}
 			deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
 				Name: browserTURNVolumeName,
 				VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
@@ -1099,16 +1114,14 @@ func (r *WorkspaceReconciler) reconcileBrowserDeployment(
 					Items:       turnICESecretItems,
 				}},
 			})
-			if r.TURNProfile.CredentialIssuer.Kind == TURNCredentialIssuerTURNREST {
-				deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
-					Name: turnRESTVolumeName,
-					VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
-						SecretName:  r.TURNProfile.CredentialIssuer.SecretRef,
-						DefaultMode: int32Ptr(0440),
-						Items:       []corev1.KeyToPath{{Key: "turn-rest-shared-secret", Path: "turn-rest-shared-secret"}},
-					}},
-				})
-			}
+			deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
+				Name: turnRESTVolumeName,
+				VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+					SecretName:  r.TURNProfile.CredentialIssuer.SecretRef,
+					DefaultMode: int32Ptr(0440),
+					Items:       []corev1.KeyToPath{{Key: "turn-rest-shared-secret", Path: "turn-rest-shared-secret"}},
+				}},
+			})
 		}
 		container := corev1.Container{
 			Name:                     "browser",
@@ -1137,11 +1150,6 @@ func (r *WorkspaceReconciler) reconcileBrowserDeployment(
 			LivenessProbe:   httpHealthProbe("webrtc", "/health", 10, 2, 3),
 			SecurityContext: restrictedContainerSecurityContext(),
 		}
-		if r.TURNProfile != nil && r.TURNProfile.CredentialIssuer.Kind == TURNCredentialIssuerStaticSecret {
-			container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
-				Name: browserTURNVolumeName, MountPath: browserTURNMountPath, ReadOnly: true,
-			})
-		}
 		if workspace.Spec.Browser.Resources != nil {
 			container.Resources = *workspace.Spec.Browser.Resources
 		}
@@ -1164,10 +1172,10 @@ func (r *WorkspaceReconciler) reconcileBrowserService(
 	workspace *workspacev1alpha1.Workspace,
 	namespace string,
 ) error {
-	name := resourceName(browserComponent, workspace.Spec.WorkspaceID)
+	browserIdentity := workspaceserviceidentities.MustResolve("browser", workspace.Spec.WorkspaceID, namespace)
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      browserIdentity.ServiceName,
 			Namespace: namespace,
 		},
 	}
@@ -1180,7 +1188,7 @@ func (r *WorkspaceReconciler) reconcileBrowserService(
 		}
 		svc.Spec.Selector = labels
 		svc.Spec.Ports = []corev1.ServicePort{
-			{Name: "webrtc", Port: 6080, TargetPort: intstrFromInt32(6080), Protocol: corev1.ProtocolTCP},
+			{Name: "webrtc", Port: int32(browserIdentity.Port), TargetPort: intstrFromInt32(int32(browserIdentity.Port)), Protocol: corev1.ProtocolTCP},
 			{Name: "cdp", Port: 9223, TargetPort: intstrFromInt32(9223), Protocol: corev1.ProtocolTCP},
 		}
 		if r.TURNProfile != nil {
@@ -1215,14 +1223,12 @@ func (r *WorkspaceReconciler) browserConnectivityProbeContainer(workspaceID stri
 	volumeMounts := []corev1.VolumeMount{{
 		Name: browserTURNVolumeName, MountPath: browserTURNMountPath, ReadOnly: true,
 	}}
-	if r.TURNProfile.CredentialIssuer.Kind == TURNCredentialIssuerTURNREST {
-		env = append(env, corev1.EnvVar{
-			Name: "TURN_REST_SHARED_SECRET_FILE", Value: turnRESTMountPath + "/turn-rest-shared-secret",
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name: turnRESTVolumeName, MountPath: turnRESTMountPath, ReadOnly: true,
-		})
-	}
+	env = append(env, corev1.EnvVar{
+		Name: "TURN_REST_SHARED_SECRET_FILE", Value: turnRESTMountPath + "/turn-rest-shared-secret",
+	})
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name: turnRESTVolumeName, MountPath: turnRESTMountPath, ReadOnly: true,
+	})
 	return corev1.Container{
 		Name:            "connectivity-probe",
 		Image:           r.BrowserConnectivityProbeImage,
@@ -1330,12 +1336,64 @@ func (r *WorkspaceReconciler) reconcileCanvasDeployment(
 	return err
 }
 
+const browserCompositeProbeScript = `exec >/dev/null 2>&1
+browser_config=/tmp/aileron-browser/neko.generated.yaml
+[ -f "${browser_config}" ] &&
+[ ! -L "${browser_config}" ] &&
+[ "$(stat -c '%a:%u' "${browser_config}")" = "600:$(id -u)" ] &&
+awk '
+/^[^[:space:]#]/ {
+  if ($0 !~ /^[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*$/) {
+    noncanonical_top_level_lines++
+    next
+  }
+  section = $0
+  sub(/:[[:space:]]*$/, "", section)
+  managed_nested = 0
+  if (section == "member") member_sections++
+  if (section == "webrtc") webrtc_sections++
+  next
+}
+(section == "member" || section == "webrtc") {
+  if ($0 ~ /^[[:space:]]*$/ || $0 ~ /^[[:space:]]*#/) next
+  if ($0 ~ /^  [^[:space:]]/) {
+    if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_-]*:([[:space:]]|$)/) {
+      noncanonical_managed_children++
+      next
+    }
+    managed_nested = $0 ~ /^  [A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*(#.*)?$/
+  } else if ($0 ~ /^    / && managed_nested) {
+    next
+  } else {
+    noncanonical_managed_children++
+    next
+  }
+}
+section == "member" && /^  provider:[[:space:]]*/ {
+  member_providers++
+  if ($0 ~ /^  provider:[[:space:]]*multiuser[[:space:]]*$/) valid_member_providers++
+}
+section == "webrtc" && /^  icelite:[[:space:]]*/ {
+  webrtc_icelite_values++
+  if ($0 ~ /^  icelite:[[:space:]]*false[[:space:]]*$/) valid_webrtc_icelite_values++
+}
+END {
+  valid = member_sections == 1 && webrtc_sections == 1 &&
+    member_providers == 1 && valid_member_providers == 1 &&
+    webrtc_icelite_values == 1 && valid_webrtc_icelite_values == 1 &&
+    noncanonical_top_level_lines == 0 && noncanonical_managed_children == 0
+  exit valid ? 0 : 1
+}
+' "${browser_config}" &&
+curl --fail --silent --max-time 1 http://127.0.0.1:6080/health &&
+curl --fail --silent --max-time 1 http://127.0.0.1:9223/json/version`
+
 func browserCompositeProbe(periodSeconds, timeoutSeconds, failureThreshold int32) *corev1.Probe {
 	return &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{
 			"/bin/sh",
 			"-ec",
-			`curl --fail --silent --show-error --max-time 1 http://127.0.0.1:6080/health >/dev/null && curl --fail --silent --show-error --max-time 1 http://127.0.0.1:9223/json/version >/dev/null`,
+			browserCompositeProbeScript,
 		}}},
 		PeriodSeconds:    periodSeconds,
 		TimeoutSeconds:   timeoutSeconds,
@@ -1349,10 +1407,10 @@ func (r *WorkspaceReconciler) reconcileCanvasService(
 	workspace *workspacev1alpha1.Workspace,
 	namespace string,
 ) error {
-	name := resourceName(canvasComponent, workspace.Spec.WorkspaceID)
+	canvasIdentity := workspaceserviceidentities.MustResolve("canvas", workspace.Spec.WorkspaceID, namespace)
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      canvasIdentity.ServiceName,
 			Namespace: namespace,
 		},
 	}
@@ -1365,7 +1423,7 @@ func (r *WorkspaceReconciler) reconcileCanvasService(
 		}
 		svc.Spec.Selector = labels
 		svc.Spec.Ports = []corev1.ServicePort{
-			{Name: "http", Port: 3003, TargetPort: intstrFromInt32(3003), Protocol: corev1.ProtocolTCP},
+			{Name: "http", Port: int32(canvasIdentity.Port), TargetPort: intstrFromInt32(int32(canvasIdentity.Port)), Protocol: corev1.ProtocolTCP},
 			{Name: "api", Port: 3013, TargetPort: intstrFromInt32(3013), Protocol: corev1.ProtocolTCP},
 		}
 		return nil
@@ -1471,7 +1529,7 @@ func (r *WorkspaceReconciler) reconcileRuntimePeerFirewallPolicy(
 					"aileron.io/component":    runtimeComponent,
 				},
 			},
-			"egress": workspacePeerEgressRules(namespace, workspace.Spec.WorkspaceID),
+			"egress": r.runtimePeerEgressRules(namespace, workspace.Spec.WorkspaceID),
 		}
 
 		if err := unstructured.SetNestedField(policy.Object, spec, "spec"); err != nil {
@@ -1623,9 +1681,9 @@ func (r *WorkspaceReconciler) deleteManagedResources(
 		name string
 		obj  client.Object
 	}{
-		{name: resourceName(runtimeComponent, workspace.Spec.WorkspaceID), obj: &corev1.Service{}},
-		{name: resourceName(browserComponent, workspace.Spec.WorkspaceID), obj: &corev1.Service{}},
-		{name: resourceName(canvasComponent, workspace.Spec.WorkspaceID), obj: &corev1.Service{}},
+		{name: workspaceserviceidentities.MustResolve("runtime", workspace.Spec.WorkspaceID, namespace).ServiceName, obj: &corev1.Service{}},
+		{name: workspaceserviceidentities.MustResolve("browser", workspace.Spec.WorkspaceID, namespace).ServiceName, obj: &corev1.Service{}},
+		{name: workspaceserviceidentities.MustResolve("canvas", workspace.Spec.WorkspaceID, namespace).ServiceName, obj: &corev1.Service{}},
 		{name: resourceName(runtimeComponent, workspace.Spec.WorkspaceID), obj: &appsv1.Deployment{}},
 		{name: resourceName(browserComponent, workspace.Spec.WorkspaceID), obj: &appsv1.Deployment{}},
 		{name: resourceName(canvasComponent, workspace.Spec.WorkspaceID), obj: &appsv1.Deployment{}},
@@ -2354,6 +2412,14 @@ func workspacePeerEgressRules(namespace string, workspaceID string) []interface{
 	}
 }
 
+func (r *WorkspaceReconciler) runtimePeerEgressRules(namespace string, workspaceID string) []interface{} {
+	rules := workspacePeerEgressRules(namespace, workspaceID)
+	if r.PlatformDatabaseEgressDestination == nil {
+		return append(rules, internalServiceEgressRule(r.ConfigNamespace, "postgres"))
+	}
+	return append(rules, destinationRule(*r.PlatformDatabaseEgressDestination))
+}
+
 func workspaceComponentEgressRule(
 	namespace string,
 	workspaceID string,
@@ -2390,7 +2456,6 @@ func workspaceComponentEgressRule(
 func requiredInternalServiceComponents() []string {
 	return []string{
 		"workspace-manager",
-		"postgres",
 	}
 }
 
@@ -2448,6 +2513,9 @@ func componentAnnotations(
 			"%d",
 			workspace.Spec.Runtime.MountRevision,
 		)
+		if workspace.Spec.Runtime.DatabaseTrust != nil {
+			annotations[runtimeDatabaseCARevisionAnnotation] = workspace.Spec.Runtime.DatabaseTrust.Revision
+		}
 	}
 	if component == browserComponent {
 		annotations[browserCredentialRevisionAnnotation] = fmt.Sprintf(
@@ -2472,10 +2540,14 @@ func mergeComponentAnnotations(
 	for key, value := range componentAnnotations(workspace, component) {
 		annotations[key] = value
 	}
+	if component == runtimeComponent && workspace.Spec.Runtime.DatabaseTrust == nil {
+		delete(annotations, runtimeDatabaseCARevisionAnnotation)
+	}
 	if component != runtimeComponent {
 		delete(annotations, runtimeInstanceAnnotation)
 		delete(annotations, runtimeAccessRevisionAnnotation)
 		delete(annotations, mountRevisionAnnotation)
+		delete(annotations, runtimeDatabaseCARevisionAnnotation)
 	}
 	if component != browserComponent {
 		delete(annotations, browserCredentialRevisionAnnotation)
@@ -2600,7 +2672,7 @@ func runtimeVolumes(
 				Secret: &corev1.SecretVolumeSource{
 					SecretName: workspace.Spec.Runtime.RuntimeSecretName,
 					Items: []corev1.KeyToPath{
-						{Key: runtimeStateDatabaseSecretKey, Path: runtimeStateDatabaseSecretKey, Mode: int32Ptr(0440)},
+						{Key: runtimeDatabaseConnectionKey, Path: runtimeDatabaseConnectionKey, Mode: int32Ptr(0440)},
 						{Key: runtimeControlTokenSecretKey, Path: runtimeControlTokenSecretKey, Mode: int32Ptr(0440)},
 					},
 					DefaultMode: int32Ptr(0440),
@@ -2641,6 +2713,24 @@ func runtimeVolumes(
 			VolumeSource: corev1.VolumeSource{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 					ClaimName: knowledgeBasesPVCName,
+				},
+			},
+		})
+	}
+	if workspace.Spec.Runtime.DatabaseTrust != nil {
+		volumes = append(volumes, corev1.Volume{
+			Name: runtimeDatabaseCAVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: workspace.Spec.Runtime.DatabaseTrust.SecretName,
+					Items: []corev1.KeyToPath{
+						{
+							Key:  workspace.Spec.Runtime.DatabaseTrust.SecretKey,
+							Path: runtimeDatabaseCAFileName,
+							Mode: int32Ptr(0444),
+						},
+					},
+					DefaultMode: int32Ptr(0444),
 				},
 			},
 		})
@@ -2697,6 +2787,13 @@ func runtimeVolumeMounts(
 			ReadOnly:  true,
 		})
 	}
+	if workspace.Spec.Runtime.DatabaseTrust != nil {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      runtimeDatabaseCAVolumeName,
+			MountPath: runtimeDatabaseCAMountPath,
+			ReadOnly:  true,
+		})
+	}
 	return mounts
 }
 
@@ -2722,9 +2819,14 @@ chmod 2770 "${HOME}/.codex"`},
 func runtimeEnvVars(
 	workspace *workspacev1alpha1.Workspace,
 	reconciler *WorkspaceReconciler,
+	namespace string,
 ) []corev1.EnvVar {
-	browserServiceName := resourceName(browserComponent, workspace.Spec.WorkspaceID)
-	canvasServiceName := resourceName(canvasComponent, workspace.Spec.WorkspaceID)
+	browserIdentity := workspaceserviceidentities.MustResolve(
+		"browser", workspace.Spec.WorkspaceID, namespace,
+	)
+	canvasIdentity := workspaceserviceidentities.MustResolve(
+		"canvas", workspace.Spec.WorkspaceID, namespace,
+	)
 	return []corev1.EnvVar{
 		{Name: "AILERON_WORKSPACE_ID", Value: workspace.Spec.WorkspaceID},
 		{Name: "AILERON_WORKSPACE_PATH", Value: workspaceMountPath(workspace)},
@@ -2732,25 +2834,25 @@ func runtimeEnvVars(
 		{Name: "AILERON_RUNTIME_ACCESS_REVISION", Value: fmt.Sprintf("%d", workspace.Spec.Runtime.AccessRevision)},
 		{Name: "AILERON_KB_MOUNT_REVISION", Value: fmt.Sprintf("%d", workspace.Spec.Runtime.MountRevision)},
 		{Name: "AILERON_WORKTREE_SUBDIR", Value: workspace.Spec.WorktreeSubdir},
-		{Name: "AILERON_RUNTIME_STATE_DATABASE_URL_FILE", Value: runtimeSecretsMountPath + "/" + runtimeStateDatabaseSecretKey},
+		{Name: "AILERON_RUNTIME_DATABASE_CONNECTION_FILE", Value: runtimeSecretsMountPath + "/" + runtimeDatabaseConnectionKey},
 		{Name: "AILERON_RUNTIME_CONTROL_TOKEN_FILE", Value: runtimeSecretsMountPath + "/" + runtimeControlTokenSecretKey},
 		{Name: "AILERON_MANAGER_INTERNAL_URL", Value: reconciler.ManagerURL},
 		{Name: "AILERON_PLATFORM_PUBLIC_ORIGIN", Value: reconciler.PlatformPublicOrigin},
 		{Name: "AILERON_RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE", Value: runtimeAssertionJWKSFilePath},
 		{Name: "AILERON_RUNTIME_ASSERTION_ISSUER", Value: workspace.Spec.Runtime.Assertion.Issuer},
 		{Name: "HOME", Value: runtimeHomeMountPath},
-		{Name: "AILERON_BROWSER_SERVICE_NAME", Value: browserServiceName},
-		{Name: "AILERON_BROWSER_WEBRTC_INTERNAL_URL", Value: fmt.Sprintf("http://%s:6080", browserServiceName)},
-		{Name: "AILERON_BROWSER_CDP_URL", Value: fmt.Sprintf("http://%s:9223", browserServiceName)},
-		{Name: "AILERON_CANVAS_SERVICE_NAME", Value: canvasServiceName},
-		{Name: "AILERON_CANVAS_INTERNAL_URL", Value: fmt.Sprintf("http://%s:3003", canvasServiceName)},
-		{Name: "AILERON_CANVAS_API_URL", Value: fmt.Sprintf("http://%s:3013", canvasServiceName)},
+		{Name: "AILERON_BROWSER_SERVICE_NAME", Value: browserIdentity.ServiceName},
+		{Name: "AILERON_BROWSER_WEBRTC_INTERNAL_URL", Value: browserIdentity.URL},
+		{Name: "AILERON_BROWSER_CDP_URL", Value: fmt.Sprintf("http://%s:9223", browserIdentity.FQDN)},
+		{Name: "AILERON_CANVAS_SERVICE_NAME", Value: canvasIdentity.ServiceName},
+		{Name: "AILERON_CANVAS_INTERNAL_URL", Value: canvasIdentity.URL},
+		{Name: "AILERON_CANVAS_API_URL", Value: fmt.Sprintf("http://%s:3013", canvasIdentity.FQDN)},
 	}
 }
 
 func runtimeSecretName(workspaceID string) string {
 	digest := sha256.Sum256([]byte(workspaceID))
-	return fmt.Sprintf("workspace-runtime-db-%x", digest[:16])
+	return fmt.Sprintf("workspace-generation-%x", digest[:8])
 }
 
 // browserEnvVars exposes only non-sensitive configuration and mounted Secret file paths.

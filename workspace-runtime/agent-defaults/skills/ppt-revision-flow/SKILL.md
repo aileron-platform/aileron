@@ -13,7 +13,7 @@ Use this skill for completed deck revision. It is not a new deck creation flow.
 /workspace/.aileron/canvases/ppt-design-flow/<session-id>/
 ```
 
-The shared runtime commands are executed from `/workspace/.codex/skills/ppt-design-flow/`.
+The shared runtime commands are executed from the sibling `ppt-design-flow` skill directory (`../ppt-design-flow/` relative to this skill).
 
 Image retouch and regeneration reuse the shared subagent runtime in `references/subagent-generation-runtime.md`. Every revision image edit or regeneration, including a single page, MUST use bounded single-image subagent workers after explicit user authorization. Each image worker must use `fork_context:false`, call image generation/editing at most once, adopt exactly one revised page image, write orchestration metadata only to file-backed state, and finish with one short user-safe sentence. Worker final messages must not include JSON, internal paths, base64 payloads, data URLs, markdown image embeds, raw `imageGeneration` results, or raw `image_generation_call` results. If authorization is missing or denied, the revision flow must use the shared subagent authorization question tool and stop when authorization is not granted. The main thread must never generate or edit revised page images directly.
 

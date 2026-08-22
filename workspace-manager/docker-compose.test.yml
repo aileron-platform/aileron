@@ -1,20 +1,41 @@
 services:
   postgres-test:
-    image: postgres:15-alpine
+    image: postgres:15-alpine@sha256:cae15a3b718f23497a60b7cafdcf205216d7949680972da0584db00fb68bf3e6
+    platform: linux/amd64
     environment:
-      POSTGRES_USER: test_user
-      POSTGRES_PASSWORD: test_password
+      POSTGRES_USER: bootstrap_superuser
+      POSTGRES_PASSWORD: bootstrap_password
       POSTGRES_DB: test_workspace_manager
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      test: ["CMD-SHELL", "pg_isready -U platform_login -d test_workspace_manager"]
       interval: 5s
       timeout: 5s
       retries: 5
     tmpfs:
       - /var/lib/postgresql/data
+    volumes:
+      - ./tests/fixtures/postgres/001_platform_login.sql:/docker-entrypoint-initdb.d/001_platform_login.sql:ro
+
+  postgres16-test:
+    image: postgres:16-alpine@sha256:075f7ba66bc9b3ce7d6b8b635208ff61cd7cf1a67d71ec530eec5d7ae0cbe571
+    platform: linux/amd64
+    environment:
+      POSTGRES_USER: bootstrap_superuser
+      POSTGRES_PASSWORD: bootstrap_password
+      POSTGRES_DB: test_workspace_manager
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform_login -d test_workspace_manager"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./tests/fixtures/postgres/001_platform_login.sql:/docker-entrypoint-initdb.d/001_platform_login.sql:ro
 
   redis-test:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:9702d01c1f10c3ea9f48211b4362e44f154ff02d063e6f7268eba804059f53bf
+    platform: linux/amd64
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -22,14 +43,33 @@ services:
       retries: 5
 
   workspace-manager-test:
-    image: ailerondocker/workspace-manager:dev
-    pull_policy: never
+    build:
+      context: ..
+      dockerfile: workspace-manager/Dockerfile
+      target: test
+      args:
+        SOURCE_REVISION: ${AILERON_SOURCE_REVISION:-development}
+        PYTHON_IMAGE: python:3.14.6-slim@sha256:b921fe7e7522f828d45197a47656ec465a9b15689b27fa8e1fba2864fca5b967
+        NODE_IMAGE: node:24.18.0-slim@sha256:d45d78e7929b46875bbd4e29bea672d5bc48186c6c3588306521c815e78352d6
+        NPM_VERSION: "12.0.1"
+        UV_VERSION: "0.11.32"
+        CODEX_CLI_VERSION: "0.145.0"
+    image: ${AILERON_MANAGER_TEST_IMAGE:-ailerondocker/workspace-manager-suite:development}
+    platform: linux/amd64
     entrypoint:
       - /bin/sh
       - -c
       - |
         umask 077
         printf '%s\n' 'manager-test-runtime-database-credential-key-v1' > /tmp/runtime-database-credential.key
+        printf '%s\n' 'postgresql://platform_login:platform_password@postgres-test:5432/test_workspace_manager' > /tmp/platform-database-url
+        printf '%s\n' 'redis://redis-test:6379/0' > /tmp/redis-general-url
+        printf '%s\n' 'redis://redis-test:6379/0' > /tmp/redis-job-queue-url
+        printf '%s\n' 'redis://redis-test:6379/1' > /tmp/redis-job-result-url
+        export REDIS_URL_FILE=/tmp/redis-general-url
+        export CELERY_BROKER_URL_FILE=/tmp/redis-job-queue-url
+        export CELERY_RESULT_BACKEND_FILE=/tmp/redis-job-result-url
+        export DATABASE_URL_FILE=/tmp/platform-database-url
         mkdir -p /tmp/runtime-assertion-keys
         .venv/bin/python scripts/generate_runtime_assertion_keys.py /tmp/runtime-assertion-keys --key-id workspace-manager-ed25519-v1
         exec "$$@"
@@ -37,13 +77,13 @@ services:
     depends_on:
       postgres-test:
         condition: service_healthy
+      postgres16-test:
+        condition: service_healthy
       redis-test:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://test_user:test_password@postgres-test:5432/test_workspace_manager
-      - AUTOMATION_TEST_DATABASE_URL=postgresql://test_user:test_password@postgres-test:5432/test_workspace_manager
+      - AUTOMATION_TEST_DATABASE_URL=postgresql://platform_login:platform_password@postgres-test:5432/test_workspace_manager
       - CELERY_INTEGRATION_BROKER_URL=redis://redis-test:6379/15
-      - REDIS_URL=redis://redis-test:6379/0
       - RUNTIME_DATABASE_CREDENTIAL_KEY_FILE=/tmp/runtime-database-credential.key
       - RUNTIME_ASSERTION_PRIVATE_KEY_FILE=/tmp/runtime-assertion-keys/private-key.pem
       - RUNTIME_ASSERTION_PUBLIC_KEY_SET_FILE=/tmp/runtime-assertion-keys/jwks.json
@@ -52,15 +92,16 @@ services:
       - CILIUM_ENABLED=true
       - PYTHONPATH=/workspace-manager
     volumes:
-      - .:/workspace-manager
-      - /workspace-manager/.venv
-      - ../packages:/packages:ro
-      - ..:/repo-root:ro
-      - ../scripts:/scripts:ro
-      - ../helm:/helm:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}:/repo-root:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/scripts:/scripts:ro
+      - ${AILERON_SUITE_SOURCE_ROOT:-..}/helm:/helm:ro
     working_dir: /workspace-manager
-    command: >
-      sh -c "
-        uv sync --dev &&
-        uv run pytest tests/ --cov=app --cov-report=term-missing --cov-report=html -v
-      "
+    command:
+      - /workspace-manager/.venv/bin/python
+      - -m
+      - pytest
+      - tests/
+      - --cov=app
+      - --cov-report=term-missing
+      - --cov-report=html
+      - -v

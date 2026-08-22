@@ -69,6 +69,7 @@ dependencies = [
     "aileron-file-core",
     "aileron-git-core",
     "aileron-marketplace-core",
+    "aileron-runtime-database-connection",
 ]
 
 [project.optional-dependencies]
@@ -133,6 +134,7 @@ dev-dependencies = [
 aileron-file-core = { path = "../packages/aileron-file-core", editable = true }
 aileron-git-core = { path = "../packages/aileron-git-core", editable = true }
 aileron-marketplace-core = { path = "../packages/aileron-marketplace-core", editable = true }
+aileron-runtime-database-connection = { path = "../packages/aileron-runtime-database-connection", editable = true }
 openai-codex = { path = "vendor/openai_codex" }
 
 [tool.black]

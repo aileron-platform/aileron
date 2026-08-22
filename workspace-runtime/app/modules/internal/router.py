@@ -22,10 +22,10 @@ from pydantic import BaseModel, Field
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from aileron_marketplace_core import (
-    UserCopyApplyMetadataContract,
-    UserCopyApplyResultContract,
-    UserCopyPreflightRequestContract,
-    UserCopyPreflightResultContract,
+    UserCopyProjectionApplyMetadataContract,
+    UserCopyProjectionApplyResultContract,
+    UserCopyProjectionPreflightRequestContract,
+    UserCopyProjectionPreflightResultContract,
 )
 
 from app.config.settings import get_settings
@@ -453,7 +453,6 @@ async def internal_health_check(
             "service": "workspace-runtime-internal",
             "version": "1.0.0",
             "runtimeInstanceId": get_settings().AILERON_RUNTIME_INSTANCE_ID,
-            "providerStateRootId": service.marketplace_provider_state_root_id,
         },
     )
 
@@ -461,7 +460,7 @@ async def internal_health_check(
 @router.post(
     "/marketplace/plugins/install",
     response_model=MarketplacePluginCommandResult,
-    summary="Install one Marketplace plugin through the provider CLI",
+    summary="Install one Marketplace plugin through the target client CLI",
 )
 async def install_marketplace_plugin(
     request: MarketplacePluginInstallRequest,
@@ -477,13 +476,13 @@ async def install_marketplace_plugin(
 
 @router.post(
     "/marketplace/user-copies/preflight",
-    response_model=UserCopyPreflightResultContract,
+    response_model=UserCopyProjectionPreflightResultContract,
     summary="Preflight one user-scope Marketplace copy",
 )
 async def preflight_marketplace_user_copy(
-    request: UserCopyPreflightRequestContract,
+    request: UserCopyProjectionPreflightRequestContract,
     service: Annotated[InternalService, Depends(get_internal_service)],
-) -> UserCopyPreflightResultContract:
+) -> UserCopyProjectionPreflightResultContract:
     """Return exact merge, no-op, conflict, and blocking projections."""
 
     try:
@@ -494,7 +493,7 @@ async def preflight_marketplace_user_copy(
 
 @router.post(
     "/marketplace/user-copies/apply",
-    response_model=UserCopyApplyResultContract,
+    response_model=UserCopyProjectionApplyResultContract,
     summary="Apply one canonical user-copy snapshot",
 )
 async def apply_marketplace_user_copy(
@@ -505,7 +504,7 @@ async def apply_marketplace_user_copy(
         int | None,
         Header(alias="content-length", ge=0),
     ] = None,
-) -> UserCopyApplyResultContract:
+) -> UserCopyProjectionApplyResultContract:
     """Verify multipart metadata and atomically apply the uploaded ZIP."""
 
     try:
@@ -529,7 +528,7 @@ async def apply_marketplace_user_copy(
                 detail={"code": ("marketplace.user_copy.archive_content_type_invalid")},
             )
         try:
-            parsed_metadata = UserCopyApplyMetadataContract.model_validate_json(
+            parsed_metadata = UserCopyProjectionApplyMetadataContract.model_validate_json(
                 metadata
             )
         except ValidationError as exc:

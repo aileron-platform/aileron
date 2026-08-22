@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from enum import Enum
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping, Optional
 
 from .adapter import (
     StructuredDocumentKind,
@@ -255,7 +255,7 @@ class _BackupRecord:
 class _OperationJournal:
     operation_id: str
     workspace_id: str
-    provider: str
+    target_client: str
     profile_digest: str
     materialization_digest: str
     contextual_materialization_digest: str
@@ -271,10 +271,10 @@ class _OperationJournal:
 
     def canonical_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
-            "journalVersion": 2,
+            "journalVersion": 3,
             "operationId": self.operation_id,
             "workspaceId": self.workspace_id,
-            "provider": self.provider,
+            "targetClient": self.target_client,
             "profileDigest": self.profile_digest,
             "materializationDigest": self.materialization_digest,
             "contextualMaterializationDigest": (self.contextual_materialization_digest),
@@ -305,7 +305,7 @@ class _OperationJournal:
             "journalVersion",
             "operationId",
             "workspaceId",
-            "provider",
+            "targetClient",
             "profileDigest",
             "materializationDigest",
             "contextualMaterializationDigest",
@@ -323,7 +323,7 @@ class _OperationJournal:
             "journalVersion",
             "operationId",
             "workspaceId",
-            "provider",
+            "targetClient",
             "profileDigest",
             "materializationDigest",
             "contextualMaterializationDigest",
@@ -339,11 +339,11 @@ class _OperationJournal:
             set(value) - allowed
             or not required.issubset(value)
             or type(value.get("journalVersion")) is not int
-            or value["journalVersion"] != 2
+            or value["journalVersion"] != 3
             or not _is_operation_id(value.get("operationId"))
             or not isinstance(value.get("workspaceId"), str)
             or not value["workspaceId"]
-            or value.get("provider") not in {"claude-code", "codex"}
+            or value.get("targetClient") not in {"claude-code", "codex"}
             or not _is_digest(value.get("profileDigest"))
             or not _is_digest(value.get("materializationDigest"))
             or not _is_digest(value.get("contextualMaterializationDigest"))
@@ -432,7 +432,7 @@ class _OperationJournal:
         return cls(
             operation_id=value["operationId"],
             workspace_id=value["workspaceId"],
-            provider=value["provider"],
+            target_client=value["targetClient"],
             profile_digest=value["profileDigest"],
             materialization_digest=value["materializationDigest"],
             contextual_materialization_digest=value["contextualMaterializationDigest"],
@@ -461,8 +461,8 @@ class _PreparedTargetMutation:
     target_mode: int | None = None
 
 
-ReadbackResolver = Callable[[PlannedUserCopyResource], str | None]
-CrashHook = Callable[[UserCopyCrashPoint, str | None], None]
+ReadbackResolver = Callable[[PlannedUserCopyResource], Optional[str]]
+CrashHook = Callable[[UserCopyCrashPoint, Optional[str]], None]
 
 
 class UserCopyMaterializer:
@@ -512,7 +512,7 @@ class UserCopyMaterializer:
         journal = _OperationJournal(
             operation_id=operation_id,
             workspace_id=workspace_id,
-            provider=plan.provider,
+            target_client=plan.target_client,
             profile_digest=plan.profile_digest,
             materialization_digest=plan.materialization_digest,
             contextual_materialization_digest=context_digest,
@@ -665,7 +665,7 @@ class UserCopyMaterializer:
         return operation_dir.exists()
 
     def mark_published(self, operation_id: str) -> None:
-        """Persist that provider generation advanced for this completed copy."""
+        """Persist that target_client generation advanced for this completed copy."""
 
         operation_dir = self._operation_directory(operation_id)
         journal = self._read_journal(operation_dir)
@@ -887,7 +887,7 @@ class UserCopyMaterializer:
         document = self._read_structured_document(first)
         changed = False
         content_digests: dict[str, str] = {}
-        tokens = self._placeholder_tokens(first.provider)
+        tokens = self._placeholder_tokens(first.target_client)
         for resource in resources:
             source_document = json.loads(
                 resource.source_path.read_text(encoding="utf-8")
@@ -2109,7 +2109,7 @@ class UserCopyMaterializer:
             }
         if (
             journal.operation_id != operation_id
-            or journal.provider != plan.provider
+            or journal.target_client != plan.target_client
             or journal.profile_digest != plan.profile_digest
             or journal.materialization_digest != plan.materialization_digest
             or not backup_keys.issubset(changed_groups)
@@ -2169,18 +2169,23 @@ class UserCopyMaterializer:
             set(proof)
             != {
                 "status",
-                "provider",
+                "packageFormat",
+                "targetClient",
                 "profileVersion",
                 "profileDigest",
                 "resources",
                 "conflicts",
                 "blockingIssues",
+                "skippedResources",
+                "projectionDigest",
                 "materializationDigest",
             }
-            or proof.get("provider") != candidate_plan.provider
+            or proof.get("packageFormat") != candidate_plan.package_format
+            or proof.get("targetClient") != candidate_plan.target_client
             or proof.get("profileVersion") != candidate_plan.profile_version
             or proof.get("profileDigest") != candidate_plan.profile_digest
             or proof.get("materializationDigest") != journal.materialization_digest
+            or proof.get("projectionDigest") != candidate_plan.projection_digest
             or proof.get("status")
             not in {
                 UserCopyPlanStatus.READY.value,
@@ -2189,6 +2194,10 @@ class UserCopyMaterializer:
             or not isinstance(proof.get("resources"), list)
             or not isinstance(proof.get("conflicts"), list)
             or proof.get("blockingIssues") != []
+            or proof.get("skippedResources")
+            != [
+                item.canonical_dict() for item in candidate_plan.skipped_resources
+            ]
         ):
             raise UserCopyMaterializationError(
                 "marketplace.user_copy.runtime_state_invalid"
@@ -2204,7 +2213,7 @@ class UserCopyMaterializer:
         resources: list[PlannedUserCopyResource] = []
         seen: set[str] = set()
         resource_allowed = {
-            "provider",
+            "targetClient",
             "resourceType",
             "resourceId",
             "sourceKind",
@@ -2364,7 +2373,7 @@ class UserCopyMaterializer:
         status = UserCopyPlanStatus(proof["status"])
         expected_status = (
             UserCopyPlanStatus.CONFIRMATION_REQUIRED
-            if conflicts
+            if conflicts or candidate_plan.skipped_resources
             else UserCopyPlanStatus.READY
         )
         if status is not expected_status:
@@ -2372,13 +2381,16 @@ class UserCopyMaterializer:
                 "marketplace.user_copy.runtime_state_invalid"
             )
         plan = UserCopyMaterializationPlan(
-            provider=candidate_plan.provider,
+            package_format=candidate_plan.package_format,
+            target_client=candidate_plan.target_client,
             profile_version=candidate_plan.profile_version,
             profile_digest=candidate_plan.profile_digest,
             status=status,
             resources=tuple(resources),
             conflicts=tuple(conflicts),
             blocking_issues=tuple(),
+            skipped_resources=candidate_plan.skipped_resources,
+            projection_digest=candidate_plan.projection_digest,
             materialization_digest=journal.materialization_digest,
         )
         if (
@@ -2459,10 +2471,10 @@ class UserCopyMaterializer:
             self._crash_hook(point, target_locator)
 
     @staticmethod
-    def _placeholder_tokens(provider: str) -> tuple[str, ...]:
-        if provider == "claude-code":
+    def _placeholder_tokens(target_client: str) -> tuple[str, ...]:
+        if target_client == "claude-code":
             return ("${CLAUDE_PLUGIN_ROOT}",)
-        if provider == "codex":
+        if target_client == "codex":
             return ("PLUGIN_ROOT", "${PLUGIN_ROOT}", "${CODEX_PLUGIN_ROOT}")
         raise UserCopyMaterializationError(
             "marketplace.user_copy.materialization_mismatch"

@@ -16,7 +16,7 @@ from app.modules.cli_settings.user_scope.paths import (
 )
 from app.modules.cli_settings.toml_codec import dump_toml, parse_toml
 from app.modules.cli_settings.user_scope.codecs import read_text, write_text_atomic
-from app.modules.marketplace_operations.gate import get_marketplace_provider_gate
+from app.modules.marketplace_operations.gate import get_marketplace_target_client_gate
 
 from .app_server_hooks import (
     CodexAuthoritativeHook,
@@ -136,7 +136,7 @@ class CodexPluginControlStore:
     ) -> tuple[CodexPluginMcpPolicy, bool, str, int]:
         """Atomically replace one official plugin MCP policy and verify readback."""
 
-        gate = get_marketplace_provider_gate()
+        gate = get_marketplace_target_client_gate()
 
         def mutate() -> tuple[CodexPluginMcpPolicy, bool, str]:
             server = self._require_mcp_server(plugin_id, server_id)
@@ -251,7 +251,7 @@ class CodexPluginControlStore:
     ) -> tuple[CodexPluginHookControlSummary, str, int]:
         """Approve or revoke every command hook contributed by one plugin."""
 
-        gate = get_marketplace_provider_gate()
+        gate = get_marketplace_target_client_gate()
 
         def mutate() -> tuple[CodexPluginHookControlSummary, str]:
             documents = self._plugin_hook_documents(plugin_id)
@@ -380,7 +380,7 @@ class CodexPluginControlStore:
 
     def _authoritative_hooks(self) -> tuple[CodexAuthoritativeHook, ...]:
         key = (
-            get_marketplace_provider_gate().generation("codex"),
+            get_marketplace_target_client_gate().generation("codex"),
             self.user_revision(),
         )
         if key != self._hooks_cache_key:

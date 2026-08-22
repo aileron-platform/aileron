@@ -458,14 +458,14 @@ async def answer_question(
         return _error_response(exc)
 
 
-@router.post("/{thread_id}/cancel", response_model=ThreadDetailResponse)
-async def cancel_thread(
+@router.post("/{thread_id}/stop", response_model=ThreadDetailResponse)
+async def stop_thread(
     thread_id: str,
     request: Request,
     service: ThreadService = Depends(get_thread_service),
 ) -> ThreadDetailResponse | JSONResponse:
     try:
-        return await service.cancel_thread(
+        return await service.stop_thread(
             thread_id=thread_id, user_id=get_current_user_id(request)
         )
     except ThreadApiError as exc:

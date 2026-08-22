@@ -46,6 +46,20 @@ dependencies = [
 requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
 
 [[package]]
+name = "aileron-runtime-database-connection"
+version = "0.1.0"
+source = { editable = "../packages/aileron-runtime-database-connection" }
+dependencies = [
+    { name = "sqlalchemy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "sqlalchemy", specifier = ">=2.0.0" }]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=7.4.0" }]
+
+[[package]]
 name = "aileron-workspace-runtime"
 version = "1.0.0"
 source = { editable = "." }
@@ -54,6 +68,7 @@ dependencies = [
     { name = "aileron-file-core" },
     { name = "aileron-git-core" },
     { name = "aileron-marketplace-core" },
+    { name = "aileron-runtime-database-connection" },
     { name = "aiofiles" },
     { name = "aiohttp" },
     { name = "anthropic" },
@@ -135,6 +150,7 @@ requires-dist = [
     { name = "aileron-file-core", editable = "../packages/aileron-file-core" },
     { name = "aileron-git-core", editable = "../packages/aileron-git-core" },
     { name = "aileron-marketplace-core", editable = "../packages/aileron-marketplace-core" },
+    { name = "aileron-runtime-database-connection", editable = "../packages/aileron-runtime-database-connection" },
     { name = "aiofiles", specifier = ">=23.2.0" },
     { name = "aiohttp", specifier = ">=3.9.1" },
     { name = "anthropic", specifier = ">=0.3.0" },

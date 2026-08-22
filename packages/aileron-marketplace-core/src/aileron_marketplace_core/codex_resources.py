@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from .provider_resources import provider_resource_name_contract
+from .package_format_resources import package_format_resource_name_contract
 from .resource_resolution import (
     PackageSourceError,
     PluginResourceOwner,
@@ -46,7 +46,7 @@ class CodexPluginResources:
 
 
 def _manifest_path(package_root: Path) -> Path:
-    contract = provider_resource_name_contract("codex")
+    contract = package_format_resource_name_contract("codex-native")
     return package_root / contract.plugin_manifest_path
 
 

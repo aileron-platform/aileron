@@ -64,7 +64,7 @@ def _service(tmp_path: Path, monkeypatch) -> tuple[CodexAgentSettings, Path]:
     gate.generation.return_value = 17
     monkeypatch.setattr(
         codex_service_module,
-        "get_marketplace_provider_gate",
+        "get_marketplace_target_client_gate",
         MagicMock(return_value=gate),
     )
     return service, package_root
@@ -107,7 +107,7 @@ def test_codex_apps_api_reads_installed_root_and_sanitizes_definition(
     }
     assert resource["provenance"] == {
         "origin": "marketplace-plugin",
-        "provider": "codex",
+        "targetClient": "codex",
         "pluginId": "demo@local",
         "marketplaceId": "local",
     }

@@ -55,18 +55,17 @@ class SlashCommandService:
         self._repository = ScopedMarkdownRepository("commands")
 
     def list_scopes(
-        self, workspace_id: str, scope: DocumentScope | None = None
+        self,
+        workspace_id: str,
+        scope: DocumentScope | None = None,
+        *,
+        strict_plugin_errors: bool = False,
     ) -> SlashCommandScopesResponse:
-        """
-        List all slash commands
-
-        Modified: Auto-integrate plugin commands
-        """
+        """List slash commands, including plugin commands when requested."""
         items: list[SlashCommandDocumentSummary] = []
         available_scopes: list[SlashCommandAvailableScope] = []
 
-        # 1. Load commands from file system (project/user/local)
-        # Skip file system loading if querying PLUGIN scope
+        # Load commands from file system (project/user/local).
         if scope != DocumentScope.PLUGIN:
             for scope_item in iter_requested_scopes(
                 scope, allow_local=False, allow_plugin=False
@@ -79,16 +78,21 @@ class SlashCommandService:
                     SlashCommandAvailableScope(scope=scope_item, readOnly=False)
                 )
 
-        # 2. Load plugin commands (from plugin loader)
+        # Load plugin commands from the plugin inventory.
         if scope is None or scope == DocumentScope.PLUGIN:
             available_scopes.append(
                 SlashCommandAvailableScope(scope=DocumentScope.PLUGIN, readOnly=True)
             )
             try:
-                plugin_commands = self._load_plugin_commands(workspace_id)
+                plugin_commands = self._load_plugin_commands(
+                    workspace_id,
+                    strict_errors=strict_plugin_errors,
+                )
                 if plugin_commands:
                     items.extend(plugin_commands)
             except Exception as e:
+                if strict_plugin_errors:
+                    raise
                 logger.error(f"Failed to load plugin commands: {e}")
 
         items.sort(key=lambda item: (item.scope.value, item.path))
@@ -242,7 +246,10 @@ class SlashCommandService:
         )
 
     def _load_plugin_commands(
-        self, workspace_id: str
+        self,
+        workspace_id: str,
+        *,
+        strict_errors: bool = False,
     ) -> list[SlashCommandDocumentSummary]:
         """Load plugin commands
 
@@ -274,6 +281,8 @@ class SlashCommandService:
                     )
                 )
             except (OSError, IOError) as e:
+                if strict_errors:
+                    raise
                 logger.error(f"Failed to read plugin command {cmd.file_path}: {e}")
 
         return documents

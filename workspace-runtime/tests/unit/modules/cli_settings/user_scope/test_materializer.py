@@ -79,8 +79,10 @@ def test_apply_publish_and_finalize_leave_only_ordinary_user_content(
         operation_id=_OPERATION_ID,
         workspace_id="workspace-1",
     )
-    payload = (
-        runtime_home / ".aileron" / "user-copy" / "codex" / "demo" / "bin" / "server"
+    payload = next(
+        item.runtime_path
+        for item in plan.resources
+        if item.resource_type == "dependency-payload"
     )
 
     assert result.journal_phase is UserCopyJournalPhase.COMPLETED

@@ -6,7 +6,6 @@ import asyncio
 import hashlib
 import logging
 import os
-import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,10 +21,10 @@ from openai_codex.generated.v2_all import (
     LogoutAccountResponse,
 )
 from aileron_marketplace_core import (
-    UserCopyApplyMetadataContract,
-    UserCopyApplyResultContract,
-    UserCopyPreflightRequestContract,
-    UserCopyPreflightResultContract,
+    UserCopyProjectionApplyMetadataContract,
+    UserCopyProjectionApplyResultContract,
+    UserCopyProjectionPreflightRequestContract,
+    UserCopyProjectionPreflightResultContract,
 )
 
 from app.config.settings import get_settings
@@ -85,7 +84,6 @@ class InternalService:
         self.codex_sessions_dir = self.home_dir / ".codex-sessions"
         self._json_document_codec = JsonDocumentCodec()
         self._toml_document_codec = TomlDocumentCodec()
-        self.codex_bin = shutil.which("codex") or "codex"
         self._credentials_filename = ".credentials.json"
         self._env_keys_env = "CLAUDE_CODE_SYNCED_KEYS"
         self._auth_method_env = "CLAUDE_CODE_AUTH_METHOD"
@@ -104,12 +102,6 @@ class InternalService:
         )
 
     @property
-    def marketplace_provider_state_root_id(self) -> str:
-        """Stable opaque identity exposed through the Runtime descriptor."""
-
-        return self._marketplace_user_copies.provider_state_root_id
-
-    @property
     def marketplace_user_copy_max_archive_bytes(self) -> int:
         """Maximum accepted one-shot ZIP body size."""
 
@@ -117,8 +109,8 @@ class InternalService:
 
     async def preflight_marketplace_user_copy(
         self,
-        request: UserCopyPreflightRequestContract,
-    ) -> UserCopyPreflightResultContract:
+        request: UserCopyProjectionPreflightRequestContract,
+    ) -> UserCopyProjectionPreflightResultContract:
         """Run one-shot user-copy target preflight."""
 
         return await asyncio.to_thread(
@@ -128,9 +120,9 @@ class InternalService:
 
     async def apply_marketplace_user_copy(
         self,
-        metadata: UserCopyApplyMetadataContract,
+        metadata: UserCopyProjectionApplyMetadataContract,
         bundle: bytes,
-    ) -> UserCopyApplyResultContract:
+    ) -> UserCopyProjectionApplyResultContract:
         """Stage and apply one canonical user-copy snapshot."""
 
         return await asyncio.to_thread(
@@ -226,7 +218,7 @@ class InternalService:
         self,
         request: MarketplacePluginInstallRequest,
     ) -> MarketplacePluginCommandResult:
-        """Run one provider CLI installation without durable install state."""
+        """Run one target client CLI installation without durable install state."""
 
         return await asyncio.to_thread(
             self._marketplace_plugin_installs.install,
@@ -313,7 +305,6 @@ class InternalService:
         self.codex_auth_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         codex = AsyncCodex(
             config=CodexConfig(
-                codex_bin=self.codex_bin,
                 cwd="/workspace",
                 env={"CODEX_HOME": str(self.codex_auth_dir)},
             )
@@ -345,7 +336,6 @@ class InternalService:
         """Read Codex account status from the managed auth home."""
         codex = AsyncCodex(
             config=CodexConfig(
-                codex_bin=self.codex_bin,
                 cwd="/workspace",
                 env={"CODEX_HOME": str(self.codex_auth_dir)},
             )
@@ -403,7 +393,6 @@ class InternalService:
 
         codex = AsyncCodex(
             config=CodexConfig(
-                codex_bin=self.codex_bin,
                 cwd="/workspace",
                 env={"CODEX_HOME": str(self.codex_auth_dir)},
             )

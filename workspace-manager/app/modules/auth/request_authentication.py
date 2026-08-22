@@ -42,6 +42,7 @@ class AuthenticatedManagerUser:
     """Immutable User projection exposed to authenticated consumers."""
 
     id: str
+    subject: str
     username: str
     email: str | None
     display_name: str | None
@@ -133,6 +134,8 @@ class ManagerRequestAuthentication:
                 or projection.session_subject != projection.user_subject
             ):
                 self._reject(401, "MANAGER_SESSION_REQUIRED")
+            if not projection.session_subject or not projection.user_subject:
+                self._reject(401, "MANAGER_SESSION_REQUIRED")
 
             if not self._policy.is_authorized(projection):
                 self._reject(403, "PLATFORM_AUTHORIZATION_DENIED")
@@ -155,6 +158,7 @@ class ManagerRequestAuthentication:
             session_id=projection.session_id,
             user=AuthenticatedManagerUser(
                 id=projection.user_id,
+                subject=projection.user_subject,
                 username=projection.username,
                 email=projection.email,
                 display_name=projection.display_name,

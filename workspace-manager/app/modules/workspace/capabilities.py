@@ -7,8 +7,9 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from app.config.model_registry import normalize_model_selection
-from app.modules.settings.models import UserSettings, UserToolModelSelection
 from app.core.pydantic import CamelModel
+from app.modules.settings.models import UserSettings, UserToolModelSelection
+from app.modules.workspace.models import SUPPORTED_AGENTIC_TOOLS
 
 AgenticToolId = Literal["claude", "codex", "opencode"]
 ClaudeMode = Literal["execute", "plan"]
@@ -16,6 +17,12 @@ ClaudeMode = Literal["execute", "plan"]
 CLAUDE_CONTEXT_WINDOW = 200000
 CODEX_CONTEXT_WINDOW = 200000
 OPENCODE_CONTEXT_WINDOW = 128000
+
+WORKSPACE_TOOL_CAPABILITY_IDS: dict[str, AgenticToolId] = {
+    "claude-code": "claude",
+    "codex": "codex",
+    "opencode": "opencode",
+}
 
 
 class ToolCapability(CamelModel):
@@ -66,6 +73,55 @@ class WorkspaceCapabilities(CamelModel):
         if capability.modes is None:
             return claude_mode is None
         return claude_mode in capability.modes
+
+
+def reconcile_workspace_capabilities(
+    capabilities: WorkspaceCapabilities,
+    agentic_tools: object,
+) -> WorkspaceCapabilities:
+    """Return the capability subset enabled by one workspace's tool selection.
+
+    Legacy invalid selections (``None``, empty, malformed, or entirely unknown)
+    are constrained to the snapshot's existing default tool. If a selection has
+    at least one recognized workspace tool, only those recognized tools are
+    honored; a snapshot missing all explicitly selected tools is rejected rather
+    than widened to a different provider.
+    """
+
+    tools_by_id = {tool.id: tool for tool in capabilities.tools}
+    selected_workspace_tools = (
+        {
+            tool
+            for tool in agentic_tools
+            if isinstance(tool, str) and tool in WORKSPACE_TOOL_CAPABILITY_IDS
+        }
+        if isinstance(agentic_tools, list)
+        else set()
+    )
+    enabled_tool_ids = [
+        WORKSPACE_TOOL_CAPABILITY_IDS[workspace_tool]
+        for workspace_tool in SUPPORTED_AGENTIC_TOOLS
+        if workspace_tool in selected_workspace_tools
+    ]
+
+    if not enabled_tool_ids:
+        enabled_tool_ids = [capabilities.default_tool]
+
+    enabled_tools = [
+        tools_by_id[tool_id] for tool_id in enabled_tool_ids if tool_id in tools_by_id
+    ]
+    if not enabled_tools:
+        raise ValueError("No enabled workspace tools have capability definitions")
+
+    effective_tool_ids = {tool.id for tool in enabled_tools}
+    default_tool = (
+        capabilities.default_tool
+        if capabilities.default_tool in effective_tool_ids
+        else enabled_tools[0].id
+    )
+    return WorkspaceCapabilities.model_validate(
+        {"defaultTool": default_tool, "tools": enabled_tools}
+    )
 
 
 def _selection(

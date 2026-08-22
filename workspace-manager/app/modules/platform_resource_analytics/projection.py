@@ -49,7 +49,7 @@ class PlatformResourceAnalytics:
         self.db = db
         self.settings = get_settings()
         self.authorization = AuthorizationOperationPolicy(db)
-        self.cache = cache or PlatformResourceCache(self.settings.REDIS_URL)
+        self.cache = cache or PlatformResourceCache(self.settings.redis_url)
 
     def get_summary(
         self,
@@ -214,9 +214,7 @@ class PlatformResourceAnalytics:
             range=cast(RangeValue, range_value),
             timeZone=self.settings.TZ,
             calculatedAt=_utcnow(),
-            collectionStartedAt=min(
-                (row.calculated_at for row in rows), default=None
-            ),
+            collectionStartedAt=min((row.calculated_at for row in rows), default=None),
             isStale=False,
             refreshInProgress=False,
             points=[
@@ -278,8 +276,7 @@ class PlatformResourceAnalytics:
                 select(db_models.PlatformResourceDailyMetric).where(
                     db_models.PlatformResourceDailyMetric.local_date
                     == target.isoformat(),
-                    db_models.PlatformResourceDailyMetric.time_zone
-                    == self.settings.TZ,
+                    db_models.PlatformResourceDailyMetric.time_zone == self.settings.TZ,
                     db_models.PlatformResourceDailyMetric.resource_type
                     == resource_type,
                 )

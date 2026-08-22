@@ -18,8 +18,11 @@ from aileron_file_core import (
 )
 from sqlalchemy.orm import Session
 
-from app.modules.marketplace.models import MarketplaceProvider
-from app.modules.marketplace.providers import MarketplaceProviderAdapter
+from app.modules.marketplace.models import (
+    MarketplacePackageFormat,
+    MarketplaceTargetClient,
+)
+from app.modules.marketplace.target_clients import MarketplaceTargetClientAdapter
 
 from .catalog_queries import _MarketplaceCatalogSupport
 from .package_git import _MarketplaceGitSupport
@@ -97,6 +100,7 @@ class _MarketplaceRegistrySupport(
             "db",
             "local_history",
             "marketplace_runtime_client",
+            "request",
             "settings",
             "storage_root",
         ]
@@ -129,13 +133,24 @@ class _MarketplaceRegistrySupport(
         """Return the system-managed shared registry root."""
         return self.storage_root / "registry"
 
+    def _requested_package_format(self) -> MarketplacePackageFormat | None:
+        request = self.request
+        if request is None:
+            return None
+        raw = request.query_params.get("packageFormat")
+        if raw is None:
+            return None
+        if raw not in {"codex-native", "claude-native", "agent-plugin/1.0.0"}:
+            raise MarketplacePathError("marketplace.package.format_invalid")
+        return raw
+
     def _file_engine_for_root(
         self,
         *,
         root: Path,
         registry_root: Path,
         invalidation_key: str = "registry",
-        package_targets: set[tuple[MarketplaceProvider, str]] | None = None,
+        package_targets: set[tuple[MarketplaceTargetClient, str]] | None = None,
     ) -> FileOperationEngine:
         path_exclusion = _marketplace_path_exclusion()
         resolved_package_targets = set(package_targets or ())
@@ -169,7 +184,7 @@ class _MarketplaceRegistrySupport(
     def _package_cache_target_for_path(
         self,
         path: Path,
-    ) -> tuple[MarketplaceProvider, str] | None:
+    ) -> tuple[MarketplaceTargetClient, str] | None:
         try:
             parts = (
                 path.resolve()
@@ -178,30 +193,30 @@ class _MarketplaceRegistrySupport(
             )
         except ValueError:
             return None
-        if len(parts) < 3 or parts[0] not in self.adapters or parts[1] != "plugins":
+        if len(parts) < 4 or parts[0] not in self.adapters or parts[1] != "plugins":
             return None
-        return parts[0], parts[2]  # type: ignore[return-value]
+        return parts[0], parts[3]  # type: ignore[return-value]
 
     def _marketplace_package_lock_key(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
-    ) -> tuple[str, MarketplaceProvider, str]:
+    ) -> tuple[str, MarketplaceTargetClient, str]:
         _ = user_id
-        return ("marketplace", provider, package_id)
+        return ("marketplace", target_client, package_id)
 
     @contextmanager
     def _package_source_lock(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
     ) -> Iterator[None]:
         """Hold the package mutation lock while creating an immutable source view."""
 
         with _resource_write_locks.lock(
-            self._marketplace_package_lock_key(user_id, provider, package_id)
+            self._marketplace_package_lock_key(user_id, target_client, package_id)
         ):
             yield
 
@@ -214,14 +229,18 @@ class _MarketplaceRegistrySupport(
     def _invalidate_package_overview(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
     ) -> None:
         """Invalidate one shared package overview and its registry index."""
         _ = user_id
         self.cache.delete(
             self.cache.registry_index_key(),
-            self.cache.package_overview_key(provider, package_id),
+            self.cache.package_overview_key(
+                target_client,
+                package_id,
+                self._requested_package_format(),
+            ),
         )
 
     def _read_json(self, path: Path) -> dict[str, Any]:
@@ -231,8 +250,10 @@ class _MarketplaceRegistrySupport(
             return {}
         return data if isinstance(data, dict) else {}
 
-    def _get_adapter(self, provider: MarketplaceProvider) -> MarketplaceProviderAdapter:
-        return self.adapters[provider]
+    def _get_adapter(
+        self, target_client: MarketplaceTargetClient
+    ) -> MarketplaceTargetClientAdapter:
+        return self.adapters[target_client]
 
     def _assert_relative_to(self, path: Path, root: Path) -> None:
         try:

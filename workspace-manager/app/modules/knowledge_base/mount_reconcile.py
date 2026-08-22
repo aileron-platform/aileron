@@ -26,7 +26,6 @@ from app.modules.workspace.runtime.job_repository import (
 from app.modules.audit.events import AuditEventService
 from app.modules.knowledge_base.mount_snapshot import canonical_mount_snapshot
 from app.modules.knowledge_base.access import KnowledgeBaseConflictError
-from app.modules.workspace.orchestrator.models import RuntimeInfo
 from app.modules.authorization.actor import AuthorizationActor
 from app.modules.authorization.operation_policy import (
     AuthorizationOperationPolicy,
@@ -48,8 +47,9 @@ from app.modules.workspace.custom_resources import (
     WorkspaceCustomResourceService,
 )
 from app.modules.workspace.execution_plane import (
-    ExecutionPlanePlan,
-    WorkspaceExecutionPlaneService,
+    GenerationClaim,
+    GenerationOutcome,
+    WorkspaceExecutionPlane,
 )
 from app.modules.workspace.runtime.job_execution import (
     RuntimeJobClaimLease,
@@ -82,10 +82,10 @@ class _ClaimedMountWork:
     target_runtime_revision: int | None
     workspace_identity: WorkspaceExecutionPlaneIdentity
     custom_resource_identity: WorkspaceCustomResourceExecutionIdentity | None
-    plan: ExecutionPlanePlan | None
+    plan: object | None
 
 
-class KnowledgeBaseMountReconcileService(WorkspaceExecutionPlaneService):
+class KnowledgeBaseMountReconcileService(WorkspaceExecutionPlane):
     """Own durable mount retry, claim, side effects, and terminal transactions."""
 
     def __init__(
@@ -102,7 +102,7 @@ class KnowledgeBaseMountReconcileService(WorkspaceExecutionPlaneService):
             db,
             settings=settings,
             runtime_provision=runtime_provision,
-            custom_resource_service=custom_resource_service,
+            custom_resources=custom_resource_service,
             assertion_service_factory=assertion_service_factory,
             http_client_factory=http_client_factory,
         )
@@ -140,7 +140,7 @@ class KnowledgeBaseMountReconcileService(WorkspaceExecutionPlaneService):
                 def assert_claim() -> None:
                     heartbeat.assert_valid(session_lock)
 
-                runtime_result: RuntimeInfo | None = None
+                outcome: GenerationOutcome | None = None
                 with heartbeat:
                     if claimed_work.offline_promotion:
                         assert_claim()
@@ -154,34 +154,41 @@ class KnowledgeBaseMountReconcileService(WorkspaceExecutionPlaneService):
                             raise RuntimeError(
                                 "Claimed mount work has no execution plan"
                             )
-                        self.best_effort_drain(
-                            workspace_id=claimed_work.workspace_id,
-                            workspace_identity=claimed_work.workspace_identity,
-                            expected_mounted_revision=(
-                                claimed_work.plan.observed_mount_revision
-                            ),
-                            target_mounted_revision=(claimed_work.plan.mount_revision),
-                            job_id=claimed_work.job_id,
-                            assert_claim=assert_claim,
-                        )
-                        assert_claim()
                         if claimed_work.target_runtime_revision is None:
                             raise RuntimeError(
                                 "Claimed mount work has no Runtime revision"
                             )
-                        runtime_result = self._apply_runtime_component(
-                            workspace_id=claimed_work.workspace_id,
-                            target_revision=claimed_work.target_runtime_revision,
-                            plan=claimed_work.plan,
-                            assert_claim=assert_claim,
+                        outcome = self.reconcile(
+                            GenerationClaim(
+                                workspace_id=claimed_work.workspace_id,
+                                job_id=claimed_work.job_id,
+                                assert_owned=assert_claim,
+                                runtime_instance_id=(
+                                    claimed_work.plan.runtime_instance_id
+                                ),
+                                expected_mounted_revision=(
+                                    claimed_work.plan.observed_mount_revision
+                                ),
+                                target_mounted_revision=(
+                                    claimed_work.plan.mount_revision
+                                ),
+                                identity=claimed_work.workspace_identity,
+                            ),
+                            attempt=claimed_work.plan,
                         )
+                        outcome.raise_for_failure()
                         assert_claim()
 
                     if not self._target_is_current(claimed_work):
+                        if outcome is not None:
+                            self._discard_ready(
+                                outcome,
+                                assert_claim=assert_claim,
+                            )
                         return self._complete_superseded(claimed_work)
                     return self._complete_success(
                         claimed_work,
-                        runtime_result=runtime_result,
+                        outcome=outcome,
                     )
         except WorkspaceAdvisoryLockUnavailableError:
             self.db.rollback()
@@ -386,7 +393,7 @@ class KnowledgeBaseMountReconcileService(WorkspaceExecutionPlaneService):
                 if workspace.provisioner == "kubernetes"
                 else None
             )
-            plan: ExecutionPlanePlan | None = None
+            plan: object | None = None
             target_runtime_revision: int | None = None
             try:
                 self.runtime_provision.preflight_knowledge_base_mounts(workspace)
@@ -560,7 +567,7 @@ class KnowledgeBaseMountReconcileService(WorkspaceExecutionPlaneService):
         self,
         work: _ClaimedMountWork,
         *,
-        runtime_result: RuntimeInfo | None,
+        outcome: GenerationOutcome | None,
     ) -> WorkspaceRuntimeJobRunResult:
         now = datetime.now(timezone.utc)
         try:
@@ -584,11 +591,9 @@ class KnowledgeBaseMountReconcileService(WorkspaceExecutionPlaneService):
                 self.db.rollback()
                 raise RuntimeJobClaimLostError("Mount target changed before completion")
             if work.target_runtime_revision is not None:
-                self._apply_runtime_component_result(
-                    workspace,
-                    work.plan,
-                    runtime_result,
-                )
+                if outcome is None:
+                    raise RuntimeError("Ready Workspace generation outcome is missing")
+                self._stage_ready(workspace, outcome)
                 workspace.runtime_observed_revision = work.target_runtime_revision
                 workspace.runtime_status = "running"
                 workspace.runtime_reason = None

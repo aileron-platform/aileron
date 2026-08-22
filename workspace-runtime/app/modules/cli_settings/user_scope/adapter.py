@@ -1,4 +1,4 @@
-"""Provider adapter seam for Marketplace user-copy profiles."""
+"""Target client adapter seam for Marketplace user-copy profiles."""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ class CoreProfileResource:
 
 @dataclass(frozen=True)
 class ResolvedUserCopyTarget:
-    """Typed provider target produced without package-defined paths."""
+    """Typed target_client target produced without package-defined paths."""
 
     agent: UserScopeAgent
     target_kind: UserCopyTargetKind
@@ -78,12 +78,12 @@ class ResolvedUserCopyTarget:
     structured_entry_id: str | None = None
 
 
-class ProviderUserCopyAdapter(Protocol):
-    """Provider target adapter contract consumed by the planner."""
+class TargetClientUserScopeAdapter(Protocol):
+    """Target client target adapter contract consumed by the planner."""
 
     @property
-    def provider(self) -> str:
-        """Return the canonical provider identifier."""
+    def target_client(self) -> str:
+        """Return the canonical target_client identifier."""
 
     @property
     def agent(self) -> UserScopeAgent:
@@ -91,7 +91,7 @@ class ProviderUserCopyAdapter(Protocol):
 
     @property
     def placeholder_tokens(self) -> tuple[str, ...]:
-        """Return provider-owned package-root placeholder tokens."""
+        """Return target_client-owned package-root placeholder tokens."""
 
     def resolve_target(
         self,
@@ -104,7 +104,7 @@ class ProviderUserCopyAdapter(Protocol):
 
 
 class UserCopyAdapterError(ValueError):
-    """A profile resource cannot be mapped to a safe provider target."""
+    """A profile resource cannot be mapped to a safe target_client target."""
 
     def __init__(self, code: str, detail: str) -> None:
         super().__init__(f"{code}: {detail}")
@@ -268,7 +268,7 @@ def rewrite_known_placeholders(
     payload_root: Path | None,
     validate_payload_reference: bool = False,
 ) -> tuple[Any, bool]:
-    """Rewrite only provider-declared leading placeholder tokens."""
+    """Rewrite only target_client-declared leading placeholder tokens."""
 
     if isinstance(value, dict):
         rewritten: dict[str, Any] = {}

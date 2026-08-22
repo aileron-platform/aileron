@@ -73,6 +73,11 @@ func TestWorkspaceDeepCopyKeepsLifecycleStateIndependent(t *testing.T) {
 				RuntimeHome:   WorkspaceStorageCapacitySpec{CapacityBytes: 2_147_483_648, Revision: 1},
 			},
 			Runtime: WorkspaceResourceSpec{
+				DatabaseTrust: &WorkspaceDatabaseTrustSpec{
+					SecretName: "platform-database-ca",
+					SecretKey:  "ca.crt",
+					Revision:   "ca-v1",
+				},
 				Resources: &corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceMemory: resource.MustParse("1Gi"),
@@ -108,6 +113,7 @@ func TestWorkspaceDeepCopyKeepsLifecycleStateIndependent(t *testing.T) {
 
 	copied := workspace.DeepCopyObject().(*Workspace)
 	copied.Spec.Runtime.Resources.Requests[corev1.ResourceMemory] = resource.MustParse("2Gi")
+	copied.Spec.Runtime.DatabaseTrust.Revision = "ca-v2"
 	copied.Spec.Firewall.Workspace.AllowedDomains[0] = "changed.example.com"
 	copied.Status.Bootstrap.LastTransitionAt.Time = time.Unix(1_800_000_000, 0)
 	copied.Status.Storage.WorkspaceData.ObservedAt.Time = time.Unix(1_800_000_000, 0)
@@ -118,6 +124,9 @@ func TestWorkspaceDeepCopyKeepsLifecycleStateIndependent(t *testing.T) {
 
 	if actual := workspace.Spec.Runtime.Resources.Requests.Memory().String(); actual != "1Gi" {
 		t.Fatalf("source resources changed through deep copy: %s", actual)
+	}
+	if workspace.Spec.Runtime.DatabaseTrust.Revision != "ca-v1" {
+		t.Fatal("source database trust changed through deep copy")
 	}
 	if workspace.Spec.Firewall.Workspace.AllowedDomains[0] != "api.example.com" {
 		t.Fatal("source firewall domains changed through deep copy")

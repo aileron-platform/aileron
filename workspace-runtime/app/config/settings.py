@@ -47,6 +47,22 @@ def read_required_secret_file(value: object) -> SecretStr:
 RequiredSecretFile = Annotated[SecretStr, BeforeValidator(read_required_secret_file)]
 
 
+def validate_required_secret_path(value: object) -> Path:
+    """Require an absolute path to an existing regular secret file."""
+
+    if not isinstance(value, (str, Path)):
+        raise ValueError("Secret file reference must be a path")
+    path = Path(value)
+    if not path.is_absolute():
+        raise ValueError("Secret file reference must be absolute")
+    if not path.is_file():
+        raise ValueError("Secret file is unavailable")
+    return path
+
+
+RequiredSecretPath = Annotated[Path, BeforeValidator(validate_required_secret_path)]
+
+
 class Settings(BaseSettings):
     """Workspace Runtime settings class"""
 
@@ -68,9 +84,9 @@ class Settings(BaseSettings):
     # === Platform-owned Runtime environment ===
     AILERON_WORKSPACE_ID: str = Field(..., min_length=1, description="Workspace ID")
     AILERON_WORKSPACE_PATH: str = Field(..., min_length=1, description="Workspace path")
-    AILERON_RUNTIME_STATE_DATABASE_URL_FILE: RequiredSecretFile = Field(
+    AILERON_RUNTIME_DATABASE_CONNECTION_FILE: RequiredSecretPath = Field(
         ...,
-        description="File containing the Workspace-scoped Runtime state database URL",
+        description="File containing the canonical Runtime database connection",
     )
     AILERON_RUNTIME_CONTROL_TOKEN_FILE: RequiredSecretFile = Field(
         ...,
@@ -204,26 +220,6 @@ class Settings(BaseSettings):
     # === System monitoring settings ===
     DISK_THRESHOLD: float = Field(
         default=90.0, description="Disk usage warning threshold"
-    )
-
-    # === Draw.io integration settings ===
-    DRAWIO_ENABLED: bool = Field(
-        default=True,
-        description="Whether the same-origin Draw.io integration is enabled",
-    )
-    DRAWIO_EXTERNAL_URL: str = Field(
-        default="/draw",
-        description="Same-origin Draw.io public path",
-    )
-    DRAWIO_INTERNAL_URL: str = Field(
-        default="http://drawio:8080",
-        description="Draw.io internal access URL (container internal access)",
-    )
-    DRAWIO_HEALTHCHECK_TIMEOUT_SECONDS: float = Field(
-        default=1.5, description="Draw.io internal health check timeout seconds"
-    )
-    DRAWIO_HEALTHCHECK_TTL_SECONDS: int = Field(
-        default=30, description="Draw.io health check result cache seconds"
     )
 
     @field_validator("AILERON_PLATFORM_PUBLIC_ORIGIN")

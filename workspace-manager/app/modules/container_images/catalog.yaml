@@ -6,11 +6,6 @@ version: "1.0"
 # Default image. Keep this aligned with the database default value.
 default_image: "universal"
 
-# Supporting container images for browser, canvas, and other auxiliary containers.
-# Local image tags are architecture-neutral because Docker stores native images per host.
-browser_image: "ailerondocker/workspace-chrome:dev"
-canvas_image: "ailerondocker/workspace-canvas:dev"
-
 # Available container image list.
 images:
   - id: "universal"

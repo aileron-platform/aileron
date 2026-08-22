@@ -36,7 +36,7 @@ class CodexUserCopyAdapter:
 
     paths: UserScopePathResolver
     codex_paths: CodexPathResolver
-    provider: str = "codex"
+    target_client: str = "codex"
     agent: UserScopeAgent = UserScopeAgent.CODEX
     placeholder_tokens: tuple[str, ...] = (
         "PLUGIN_ROOT",
@@ -52,7 +52,10 @@ class CodexUserCopyAdapter:
         user_paths = paths or get_user_scope_path_resolver()
         return cls(
             paths=user_paths,
-            codex_paths=CodexPathResolver(user_home=user_paths.user_home),
+            codex_paths=CodexPathResolver(
+                user_home=user_paths.user_home,
+                codex_home_override=user_paths.codex_home,
+            ),
         )
 
     def resolve_target(
@@ -166,7 +169,7 @@ class CodexUserCopyAdapter:
     ) -> ResolvedUserCopyTarget:
         if (
             resource.target_resource != expected_target
-            or resource.source_kind != "copy-convention"
+            or resource.source_kind not in {"copy-convention", "plugin-component"}
             or resource.copy_semantics != "create-directory"
         ):
             raise UserCopyAdapterError(

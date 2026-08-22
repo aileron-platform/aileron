@@ -6,10 +6,10 @@ from typing import Any
 
 import httpx
 from aileron_marketplace_core import (
-    UserCopyApplyMetadataContract,
-    UserCopyApplyResultContract,
-    UserCopyPreflightRequestContract,
-    UserCopyPreflightResultContract,
+    UserCopyProjectionApplyMetadataContract,
+    UserCopyProjectionApplyResultContract,
+    UserCopyProjectionPreflightRequestContract,
+    UserCopyProjectionPreflightResultContract,
 )
 from pydantic import ValidationError
 
@@ -61,7 +61,7 @@ class MarketplaceRuntimeClient:
         runtime_instance_id: str,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute one provider CLI installation and return its terminal result."""
+        """Execute one target client CLI installation and return its terminal result."""
 
         return self._request(
             "POST",
@@ -78,8 +78,8 @@ class MarketplaceRuntimeClient:
         runtime_url: str,
         workspace_id: str,
         runtime_instance_id: str,
-        request: UserCopyPreflightRequestContract,
-    ) -> UserCopyPreflightResultContract:
+        request: UserCopyProjectionPreflightRequestContract,
+    ) -> UserCopyProjectionPreflightResultContract:
         """Read a one-shot user-copy plan without creating Runtime state."""
 
         payload = self._request(
@@ -93,7 +93,7 @@ class MarketplaceRuntimeClient:
             contract_failure_code="marketplace.user_copy.runtime_contract_invalid",
         )
         try:
-            return UserCopyPreflightResultContract.from_wire(payload)
+            return UserCopyProjectionPreflightResultContract.from_wire(payload)
         except ValidationError as exc:
             raise MarketplaceRuntimeClientError(
                 "marketplace.user_copy.runtime_contract_invalid"
@@ -105,9 +105,9 @@ class MarketplaceRuntimeClient:
         runtime_url: str,
         workspace_id: str,
         runtime_instance_id: str,
-        metadata: UserCopyApplyMetadataContract,
+        metadata: UserCopyProjectionApplyMetadataContract,
         bundle: bytes,
-    ) -> UserCopyApplyResultContract:
+    ) -> UserCopyProjectionApplyResultContract:
         """Upload and apply one operation-bound canonical sparse package."""
 
         headers = runtime_command_headers(
@@ -160,7 +160,7 @@ class MarketplaceRuntimeClient:
                 "marketplace.user_copy.runtime_contract_invalid"
             )
         try:
-            return UserCopyApplyResultContract.from_wire(result)
+            return UserCopyProjectionApplyResultContract.from_wire(result)
         except ValidationError as exc:
             raise MarketplaceRuntimeClientError(
                 "marketplace.user_copy.runtime_contract_invalid"

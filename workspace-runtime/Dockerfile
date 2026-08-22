@@ -69,10 +69,6 @@ RUN mkdir -p /etc/ssh/ssh_config.d \
     && git config --system user.name "Developer" \
     && git config --system user.email "developer@workspace.local"
 
-RUN mkdir -p /workspace/.agents/skills /workspace/.claude && \
-    ln -sfn /workspace/.agents/skills /workspace/.claude/skills && \
-    chown -R developer:developer /workspace/.agents /workspace/.claude 2>/dev/null || true
-
 # Install platform-managed tools outside the persistent user home.
 ARG CLAUDE_CLI_VERSION
 ARG PLAYWRIGHT_CLI_VERSION
@@ -229,6 +225,8 @@ HEALTHCHECK --interval=5s --timeout=5s --start-period=15s --retries=12 \
 COPY workspace-runtime/start_services.sh /start_services.sh
 COPY workspace-runtime/supervisord.conf workspace-runtime/supervisord.dev.conf ./
 COPY workspace-runtime/agent-defaults/ /opt/aileron/agent-defaults/
+RUN find /opt/aileron/agent-defaults -type d -exec chmod a+rx {} + \
+    && find /opt/aileron/agent-defaults -type f -exec chmod a+r {} +
 RUN chmod +x /start_services.sh
 
 # The container runs as root for sshd; app services run as developer in supervisord.dev.conf.
@@ -261,6 +259,8 @@ RUN chmod +x /opt/terminal-service/bin/terminal-service
 COPY workspace-runtime/start_services.sh /start_services.sh
 COPY workspace-runtime/supervisord.conf workspace-runtime/supervisord.dev.conf ./
 COPY workspace-runtime/agent-defaults/ /opt/aileron/agent-defaults/
+RUN find /opt/aileron/agent-defaults -type d -exec chmod a+rx {} + \
+    && find /opt/aileron/agent-defaults -type f -exec chmod a+r {} +
 RUN chmod +x /start_services.sh
 
 EXPOSE 3002 3004 22
@@ -295,6 +295,8 @@ RUN mkdir -p /workspace-runtime/scripts
 COPY --chown=developer:developer workspace-runtime/scripts/ /workspace-runtime/scripts/
 RUN chmod +x /workspace-runtime/scripts/*.sh
 COPY workspace-runtime/agent-defaults/ /opt/aileron/agent-defaults/
+RUN find /opt/aileron/agent-defaults -type d -exec chmod a+rx {} + \
+    && find /opt/aileron/agent-defaults -type f -exec chmod a+r {} +
 COPY --from=go-terminal-builder /opt/terminal-service/bin/terminal-service /opt/terminal-service/bin/terminal-service
 RUN chmod +x /opt/terminal-service/bin/terminal-service
 

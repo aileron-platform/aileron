@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from aileron_marketplace_core.user_copy_profiles import (
-    resolve_user_copy_profile,
+from aileron_marketplace_core import (
+    PluginReleaseIdentity,
+    extract_user_copy_source_profile,
 )
 
 from app.modules.cli_settings.user_scope.paths import UserScopePathResolver
@@ -76,13 +77,22 @@ def plan_codex_package(
     inventory: UserCopyInventory | None = None,
 ) -> UserCopyMaterializationPlan:
     runtime_home.mkdir(parents=True, exist_ok=True)
-    profile = resolve_user_copy_profile("codex", package_root)
+    profile = extract_user_copy_source_profile(
+        "codex-native",
+        package_root,
+        release=PluginReleaseIdentity(
+            catalog_plugin_id=f"test/{package_id}",
+            revision="a" * 64,
+        ),
+    )
     planner = UserCopyPlanner(
         package_id=package_id,
+        release_revision="a" * 64,
         paths=UserScopePathResolver(user_home=runtime_home),
     )
-    return planner.plan(
+    return planner.plan_source_profile(
         profile,
-        package_root,
+        target_client="codex",
+        package_root=package_root,
         inventory=inventory or UserCopyInventory(complete=True),
     )

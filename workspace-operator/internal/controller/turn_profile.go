@@ -23,8 +23,7 @@ const (
 	TURNDestinationFQDNs          = "fqdns"
 	TURNDestinationUnenforced     = "unenforced"
 
-	TURNCredentialIssuerTURNREST     = "turnRest"
-	TURNCredentialIssuerStaticSecret = "staticSecret"
+	TURNCredentialIssuerTURNREST = "turnRest"
 )
 
 type TURNPolicyDestination struct {
@@ -125,8 +124,7 @@ func (profile TURNReachabilityProfile) Validate() error {
 		profile.Backend.RelayPortRange.Min > profile.Backend.RelayPortRange.Max {
 		return fmt.Errorf("TURN relay port range must be between 1024 and 65535")
 	}
-	if profile.CredentialIssuer.Kind != TURNCredentialIssuerTURNREST &&
-		profile.CredentialIssuer.Kind != TURNCredentialIssuerStaticSecret {
+	if profile.CredentialIssuer.Kind != TURNCredentialIssuerTURNREST {
 		return fmt.Errorf("unsupported TURN credential issuer kind %q", profile.CredentialIssuer.Kind)
 	}
 	if strings.TrimSpace(profile.CredentialIssuer.SecretRef) == "" ||

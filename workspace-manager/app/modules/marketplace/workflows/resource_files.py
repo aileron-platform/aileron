@@ -1,4 +1,4 @@
-"""Private Marketplace resource support mixin."""
+"""Managed Registry resource support mixin."""
 
 from __future__ import annotations
 
@@ -31,9 +31,11 @@ from app.modules.marketplace.models import (
     MarketplacePackageDetail,
     MarketplacePackageFile,
     MarketplacePackageMutationResult,
-    MarketplaceProvider,
+    MarketplacePackageFormat,
+    MarketplaceTargetClient,
 )
-from app.modules.marketplace.providers import MarketplaceProviderAdapter
+from app.modules.marketplace.target_clients import create_package_format_adapters
+from app.modules.marketplace.target_clients import MarketplaceTargetClientAdapter
 from app.modules.marketplace.resource_mutations import (
     validate_package_relative_path,
 )
@@ -47,12 +49,12 @@ from .registry_operations import (
 
 
 class _MarketplaceResourceSupport:
-    """Provide resource support behavior to the composed private kernel."""
+    """Provide resource support behavior to the composed registry kernel."""
 
     def _mutation_result_for_package(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
         *,
         path: str,
@@ -60,10 +62,10 @@ class _MarketplaceResourceSupport:
         base_entry_fingerprint: str | None = None,
     ) -> MarketplacePackageMutationResult:
         """Return the canonical resource identity and fresh package revision."""
-        self._invalidate_package_overview(user_id, provider, package_id)
+        self._invalidate_package_overview(user_id, target_client, package_id)
         summary = self._package_reads.get_package_operation_summary(
             user_id,
-            provider,
+            target_client,
             package_id,
         )
         if summary is None:
@@ -79,13 +81,13 @@ class _MarketplaceResourceSupport:
     def _get_package_detail_for_mutation(
         self,
         user_id: str,
-        provider: MarketplaceProvider,
+        target_client: MarketplaceTargetClient,
         package_id: str,
     ) -> MarketplacePackageDetail | None:
         """Read the current filesystem revision without trusting Redis."""
         return self._package_reads.get_package_detail(
             user_id,
-            provider,
+            target_client,
             package_id,
             use_cache=False,
         )
@@ -337,19 +339,21 @@ class _MarketplaceResourceSupport:
 
     def _upsert_listing_entry_with_core(
         self,
-        adapter: MarketplaceProviderAdapter,
+        adapter: MarketplaceTargetClientAdapter,
         registry_root: Path,
         package_id: str,
         entry: dict[str, Any],
         invalidation_key: str = "registry",
     ) -> None:
         catalog = self._read_catalog(registry_root)
-        provider = adapter.provider
+        target_client = adapter.target_client
         existing = next(
             (
                 item
                 for item in catalog.packages
-                if item.provider == provider and item.package_id == package_id
+                if item.target_client == target_client
+                and item.package_format == adapter.package_format
+                and item.package_id == package_id
             ),
             None,
         )
@@ -364,7 +368,14 @@ class _MarketplaceResourceSupport:
             )
         )
         next_entry = MarketplaceCatalogPackage(
-            provider=provider,
+            target_client=target_client,
+            packageFormat=adapter.package_format,
+            userCopyTargetClient=adapter.user_copy_target_client,
+            catalogPluginId=(
+                existing.catalog_plugin_id
+                if existing is not None
+                else f"{catalog.marketplace_id}/{adapter.package_format}/{package_id}"
+            ),
             package_id=package_id,
             category=(
                 str(entry["category"])
@@ -381,7 +392,11 @@ class _MarketplaceResourceSupport:
         packages = [
             item
             for item in catalog.packages
-            if not (item.provider == provider and item.package_id == package_id)
+            if not (
+                item.target_client == target_client
+                and item.package_format == adapter.package_format
+                and item.package_id == package_id
+            )
         ]
         packages.append(next_entry)
         next_catalog = catalog.model_copy(update={"packages": packages})
@@ -393,7 +408,7 @@ class _MarketplaceResourceSupport:
 
     def _remove_listing_entry_with_core(
         self,
-        adapter: MarketplaceProviderAdapter,
+        adapter: MarketplaceTargetClientAdapter,
         registry_root: Path,
         package_id: str,
         invalidation_key: str = "registry",
@@ -405,7 +420,8 @@ class _MarketplaceResourceSupport:
                     entry
                     for entry in catalog.packages
                     if not (
-                        entry.provider == adapter.provider
+                        entry.target_client == adapter.target_client
+                        and entry.package_format == adapter.package_format
                         and entry.package_id == package_id
                     )
                 ]
@@ -419,20 +435,17 @@ class _MarketplaceResourceSupport:
 
     def _create_package_scaffold_with_core(
         self,
-        adapter: MarketplaceProviderAdapter,
+        adapter: MarketplaceTargetClientAdapter,
         package_path: Path,
         request: MarketplacePackageCreateRequest,
         invalidation_key: str,
     ) -> None:
         manifest_path = adapter.manifest_path(package_path)
-        if request.provider == "codex":
-            manifest = {
-                "name": request.package_id,
-                "version": "0.1.0",
-                "description": request.description,
-            }
-        else:
-            manifest = {"name": request.package_id}
+        manifest = {
+            "name": request.package_id,
+            "version": request.version,
+            "description": request.description,
+        }
         self._write_json_with_core(
             manifest_path,
             manifest,
@@ -515,7 +528,7 @@ class _MarketplaceResourceSupport:
     def _export_marketplace_manifest(
         self,
         registry_root: Path,
-        adapter: MarketplaceProviderAdapter,
+        adapter: MarketplaceTargetClientAdapter,
         listing: dict[str, Any],
     ) -> dict[str, Any]:
         manifest: dict[str, Any] = {}
@@ -529,17 +542,39 @@ class _MarketplaceResourceSupport:
         return manifest
 
     def _resolve_package_path(
-        self, user_id: str, provider: MarketplaceProvider, package_id: str
+        self,
+        user_id: str,
+        target_client: MarketplaceTargetClient,
+        package_id: str,
+        package_format: MarketplacePackageFormat | None = None,
     ) -> Path:
-        """Resolve a package path and ensure it stays inside the selected provider root."""
+        """Resolve one exact package variant inside the selected target-client root."""
         if not self._package_id_pattern.match(package_id):
             raise MarketplacePathError("marketplace.package.invalid_id")
 
         root = self._get_registry_root(user_id)
-        adapter = self._get_adapter(provider)
-        provider_root = self._get_provider_root(user_id, provider)
+        resolved_format = package_format or self._requested_package_format()
+        if resolved_format is None and self._catalog_path(root).is_file():
+            matches = [
+                entry.package_format
+                for entry in self._read_catalog(root).packages
+                if entry.target_client == target_client
+                and entry.package_id == package_id
+            ]
+            if len(matches) > 1:
+                raise MarketplacePathError("marketplace.package.variant_required")
+            if matches:
+                resolved_format = matches[0]
+        if resolved_format is None:
+            resolved_format = (
+                "codex-native" if target_client == "codex" else "claude-native"
+            )
+        adapter = create_package_format_adapters()[resolved_format]
+        if adapter.target_client != target_client:
+            raise MarketplacePathError("marketplace.package.variant_invalid")
+        target_client_root = self._get_target_client_root(user_id, target_client)
         candidate = adapter.package_path(root, package_id)
 
         self._assert_relative_to(candidate, root)
-        self._assert_relative_to(candidate, provider_root)
+        self._assert_relative_to(candidate, target_client_root)
         return candidate

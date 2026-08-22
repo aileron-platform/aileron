@@ -36,6 +36,14 @@ def test_profile_rejects_unknown_contract_version() -> None:
         TURNReachabilityProfile.from_mapping(raw)
 
 
+def test_profile_rejects_static_credential_issuer() -> None:
+    raw = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+    raw["credentialIssuer"]["kind"] = "staticSecret"
+
+    with pytest.raises(TURNReachabilityProfileError, match="credentialIssuer.kind"):
+        TURNReachabilityProfile.from_mapping(raw)
+
+
 def test_profile_revision_normalizes_set_fields() -> None:
     first = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
     first["evidence"]["requiredFrontendVantages"] = ["z-vantage", "host", "z-vantage"]

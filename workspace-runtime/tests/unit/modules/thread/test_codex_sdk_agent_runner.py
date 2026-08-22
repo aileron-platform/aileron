@@ -289,6 +289,45 @@ async def test_cancelled_waiter_does_not_cancel_shared_agent_task() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stop_awaits_local_task_and_preserves_manager_error_when_cleanup_fails() -> (
+    None
+):
+    stream_started = asyncio.Event()
+    stop_error = RuntimeError("manager stop failed")
+    cleanup_error = RuntimeError("task cleanup failed")
+
+    class StopFailingManager(FakeManager):
+        async def stop_execution(self, execution_id: str) -> None:
+            self.finished.append(f"stop:{execution_id}")
+            raise stop_error
+
+        async def finish_execution(self, execution_id: str) -> None:
+            await super().finish_execution(execution_id)
+            raise cleanup_error
+
+    manager = StopFailingManager()
+    manager.turn = BlockingTurn(stream_started)
+    runner = CodexSdkAgentRunner(
+        workspace_id="ws-1",
+        manager=manager,
+        cwd_resolver=lambda context_id: f"/workspace/worktrees/{context_id}",
+    )
+    execution_id = runner.reserve()
+    await runner.start(request(), lambda event: None, execution_id)
+    await asyncio.wait_for(stream_started.wait(), timeout=1)
+    local_task = runner._tasks[execution_id]
+
+    with pytest.raises(RuntimeError, match="manager stop failed") as raised:
+        await runner.stop(execution_id)
+
+    assert raised.value is stop_error
+    assert local_task.done() is True
+    assert manager.finished == [f"stop:{execution_id}", execution_id]
+    assert runner.is_alive(execution_id) is False
+    assert runner._tasks == {}
+
+
+@pytest.mark.asyncio
 async def test_destroy_thread_delegates_to_manager() -> None:
     manager = FakeManager()
     runner = CodexSdkAgentRunner(

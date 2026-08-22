@@ -63,7 +63,7 @@ class PlatformResourceTelemetryIngestion:
     ) -> None:
         self.db = db
         settings = get_settings()
-        self.cache = cache or PlatformResourceCache(settings.REDIS_URL)
+        self.cache = cache or PlatformResourceCache(settings.redis_url)
         self._clock = clock or _utcnow
         self._activity_ledger = PlatformResourceActivityLedger(
             db, capacity_metrics=capacity_metrics

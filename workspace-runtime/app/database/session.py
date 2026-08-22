@@ -2,40 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
+from aileron_runtime_database_connection import (
+    AsyncpgRuntimeConnectionAdapter,
+    RuntimeDatabaseConnections,
+    SecretFileRuntimeConnectionSource,
+)
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
-    create_async_engine,
 )
 
 from app.config.settings import get_settings
 
 _async_engine: AsyncEngine | None = None
 _AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
-
-
-def _get_database_url() -> str:
-    """Get database connection string."""
-    database_url = (
-        get_settings()
-        .AILERON_RUNTIME_STATE_DATABASE_URL_FILE.get_secret_value()
-    )
-    if not database_url:
-        raise RuntimeError("Runtime state database URL is not configured")
-    return database_url
-
-
-def _get_async_database_url(database_url: str) -> str:
-    """Require the workspace-scoped PostgreSQL connection contract."""
-    if database_url.startswith("postgresql+asyncpg://"):
-        return database_url
-    if database_url.startswith("postgresql://"):
-        return database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    raise RuntimeError("Runtime state database must use PostgreSQL")
+_runtime_database_connections = RuntimeDatabaseConnections()
 
 
 def get_async_engine() -> AsyncEngine:
@@ -44,8 +29,13 @@ def get_async_engine() -> AsyncEngine:
     if _async_engine is not None:
         return _async_engine
 
-    database_url = _get_async_database_url(_get_database_url())
-    _async_engine = create_async_engine(database_url, pool_pre_ping=True)
+    settings = get_settings()
+    _async_engine = _runtime_database_connections.open(
+        source=SecretFileRuntimeConnectionSource(
+            settings.AILERON_RUNTIME_DATABASE_CONNECTION_FILE
+        ),
+        adapter=AsyncpgRuntimeConnectionAdapter(),
+    )
     return _async_engine
 
 

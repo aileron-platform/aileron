@@ -31,7 +31,7 @@ class ClaudeUserCopyAdapter:
     """Map canonical Claude profile resources to typed user targets."""
 
     paths: UserScopePathResolver
-    provider: str = "claude-code"
+    target_client: str = "claude-code"
     agent: UserScopeAgent = UserScopeAgent.CLAUDE_CODE
     placeholder_tokens: tuple[str, ...] = ("${CLAUDE_PLUGIN_ROOT}",)
 

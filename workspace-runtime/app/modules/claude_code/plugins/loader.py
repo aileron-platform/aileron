@@ -22,9 +22,9 @@ from aileron_marketplace_core import (
 
 from app.modules.claude_code.documents import DocumentScope, workspace_root
 from app.modules.cli_settings.cache import ProcessTTLCache
-from app.modules.marketplace_operations.gate import get_marketplace_provider_gate
+from app.modules.marketplace_operations.gate import get_marketplace_target_client_gate
 
-from .provider_inventory import run_claude_plugin_cli
+from .plugin_inventory import run_claude_plugin_cli
 
 if TYPE_CHECKING:
     from ..settings.configuration import SettingsService
@@ -77,7 +77,7 @@ class PluginComponentsLoader:
         ] = ProcessTTLCache()
 
     def load_plugin_commands(self, workspace_id: str) -> list[ComponentFileInfo]:
-        generation = get_marketplace_provider_gate().generation("claude-code")
+        generation = get_marketplace_target_client_gate().generation("claude-code")
         return list(
             self._load_plugin_components(workspace_id, generation, "commands")[
                 "commands"
@@ -85,7 +85,7 @@ class PluginComponentsLoader:
         )
 
     def load_plugin_agents(self, workspace_id: str) -> list[ComponentFileInfo]:
-        generation = get_marketplace_provider_gate().generation("claude-code")
+        generation = get_marketplace_target_client_gate().generation("claude-code")
         return list(
             self._load_plugin_components(workspace_id, generation, "agents")["agents"]
         )
@@ -94,7 +94,7 @@ class PluginComponentsLoader:
         self,
         workspace_id: str,
     ) -> dict[str, dict[str, Any]]:
-        generation = get_marketplace_provider_gate().generation("claude-code")
+        generation = get_marketplace_target_client_gate().generation("claude-code")
         return dict(
             self._load_plugin_components(workspace_id, generation, "mcp_servers")[
                 "mcp_servers"
@@ -105,13 +105,13 @@ class PluginComponentsLoader:
         self,
         workspace_id: str,
     ) -> dict[str, dict[str, Any]]:
-        generation = get_marketplace_provider_gate().generation("claude-code")
+        generation = get_marketplace_target_client_gate().generation("claude-code")
         return dict(
             self._load_plugin_components(workspace_id, generation, "hooks")["hooks"]
         )
 
     def load_plugin_skills(self, workspace_id: str) -> list[SkillDirectoryInfo]:
-        generation = get_marketplace_provider_gate().generation("claude-code")
+        generation = get_marketplace_target_client_gate().generation("claude-code")
         return list(
             self._load_plugin_components(workspace_id, generation, "skills")["skills"]
         )
@@ -120,7 +120,7 @@ class PluginComponentsLoader:
         self,
         workspace_id: str,
     ) -> list[ComponentFileInfo]:
-        generation = get_marketplace_provider_gate().generation("claude-code")
+        generation = get_marketplace_target_client_gate().generation("claude-code")
         return list(
             self._load_plugin_components(workspace_id, generation, "output_styles")[
                 "output_styles"

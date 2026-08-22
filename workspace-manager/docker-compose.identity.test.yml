@@ -95,7 +95,6 @@ services:
       postgres-identity-test:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://identity_test:identity_test@postgres-identity-test:5432/aileron
       OIDC_ISSUER_URL: https://oidc.test.example
       OIDC_CLIENT_ID: aileron-manager
       OIDC_ALLOWED_ALGORITHMS: RS256
@@ -116,6 +115,8 @@ services:
       - /bin/sh
       - -ec
       - >-
+        printf '%s\n' 'postgresql://identity_test:identity_test@postgres-identity-test:5432/aileron' > /tmp/platform-database-url;
+        export DATABASE_URL_FILE=/tmp/platform-database-url;
         uv run pytest tests/integration/modules/identity -v
 
 volumes:

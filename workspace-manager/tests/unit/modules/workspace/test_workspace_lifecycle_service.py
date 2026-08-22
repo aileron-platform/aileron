@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
@@ -15,13 +16,18 @@ from app.config.settings import get_settings
 from app.db import models as db_models
 from app.modules.authorization.actor import AuthorizationActor
 from app.modules.settings.models import UserSettings
-from app.modules.workspace.capabilities import build_capabilities_from_settings
+from app.modules.workspace.capabilities import (
+    build_capabilities_from_settings,
+    reconcile_workspace_capabilities,
+)
 from app.modules.workspace.catalog import WorkspaceError, WorkspaceService
 from app.modules.workspace.custom_resources import (
     WorkspaceCustomResourceExecutionPlan,
     WorkspaceCustomResourceExecutionResult,
     WorkspaceCustomResourceNotReadyError,
+    WorkspaceCustomResourceService,
 )
+from app.modules.workspace.execution_plane import WorkspaceExecutionPlane
 from app.modules.workspace.lifecycle import (
     WorkspaceLifecycleConflictError,
     WorkspaceLifecycleRunResult,
@@ -44,7 +50,11 @@ from app.modules.workspace.runtime.provisioning import (
     WorkspaceExecutionPlaneIdentity,
     WorkspaceExecutionPlanePlan,
 )
-from app.modules.workspace.runtime.sync import RuntimeCapabilitiesSyncError
+from app.modules.workspace.runtime.sync import (
+    RuntimeCapabilitiesSyncError,
+    RuntimeSyncService,
+    WorkspaceCapabilityResolution,
+)
 
 
 def _seed_workspace(
@@ -109,6 +119,7 @@ def _seed_workspace(
                 env_vars=[],
                 workspace_firewall_allowed_domains=[],
                 browser_firewall_allowed_domains=[],
+                firewall_target_delivery_id=f"delivery-{workspace_id}",
                 acp_cli_args=[],
             )
         )
@@ -276,7 +287,7 @@ def _plan(
             role_prefix="wsr_test_",
             password="scoped-password",
             database_url="postgresql://runtime:scoped@postgres/app",
-            secret_name="workspace-runtime-db-test",
+            secret_name="workspace-generation-0123456789abcdef",
         ),
         runtime_control_token="generation-token",
         runtime_context=RuntimeContext(),
@@ -304,7 +315,7 @@ def _runtime_replacement_plan(
             role_prefix="wsr_test_",
             password="scoped-password",
             database_url="postgresql://runtime:scoped@postgres/app",
-            secret_name="workspace-runtime-db-test",
+            secret_name="workspace-generation-0123456789abcdef",
         ),
         runtime_control_token=plan.runtime_control_token,
         runtime_context=plan.runtime_context,
@@ -334,11 +345,24 @@ def _custom_resource_runtime_replacement_plan(
             role_prefix="wsr_test_",
             password="scoped-password",
             database_url="postgresql://runtime:scoped@postgres/app",
-            secret_name="workspace-runtime-db-test",
+            secret_name="workspace-generation-0123456789abcdef",
         ),
         runtime_control_token="generation-token",
         setup_script="#!/bin/sh\nexit 0\n",
         manifest={},
+    )
+
+
+def _capability_resolution(
+    agentic_tools: list[str] | None = None,
+) -> WorkspaceCapabilityResolution:
+    snapshot = build_capabilities_from_settings(UserSettings())
+    return WorkspaceCapabilityResolution(
+        snapshot=snapshot,
+        effective=reconcile_workspace_capabilities(
+            snapshot,
+            ["claude-code"] if agentic_tools is None else agentic_tools,
+        ),
     )
 
 
@@ -347,7 +371,7 @@ def _service(
     *,
     runtime_provision: MagicMock | None = None,
     custom_resources: MagicMock | None = None,
-    drain_service: MagicMock | None = None,
+    execution_plane: MagicMock | None = None,
     runtime_database_service: MagicMock | None = None,
     runtime_sync: MagicMock | None = None,
 ) -> WorkspaceLifecycleService:
@@ -359,27 +383,40 @@ def _service(
     )
     if runtime_sync is None:
         runtime_sync = MagicMock()
-        runtime_sync.resolve_workspace_capabilities.return_value = (
-            build_capabilities_from_settings(UserSettings())
+        runtime_sync.resolve_workspace_capability_resolution.return_value = (
+            _capability_resolution()
         )
         runtime_sync.sync_capabilities_to_runtime_generation.return_value = {
             "success": True
         }
+    runtime_provision = (
+        runtime_provision if runtime_provision is not None else MagicMock()
+    )
+    custom_resources = (
+        custom_resources if custom_resources is not None else MagicMock()
+    )
+    runtime_database_service = (
+        runtime_database_service
+        if runtime_database_service is not None
+        else MagicMock()
+    )
+    execution_plane_probe = execution_plane
+    execution_plane = WorkspaceExecutionPlane(
+        db,
+        settings=settings,
+        runtime_provision=runtime_provision,
+        custom_resources=custom_resources,
+        runtime_database_service=runtime_database_service,
+    )
+    if execution_plane_probe is not None:
+        execution_plane.best_effort_drain = execution_plane_probe.best_effort_drain
     return WorkspaceLifecycleService(
         db,
         settings=settings,
-        runtime_provision=(
-            runtime_provision if runtime_provision is not None else MagicMock()
-        ),
-        custom_resources=(
-            custom_resources if custom_resources is not None else MagicMock()
-        ),
-        drain_service=drain_service if drain_service is not None else MagicMock(),
-        runtime_database_service=(
-            runtime_database_service
-            if runtime_database_service is not None
-            else MagicMock()
-        ),
+        runtime_provision=runtime_provision,
+        custom_resources=custom_resources,
+        execution_plane=execution_plane,
+        runtime_database_service=runtime_database_service,
         runtime_sync=runtime_sync,
     )
 
@@ -503,7 +540,9 @@ def test_component_restart_advances_only_target_revision_and_is_idempotent(
     assert first.job.id == second.job.id
 
 
-def test_component_restart_failure_marks_only_target_component(test_app) -> None:
+def test_component_restart_failure_marks_only_target_component(
+    test_app, caplog
+) -> None:
     _, session_factory = test_app
     owner_id, workspace_id, _ = _seed_workspace(
         session_factory,
@@ -527,9 +566,25 @@ def test_component_restart_failure_marks_only_target_component(test_app) -> None
             component="browser",
             correlation_id="browser-restart-failure",
         )
-        result = service.run_durable_job(command.job.id)
+        job_id = command.job.id
+        with caplog.at_level(
+            logging.ERROR,
+            logger="app.modules.workspace.lifecycle",
+        ):
+            result = service.run_durable_job(job_id)
 
     assert result == WorkspaceLifecycleRunResult.FAILED
+    diagnostic = next(
+        record
+        for record in caplog.records
+        if record.getMessage() == "Workspace component reconcile failed"
+    )
+    assert diagnostic.job_id == job_id
+    assert diagnostic.workspace_id == workspace_id
+    assert diagnostic.component == "browser"
+    assert diagnostic.error_code == "WORKSPACE_LIFECYCLE_FAILED"
+    assert diagnostic.error_type == "RuntimeError"
+    assert "browser restart failed" not in caplog.text
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
         assert workspace.runtime_status == "running"
@@ -540,227 +595,6 @@ def test_component_restart_failure_marks_only_target_component(test_app) -> None
         assert workspace.browser_error_code == "WORKSPACE_LIFECYCLE_FAILED"
         assert workspace.browser_last_transition_at is not None
         assert workspace.bootstrap_status == "pending"
-
-
-def test_kubernetes_component_restart_renews_claim_and_uses_ready_timeout(
-    test_app,
-) -> None:
-    _, session_factory = test_app
-    owner_id, workspace_id, _ = _seed_workspace(
-        session_factory,
-        runtime_status="running",
-    )
-    with session_factory() as db:
-        workspace = db.get(db_models.Workspace, workspace_id)
-        workspace.provisioner = "kubernetes"
-        old_instance_id = workspace.runtime_instance_id
-        db.commit()
-
-    custom_resources = MagicMock()
-    prepared_plans: list[WorkspaceCustomResourceExecutionPlan] = []
-
-    def prepare(workspace, *, runtime_instance_id):
-        plan = _custom_resource_runtime_replacement_plan(
-            workspace,
-            runtime_instance_id,
-        )
-        prepared_plans.append(plan)
-        return plan
-
-    custom_resources.prepare_execution_plane.side_effect = prepare
-
-    def apply_runtime(
-        workspace,
-        *,
-        component,
-        assert_claim,
-        runtime_plan,
-        max_attempts,
-    ):
-        assert component == "runtime"
-        assert max_attempts == 1
-        with session_factory() as state_db:
-            state_workspace = state_db.get(db_models.Workspace, workspace_id)
-            assert (
-                state_workspace.runtime_instance_id == runtime_plan.runtime_instance_id
-            )
-            assert (
-                state_workspace.runtime_control_instance_id
-                == runtime_plan.runtime_instance_id
-            )
-            assert state_workspace.runtime_control_token_hash == "b" * 64
-        assert_claim()
-
-    custom_resources.apply_component_desired_revision.side_effect = apply_runtime
-    drain_service = MagicMock()
-    with session_factory() as db:
-        service = _service(
-            db,
-            custom_resources=custom_resources,
-            drain_service=drain_service,
-        )
-        command = service.request_component_restart(
-            actor=_actor(owner_id),
-            workspace_id=workspace_id,
-            component="runtime",
-            correlation_id="runtime-restart",
-        )
-        result = service.run_durable_job(command.job.id)
-
-    assert result == WorkspaceLifecycleRunResult.SUCCEEDED
-    assert len(prepared_plans) == 1
-    assert prepared_plans[0].runtime_instance_id != old_instance_id
-    call = custom_resources.apply_component_desired_revision.call_args
-    assert call.kwargs["component"] == "runtime"
-    assert call.kwargs["max_attempts"] == 1
-    assert call.kwargs["runtime_plan"] is prepared_plans[0]
-    drain_service.best_effort_drain.assert_called_once()
-    with session_factory() as db:
-        workspace = db.get(db_models.Workspace, workspace_id)
-        assert workspace.runtime_instance_id == prepared_plans[0].runtime_instance_id
-        assert workspace.runtime_control_instance_id == workspace.runtime_instance_id
-        assert workspace.runtime_container_id == "runtime-old"
-        assert workspace.browser_container_id == "browser-old"
-        assert workspace.canvas_container_id == "canvas-old"
-
-
-def test_docker_runtime_restart_rotates_only_runtime_generation(test_app) -> None:
-    _, session_factory = test_app
-    owner_id, workspace_id, _ = _seed_workspace(
-        session_factory,
-        runtime_status="running",
-    )
-    with session_factory() as db:
-        old_instance_id = db.get(
-            db_models.Workspace,
-            workspace_id,
-        ).runtime_instance_id
-
-    runtime_provision = MagicMock()
-    prepared_plans: list[WorkspaceExecutionPlanePlan] = []
-
-    def prepare(workspace, *, runtime_instance_id):
-        plan = _runtime_replacement_plan(workspace, runtime_instance_id)
-        prepared_plans.append(plan)
-        return plan
-
-    runtime_provision.prepare_execution_plane.side_effect = prepare
-    runtime_result = _runtime_info(
-        "runtime-new",
-        3002,
-    )
-
-    def apply_runtime(plan, *, assert_claim):
-        with session_factory() as state_db:
-            state_workspace = state_db.get(db_models.Workspace, workspace_id)
-            assert state_workspace.runtime_instance_id == plan.runtime_instance_id
-            assert (
-                state_workspace.runtime_control_instance_id == plan.runtime_instance_id
-            )
-            assert state_workspace.runtime_control_token_hash == "b" * 64
-        assert_claim()
-        return runtime_result
-
-    runtime_provision.apply_prepared_runtime_component.side_effect = apply_runtime
-
-    def stage(workspace, *, component, result):
-        assert component == "runtime"
-        workspace.runtime_container_id = result.identifier
-
-    runtime_provision.apply_component_result.side_effect = stage
-    drain_service = MagicMock()
-    with session_factory() as db:
-        service = _service(
-            db,
-            runtime_provision=runtime_provision,
-            drain_service=drain_service,
-        )
-        command = service.request_component_restart(
-            actor=_actor(owner_id),
-            workspace_id=workspace_id,
-            component="runtime",
-            correlation_id="runtime-restart",
-        )
-        result = service.run_durable_job(command.job.id)
-
-    assert result == WorkspaceLifecycleRunResult.SUCCEEDED
-    assert len(prepared_plans) == 1
-    assert prepared_plans[0].runtime_instance_id != old_instance_id
-    runtime_provision.apply_prepared_runtime_component.assert_called_once()
-    runtime_provision.restart_sibling_component.assert_not_called()
-    drain_service.best_effort_drain.assert_called_once()
-    with session_factory() as db:
-        workspace = db.get(db_models.Workspace, workspace_id)
-        assert workspace.runtime_instance_id == prepared_plans[0].runtime_instance_id
-        assert workspace.runtime_control_instance_id == workspace.runtime_instance_id
-        assert workspace.runtime_container_id == "runtime-new"
-        assert workspace.browser_container_id == "browser-old"
-        assert workspace.canvas_container_id == "canvas-old"
-
-
-def test_runtime_restart_failure_keeps_activated_generation_for_recovery(
-    test_app,
-) -> None:
-    _, session_factory = test_app
-    owner_id, workspace_id, _ = _seed_workspace(
-        session_factory,
-        runtime_status="running",
-    )
-    with session_factory() as db:
-        old_instance_id = db.get(
-            db_models.Workspace,
-            workspace_id,
-        ).runtime_instance_id
-
-    runtime_provision = MagicMock()
-    prepared_plans: list[WorkspaceExecutionPlanePlan] = []
-
-    def prepare(workspace, *, runtime_instance_id):
-        plan = _runtime_replacement_plan(workspace, runtime_instance_id)
-        prepared_plans.append(plan)
-        return plan
-
-    runtime_provision.prepare_execution_plane.side_effect = prepare
-
-    def fail_after_start(plan, *, assert_claim):
-        with session_factory() as state_db:
-            state_workspace = state_db.get(db_models.Workspace, workspace_id)
-            assert state_workspace.runtime_instance_id == plan.runtime_instance_id
-            assert (
-                state_workspace.runtime_control_instance_id == plan.runtime_instance_id
-            )
-            assert state_workspace.runtime_control_token_hash == "b" * 64
-        assert_claim()
-        raise RuntimeError("Runtime readiness timed out")
-
-    runtime_provision.apply_prepared_runtime_component.side_effect = fail_after_start
-
-    with session_factory() as db:
-        service = _service(
-            db,
-            runtime_provision=runtime_provision,
-            drain_service=MagicMock(),
-        )
-        command = service.request_component_restart(
-            actor=_actor(owner_id),
-            workspace_id=workspace_id,
-            component="runtime",
-            correlation_id="runtime-restart-failure",
-        )
-        result = service.run_durable_job(command.job.id)
-        job_id = command.job.id
-
-    assert result == WorkspaceLifecycleRunResult.FAILED
-    assert len(prepared_plans) == 1
-    with session_factory() as db:
-        workspace = db.get(db_models.Workspace, workspace_id)
-        job = db.get(db_models.WorkspaceRuntimeJob, job_id)
-        assert workspace.runtime_status == "error"
-        assert workspace.runtime_instance_id != old_instance_id
-        assert workspace.runtime_instance_id == prepared_plans[0].runtime_instance_id
-        assert workspace.runtime_control_instance_id == workspace.runtime_instance_id
-        assert workspace.runtime_container_id == "runtime-old"
-        assert job.status == "failed"
 
 
 def test_start_rejects_running_workspace_without_creating_job(test_app) -> None:
@@ -802,7 +636,7 @@ def test_error_rebuild_runs_new_execution_plane_generation_to_ready(
         prepared_instance_ids.append(runtime_instance_id)
         return _plan(workspace, runtime_instance_id)
 
-    runtime_provision.prepare_execution_plane.side_effect = prepare
+    runtime_provision._prepare_generation.side_effect = prepare
 
     def apply(plan, *, assert_claim, timeout_seconds):
         assert timeout_seconds == 1
@@ -821,7 +655,7 @@ def test_error_rebuild_runs_new_execution_plane_generation_to_ready(
             canvas=_runtime_info("canvas-rebuilt", 3003),
         )
 
-    runtime_provision.apply_execution_plane.side_effect = apply
+    runtime_provision._apply_generation.side_effect = apply
 
     def stage(workspace, result):
         workspace.runtime_instance_id = result.runtime_instance_id
@@ -829,7 +663,7 @@ def test_error_rebuild_runs_new_execution_plane_generation_to_ready(
         workspace.browser_container_id = result.browser.identifier
         workspace.canvas_container_id = result.canvas.identifier
 
-    runtime_provision.apply_execution_plane_result.side_effect = stage
+    runtime_provision._stage_generation.side_effect = stage
 
     with session_factory() as db:
         service = _service(db, runtime_provision=runtime_provision)
@@ -1148,7 +982,7 @@ def test_superseded_revision_children_keep_operation_specific_targets() -> None:
         observed_mount_revision=5,
         access_revision=2,
         workspace_identity=MagicMock(),
-        provider_plan=MagicMock(),
+        generation_attempt=MagicMock(),
         children=(mount_child, access_child),
     )
 
@@ -1233,6 +1067,7 @@ def test_start_worker_absorbs_mount_child_and_opens_gate_after_ready(test_app) -
         )
         workspace.runtime_reason = "ProvisionFailed"
         workspace.runtime_error_code = "PREVIOUS_PROVISION_FAILURE"
+        workspace.agentic_tools = ["codex"]
         workspace.bootstrap_status = "error"
         workspace.bootstrap_error_code = "PREVIOUS_PROVISION_FAILURE"
         workspace.browser_status = "error"
@@ -1253,13 +1088,13 @@ def test_start_worker_absorbs_mount_child_and_opens_gate_after_ready(test_app) -
         )
     execution_plane = _execution_plane()
     runtime_provision = MagicMock()
-    runtime_provision.prepare_execution_plane.side_effect = (
+    runtime_provision._prepare_generation.side_effect = (
         lambda workspace, **_: _plan(
             workspace,
             execution_plane.runtime_instance_id,
         )
     )
-    runtime_provision.apply_execution_plane.return_value = execution_plane
+    runtime_provision._apply_generation.return_value = execution_plane
 
     def stage(workspace, result):
         workspace.runtime_instance_id = result.runtime_instance_id
@@ -1267,11 +1102,13 @@ def test_start_worker_absorbs_mount_child_and_opens_gate_after_ready(test_app) -
         workspace.browser_container_id = result.browser.identifier
         workspace.canvas_container_id = result.canvas.identifier
 
-    runtime_provision.apply_execution_plane_result.side_effect = stage
+    runtime_provision._stage_generation.side_effect = stage
     drain_service = MagicMock()
-    capabilities = build_capabilities_from_settings(UserSettings())
+    capability_resolution = _capability_resolution(["codex"])
     runtime_sync = MagicMock()
-    runtime_sync.resolve_workspace_capabilities.return_value = capabilities
+    runtime_sync.resolve_workspace_capability_resolution.return_value = (
+        capability_resolution
+    )
     runtime_sync.sync_capabilities_to_runtime_generation.return_value = {
         "success": True
     }
@@ -1279,7 +1116,7 @@ def test_start_worker_absorbs_mount_child_and_opens_gate_after_ready(test_app) -
         result = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=drain_service,
+            execution_plane=drain_service,
             runtime_sync=runtime_sync,
         ).run_durable_job(job_id)
 
@@ -1323,7 +1160,21 @@ def test_start_worker_absorbs_mount_child_and_opens_gate_after_ready(test_app) -
         assert workspace.runtime_access_revision == 1
         assert workspace.runtime_access_observed_revision == 1
         assert workspace.runtime_instance_id == execution_plane.runtime_instance_id
-        assert workspace.agentic_capabilities == capabilities.model_dump(by_alias=True)
+        assert workspace.agentic_capabilities == (
+            capability_resolution.snapshot.model_dump(by_alias=True)
+        )
+        assert [tool["id"] for tool in workspace.agentic_capabilities["tools"]] == [
+            "claude",
+            "codex",
+            "opencode",
+        ]
+        workspace.agentic_tools = ["claude-code"]
+        db.commit()
+        capabilities_after_switch = RuntimeSyncService(
+            db
+        ).resolve_workspace_capabilities(workspace_id)
+        assert [tool.id for tool in capabilities_after_switch.tools] == ["claude"]
+        assert capabilities_after_switch.default_tool == "claude"
         attachment = db.get(
             db_models.WorkspaceKnowledgeBaseAttachment,
             attachment_id,
@@ -1366,10 +1217,10 @@ def test_start_worker_absorbs_mount_child_and_opens_gate_after_ready(test_app) -
         workspace_id,
         execution_plane.runtime.internal_url,
         execution_plane.runtime_instance_id,
-        capabilities,
+        capability_resolution.effective,
     )
     assert (
-        runtime_provision.apply_execution_plane.call_args.kwargs["timeout_seconds"] == 1
+        runtime_provision._apply_generation.call_args.kwargs["timeout_seconds"] == 1
     )
 
 
@@ -1436,21 +1287,21 @@ def test_start_failure_automatically_recovers_with_active_mount_snapshot(
 
     failed_runtime_provision = MagicMock()
     if failure_stage == "prepare":
-        failed_runtime_provision.prepare_execution_plane.side_effect = RuntimeError(
+        failed_runtime_provision._prepare_generation.side_effect = RuntimeError(
             "candidate preflight failed"
         )
     else:
-        failed_runtime_provision.prepare_execution_plane.side_effect = (
+        failed_runtime_provision._prepare_generation.side_effect = (
             lambda workspace, **_: _plan(workspace)
         )
-        failed_runtime_provision.apply_execution_plane.side_effect = RuntimeError(
+        failed_runtime_provision._apply_generation.side_effect = RuntimeError(
             "candidate apply failed"
         )
     with session_factory() as db:
         first_result = _service(
             db,
             runtime_provision=failed_runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         ).run_durable_job(initial_parent_id)
 
     assert first_result == WorkspaceLifecycleRunResult.FAILED
@@ -1521,11 +1372,11 @@ def test_start_failure_automatically_recovers_with_active_mount_snapshot(
         applied_snapshots.append(workspace.knowledge_base_mount_candidate_snapshot)
         return _plan(workspace, execution_plane.runtime_instance_id)
 
-    recovered_runtime_provision.prepare_execution_plane.side_effect = (
+    recovered_runtime_provision._prepare_generation.side_effect = (
         prepare_active_snapshot
     )
     execution_plane = _execution_plane()
-    recovered_runtime_provision.apply_execution_plane.return_value = execution_plane
+    recovered_runtime_provision._apply_generation.return_value = execution_plane
 
     def stage(workspace, result):
         workspace.runtime_instance_id = result.runtime_instance_id
@@ -1533,12 +1384,12 @@ def test_start_failure_automatically_recovers_with_active_mount_snapshot(
         workspace.browser_container_id = result.browser.identifier
         workspace.canvas_container_id = result.canvas.identifier
 
-    recovered_runtime_provision.apply_execution_plane_result.side_effect = stage
+    recovered_runtime_provision._stage_generation.side_effect = stage
     with session_factory() as db:
         recovery_result = _service(
             db,
             runtime_provision=recovered_runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         ).run_durable_job(recovery_parent_id)
 
     assert recovery_result == WorkspaceLifecycleRunResult.SUCCEEDED
@@ -1646,7 +1497,7 @@ def test_mount_compensation_failure_stops_without_recursive_recovery(
         observed_mount_revision=0,
     )
     failed_runtime_provision = MagicMock()
-    failed_runtime_provision.prepare_execution_plane.side_effect = RuntimeError(
+    failed_runtime_provision._prepare_generation.side_effect = RuntimeError(
         "execution plane unavailable"
     )
 
@@ -1654,7 +1505,7 @@ def test_mount_compensation_failure_stops_without_recursive_recovery(
         initial_result = _service(
             db,
             runtime_provision=failed_runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         ).run_durable_job(initial_parent_id)
 
     assert initial_result == WorkspaceLifecycleRunResult.FAILED
@@ -1673,7 +1524,7 @@ def test_mount_compensation_failure_stops_without_recursive_recovery(
         recovery_result = _service(
             db,
             runtime_provision=failed_runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         ).run_durable_job(recovery_parent_id)
 
     assert recovery_result == WorkspaceLifecycleRunResult.FAILED
@@ -1716,14 +1567,14 @@ def test_mount_compensation_recovery_parent_is_republished_after_broker_outage(
         observed_mount_revision=0,
     )
     failed_runtime_provision = MagicMock()
-    failed_runtime_provision.prepare_execution_plane.side_effect = RuntimeError(
+    failed_runtime_provision._prepare_generation.side_effect = RuntimeError(
         "candidate preflight failed"
     )
     with session_factory() as db:
         result = _service(
             db,
             runtime_provision=failed_runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         ).run_durable_job(initial_parent_id)
 
     assert result == WorkspaceLifecycleRunResult.FAILED
@@ -1795,8 +1646,8 @@ def test_start_failure_revokes_staged_runtime_control_generation(test_app) -> No
         workspace.runtime_control_token_hash = "b" * 64
         return plan
 
-    runtime_provision.prepare_execution_plane.side_effect = prepare
-    runtime_provision.apply_execution_plane.side_effect = RuntimeError(
+    runtime_provision._prepare_generation.side_effect = prepare
+    runtime_provision._apply_generation.side_effect = RuntimeError(
         "provision failed"
     )
 
@@ -1804,7 +1655,7 @@ def test_start_failure_revokes_staged_runtime_control_generation(test_app) -> No
         result = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         ).run_durable_job(job_id)
 
     assert result == WorkspaceLifecycleRunResult.FAILED
@@ -1840,8 +1691,8 @@ def test_kubernetes_start_timeout_persists_consistent_terminal_failure(
             runtime_instance_id,
         )
 
-    custom_resources.prepare_execution_plane.side_effect = prepare
-    custom_resources.apply_execution_plane.side_effect = (
+    custom_resources._prepare_generation.side_effect = prepare
+    custom_resources._apply_generation.side_effect = (
         WorkspaceCustomResourceNotReadyError("workspace did not become ready")
     )
 
@@ -1849,7 +1700,7 @@ def test_kubernetes_start_timeout_persists_consistent_terminal_failure(
         result = _service(
             db,
             custom_resources=custom_resources,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         ).run_durable_job(job_id)
 
     assert result == WorkspaceLifecycleRunResult.FAILED
@@ -1876,13 +1727,13 @@ def test_capabilities_sync_retry_succeeds_without_reprovision_or_termination(
     )
     execution_plane = _execution_plane()
     runtime_provision = MagicMock()
-    runtime_provision.prepare_execution_plane.side_effect = (
+    runtime_provision._prepare_generation.side_effect = (
         lambda workspace, **_: _plan(
             workspace,
             execution_plane.runtime_instance_id,
         )
     )
-    runtime_provision.apply_execution_plane.return_value = execution_plane
+    runtime_provision._apply_generation.return_value = execution_plane
 
     def stage(workspace, result):
         workspace.runtime_instance_id = result.runtime_instance_id
@@ -1890,10 +1741,10 @@ def test_capabilities_sync_retry_succeeds_without_reprovision_or_termination(
         workspace.browser_container_id = result.browser.identifier
         workspace.canvas_container_id = result.canvas.identifier
 
-    runtime_provision.apply_execution_plane_result.side_effect = stage
+    runtime_provision._stage_generation.side_effect = stage
     runtime_sync = MagicMock()
-    runtime_sync.resolve_workspace_capabilities.return_value = (
-        build_capabilities_from_settings(UserSettings())
+    runtime_sync.resolve_workspace_capability_resolution.return_value = (
+        _capability_resolution()
     )
     runtime_sync.sync_capabilities_to_runtime_generation.side_effect = [
         RuntimeCapabilitiesSyncError("runtime unavailable"),
@@ -1909,13 +1760,13 @@ def test_capabilities_sync_retry_succeeds_without_reprovision_or_termination(
         result = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
             runtime_sync=runtime_sync,
         ).run_durable_job(job_id)
 
     assert result == WorkspaceLifecycleRunResult.SUCCEEDED
-    runtime_provision.apply_execution_plane.assert_called_once()
-    runtime_provision.terminate_execution_plane.assert_not_called()
+    runtime_provision._apply_generation.assert_called_once()
+    runtime_provision._discard_generation.assert_not_called()
     assert runtime_sync.sync_capabilities_to_runtime_generation.call_count == 2
     sleep.assert_called_once_with(1)
     with session_factory() as db:
@@ -1933,19 +1784,19 @@ def test_completion_failure_terminates_exact_provider_result_once(test_app) -> N
     )
     execution_plane = _execution_plane()
     runtime_provision = MagicMock()
-    runtime_provision.prepare_execution_plane.side_effect = (
+    runtime_provision._prepare_generation.side_effect = (
         lambda workspace, **_: _plan(
             workspace,
             execution_plane.runtime_instance_id,
         )
     )
-    runtime_provision.apply_execution_plane.return_value = execution_plane
+    runtime_provision._apply_generation.return_value = execution_plane
 
     with session_factory() as db:
         service = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         )
         service._complete_provision_success = MagicMock(
             side_effect=RuntimeError("completion failed")
@@ -1953,10 +1804,10 @@ def test_completion_failure_terminates_exact_provider_result_once(test_app) -> N
         result = service.run_durable_job(job_id)
 
     assert result == WorkspaceLifecycleRunResult.FAILED
-    runtime_provision.apply_execution_plane.assert_called_once()
-    runtime_provision.terminate_execution_plane.assert_called_once()
+    runtime_provision._apply_generation.assert_called_once()
+    runtime_provision._discard_generation.assert_called_once()
     assert (
-        runtime_provision.terminate_execution_plane.call_args.args[1] is execution_plane
+        runtime_provision._discard_generation.call_args.args[1] is execution_plane
     )
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
@@ -1972,16 +1823,16 @@ def test_unverifiable_completion_keeps_provider_result_for_recovery(test_app) ->
     )
     execution_plane = _execution_plane()
     runtime_provision = MagicMock()
-    runtime_provision.prepare_execution_plane.side_effect = (
+    runtime_provision._prepare_generation.side_effect = (
         lambda workspace, **_: _plan(workspace)
     )
-    runtime_provision.apply_execution_plane.return_value = execution_plane
+    runtime_provision._apply_generation.return_value = execution_plane
 
     with session_factory() as db:
         service = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         )
         service._complete_provision_success = MagicMock(
             side_effect=RuntimeError("completion failed")
@@ -1990,7 +1841,7 @@ def test_unverifiable_completion_keeps_provider_result_for_recovery(test_app) ->
         result = service.run_durable_job(job_id)
 
     assert result == WorkspaceLifecycleRunResult.CLAIM_LOST
-    runtime_provision.terminate_execution_plane.assert_not_called()
+    runtime_provision._discard_generation.assert_not_called()
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
         parent = db.get(db_models.WorkspaceRuntimeJob, job_id)
@@ -2007,18 +1858,18 @@ def test_completion_commit_ack_failure_preserves_committed_result(test_app) -> N
     )
     execution_plane = _execution_plane()
     runtime_provision = MagicMock()
-    runtime_provision.prepare_execution_plane.side_effect = (
+    runtime_provision._prepare_generation.side_effect = (
         lambda workspace, **_: _plan(
             workspace,
             execution_plane.runtime_instance_id,
         )
     )
-    runtime_provision.apply_execution_plane.return_value = execution_plane
+    runtime_provision._apply_generation.return_value = execution_plane
 
     def stage(workspace, result):
         workspace.runtime_instance_id = result.runtime_instance_id
 
-    runtime_provision.apply_execution_plane_result.side_effect = stage
+    runtime_provision._stage_generation.side_effect = stage
 
     with session_factory() as db:
         original_commit = db.commit
@@ -2026,7 +1877,7 @@ def test_completion_commit_ack_failure_preserves_committed_result(test_app) -> N
         service = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         )
         original_terminal_audit = service._record_lifecycle_terminal_audit
         completion_pending = False
@@ -2051,7 +1902,7 @@ def test_completion_commit_ack_failure_preserves_committed_result(test_app) -> N
 
     assert result == WorkspaceLifecycleRunResult.SUCCEEDED
     assert acknowledgement_failed is True
-    runtime_provision.terminate_execution_plane.assert_not_called()
+    runtime_provision._discard_generation.assert_not_called()
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
         parent = db.get(db_models.WorkspaceRuntimeJob, job_id)
@@ -2079,11 +1930,11 @@ def test_capabilities_sync_failure_retries_and_never_opens_running_gate(
         workspace.runtime_control_token_hash = "b" * 64
         return plan
 
-    runtime_provision.prepare_execution_plane.side_effect = prepare
-    runtime_provision.apply_execution_plane.return_value = execution_plane
+    runtime_provision._prepare_generation.side_effect = prepare
+    runtime_provision._apply_generation.return_value = execution_plane
     runtime_sync = MagicMock()
-    runtime_sync.resolve_workspace_capabilities.return_value = (
-        build_capabilities_from_settings(UserSettings())
+    runtime_sync.resolve_workspace_capability_resolution.return_value = (
+        _capability_resolution()
     )
     runtime_sync.sync_capabilities_to_runtime_generation.side_effect = (
         RuntimeCapabilitiesSyncError("runtime unavailable")
@@ -2098,7 +1949,7 @@ def test_capabilities_sync_failure_retries_and_never_opens_running_gate(
         service = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
             runtime_sync=runtime_sync,
         )
         result = service.run_durable_job(job_id)
@@ -2106,8 +1957,8 @@ def test_capabilities_sync_failure_retries_and_never_opens_running_gate(
     assert result == WorkspaceLifecycleRunResult.FAILED
     assert runtime_sync.sync_capabilities_to_runtime_generation.call_count == 2
     sleep.assert_called_once_with(1)
-    runtime_provision.terminate_execution_plane.assert_called_once()
-    runtime_provision.apply_execution_plane_result.assert_not_called()
+    runtime_provision._discard_generation.assert_called_once()
+    runtime_provision._stage_generation.assert_not_called()
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
         job = db.get(db_models.WorkspaceRuntimeJob, job_id)
@@ -2161,11 +2012,11 @@ def test_kubernetes_capabilities_failure_preserves_workspace_cr_and_pvcs(
             status={"components": {"runtime": {"phase": "Running"}}},
         )
 
-    custom_resources.prepare_execution_plane.side_effect = prepare
-    custom_resources.apply_execution_plane.side_effect = apply
+    custom_resources._prepare_generation.side_effect = prepare
+    custom_resources._apply_generation.side_effect = apply
     runtime_sync = MagicMock()
-    runtime_sync.resolve_workspace_capabilities.return_value = (
-        build_capabilities_from_settings(UserSettings())
+    runtime_sync.resolve_workspace_capability_resolution.return_value = (
+        _capability_resolution()
     )
     runtime_sync.sync_capabilities_to_runtime_generation.side_effect = (
         RuntimeCapabilitiesSyncError("runtime unavailable")
@@ -2179,42 +2030,20 @@ def test_kubernetes_capabilities_failure_preserves_workspace_cr_and_pvcs(
         result = _service(
             db,
             custom_resources=custom_resources,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
             runtime_sync=runtime_sync,
         ).run_durable_job(job_id)
 
     assert result == WorkspaceLifecycleRunResult.FAILED
     assert prepared_plan is not None
-    custom_resources.abandon_execution_plane_generation.assert_called_once()
-    custom_resources.delete_persisted_workspace.assert_not_called()
-    custom_resources.apply_execution_plane_result.assert_not_called()
+    custom_resources._discard_generation.assert_called_once()
+    custom_resources._delete_persisted_workspace.assert_not_called()
+    custom_resources._stage_generation.assert_not_called()
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
         job = db.get(db_models.WorkspaceRuntimeJob, job_id)
         assert workspace.runtime_status == "error"
         assert job.error_code == "RUNTIME_CAPABILITIES_SYNC_FAILED"
-
-
-def test_kubernetes_capabilities_sync_uses_ready_runtime_internal_url() -> None:
-    result = WorkspaceCustomResourceExecutionResult(
-        workspace_id="workspace-1",
-        target_namespace="workspace-system",
-        runtime_instance_id="11111111-1111-4111-8111-111111111111",
-        mount_revision=0,
-        access_revision=0,
-        runtime_pod_uid="runtime-pod-uid",
-        browser_pod_uid="browser-pod-uid",
-        canvas_pod_uid="canvas-pod-uid",
-        status={"components": {"runtime": {"phase": "Running"}}},
-    )
-
-    assert WorkspaceLifecycleService._runtime_capabilities_sync_target(
-        result,
-        provisioner="kubernetes",
-    ) == (
-        "http://runtime-workspace-1.workspace-system.svc.cluster.local:3002",
-        "11111111-1111-4111-8111-111111111111",
-    )
 
 
 def test_stop_worker_requires_exact_termination_before_clearing_identity(
@@ -2231,12 +2060,12 @@ def test_stop_worker_requires_exact_termination_before_clearing_identity(
         result = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         ).run_durable_job(job_id)
 
     assert result == WorkspaceLifecycleRunResult.SUCCEEDED
-    runtime_provision.terminate_current_execution_plane.assert_called_once()
-    runtime_provision.prove_execution_plane_absent.assert_called_once()
+    runtime_provision._terminate_persisted_generation.assert_called_once()
+    runtime_provision._prove_generation_absent.assert_called_once()
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
         assert workspace.runtime_status == "stopped"
@@ -2272,12 +2101,12 @@ def test_kubernetes_stop_preserves_custom_resource_and_workspace_record(
         result = _service(
             db,
             custom_resources=custom_resources,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         ).run_durable_job(stop_job_id)
 
     assert result == WorkspaceLifecycleRunResult.SUCCEEDED
-    custom_resources.stop_persisted_execution_plane.assert_called_once()
-    custom_resources.delete_persisted_workspace.assert_not_called()
+    custom_resources._discard_generation.assert_called_once()
+    custom_resources._delete_persisted_workspace.assert_not_called()
     with session_factory() as db:
         workspace = db.get(db_models.Workspace, workspace_id)
         assert workspace is not None
@@ -2292,14 +2121,14 @@ def test_delete_failure_keeps_workspace_and_references_fail_closed(test_app) -> 
         operation="workspace_delete",
     )
     runtime_provision = MagicMock()
-    runtime_provision.terminate_current_execution_plane.side_effect = RuntimeError(
+    runtime_provision._terminate_persisted_generation.side_effect = RuntimeError(
         "sensitive backend failure"
     )
     with session_factory() as db:
         result = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         ).run_durable_job(job_id)
 
     assert result == WorkspaceLifecycleRunResult.FAILED
@@ -2332,14 +2161,14 @@ def test_delete_failure_keeps_workspace_when_termination_is_unconfirmed(
         operation="workspace_delete",
     )
     runtime_provision = MagicMock()
-    runtime_provision.prove_execution_plane_absent.side_effect = (
+    runtime_provision._prove_generation_absent.side_effect = (
         WorkspaceRuntimeTerminationUnconfirmedError("runtime remains present")
     )
     with session_factory() as db:
         result = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
         ).run_durable_job(job_id)
 
     assert result == WorkspaceLifecycleRunResult.FAILED
@@ -2349,8 +2178,8 @@ def test_delete_failure_keeps_workspace_when_termination_is_unconfirmed(
         assert workspace is not None
         assert workspace.runtime_status == "deleting"
         assert workspace.runtime_instance_id is not None
-        runtime_provision.terminate_current_execution_plane.assert_called_once()
-        runtime_provision.prove_execution_plane_absent.assert_called_once()
+        runtime_provision._terminate_persisted_generation.assert_called_once()
+        runtime_provision._prove_generation_absent.assert_called_once()
         assert job.status == "failed"
         assert job.error_code == "WORKSPACE_RUNTIME_TERMINATION_UNCONFIRMED"
         audit = db.scalar(
@@ -2380,13 +2209,13 @@ def test_delete_worker_completes_when_execution_plane_is_already_absent(
         result = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
             runtime_database_service=runtime_database_service,
         ).run_durable_job(job_id)
 
     assert result == WorkspaceLifecycleRunResult.SUCCEEDED
-    runtime_provision.terminate_current_execution_plane.assert_called_once()
-    runtime_provision.prove_execution_plane_absent.assert_called_once()
+    runtime_provision._terminate_persisted_generation.assert_called_once()
+    runtime_provision._prove_generation_absent.assert_called_once()
     runtime_database_service.drop_workspace.assert_called_once_with(
         workspace_id=workspace_id
     )
@@ -2421,7 +2250,7 @@ def test_delete_worker_fails_closed_when_running_automation_is_not_cancelled(
         result = _service(
             db,
             runtime_provision=MagicMock(),
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
             runtime_database_service=MagicMock(),
         ).run_durable_job(delete_job_id)
 
@@ -2482,7 +2311,7 @@ def test_delete_worker_does_not_depend_on_owner_lifetime(test_app) -> None:
         result = _service(
             db,
             runtime_provision=MagicMock(),
-            drain_service=MagicMock(),
+            execution_plane=MagicMock(),
             runtime_database_service=MagicMock(),
         ).run_durable_job(delete_job_id)
 
@@ -2552,7 +2381,7 @@ def test_lifecycle_fails_provisioner_mismatch_before_side_effect(test_app) -> No
         result = _service(
             db,
             runtime_provision=runtime_provision,
-            drain_service=drain_service,
+            execution_plane=drain_service,
         ).run_durable_job(job_id)
 
         assert result == WorkspaceLifecycleRunResult.FAILED

@@ -609,7 +609,9 @@ func firewallPolicyRequiresEndpoint(
 	case 1:
 		return workspace.Spec.Runtime.DesiredState == "Running"
 	case 2:
-		return workspace.Spec.Browser.Enabled && workspace.Spec.Browser.DesiredState == "Running"
+		return workspace.Spec.Browser.Enabled &&
+			bootstrapSucceeded(workspace) &&
+			workspace.Spec.Browser.DesiredState == "Running"
 	default:
 		return false
 	}

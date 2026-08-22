@@ -1,4 +1,5 @@
 """Marketplace routes."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -40,6 +41,7 @@ from app.modules.marketplace.cli_install import (
 )
 from app.modules.marketplace.models import (
     MarketplaceActivityAction,
+    MarketplaceActivityDetail,
     MarketplaceActivityListResult,
     MarketplaceActivityStatus,
     MarketplaceBasicUpdateRequest,
@@ -53,11 +55,6 @@ from app.modules.marketplace.models import (
     MarketplaceGitPathRequest,
     MarketplaceGitStageResult,
     MarketplaceGitUnstageResult,
-    MarketplaceImportCandidate,
-    MarketplaceImportRequest,
-    MarketplaceImportResult,
-    MarketplaceImportSource,
-    MarketplaceImportUploadResult,
     MarketplaceLocalHistoryListResponse,
     MarketplaceLocalHistoryRestoreRequest,
     MarketplaceLocalHistoryRestoreResponse,
@@ -69,6 +66,8 @@ from app.modules.marketplace.models import (
     MarketplacePackageDeleteResult,
     MarketplacePackageDetail,
     MarketplacePackageListResult,
+    MarketplacePackageFormat,
+    MarketplacePackageFormatOption,
     MarketplacePackageMutationResult,
     MarketplacePackageSaveRequest,
     MarketplacePluginCommandResult,
@@ -79,21 +78,28 @@ from app.modules.marketplace.models import (
     MarketplaceRegistryRootMetadataSavePayload,
     MarketplaceRegistrySettings,
     MarketplaceSettingsSaveResult,
+    MarketplaceTargetClient,
     MarketplaceUserCopyApplyRequest,
     MarketplaceUserCopyApplyResult,
     MarketplaceUserCopyPreflightResult,
     MarketplaceUserCopyRequest,
+    MarketplaceImportCandidate,
+    MarketplaceImportRequest,
+    MarketplaceImportResult,
+    MarketplaceImportSource,
+    MarketplaceImportUploadResult,
 )
 from app.modules.marketplace.request import MarketplaceRequest
 from app.modules.marketplace.runtime_client import MarketplaceRuntimeClientError
 from app.modules.marketplace.user_copy import MarketplaceUserCopyError
+from app.modules.marketplace.target_clients import package_format_storage_key
 from app.modules.marketplace.workflows.registry_operations import (
     MARKETPLACE_FILE_MAX_WRITE_BYTES,
     MARKETPLACE_GIT_OPERATION_IN_PROGRESS,
     MarketplaceConflictError,
-    MarketplaceImportSourceError,
     MarketplacePathError,
     MarketplaceValidationError,
+    MarketplaceImportSourceError,
 )
 from app.modules.version_control.models import (
     BlobResponse,
@@ -162,11 +168,23 @@ def get_marketplace_user_id(request: Request) -> str:
     return "local-user"
 
 
-def _validate_provider(provider: str, request: Request) -> None:
-    if provider not in {"claude-code", "codex"}:
+def _validate_target_client(target_client: str, request: Request) -> None:
+    if target_client not in {"claude-code", "codex"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=request.state.translate("marketplace.provider.invalid"),
+            detail=request.state.translate("marketplace.target_client.invalid"),
+        )
+    if "/marketplace/packages/" not in request.url.path:
+        return
+    package_format = request.query_params.get("packageFormat")
+    compatible_formats = {
+        "codex": {"codex-native", "agent-plugin/1.0.0"},
+        "claude-code": {"claude-native"},
+    }
+    if package_format not in compatible_formats[target_client]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=request.state.translate("marketplace.package.format_invalid"),
         )
 
 
@@ -183,10 +201,17 @@ def _marketplace_import_error_status(code: str) -> int:
 
 def _marketplace_import_error_detail(
     request: Request, exc: MarketplaceImportSourceError
-) -> dict[str, str]:
+) -> dict[str, str | None]:
     translate = getattr(request.state, "translate", None)
     message = translate(exc.code, **exc.params) if translate else exc.code
-    return {"errorCode": exc.code, "message": message}
+    return {
+        "errorCode": exc.code,
+        "message": message,
+        "stage": exc.stage,
+        "source": exc.source,
+        "destination": exc.destination,
+        "category": exc.category,
+    }
 
 
 def _raise_marketplace_path_or_import_error(
@@ -313,6 +338,33 @@ def _validation_error_detail(
     }
 
 
+def _marketplace_install_error_detail(
+    request: Request,
+    payload: MarketplacePluginInstallRequest,
+    code: str,
+    *,
+    stage: str,
+    category: str,
+    extra: dict[str, object] | None = None,
+) -> dict[str, object]:
+    source = payload.source_id or (
+        f"plugins/{payload.target_client}/"
+        f"{package_format_storage_key(payload.package_format)}/"
+        f"{payload.package_id}/v{payload.version}"
+        if payload.version
+        else None
+    )
+    return {
+        "errorCode": code,
+        "message": _translate_error(request, code),
+        "stage": stage,
+        "source": source,
+        "destination": payload.workspace_id,
+        "category": category,
+        **(extra or {}),
+    }
+
+
 @router.get(
     "/packages",
     response_model=MarketplacePackageListResult,
@@ -321,7 +373,7 @@ def _validation_error_detail(
 )
 def list_marketplace_packages(
     request: Request,
-    provider: str | None = Query(default=None),
+    target_client: str | None = Query(default=None),
     q: str | None = Query(default=None),
     category: str | None = Query(default=None),
     features: str | None = Query(default=None),
@@ -331,11 +383,11 @@ def list_marketplace_packages(
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageListResult:
     """List current user's Marketplace packages."""
-    if provider:
-        _validate_provider(provider, request)
+    if target_client:
+        _validate_target_client(target_client, request)
     return service.list_packages(
         current_user_id,
-        provider=provider,  # type: ignore[arg-type]
+        target_client=target_client,  # type: ignore[arg-type]
         q=q,
         category=category,
         features=[feature for feature in (features or "").split(",") if feature],
@@ -372,7 +424,7 @@ def create_marketplace_package(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageDetail:
-    """Create a provider-native Marketplace package scaffold."""
+    """Create a target_client-native Marketplace package scaffold."""
     try:
         return service.create_package(current_user_id, payload)
     except MarketplacePathError as exc:
@@ -398,21 +450,21 @@ def create_marketplace_package(
 
 
 @router.get(
-    "/packages/{provider}/{package_id}",
+    "/packages/{target_client}/{package_id}",
     response_model=MarketplacePackageDetail,
     summary="Get Marketplace package detail",
     responses=build_responses(400, 401, 404, 500),
 )
 def get_marketplace_package_detail(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageDetail:
-    """Get a provider-native Marketplace package detail."""
-    _validate_provider(provider, request)
-    detail = service.get_package_detail(current_user_id, provider, package_id)  # type: ignore[arg-type]
+    """Get a target_client-native Marketplace package detail."""
+    _validate_target_client(target_client, request)
+    detail = service.get_package_detail(current_user_id, target_client, package_id)  # type: ignore[arg-type]
     if detail is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -422,23 +474,23 @@ def get_marketplace_package_detail(
 
 
 @router.post(
-    "/packages/{provider}/{package_id}/refresh",
+    "/packages/{target_client}/{package_id}/refresh",
     summary="Refresh one Marketplace package overview",
     responses=build_responses(400, 401, 404, 500),
 )
 def refresh_marketplace_package(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> dict[str, bool]:
     """Clear one cached package overview and the user's registry index."""
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.refresh_package_overview(
             current_user_id,
-            provider,  # type: ignore[arg-type]
+            target_client,  # type: ignore[arg-type]
             package_id,
         )
     except FileNotFoundError as exc:
@@ -446,25 +498,25 @@ def refresh_marketplace_package(
 
 
 @router.put(
-    "/packages/{provider}/{package_id}",
+    "/packages/{target_client}/{package_id}",
     response_model=MarketplacePackageMutationResult,
     summary="Save Marketplace package",
     responses=build_responses(400, 401, 404, 409, 500),
 )
 def save_marketplace_package(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplacePackageSaveRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    """Save a provider-native Marketplace package snapshot."""
-    _validate_provider(provider, request)
+    """Save a target_client-native Marketplace package snapshot."""
+    _validate_target_client(target_client, request)
     try:
         return service.save_package(
             current_user_id,
-            provider,  # type: ignore[arg-type]
+            target_client,  # type: ignore[arg-type]
             package_id,
             payload,
         )
@@ -477,19 +529,19 @@ def save_marketplace_package(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.get("/packages/{provider}/{package_id}/root-document")
+@router.get("/packages/{target_client}/{package_id}/root-document")
 def get_marketplace_root_document(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> dict[str, Any]:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.load_root_document(
             current_user_id,
-            provider,
+            target_client,
             package_id,  # type: ignore[arg-type]
         )
     except FileNotFoundError as exc:
@@ -499,20 +551,20 @@ def get_marketplace_root_document(
         ) from exc
 
 
-@router.put("/packages/{provider}/{package_id}/root-document")
+@router.put("/packages/{target_client}/{package_id}/root-document")
 def save_marketplace_root_document(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceRootDocumentSaveRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.save_root_document(
             current_user_id,
-            provider,  # type: ignore[arg-type]
+            target_client,  # type: ignore[arg-type]
             package_id,
             payload.revision,
             payload.content,
@@ -526,25 +578,25 @@ def save_marketplace_root_document(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.get("/packages/{provider}/{package_id}/mcp-servers")
+@router.get("/packages/{target_client}/{package_id}/mcp-servers")
 def list_marketplace_mcp_servers(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> list[dict[str, Any]]:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     return service.list_mcp_servers(
         current_user_id,
-        provider,
+        target_client,
         package_id,  # type: ignore[arg-type]
     )
 
 
-@router.get("/packages/{provider}/{package_id}/mcp-servers/{name}")
+@router.get("/packages/{target_client}/{package_id}/mcp-servers/{name}")
 def get_marketplace_mcp_server(
-    provider: str,
+    target_client: str,
     package_id: str,
     name: str,
     request: Request,
@@ -552,11 +604,11 @@ def get_marketplace_mcp_server(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> dict[str, Any]:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.get_mcp_server(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             name,  # type: ignore[arg-type]
             owner_file_path,
@@ -565,20 +617,20 @@ def get_marketplace_mcp_server(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.post("/packages/{provider}/{package_id}/mcp-servers")
+@router.post("/packages/{target_client}/{package_id}/mcp-servers")
 def create_marketplace_mcp_server(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceMcpServerCreateRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.create_mcp_server(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload,  # type: ignore[arg-type]
         )
@@ -591,9 +643,9 @@ def create_marketplace_mcp_server(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.put("/packages/{provider}/{package_id}/mcp-servers/{name}")
+@router.put("/packages/{target_client}/{package_id}/mcp-servers/{name}")
 def put_marketplace_mcp_server(
-    provider: str,
+    target_client: str,
     package_id: str,
     name: str,
     payload: MarketplaceMcpServerMutationRequest,
@@ -601,11 +653,11 @@ def put_marketplace_mcp_server(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.save_mcp_server(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             name,
             payload,  # type: ignore[arg-type]
@@ -619,9 +671,9 @@ def put_marketplace_mcp_server(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.delete("/packages/{provider}/{package_id}/mcp-servers/{name}")
+@router.delete("/packages/{target_client}/{package_id}/mcp-servers/{name}")
 def delete_marketplace_mcp_server(
-    provider: str,
+    target_client: str,
     package_id: str,
     name: str,
     payload: MarketplaceMcpServerDeleteRequest,
@@ -629,11 +681,11 @@ def delete_marketplace_mcp_server(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.delete_mcp_server(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             name,
             payload,  # type: ignore[arg-type]
@@ -648,63 +700,26 @@ def delete_marketplace_mcp_server(
 
 
 @router.delete(
-    "/packages/{provider}/{package_id}/draft",
-    response_model=MarketplacePackageDeleteResult,
-    summary="Discard Marketplace draft package",
-    responses=build_responses(400, 401, 404, 409, 500),
-)
-def discard_marketplace_draft_package(
-    provider: str,
-    package_id: str,
-    request: Request,
-    current_user_id: str = Depends(get_marketplace_user_id),
-    service: MarketplaceRequest = Depends(get_marketplace_request),
-) -> MarketplacePackageDeleteResult:
-    """Discard a draft Marketplace package without a revision query."""
-    _validate_provider(provider, request)
-    result = service.discard_draft_package(
-        current_user_id,
-        provider,  # type: ignore[arg-type]
-        package_id,
-    )
-    if result.deleted:
-        return result
-    status_code = (
-        status.HTTP_409_CONFLICT
-        if result.error_code == "marketplace.package.not_draft"
-        else status.HTTP_404_NOT_FOUND
-    )
-    raise HTTPException(
-        status_code=status_code,
-        detail=_translate_error(
-            request, result.error_code or "marketplace.package.not_found"
-        ),
-    )
-
-
-@router.delete(
-    "/packages/{provider}/{package_id}",
+    "/packages/{target_client}/{package_id}",
     response_model=MarketplacePackageDeleteResult,
     summary="Delete Marketplace package",
     responses=build_responses(400, 401, 404, 409, 500),
 )
 def delete_marketplace_package(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
-    revision: str = Query(...),
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageDeleteResult:
     """Hard delete a Marketplace package."""
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         result = service.delete_package(
             current_user_id,
             MarketplacePackageDeleteRequest(
-                provider=provider,  # type: ignore[arg-type]
+                target_client=target_client,  # type: ignore[arg-type]
                 package_id=package_id,
-                revision=revision,
             ),
         )
     except MarketplaceImportSourceError as exc:
@@ -712,14 +727,6 @@ def delete_marketplace_package(
             status_code=_marketplace_import_error_status(exc.code),
             detail=_marketplace_import_error_detail(request, exc),
         ) from exc
-    if (
-        not result.deleted
-        and result.error_code == "marketplace.package.revision_conflict"
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=_translate_error(request, result.error_code),
-        )
     if not result.deleted and result.error_code:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -729,23 +736,23 @@ def delete_marketplace_package(
 
 
 @router.get(
-    "/packages/{provider}/{package_id}/export",
+    "/packages/{target_client}/{package_id}/export",
     summary="Export Marketplace package",
     responses=build_responses(400, 401, 404, 500),
 )
 def export_marketplace_package(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     revision: str = Query(...),
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> Response:
-    """Export a provider-native Marketplace package zip."""
-    _validate_provider(provider, request)
+    """Export a target_client-native Marketplace package zip."""
+    _validate_target_client(target_client, request)
     try:
         archive = service.export_package(
-            current_user_id, provider, package_id, revision
+            current_user_id, target_client, package_id, revision
         )  # type: ignore[arg-type]
     except MarketplacePathError as exc:
         raise HTTPException(
@@ -775,7 +782,7 @@ def export_marketplace_package(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_validation_error_detail(request, exc),
         ) from exc
-    filename = f"{provider}-{package_id}.zip"
+    filename = f"{target_client}-{package_id}.zip"
     return Response(
         content=archive,
         media_type="application/zip",
@@ -783,70 +790,70 @@ def export_marketplace_package(
     )
 
 
-@router.get("/packages/{provider}/{package_id}/basic")
+@router.get("/packages/{target_client}/{package_id}/basic")
 def get_marketplace_basic(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> dict[str, Any]:
-    _validate_provider(provider, request)
-    return service.get_basic_metadata(current_user_id, provider, package_id)  # type: ignore[arg-type]
+    _validate_target_client(target_client, request)
+    return service.get_basic_metadata(current_user_id, target_client, package_id)  # type: ignore[arg-type]
 
 
-@router.get("/packages/{provider}/{package_id}/readme")
+@router.get("/packages/{target_client}/{package_id}/readme")
 def get_marketplace_readme(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> dict[str, Any]:
     """Load README content separately from the package overview."""
-    _validate_provider(provider, request)
-    return service.get_readme(current_user_id, provider, package_id)  # type: ignore[arg-type]
+    _validate_target_client(target_client, request)
+    return service.get_readme(current_user_id, target_client, package_id)  # type: ignore[arg-type]
 
 
-@router.put("/packages/{provider}/{package_id}/basic")
+@router.put("/packages/{target_client}/{package_id}/basic")
 def update_marketplace_basic(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceBasicUpdateRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
-    return service.update_basic_metadata(current_user_id, provider, package_id, payload)  # type: ignore[arg-type]
+    _validate_target_client(target_client, request)
+    return service.update_basic_metadata(current_user_id, target_client, package_id, payload)  # type: ignore[arg-type]
 
 
-@router.get("/packages/{provider}/{package_id}/hooks")
+@router.get("/packages/{target_client}/{package_id}/hooks")
 def get_marketplace_hooks(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> dict[str, Any]:
-    _validate_provider(provider, request)
-    return service.get_hooks(current_user_id, provider, package_id)  # type: ignore[arg-type]
+    _validate_target_client(target_client, request)
+    return service.get_hooks(current_user_id, target_client, package_id)  # type: ignore[arg-type]
 
 
-@router.put("/packages/{provider}/{package_id}/hooks")
+@router.put("/packages/{target_client}/{package_id}/hooks")
 def update_marketplace_hooks(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceHooksSaveRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.update_hooks(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload.revision,
             payload.sourceId,
@@ -861,37 +868,37 @@ def update_marketplace_hooks(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.get("/packages/{provider}/{package_id}/skills/tree")
+@router.get("/packages/{target_client}/{package_id}/skills/tree")
 def get_marketplace_skills_tree(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> dict[str, Any]:
-    _validate_provider(provider, request)
-    return service.list_skill_files(current_user_id, provider, package_id)  # type: ignore[arg-type]
+    _validate_target_client(target_client, request)
+    return service.list_skill_files(current_user_id, target_client, package_id)  # type: ignore[arg-type]
 
 
-@router.get("/packages/{provider}/{package_id}/skills/content")
+@router.get("/packages/{target_client}/{package_id}/skills/content")
 def get_marketplace_skill_content(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     path: str = Query(...),
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> dict[str, Any]:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
-        return service.read_skill_file(current_user_id, provider, package_id, path)  # type: ignore[arg-type]
+        return service.read_skill_file(current_user_id, target_client, package_id, path)  # type: ignore[arg-type]
     except (MarketplacePathError, FileNotFoundError) as exc:
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.put("/packages/{provider}/{package_id}/skills/content")
+@router.put("/packages/{target_client}/{package_id}/skills/content")
 def put_marketplace_skill_content(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceFileContentSaveRequest,
     request: Request,
@@ -899,11 +906,11 @@ def put_marketplace_skill_content(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.write_skill_file(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload.revision,
             path,
@@ -919,22 +926,22 @@ def put_marketplace_skill_content(
 
 
 @router.post(
-    "/packages/{provider}/{package_id}/skills/conflicts/preflight",
+    "/packages/{target_client}/{package_id}/skills/conflicts/preflight",
     response_model=FileConflictPreflightResponse,
 )
 def preflight_marketplace_skill_conflicts(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceSkillConflictPreflightRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> FileConflictPreflightResponse:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.preflight_skill_file_conflicts(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload.revision,
             payload,
@@ -949,11 +956,11 @@ def preflight_marketplace_skill_conflicts(
 
 
 @router.post(
-    "/packages/{provider}/{package_id}/skills/upload",
+    "/packages/{target_client}/{package_id}/skills/upload",
     response_model=FileConflictBatchResult,
 )
 async def upload_marketplace_skill_file(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     revision: str = Form(...),
@@ -964,7 +971,7 @@ async def upload_marketplace_skill_file(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> FileConflictBatchResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         stream_files: list[tuple[str, Any, int]] = []
         for file in files:
@@ -975,7 +982,7 @@ async def upload_marketplace_skill_file(
         return await run_in_threadpool(
             service.upload_skill_streams,
             current_user_id,
-            provider,  # type: ignore[arg-type]
+            target_client,  # type: ignore[arg-type]
             package_id,
             revision,
             targetPath,
@@ -993,23 +1000,23 @@ async def upload_marketplace_skill_file(
 
 
 @router.post(
-    "/packages/{provider}/{package_id}/skills/extract",
+    "/packages/{target_client}/{package_id}/skills/extract",
     response_model=FileConflictBatchResult,
 )
 async def extract_marketplace_skill_archive(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceSkillArchiveExtractRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> FileConflictBatchResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return await run_in_threadpool(
             service.extract_skill_archive,
             current_user_id,
-            provider,  # type: ignore[arg-type]
+            target_client,  # type: ignore[arg-type]
             package_id,
             payload.revision,
             payload.archivePath,
@@ -1026,20 +1033,20 @@ async def extract_marketplace_skill_archive(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.post("/packages/{provider}/{package_id}/skills")
+@router.post("/packages/{target_client}/{package_id}/skills")
 def post_marketplace_skill_entry(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceFileEntryCreateRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.create_skill_entry(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload.revision,
             payload.path,
@@ -1055,9 +1062,9 @@ def post_marketplace_skill_entry(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.delete("/packages/{provider}/{package_id}/skills")
+@router.delete("/packages/{target_client}/{package_id}/skills")
 def delete_marketplace_skill_entry(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     revision: str = Query(...),
@@ -1065,11 +1072,11 @@ def delete_marketplace_skill_entry(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.delete_skill_entry(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             revision,
             path,  # type: ignore[arg-type]
@@ -1083,20 +1090,20 @@ def delete_marketplace_skill_entry(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.post("/packages/{provider}/{package_id}/skills/move")
+@router.post("/packages/{target_client}/{package_id}/skills/move")
 def post_marketplace_skill_move(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceFileEntryMoveRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.move_skill_entry(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload.revision,
             payload.previousPath,
@@ -1111,37 +1118,37 @@ def post_marketplace_skill_move(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.get("/packages/{provider}/{package_id}/files/tree")
+@router.get("/packages/{target_client}/{package_id}/files/tree")
 def get_marketplace_files_tree(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> dict[str, Any]:
-    _validate_provider(provider, request)
-    return service.list_package_files_tree(current_user_id, provider, package_id)  # type: ignore[arg-type]
+    _validate_target_client(target_client, request)
+    return service.list_package_files_tree(current_user_id, target_client, package_id)  # type: ignore[arg-type]
 
 
-@router.get("/packages/{provider}/{package_id}/files/content")
+@router.get("/packages/{target_client}/{package_id}/files/content")
 def get_marketplace_file_content(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     path: str = Query(...),
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> dict[str, Any]:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
-        return service.read_package_file(current_user_id, provider, package_id, path)  # type: ignore[arg-type]
+        return service.read_package_file(current_user_id, target_client, package_id, path)  # type: ignore[arg-type]
     except (MarketplacePathError, FileNotFoundError) as exc:
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.put("/packages/{provider}/{package_id}/files/content")
+@router.put("/packages/{target_client}/{package_id}/files/content")
 def put_marketplace_file_content(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceFileContentSaveRequest,
     request: Request,
@@ -1149,11 +1156,11 @@ def put_marketplace_file_content(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.write_package_file(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload.revision,
             path,
@@ -1169,22 +1176,22 @@ def put_marketplace_file_content(
 
 
 @router.post(
-    "/packages/{provider}/{package_id}/files/conflicts/preflight",
+    "/packages/{target_client}/{package_id}/files/conflicts/preflight",
     response_model=FileConflictPreflightResponse,
 )
 def preflight_marketplace_file_conflicts(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: FileConflictPreflightRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> FileConflictPreflightResponse:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.preflight_package_file_conflicts(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload,
         )
@@ -1198,11 +1205,11 @@ def preflight_marketplace_file_conflicts(
 
 
 @router.post(
-    "/packages/{provider}/{package_id}/files/upload",
+    "/packages/{target_client}/{package_id}/files/upload",
     response_model=FileConflictBatchResult,
 )
 async def upload_marketplace_file_entries(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     target_path: str = Form(..., alias="targetPath"),
@@ -1212,7 +1219,7 @@ async def upload_marketplace_file_entries(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> FileConflictBatchResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         streams = []
         for file in files:
@@ -1224,7 +1231,7 @@ async def upload_marketplace_file_entries(
         return await run_in_threadpool(
             service.upload_package_files,
             current_user_id,
-            provider,  # type: ignore[arg-type]
+            target_client,  # type: ignore[arg-type]
             package_id,
             target_path,
             streams,
@@ -1241,22 +1248,22 @@ async def upload_marketplace_file_entries(
 
 
 @router.post(
-    "/packages/{provider}/{package_id}/files/paste",
+    "/packages/{target_client}/{package_id}/files/paste",
     response_model=FileConflictBatchResult,
 )
 def paste_marketplace_file_entries(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: FileConflictExecutionRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> FileConflictBatchResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.paste_package_files(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload,
         )
@@ -1270,22 +1277,22 @@ def paste_marketplace_file_entries(
 
 
 @router.post(
-    "/packages/{provider}/{package_id}/files/extract",
+    "/packages/{target_client}/{package_id}/files/extract",
     response_model=FileConflictBatchResult,
 )
 def extract_marketplace_file_archive(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: FileExtractExecutionRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> FileConflictBatchResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.extract_package_archive(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload,
         )
@@ -1298,20 +1305,20 @@ def extract_marketplace_file_archive(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.post("/packages/{provider}/{package_id}/files")
+@router.post("/packages/{target_client}/{package_id}/files")
 def post_marketplace_file_entry(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceFileEntryCreateRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.create_package_file_entry(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload.revision,
             payload.path,
@@ -1327,9 +1334,9 @@ def post_marketplace_file_entry(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.delete("/packages/{provider}/{package_id}/files")
+@router.delete("/packages/{target_client}/{package_id}/files")
 def delete_marketplace_file_entry(
-    provider: str,
+    target_client: str,
     package_id: str,
     request: Request,
     revision: str = Query(...),
@@ -1337,11 +1344,11 @@ def delete_marketplace_file_entry(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.delete_package_file_entry(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             revision,
             path,  # type: ignore[arg-type]
@@ -1355,20 +1362,20 @@ def delete_marketplace_file_entry(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.post("/packages/{provider}/{package_id}/files/move")
+@router.post("/packages/{target_client}/{package_id}/files/move")
 def post_marketplace_file_move(
-    provider: str,
+    target_client: str,
     package_id: str,
     payload: MarketplaceFileEntryMoveRequest,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.move_package_file_entry(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             payload.revision,
             payload.previousPath,
@@ -1383,27 +1390,27 @@ def post_marketplace_file_move(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.get("/packages/{provider}/{package_id}/{resource_type}")
+@router.get("/packages/{target_client}/{package_id}/{resource_type}")
 def list_marketplace_documents(
-    provider: str,
+    target_client: str,
     package_id: str,
     resource_type: DocumentResourceType,
     request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> list[dict[str, Any]]:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     return service.list_documents(
         current_user_id,
-        provider,
+        target_client,
         package_id,
         resource_type,  # type: ignore[arg-type]
     )
 
 
-@router.get("/packages/{provider}/{package_id}/{resource_type}/content")
+@router.get("/packages/{target_client}/{package_id}/{resource_type}/content")
 def load_marketplace_document(
-    provider: str,
+    target_client: str,
     package_id: str,
     resource_type: DocumentResourceType,
     request: Request,
@@ -1411,19 +1418,19 @@ def load_marketplace_document(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> dict[str, Any]:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     return service.load_document(
         current_user_id,
-        provider,
+        target_client,
         package_id,
         resource_type,
         path,  # type: ignore[arg-type]
     )
 
 
-@router.post("/packages/{provider}/{package_id}/{resource_type}")
+@router.post("/packages/{target_client}/{package_id}/{resource_type}")
 def create_marketplace_document(
-    provider: str,
+    target_client: str,
     package_id: str,
     resource_type: DocumentResourceType,
     payload: MarketplaceDocumentMutationRequest,
@@ -1431,11 +1438,11 @@ def create_marketplace_document(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.create_document(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             resource_type,
             payload,  # type: ignore[arg-type]
@@ -1449,9 +1456,9 @@ def create_marketplace_document(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.put("/packages/{provider}/{package_id}/{resource_type}/content")
+@router.put("/packages/{target_client}/{package_id}/{resource_type}/content")
 def update_marketplace_document(
-    provider: str,
+    target_client: str,
     package_id: str,
     resource_type: DocumentResourceType,
     payload: MarketplaceDocumentMutationRequest,
@@ -1460,12 +1467,12 @@ def update_marketplace_document(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     request_payload = payload.model_copy(update={"path": path})
     try:
         return service.update_document(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             resource_type,
             request_payload,  # type: ignore[arg-type]
@@ -1479,9 +1486,9 @@ def update_marketplace_document(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.post("/packages/{provider}/{package_id}/{resource_type}/move")
+@router.post("/packages/{target_client}/{package_id}/{resource_type}/move")
 def move_marketplace_document(
-    provider: str,
+    target_client: str,
     package_id: str,
     resource_type: DocumentResourceType,
     payload: MarketplaceDocumentRenameRequest,
@@ -1489,11 +1496,11 @@ def move_marketplace_document(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     try:
         return service.move_document(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             resource_type,
             payload,  # type: ignore[arg-type]
@@ -1507,9 +1514,9 @@ def move_marketplace_document(
         _raise_marketplace_mutation_error(request, exc)
 
 
-@router.delete("/packages/{provider}/{package_id}/{resource_type}/content")
+@router.delete("/packages/{target_client}/{package_id}/{resource_type}/content")
 def delete_marketplace_document(
-    provider: str,
+    target_client: str,
     package_id: str,
     resource_type: DocumentResourceType,
     request: Request,
@@ -1518,12 +1525,12 @@ def delete_marketplace_document(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplacePackageMutationResult:
-    _validate_provider(provider, request)
+    _validate_target_client(target_client, request)
     request_payload = payload.model_copy(update={"path": path})
     try:
         return service.remove_document(
             current_user_id,
-            provider,
+            target_client,
             package_id,
             resource_type,
             request_payload,  # type: ignore[arg-type]
@@ -1548,7 +1555,12 @@ def list_marketplace_activity(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, alias="pageSize", ge=1, le=100),
     workspace_id: str | None = Query(default=None, alias="workspaceId"),
-    provider: str | None = Query(default=None),
+    package_format: MarketplacePackageFormat | None = Query(
+        default=None, alias="packageFormat"
+    ),
+    target_client: MarketplaceTargetClient | None = Query(
+        default=None, alias="targetClient"
+    ),
     package_id: str | None = Query(default=None, alias="packageId"),
     action: MarketplaceActivityAction | None = Query(default=None),
     activity_status: MarketplaceActivityStatus | None = Query(
@@ -1559,24 +1571,42 @@ def list_marketplace_activity(
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplaceActivityListResult:
     """List authorized workspace audit and actor-owned registry activity."""
-    if provider is not None:
-        _validate_provider(provider, request)
     return service.list_activity(
         current_user_id,
         page=page,
         page_size=page_size,
         workspace_id=workspace_id,
-        provider=provider,  # type: ignore[arg-type]
+        package_format=package_format,
+        target_client=target_client,
         package_id=package_id,
         action=action,
         status=activity_status,
     )
 
 
+@router.get(
+    "/activities/{activity_id}",
+    response_model=MarketplaceActivityDetail,
+    summary="Get Marketplace activity detail",
+    responses=build_responses(401, 403, 404, 500),
+)
+def get_marketplace_activity_detail(
+    activity_id: str,
+    current_user_id: str = Depends(get_marketplace_user_id),
+    service: MarketplaceRequest = Depends(get_marketplace_request),
+) -> MarketplaceActivityDetail:
+    """Return raw CLI output only to the actor or Workspace managers."""
+
+    detail = service.get_activity_detail(current_user_id, activity_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="marketplace.activity.not_found")
+    return detail
+
+
 @router.post(
-    "/import/scan",
+    "/imports/scan",
     response_model=list[MarketplaceImportCandidate],
-    summary="Scan Marketplace import source",
+    summary="Scan Plugin import source",
     responses=build_responses(400, 401, 403, 500),
 )
 def scan_marketplace_import_source(
@@ -1585,7 +1615,7 @@ def scan_marketplace_import_source(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> list[MarketplaceImportCandidate]:
-    """Validate and scan an external Marketplace import source."""
+    """Validate and scan an external Plugin import source."""
     try:
         return service.scan_import_source(current_user_id, payload)
     except MarketplaceImportSourceError as exc:
@@ -1596,25 +1626,25 @@ def scan_marketplace_import_source(
 
 
 @router.post(
-    "/import/upload",
+    "/imports/upload",
     response_model=MarketplaceImportUploadResult,
-    summary="Upload local Marketplace import source",
+    summary="Upload local Plugin import source",
     responses=build_responses(400, 401, 403, 500),
 )
 async def upload_marketplace_import_source(
     request: Request,
-    provider: str = Form(...),
+    target_client: str = Form(..., alias="targetClient"),
     file: UploadFile = File(...),
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplaceImportUploadResult:
-    """Upload a local Marketplace import archive into the managed import source root."""
-    _validate_provider(provider, request)
+    """Upload a local archive into the managed import source root."""
+    _validate_target_client(target_client, request)
     try:
         content = await file.read()
         return service.save_uploaded_import_source(
             current_user_id,
-            provider,  # type: ignore[arg-type]
+            target_client,  # type: ignore[arg-type]
             file.filename or "",
             content,
         )
@@ -1626,9 +1656,9 @@ async def upload_marketplace_import_source(
 
 
 @router.post(
-    "/import",
+    "/imports",
     response_model=MarketplaceImportResult,
-    summary="Import Marketplace candidates",
+    summary="Import Plugin candidates",
     responses=build_responses(400, 401, 403, 500),
 )
 def import_marketplace_candidates(
@@ -1637,7 +1667,7 @@ def import_marketplace_candidates(
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> MarketplaceImportResult:
-    """Import selected Marketplace candidates into the local registry."""
+    """Import selected Plugin candidates into the managed registry."""
     try:
         return service.import_candidates(current_user_id, payload)
     except MarketplaceImportSourceError as exc:
@@ -1650,7 +1680,7 @@ def import_marketplace_candidates(
 @router.post(
     "/plugins/install",
     response_model=MarketplacePluginCommandResult,
-    summary="Install a published Marketplace plugin with the provider CLI",
+    summary="Install a managed Plugin with the Target Client CLI",
     responses=build_responses(400, 401, 403, 404, 409, 500, 502, 503),
 )
 def install_marketplace_plugin(
@@ -1661,44 +1691,80 @@ def install_marketplace_plugin(
         get_marketplace_cli_install_service
     ),
 ) -> MarketplacePluginCommandResult:
-    """Publish one package and return the provider CLI terminal result."""
+    """Publish one package and return the target_client CLI terminal result."""
     try:
         return service.install(current_user_id, payload)
     except MarketplaceCliInstallError as exc:
         raise HTTPException(
             status_code=exc.http_status,
-            detail={
-                "errorCode": exc.code,
-                "message": _translate_error(request, exc.code),
-            },
+            detail=_marketplace_install_error_detail(
+                request,
+                payload,
+                exc.code,
+                stage="authorize" if exc.http_status == 403 else "install",
+                category="authorization" if exc.http_status == 403 else "target_client",
+            ),
         ) from exc
     except MarketplaceRuntimeClientError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={
-                "errorCode": exc.code,
-                "message": _translate_error(request, exc.code),
-            },
+            detail=_marketplace_install_error_detail(
+                request,
+                payload,
+                exc.code,
+                stage="install",
+                category="runtime",
+            ),
         ) from exc
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=_translate_error(request, str(exc)),
+            detail=_marketplace_install_error_detail(
+                request,
+                payload,
+                str(exc),
+                stage="resolve",
+                category="not_found",
+            ),
         ) from exc
     except MarketplaceConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=_translate_error(request, str(exc)),
+            detail=_marketplace_install_error_detail(
+                request,
+                payload,
+                str(exc),
+                stage="resolve",
+                category="conflict",
+            ),
         ) from exc
     except MarketplaceValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_validation_error_detail(request, exc),
+            detail=_marketplace_install_error_detail(
+                request,
+                payload,
+                str(exc),
+                stage="validate",
+                category="validation",
+                extra={"validationResults": exc.results},
+            ),
         ) from exc
     except MarketplaceImportSourceError as exc:
+        detail = _marketplace_install_error_detail(
+            request,
+            payload,
+            exc.code,
+            stage=exc.stage,
+            category=exc.category,
+        )
+        if exc.source is not None:
+            detail["source"] = exc.source
+        if exc.destination is not None:
+            detail["destination"] = exc.destination
         raise HTTPException(
             status_code=_marketplace_import_error_status(exc.code),
-            detail=_marketplace_import_error_detail(request, exc),
+            detail=detail,
         ) from exc
 
 
@@ -1862,14 +1928,18 @@ def delete_marketplace_version_control_branch(
 )
 def publish_marketplace_version_control_branch(
     payload: BranchPublishRequest,
+    request: Request,
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> BranchMutationResponse:
-    return service.publish_branch(
-        current_user_id,
-        remote=payload.remote,
-        remote_name=payload.remote_name,
-    )
+    try:
+        return service.publish_branch(
+            current_user_id,
+            remote=payload.remote,
+            remote_name=payload.remote_name,
+        )
+    except MarketplaceImportSourceError as exc:
+        _raise_marketplace_path_or_import_error(request, exc)
 
 
 @router.post(
@@ -2065,7 +2135,9 @@ def get_marketplace_version_control_changes(
     request: Request,
     cursor: str | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
-    group: Literal["all", "staged", "unstaged", "untracked", "conflicts"] = Query("all"),
+    group: Literal["all", "staged", "unstaged", "untracked", "conflicts"] = Query(
+        "all"
+    ),
     include_stats: bool = Query(
         True,
         alias="includeStats",
@@ -2511,7 +2583,8 @@ def save_marketplace_settings(
         translate = getattr(request.state, "translate", None)
         detail = (
             translate(
-                result.error_code, provider=result.partial_success_provider or "none"
+                result.error_code,
+                target_client=result.partial_success_target_client or "none",
             )
             if translate
             else result.error_code
@@ -2520,3 +2593,16 @@ def save_marketplace_settings(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail
         )
     return result
+@router.get(
+    "/package-formats",
+    response_model=list[MarketplacePackageFormatOption],
+    summary="List creatable Plugin package formats",
+)
+def list_marketplace_package_formats(
+    current_user_id: str = Depends(get_marketplace_user_id),
+    service: MarketplaceRequest = Depends(get_marketplace_request),
+) -> list[MarketplacePackageFormatOption]:
+    """Return Manager-owned format, client, and authoring capabilities."""
+
+    del current_user_id
+    return service.list_package_format_options()

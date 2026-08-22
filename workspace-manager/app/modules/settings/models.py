@@ -5,10 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import EmailStr, Field
+from pydantic import ConfigDict, Field
 
 from app.config.model_registry import AgenticToolId, get_global_model_config
 from app.core.pydantic import CamelModel
+from app.modules.identity.provider_email import ProviderEmailStr
 
 
 def default_tool_model(tool_id: AgenticToolId) -> str:
@@ -16,11 +17,13 @@ def default_tool_model(tool_id: AgenticToolId) -> str:
 
 
 class UserProfile(CamelModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     user_id: str = Field(..., alias="userId")
     username: str
     first_name: str = Field("", alias="firstName")
     last_name: str = Field("", alias="lastName")
-    email: EmailStr
+    email: ProviderEmailStr
     avatar_url: Optional[str] = Field(None, alias="avatarUrl")
 
 

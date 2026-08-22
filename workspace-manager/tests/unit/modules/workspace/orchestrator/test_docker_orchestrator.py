@@ -348,6 +348,7 @@ class TestDockerOrchestrator:
 
         assert result.identifier == "browser-container"
         call_args = docker_orchestrator.client.containers.run.call_args.kwargs
+        assert call_args["image"] == "test-image"
         assert call_args["environment"] == sample_context.environment
         assert "NEKO_MEMBER_MULTIUSER_USER_PASSWORD" not in call_args["environment"]
         assert "NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD" not in call_args["environment"]
@@ -392,6 +393,27 @@ class TestDockerOrchestrator:
         }
         assert call_args["restart_policy"] == {"Name": "always"}
         assert call_args["labels"] == sample_context.container_labels
+
+    def test_create_canvas_runtime_uses_context_image(
+        self,
+        docker_orchestrator,
+        sample_workspace,
+        sample_context,
+    ):
+        container = MagicMock(id="canvas-container")
+        docker_orchestrator.client.containers.run.return_value = container
+        docker_orchestrator.client.containers.get.side_effect = docker.errors.NotFound(
+            "Not found"
+        )
+
+        result = docker_orchestrator.create_canvas_runtime(
+            sample_workspace,
+            sample_context,
+        )
+
+        assert result.identifier == "canvas-container"
+        call_args = docker_orchestrator.client.containers.run.call_args.kwargs
+        assert call_args["image"] == "test-image"
 
     def test_create_workspace_runtime_removes_container_when_metadata_fails(
         self, docker_orchestrator, sample_workspace, sample_context

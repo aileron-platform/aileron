@@ -22,7 +22,6 @@ from app.modules.workspace.runtime.job_repository import (
     WorkspaceRuntimeJobRepository,
 )
 from app.modules.audit.events import AuditEventService
-from app.modules.workspace.orchestrator.models import RuntimeInfo
 from app.modules.workspace.runtime.assertions import RuntimeAssertionService
 from app.modules.workspace.runtime.provisioning import (
     RuntimeProvisionService,
@@ -38,8 +37,9 @@ from app.modules.workspace.custom_resources import (
     WorkspaceCustomResourceService,
 )
 from app.modules.workspace.execution_plane import (
-    ExecutionPlanePlan,
-    WorkspaceExecutionPlaneService,
+    GenerationClaim,
+    GenerationOutcome,
+    WorkspaceExecutionPlane,
 )
 from app.modules.workspace.runtime.job_execution import (
     RuntimeJobClaimLease,
@@ -64,10 +64,10 @@ class _ClaimedAccessWork:
     attempt: int
     target_runtime_revision: int
     workspace_identity: WorkspaceExecutionPlaneIdentity
-    plan: ExecutionPlanePlan
+    plan: object
 
 
-class WorkspaceAccessRecycleService(WorkspaceExecutionPlaneService):
+class WorkspaceAccessRecycleService(WorkspaceExecutionPlane):
     """Recycle all shared workloads before reopening action gates."""
 
     def __init__(
@@ -84,7 +84,7 @@ class WorkspaceAccessRecycleService(WorkspaceExecutionPlaneService):
             db,
             settings=settings,
             runtime_provision=runtime_provision,
-            custom_resource_service=custom_resource_service,
+            custom_resources=custom_resource_service,
             assertion_service_factory=assertion_service_factory,
             http_client_factory=http_client_factory,
         )
@@ -119,27 +119,31 @@ class WorkspaceAccessRecycleService(WorkspaceExecutionPlaneService):
                     heartbeat.assert_valid(session_lock)
 
                 with heartbeat:
-                    self.best_effort_drain(
-                        workspace_id=work.workspace_id,
-                        workspace_identity=work.workspace_identity,
-                        expected_mounted_revision=(work.plan.observed_mount_revision),
-                        target_mounted_revision=work.plan.mount_revision,
-                        job_id=work.job_id,
-                        assert_claim=assert_claim,
+                    outcome = self.reconcile(
+                        GenerationClaim(
+                            workspace_id=work.workspace_id,
+                            job_id=work.job_id,
+                            assert_owned=assert_claim,
+                            runtime_instance_id=work.plan.runtime_instance_id,
+                            expected_mounted_revision=(
+                                work.plan.observed_mount_revision
+                            ),
+                            target_mounted_revision=work.plan.mount_revision,
+                            identity=work.workspace_identity,
+                        ),
+                        attempt=work.plan,
                     )
-                    assert_claim()
-                    runtime_result = self._apply_runtime_component(
-                        workspace_id=work.workspace_id,
-                        target_revision=work.target_runtime_revision,
-                        plan=work.plan,
-                        assert_claim=assert_claim,
-                    )
+                    outcome.raise_for_failure()
                     assert_claim()
                     if not self._access_target_is_current(work):
+                        self._discard_ready(
+                            outcome,
+                            assert_claim=assert_claim,
+                        )
                         return self._complete_access_superseded(work)
                     return self._complete_access_success(
                         work,
-                        runtime_result,
+                        outcome,
                     )
         except WorkspaceAdvisoryLockUnavailableError:
             self.db.rollback()
@@ -436,7 +440,7 @@ class WorkspaceAccessRecycleService(WorkspaceExecutionPlaneService):
     def _complete_access_success(
         self,
         work: _ClaimedAccessWork,
-        runtime_result: RuntimeInfo | None,
+        outcome: GenerationOutcome,
     ) -> WorkspaceRuntimeJobRunResult:
         now = datetime.now(timezone.utc)
         try:
@@ -463,11 +467,7 @@ class WorkspaceAccessRecycleService(WorkspaceExecutionPlaneService):
             ):
                 self.db.rollback()
                 return WorkspaceRuntimeJobRunResult.CLAIM_LOST
-            self._apply_runtime_component_result(
-                workspace,
-                work.plan,
-                runtime_result,
-            )
+            self._stage_ready(workspace, outcome)
             workspace.runtime_observed_revision = work.target_runtime_revision
             workspace.runtime_status = "running"
             workspace.runtime_reason = None

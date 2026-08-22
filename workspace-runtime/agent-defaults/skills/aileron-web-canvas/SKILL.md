@@ -4,7 +4,7 @@ description: Build static HTML or Next.js web pages for Aileron Web Canvas previ
 license: MIT
 metadata:
   author: aileron
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Aileron Web Canvas
@@ -172,6 +172,15 @@ Recommended arguments:
 
 Do not add assistant prose after the tool call unless the host continues the turn after a non-pausing tool call and the user explicitly needs a brief summary.
 
+## Theme Contract
+
+Every generated Canvas must support both `light` and `dark` themes. The bridge exposes the current resolved theme through `window.aileron.theme` and emits `aileron:themechange` with `{ theme }` whenever it changes.
+
+- Static Canvas may apply the current value during script initialization and subscribe to the event.
+- Next.js Canvas must read and subscribe inside a client component `useEffect`, then mount that component from the root layout. Do not mutate server-rendered `<html>` or `<body>` attributes before hydration.
+- Apply the theme to `document.documentElement`, including the `dark` class, `data-theme`, and `colorScheme`. Also keep the `dark` class on `document.body` in sync.
+- Define complete light and dark color tokens that match the artifact design; do not rely on browser inversion.
+
 ## Quality Bar
 
 - Build the actual usable experience as the first screen.
@@ -180,3 +189,4 @@ Do not add assistant prose after the tool call unless the host continues the tur
 - Text must not overlap or overflow at mobile and desktop sizes.
 - Use meaningful visual assets when the user needs to inspect a product, place, object, person, or concrete state.
 - Keep comments and code identifiers in English.
+- The Canvas iframe is sandboxed without `allow-same-origin`, so `localStorage`, `sessionStorage`, and `document.cookie` throw a `SecurityError` on every access. Never call them directly; if a generated artifact needs to persist state, wrap every read/write in `try`/`catch` and degrade to in-memory state when storage throws.

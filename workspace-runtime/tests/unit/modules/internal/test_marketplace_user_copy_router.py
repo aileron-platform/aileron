@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from aileron_marketplace_core import UserCopyApplyResultContract
+from aileron_marketplace_core import UserCopyProjectionApplyResultContract
 from fastapi import HTTPException
 
 from app.modules.internal.dependencies import _manager_command_action
@@ -17,7 +17,7 @@ from app.modules.internal.router import (
 from app.modules.internal.router import router as internal_router
 
 RUNTIME_ID = "11111111-1111-4111-8111-111111111111"
-PROVIDER_STATE_ROOT_ID = f"psr_{'e' * 64}"
+TARGET_CLIENT_STATE_ROOT_ID = f"tcsr_{'e' * 64}"
 
 
 class _TrackingUpload:
@@ -43,18 +43,22 @@ class _TrackingUpload:
 def _metadata() -> dict[str, object]:
     return {
         "operationId": "d" * 32,
-        "provider": "codex",
-        "packageId": "review-helper",
-        "revision": "a" * 64,
+        "packageFormat": "codex-native",
+        "targetClient": "codex",
+        "catalogPluginId": "review-helper",
+        "releaseRevision": "a" * 64,
         "workspaceId": "workspace-1",
         "runtimeInstanceId": RUNTIME_ID,
-        "providerStateRootId": PROVIDER_STATE_ROOT_ID,
+        "targetClientStateRootId": TARGET_CLIENT_STATE_ROOT_ID,
         "expectedSourceDigest": "b" * 64,
         "expectedArchiveDigest": "c" * 64,
         "expectedPackageTreeDigest": "d" * 64,
-        "expectedProfileVersion": 1,
+        "expectedProfileVersion": 2,
         "expectedProfileDigest": "e" * 64,
+        "expectedProjectionDigest": "1" * 64,
         "expectedMaterializationDigest": "f" * 64,
+        "acceptPartialCopy": False,
+        "expectedSkippedCount": 0,
         "overwriteApprovals": [],
     }
 
@@ -63,16 +67,18 @@ def _service(*, max_archive_bytes: int = 8) -> SimpleNamespace:
     return SimpleNamespace(
         marketplace_user_copy_max_archive_bytes=max_archive_bytes,
         apply_marketplace_user_copy=AsyncMock(
-            return_value=UserCopyApplyResultContract(
+            return_value=UserCopyProjectionApplyResultContract(
                 operationId="d" * 32,
-                provider="codex",
-                packageId="review-helper",
-                revision="a" * 64,
+                packageFormat="codex-native",
+                targetClient="codex",
+                catalogPluginId="review-helper",
+                releaseRevision="a" * 64,
                 workspaceId="workspace-1",
                 createdCount=1,
                 mergedCount=0,
                 unchangedCount=0,
                 overwrittenCount=0,
+                skippedCount=0,
             )
         ),
     )

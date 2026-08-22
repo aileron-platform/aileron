@@ -129,7 +129,7 @@ class FakeRunner:
         return None
 
     def is_alive(self, execution_id: str) -> bool:
-        return True
+        return execution_id not in self.stopped
 
     async def destroy_thread(self, thread_id: str) -> None:
         self.destroyed_threads.append(thread_id)
@@ -1333,7 +1333,7 @@ async def test_complete_event_hands_off_next_queued_message(
 
 
 @pytest.mark.asyncio
-async def test_cancel_thread_clears_queue_without_starting_follow_up(
+async def test_stop_thread_dequeues_next_message_and_hands_off_follow_up(
     submit_session: AsyncSession,
 ) -> None:
     await put_capabilities(submit_session)
@@ -1355,24 +1355,67 @@ async def test_cancel_thread_clears_queue_without_starting_follow_up(
         user_id="user-a",
         message={"text": "third", "attachments": []},
     )
-    before_cancel = await service.get_thread(thread_id, user_id="user-a")
+    before_stop = await service.get_thread(thread_id, user_id="user-a")
+    first_execution_id = before_stop.active_turn_execution_id
 
-    assert [message["text"] for message in before_cancel.queued_messages] == [
+    assert [message["text"] for message in before_stop.queued_messages] == [
         "second",
         "third",
     ]
 
-    canceled = await service.cancel_thread(thread_id=thread_id, user_id="user-a")
+    stopped = await service.stop_thread(thread_id=thread_id, user_id="user-a")
 
     detail = await service.get_thread(thread_id, user_id="user-a")
     messages = await list_thread_messages(service.db, thread_id)
-    assert canceled.status == ThreadStatus.CANCELED.value
-    assert detail.status == ThreadStatus.CANCELED.value
-    assert detail.active_turn_execution_id is None
-    assert detail.queued_messages == []
-    assert [request.prompt_text for request in runner.requests] == ["first"]
-    assert runner.stopped == [before_cancel.active_turn_execution_id]
-    assert [message.type for message in messages if message.type == "user"] == ["user"]
+    assert stopped.status == ThreadStatus.QUEUED.value
+    assert detail.status == ThreadStatus.QUEUED.value
+    assert detail.active_turn_execution_id != first_execution_id
+    assert [message["text"] for message in detail.queued_messages] == ["third"]
+    assert [request.prompt_text for request in runner.requests] == ["first", "second"]
+    assert runner.stopped == [first_execution_id]
+    assert [message.type for message in messages if message.type == "user"] == [
+        "user",
+        "user",
+    ]
+
+    old_execution = await ThreadTurnRepository(submit_session).get_execution(
+        first_execution_id
+    )
+    assert old_execution is not None
+    assert old_execution.status == "canceled"
+
+
+@pytest.mark.asyncio
+async def test_late_complete_event_for_a_stopped_execution_is_fenced(
+    submit_session: AsyncSession,
+) -> None:
+    await put_capabilities(submit_session)
+    runner = FakeRunner()
+    sink = FakeSink(submit_session)
+    service, thread_id = await create_draft(submit_session, runner, sink)
+    await service.submit_thread(
+        thread_id=thread_id,
+        user_id="user-a",
+        message={"text": "first", "attachments": []},
+    )
+    before_stop = await service.get_thread(thread_id, user_id="user-a")
+    first_execution_id = before_stop.active_turn_execution_id
+    assert first_execution_id is not None
+
+    await service.stop_thread(thread_id=thread_id, user_id="user-a")
+    after_stop = await service.get_thread(thread_id, user_id="user-a")
+
+    handled, next_execution, invalidation = await service._execution.handle_event(
+        thread_id, first_execution_id, AgentEvent(type="complete")
+    )
+
+    assert handled is False
+    assert next_execution is None
+    assert invalidation is None
+
+    unchanged = await service.get_thread(thread_id, user_id="user-a")
+    assert unchanged.status == after_stop.status
+    assert unchanged.active_turn_execution_id == after_stop.active_turn_execution_id
 
 
 @pytest.mark.asyncio

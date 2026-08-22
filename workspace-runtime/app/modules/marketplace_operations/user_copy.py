@@ -9,18 +9,19 @@ from pathlib import Path
 from typing import Any, cast
 
 from aileron_marketplace_core import (
-    MarketplaceProviderName,
+    PluginReleaseIdentity,
+    SkippedUserCopyResourceContract,
+    TargetClientName,
     PackageSourceError,
-    UserCopyApplyMetadataContract,
-    UserCopyApplyResultContract,
+    UserCopyProjectionApplyMetadataContract,
+    UserCopyProjectionApplyResultContract,
     UserCopyBlockingIssueContract,
     UserCopyConflictContract,
     UserCopyPlanResourceContract,
-    UserCopyPreflightRequestContract,
-    UserCopyPreflightResultContract,
-    build_user_copy_profile_preview,
-    resolve_user_copy_profile,
-    user_copy_source_digest_from_preview,
+    UserCopyProjectionPreflightRequestContract,
+    UserCopyProjectionPreflightResultContract,
+    extract_user_copy_source_profile,
+    package_tree_digest,
 )
 
 from app.config.settings import Settings, get_settings
@@ -30,6 +31,10 @@ from app.modules.cli_settings.user_scope.materializer import (
     UserCopyMaterializationError,
     UserCopyMaterializationResult,
     UserCopyMaterializer,
+)
+from app.modules.cli_settings.user_scope.paths import (
+    get_user_scope_path_resolver,
+    target_client_state_root_id,
 )
 from app.modules.cli_settings.user_scope.planner import (
     UserCopyAction,
@@ -41,8 +46,8 @@ from app.modules.cli_settings.user_scope.planner import (
 )
 from app.modules.cli_settings.user_scope.adapter import UserCopyAdapterError
 from .errors import MarketplaceOperationError
-from .gate import MarketplaceProviderGate
-from .inventory import FilesystemUserCopyInventoryProvider
+from .gate import MarketplaceTargetClientGate
+from .inventory import FilesystemUserCopyInventoryReader
 from .state import MarketplaceMutationStore, canonical_digest, write_json_atomic
 from .user_copy_snapshot import UserCopySnapshotStager
 
@@ -61,8 +66,8 @@ class MarketplaceUserCopyService:
         settings: Settings | None = None,
         mutation_store: MarketplaceMutationStore | None = None,
         snapshot_stager: UserCopySnapshotStager | None = None,
-        inventory_provider: FilesystemUserCopyInventoryProvider | None = None,
-        gate: MarketplaceProviderGate | None = None,
+        inventory_reader: FilesystemUserCopyInventoryReader | None = None,
+        gate: MarketplaceTargetClientGate | None = None,
     ) -> None:
         self._settings = settings or get_settings()
         state_root = Path(self._settings.MARKETPLACE_OPERATION_JOURNAL_DIR)
@@ -72,14 +77,10 @@ class MarketplaceUserCopyService:
         )
         self._transaction_root = state_root / "user-copy-transactions"
         self._recovery_root = state_root / "user-copy-recovery"
-        self._inventory_provider = (
-            inventory_provider or FilesystemUserCopyInventoryProvider(self._settings)
+        self._inventory_reader = (
+            inventory_reader or FilesystemUserCopyInventoryReader(self._settings)
         )
-        self._gate = gate or MarketplaceProviderGate(self._mutation_store)
-
-    @property
-    def provider_state_root_id(self) -> str:
-        return self._mutation_store.provider_state_root_id
+        self._gate = gate or MarketplaceTargetClientGate(self._mutation_store)
 
     @property
     def max_archive_bytes(self) -> int:
@@ -87,26 +88,23 @@ class MarketplaceUserCopyService:
 
     def preflight(
         self,
-        request: UserCopyPreflightRequestContract,
-    ) -> UserCopyPreflightResultContract:
+        request: UserCopyProjectionPreflightRequestContract,
+    ) -> UserCopyProjectionPreflightResultContract:
         """Build a target-only plan from bounded Manager source proofs."""
 
         self._validate_runtime_identity(
             workspace_id=request.workspace_id,
             runtime_instance_id=request.runtime_instance_id,
         )
-        preview = request.profile_preview.to_wire(exclude_unset=True)
         try:
-            source_digest = request.profile_preview.source_digest
-            profile = request.profile_preview.to_profile()
+            profile = request.source_profile.to_profile()
         except (PackageSourceError, ValueError, TypeError, KeyError) as exc:
             raise MarketplaceOperationError(
                 "marketplace.user_copy.source_invalid",
                 http_status=409,
             ) from exc
         if (
-            source_digest != request.expected_source_digest
-            or profile.profile_version != request.expected_profile_version
+            profile.profile_version != request.expected_profile_version
             or profile.profile_digest != request.expected_profile_digest
         ):
             raise MarketplaceOperationError(
@@ -114,72 +112,54 @@ class MarketplaceUserCopyService:
                 http_status=409,
             )
 
-        inventory = self._inventory_provider.inventory(
-            request.provider,
+        inventory = self._inventory_reader.inventory(
+            request.target_client,
             profile=profile,
         )
-        proof_by_id = {
-            f"{item['resourceType']}:{item['resourceId']}": item
-            for item in preview["resources"]
-        }
         try:
-            plan = UserCopyPlanner(package_id=request.package_id).plan_preview(
+            plan = UserCopyPlanner(
+                package_id=_planner_package_id(request.catalog_plugin_id),
+                release_revision=request.release_revision,
+            ).plan_source_profile(
                 profile,
-                source_digests={
-                    stable_id: item["sourceDigest"]
-                    for stable_id, item in proof_by_id.items()
-                },
-                dependency_payload_required={
-                    stable_id: item["dependencyPayloadRequired"]
-                    for stable_id, item in proof_by_id.items()
-                },
-                dependency_payload_projectable={
-                    stable_id: item["dependencyPayloadProjectable"]
-                    for stable_id, item in proof_by_id.items()
-                },
-                dependency_payloads=preview["dependencyPayloads"],
-                structured_value_types={
-                    stable_id: item["structuredValueType"]
-                    for stable_id, item in proof_by_id.items()
-                    if item.get("structuredValueType") is not None
-                },
-                structured_value_templates={
-                    stable_id: item["structuredValueTemplate"]
-                    for stable_id, item in proof_by_id.items()
-                    if "structuredValueTemplate" in item
-                },
+                target_client=request.target_client,
+                package_root=None,
                 inventory=inventory,
             )
-        except UserCopyAdapterError as exc:
+        except (UserCopyAdapterError, ValueError) as exc:
             raise MarketplaceOperationError(
                 "marketplace.user_copy.runtime_contract_invalid",
                 http_status=409,
             ) from exc
-        provider_state_root_id = self._user_copy_provider_state_root_id()
+        root_id = self._user_copy_target_client_state_root_id(request.target_client)
         materialization_digest = contextual_materialization_digest(
             plan_digest=plan.materialization_digest,
-            provider=request.provider,
-            package_id=request.package_id,
-            revision=request.revision,
+            projection_digest=plan.projection_digest,
+            package_format=request.package_format,
+            target_client=request.target_client,
+            catalog_plugin_id=request.catalog_plugin_id,
+            release_revision=request.release_revision,
             workspace_id=request.workspace_id,
             runtime_instance_id=request.runtime_instance_id,
-            provider_state_root_id=provider_state_root_id,
-            source_digest=source_digest,
+            target_client_state_root_id=root_id,
+            source_digest=request.expected_source_digest,
             profile_version=profile.profile_version,
             profile_digest=profile.profile_digest,
         )
 
-        return UserCopyPreflightResultContract(
+        return UserCopyProjectionPreflightResultContract(
             status=plan.status.value,
-            provider=request.provider,
-            packageId=request.package_id,
-            revision=request.revision,
+            packageFormat=request.package_format,
+            targetClient=request.target_client,
+            catalogPluginId=request.catalog_plugin_id,
+            releaseRevision=request.release_revision,
             workspaceId=request.workspace_id,
             runtimeInstanceId=request.runtime_instance_id,
-            providerStateRootId=provider_state_root_id,
-            sourceDigest=source_digest,
+            targetClientStateRootId=root_id,
+            sourceDigest=request.expected_source_digest,
             profileVersion=profile.profile_version,
             profileDigest=profile.profile_digest,
+            projectionDigest=plan.projection_digest,
             materializationDigest=materialization_digest,
             resources=[
                 UserCopyPlanResourceContract.model_validate(
@@ -195,6 +175,12 @@ class MarketplaceUserCopyService:
                 )
                 for resource in plan.resources
                 if resource.action is not UserCopyAction.OVERWRITE
+            ],
+            skippedResources=[
+                SkippedUserCopyResourceContract.model_validate(
+                    resource.canonical_dict()
+                )
+                for resource in plan.skipped_resources
             ],
             conflicts=[
                 UserCopyConflictContract.model_validate(conflict.canonical_dict())
@@ -228,17 +214,17 @@ class MarketplaceUserCopyService:
 
     def apply(
         self,
-        metadata: UserCopyApplyMetadataContract,
+        metadata: UserCopyProjectionApplyMetadataContract,
         bundle: bytes,
-    ) -> UserCopyApplyResultContract:
+    ) -> UserCopyProjectionApplyResultContract:
         """Stage, replan, apply, publish once, and remove transaction state."""
 
         self._validate_runtime_identity(
             workspace_id=metadata.workspace_id,
             runtime_instance_id=metadata.runtime_instance_id,
         )
-        provider_state_root_id = self._user_copy_provider_state_root_id()
-        if metadata.provider_state_root_id != provider_state_root_id:
+        root_id = self._user_copy_target_client_state_root_id(metadata.target_client)
+        if metadata.target_client_state_root_id != root_id:
             raise MarketplaceOperationError(
                 "marketplace.user_copy.plan_stale",
                 http_status=409,
@@ -257,15 +243,15 @@ class MarketplaceUserCopyService:
                 expected_package_tree_digest=(metadata.expected_package_tree_digest),
             )
             snapshot_staged = True
-            profile = resolve_user_copy_profile(
-                metadata.provider,
+            profile = extract_user_copy_source_profile(
+                metadata.package_format,
                 snapshot.package_root,
+                release=PluginReleaseIdentity(
+                    catalog_plugin_id=metadata.catalog_plugin_id,
+                    revision=metadata.release_revision,
+                ),
             )
-            preview = build_user_copy_profile_preview(
-                snapshot.package_root,
-                profile,
-            )
-            source_digest = user_copy_source_digest_from_preview(preview)
+            source_digest = package_tree_digest(snapshot.package_root)
             if (
                 source_digest != metadata.expected_source_digest
                 or profile.profile_version != metadata.expected_profile_version
@@ -277,26 +263,32 @@ class MarketplaceUserCopyService:
                 )
             approvals = _approvals(metadata.overwrite_approvals)
 
-            with self._mutation_store.provider_lock(
-                provider=metadata.provider,
+            with self._mutation_store.target_client_lock(
+                target_client=metadata.target_client,
             ):
-                inventory = self._inventory_provider.inventory(
-                    metadata.provider,
+                inventory = self._inventory_reader.inventory(
+                    metadata.target_client,
                     profile=profile,
                 )
-                plan = UserCopyPlanner(package_id=metadata.package_id).plan(
+                plan = UserCopyPlanner(
+                    package_id=_planner_package_id(metadata.catalog_plugin_id),
+                    release_revision=metadata.release_revision,
+                ).plan_source_profile(
                     profile,
-                    snapshot.package_root,
+                    target_client=metadata.target_client,
+                    package_root=snapshot.package_root,
                     inventory=inventory,
                 )
                 current_digest = contextual_materialization_digest(
                     plan_digest=plan.materialization_digest,
-                    provider=metadata.provider,
-                    package_id=metadata.package_id,
-                    revision=metadata.revision,
+                    projection_digest=plan.projection_digest,
+                    package_format=metadata.package_format,
+                    target_client=metadata.target_client,
+                    catalog_plugin_id=metadata.catalog_plugin_id,
+                    release_revision=metadata.release_revision,
                     workspace_id=metadata.workspace_id,
                     runtime_instance_id=metadata.runtime_instance_id,
-                    provider_state_root_id=provider_state_root_id,
+                    target_client_state_root_id=root_id,
                     source_digest=source_digest,
                     profile_version=profile.profile_version,
                     profile_digest=profile.profile_digest,
@@ -304,6 +296,10 @@ class MarketplaceUserCopyService:
                 has_transaction = materializer.has_transaction(metadata.operation_id)
                 if not has_transaction and (
                     plan.status is UserCopyPlanStatus.BLOCKED
+                    or plan.projection_digest != metadata.expected_projection_digest
+                    or len(plan.skipped_resources) != metadata.expected_skipped_count
+                    or metadata.accept_partial_copy
+                    != bool(plan.skipped_resources)
                     or current_digest != metadata.expected_materialization_digest
                 ):
                     raise MarketplaceOperationError(
@@ -360,8 +356,8 @@ class MarketplaceUserCopyService:
                     raise
 
                 try:
-                    self._clear_provider_caches(metadata.provider)
-                    self._gate.advance_generation(metadata.provider)
+                    self._clear_target_client_caches(metadata.target_client)
+                    self._gate.advance_generation(metadata.target_client)
                     materializer.mark_published(metadata.operation_id)
                 except Exception:
                     try:
@@ -427,7 +423,7 @@ class MarketplaceUserCopyService:
         self,
         *,
         materializer: UserCopyMaterializer,
-        metadata: UserCopyApplyMetadataContract,
+        metadata: UserCopyProjectionApplyMetadataContract,
         plan: UserCopyMaterializationPlan,
         approvals: tuple[UserCopyOverwriteApproval, ...],
         contextual_digest: str,
@@ -455,7 +451,7 @@ class MarketplaceUserCopyService:
 
     def _recover_startup_operation(
         self,
-        metadata: UserCopyApplyMetadataContract,
+        metadata: UserCopyProjectionApplyMetadataContract,
         *,
         has_snapshot: bool,
         has_transaction: bool,
@@ -464,14 +460,16 @@ class MarketplaceUserCopyService:
             workspace_id=metadata.workspace_id,
             runtime_instance_id=metadata.runtime_instance_id,
         )
-        if metadata.provider_state_root_id != self._user_copy_provider_state_root_id():
+        if metadata.target_client_state_root_id != self._user_copy_target_client_state_root_id(
+            metadata.target_client
+        ):
             raise MarketplaceOperationError(
                 "marketplace.user_copy.runtime_state_invalid",
                 http_status=500,
             )
         materializer = UserCopyMaterializer(operation_state_root=self._transaction_root)
-        with self._mutation_store.provider_lock(
-            provider=metadata.provider,
+        with self._mutation_store.target_client_lock(
+            target_client=metadata.target_client,
         ):
             if not has_transaction:
                 if has_snapshot:
@@ -501,17 +499,16 @@ class MarketplaceUserCopyService:
                 expected_archive_digest=metadata.expected_archive_digest,
                 expected_package_tree_digest=(metadata.expected_package_tree_digest),
             )
-            profile = resolve_user_copy_profile(
-                metadata.provider,
+            profile = extract_user_copy_source_profile(
+                metadata.package_format,
                 snapshot.package_root,
-            )
-            preview = build_user_copy_profile_preview(
-                snapshot.package_root,
-                profile,
+                release=PluginReleaseIdentity(
+                    catalog_plugin_id=metadata.catalog_plugin_id,
+                    revision=metadata.release_revision,
+                ),
             )
             if (
-                user_copy_source_digest_from_preview(preview)
-                != metadata.expected_source_digest
+                package_tree_digest(snapshot.package_root) != metadata.expected_source_digest
                 or profile.profile_version != metadata.expected_profile_version
                 or profile.profile_digest != metadata.expected_profile_digest
             ):
@@ -519,11 +516,15 @@ class MarketplaceUserCopyService:
                     "marketplace.user_copy.runtime_state_invalid",
                     http_status=500,
                 )
-            plan = UserCopyPlanner(package_id=metadata.package_id).plan(
+            plan = UserCopyPlanner(
+                package_id=_planner_package_id(metadata.catalog_plugin_id),
+                release_revision=metadata.release_revision,
+            ).plan_source_profile(
                 profile,
-                snapshot.package_root,
-                inventory=self._inventory_provider.inventory(
-                    metadata.provider,
+                target_client=metadata.target_client,
+                package_root=snapshot.package_root,
+                inventory=self._inventory_reader.inventory(
+                    metadata.target_client,
                     profile=profile,
                 ),
             )
@@ -547,7 +548,7 @@ class MarketplaceUserCopyService:
         self,
         *,
         materializer: UserCopyMaterializer,
-        metadata: UserCopyApplyMetadataContract,
+        metadata: UserCopyProjectionApplyMetadataContract,
     ) -> None:
         try:
             if materializer.has_transaction(metadata.operation_id):
@@ -562,7 +563,7 @@ class MarketplaceUserCopyService:
 
     def _persist_recovery_envelope(
         self,
-        metadata: UserCopyApplyMetadataContract,
+        metadata: UserCopyProjectionApplyMetadataContract,
     ) -> None:
         self._ensure_recovery_root()
         path = self._recovery_root / f"{metadata.operation_id}.json"
@@ -599,7 +600,7 @@ class MarketplaceUserCopyService:
     def _read_recovery_envelope(
         self,
         path: Path,
-    ) -> UserCopyApplyMetadataContract:
+    ) -> UserCopyProjectionApplyMetadataContract:
         match = _RECOVERY_FILE.fullmatch(path.name)
         if match is None or path.is_symlink() or not path.is_file():
             raise MarketplaceOperationError(
@@ -620,7 +621,7 @@ class MarketplaceUserCopyService:
                 or not isinstance(value["metadata"], dict)
             ):
                 raise ValueError("recovery envelope invalid")
-            metadata = UserCopyApplyMetadataContract.from_wire(value["metadata"])
+            metadata = UserCopyProjectionApplyMetadataContract.from_wire(value["metadata"])
         except Exception as exc:
             raise MarketplaceOperationError(
                 "marketplace.user_copy.runtime_state_invalid",
@@ -635,9 +636,9 @@ class MarketplaceUserCopyService:
 
     def _scan_recovery_envelopes(
         self,
-    ) -> dict[str, UserCopyApplyMetadataContract]:
+    ) -> dict[str, UserCopyProjectionApplyMetadataContract]:
         self._ensure_recovery_root()
-        envelopes: dict[str, UserCopyApplyMetadataContract] = {}
+        envelopes: dict[str, UserCopyProjectionApplyMetadataContract] = {}
         changed = False
         for path in sorted(self._recovery_root.iterdir(), key=lambda item: item.name):
             if path.is_symlink():
@@ -743,34 +744,39 @@ class MarketplaceUserCopyService:
                 http_status=409,
             )
 
-    def _clear_provider_caches(self, provider: str) -> None:
+    def _clear_target_client_caches(self, target_client: str) -> None:
         clear_agent_settings_cache(
-            provider=cast(MarketplaceProviderName, provider),
+            provider=cast(TargetClientName, target_client),
             workspace_id=self._settings.AILERON_WORKSPACE_ID,
             scope="user",
         )
 
-    def _user_copy_provider_state_root_id(self) -> str:
+    def _user_copy_target_client_state_root_id(self, target_client: str) -> str:
         try:
-            return self.provider_state_root_id
-        except MarketplaceOperationError as exc:
+            return target_client_state_root_id(
+                target_client,
+                paths=get_user_scope_path_resolver(),
+            )
+        except (ValueError, OSError) as exc:
             raise _user_copy_error(exc) from exc
 
 
 def _apply_result(
-    metadata: UserCopyApplyMetadataContract,
+    metadata: UserCopyProjectionApplyMetadataContract,
     result: UserCopyMaterializationResult,
-) -> UserCopyApplyResultContract:
-    return UserCopyApplyResultContract(
+) -> UserCopyProjectionApplyResultContract:
+    return UserCopyProjectionApplyResultContract(
         operationId=metadata.operation_id,
-        provider=metadata.provider,
-        packageId=metadata.package_id,
-        revision=metadata.revision,
+        packageFormat=metadata.package_format,
+        targetClient=metadata.target_client,
+        catalogPluginId=metadata.catalog_plugin_id,
+        releaseRevision=metadata.release_revision,
         workspaceId=metadata.workspace_id,
         createdCount=result.created_count,
         mergedCount=result.merged_count,
         unchangedCount=result.unchanged_count,
         overwrittenCount=result.overwritten_count,
+        skippedCount=metadata.expected_skipped_count,
     )
 
 
@@ -789,33 +795,41 @@ def _approvals(
 def contextual_materialization_digest(
     *,
     plan_digest: str,
-    provider: str,
-    package_id: str,
-    revision: str,
+    projection_digest: str,
+    package_format: str,
+    target_client: str,
+    catalog_plugin_id: str,
+    release_revision: str,
     workspace_id: str,
     runtime_instance_id: str,
-    provider_state_root_id: str,
+    target_client_state_root_id: str,
     source_digest: str,
     profile_version: int,
     profile_digest: str,
 ) -> str:
-    """Bind a target plan to one source, Runtime, workspace, and provider root."""
+    """Bind a target plan to one source, Runtime, workspace, and target_client root."""
 
     return canonical_digest(
         {
-            "digestVersion": "marketplace-user-copy-materialization-v1",
+            "digestVersion": "marketplace-user-copy-materialization-v2",
             "planDigest": plan_digest,
-            "provider": provider,
-            "packageId": package_id,
-            "revision": revision,
+            "projectionDigest": projection_digest,
+            "packageFormat": package_format,
+            "targetClient": target_client,
+            "catalogPluginId": catalog_plugin_id,
+            "releaseRevision": release_revision,
             "workspaceId": workspace_id,
             "runtimeInstanceId": runtime_instance_id,
-            "providerStateRootId": provider_state_root_id,
+            "targetClientStateRootId": target_client_state_root_id,
             "sourceDigest": source_digest,
             "profileVersion": profile_version,
             "profileDigest": profile_digest,
         }
     )
+
+
+def _planner_package_id(catalog_plugin_id: str) -> str:
+    return f"catalog-{canonical_digest({'catalogPluginId': catalog_plugin_id})[:32]}"
 
 
 def _user_copy_error(exc: Exception) -> MarketplaceOperationError:

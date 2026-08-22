@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
@@ -13,7 +14,9 @@ from fastapi import Request
 
 # SetupTestEnvironment
 os.environ.setdefault("ENV", "testing")
-os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+_UNIT_DATABASE_URL_FILE = Path("/tmp/aileron-unit-database-url")
+_UNIT_DATABASE_URL_FILE.write_text("sqlite:///:memory:\n", encoding="utf-8")
+os.environ.setdefault("DATABASE_URL_FILE", str(_UNIT_DATABASE_URL_FILE))
 
 from app.db import models as db_models
 from app.modules.identity.user_authorization_policy import canonical_role_issues
@@ -46,9 +49,7 @@ def user_factory():
             "avatar_url": kwargs.get("avatar_url"),
             "is_active": is_active,
             "oidc_issuer": kwargs.get("oidc_issuer", "https://oidc.test.example"),
-            "oidc_subject": kwargs.get(
-                "oidc_subject", f"subject-{_counter}"
-            ),
+            "oidc_subject": kwargs.get("oidc_subject", f"subject-{_counter}"),
             "identity_enabled": identity_enabled,
             "sync_status": sync_status,
             "platform_role": platform_role,

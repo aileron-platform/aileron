@@ -53,6 +53,9 @@ def test_aileron_web_canvas_skill_owns_manifest_file_contract() -> None:
     assert "`/workspace/canvases/...`" in content
     assert "`contentDir/index.html` exists" in content
     assert "`contentDir` resolves to the content directory" in content
+    assert "window.aileron.theme" in content
+    assert "aileron:themechange" in content
+    assert "Do not mutate server-rendered `<html>` or `<body>` attributes before hydration" in content
     assert "never tell the user to run a" in content
     assert "dev server, share a raw file path, or paste HTML into the chat" in content
     assert "Ask no more than five questions" in content

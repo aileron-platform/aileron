@@ -5,12 +5,12 @@ import os
 from pathlib import Path
 
 import pytest
-from aileron_marketplace_core.user_copy_profiles import (
-    BlockedUserCopyResource,
-    UserCopyBlockReason,
-    UserCopyProfile,
-    build_user_copy_profile_preview,
-    resolve_user_copy_profile,
+from aileron_marketplace_core import (
+    PluginPackageFormat,
+    PluginReleaseIdentity,
+    UserCopySourceDiagnostic,
+    UserCopySourceProfile,
+    extract_user_copy_source_profile,
 )
 
 from app.modules.cli_settings.user_scope.adapter import UserCopyAdapterError
@@ -31,41 +31,24 @@ def _planner(runtime_home: Path) -> UserCopyPlanner:
     runtime_home.mkdir(parents=True, exist_ok=True)
     return UserCopyPlanner(
         package_id="demo",
+        release_revision="a" * 64,
         paths=UserScopePathResolver(user_home=runtime_home),
     )
 
 
 def _preview_plan(package: Path, runtime_home: Path):
-    profile = resolve_user_copy_profile("codex", package)
-    preview = build_user_copy_profile_preview(package, profile)
-    proof_by_id = {
-        f"{item['resourceType']}:{item['resourceId']}": item
-        for item in preview["resources"]
-    }
-    return _planner(runtime_home).plan_preview(
+    profile = extract_user_copy_source_profile(
+        "codex-native",
+        package,
+        release=PluginReleaseIdentity(
+            catalog_plugin_id="test/demo",
+            revision="a" * 64,
+        ),
+    )
+    return _planner(runtime_home).plan_source_profile(
         profile,
-        source_digests={
-            stable_id: item["sourceDigest"] for stable_id, item in proof_by_id.items()
-        },
-        dependency_payload_required={
-            stable_id: item["dependencyPayloadRequired"]
-            for stable_id, item in proof_by_id.items()
-        },
-        dependency_payload_projectable={
-            stable_id: item["dependencyPayloadProjectable"]
-            for stable_id, item in proof_by_id.items()
-        },
-        dependency_payloads=preview["dependencyPayloads"],
-        structured_value_types={
-            stable_id: item["structuredValueType"]
-            for stable_id, item in proof_by_id.items()
-            if "structuredValueType" in item
-        },
-        structured_value_templates={
-            stable_id: item["structuredValueTemplate"]
-            for stable_id, item in proof_by_id.items()
-            if "structuredValueTemplate" in item
-        },
+        target_client="codex",
+        package_root=None,
         inventory=UserCopyInventory(complete=True),
     )
 
@@ -98,7 +81,9 @@ def test_full_profile_is_deterministic_and_contains_dependency_payload(
         item for item in first.resources if item.resource_type == "dependency-payload"
     )
     assert payload.source_locator == "bin/server"
-    assert payload.target_locator == ("~/.aileron/user-copy/codex/demo/bin/server")
+    assert payload.target_locator == (
+        "~/.aileron/user-copy-payloads/codex/demo/" f"{'a' * 64}/bin/server"
+    )
     assert str(tmp_path) not in json.dumps(
         first.canonical_dict(),
         sort_keys=True,
@@ -152,47 +137,6 @@ def test_directory_payload_covers_directory_and_descendant_template_references(
     assert payloads[0].target_kind is UserCopyTargetKind.DIRECTORY
 
 
-def test_preview_rejects_template_payload_mismatch(tmp_path: Path) -> None:
-    package = tmp_path / "package"
-    runtime_home = tmp_path / "home"
-    write_full_codex_package(package)
-    profile = resolve_user_copy_profile("codex", package)
-    preview = build_user_copy_profile_preview(package, profile)
-    proof_by_id = {
-        f"{item['resourceType']}:{item['resourceId']}": item
-        for item in preview["resources"]
-    }
-
-    with pytest.raises(UserCopyAdapterError):
-        _planner(runtime_home).plan_preview(
-            profile,
-            source_digests={
-                stable_id: item["sourceDigest"]
-                for stable_id, item in proof_by_id.items()
-            },
-            dependency_payload_required={
-                stable_id: item["dependencyPayloadRequired"]
-                for stable_id, item in proof_by_id.items()
-            },
-            dependency_payload_projectable={
-                stable_id: item["dependencyPayloadProjectable"]
-                for stable_id, item in proof_by_id.items()
-            },
-            dependency_payloads=[],
-            structured_value_types={
-                stable_id: item["structuredValueType"]
-                for stable_id, item in proof_by_id.items()
-                if "structuredValueType" in item
-            },
-            structured_value_templates={
-                stable_id: item["structuredValueTemplate"]
-                for stable_id, item in proof_by_id.items()
-                if "structuredValueTemplate" in item
-            },
-            inventory=UserCopyInventory(complete=True),
-        )
-
-
 def test_identical_target_is_unchanged_and_different_target_needs_approval(
     tmp_path: Path,
 ) -> None:
@@ -220,8 +164,11 @@ def test_dependency_executable_mode_difference_is_a_conflict(
     package = tmp_path / "package"
     runtime_home = tmp_path / "home"
     write_full_codex_package(package)
-    payload_target = (
-        runtime_home / ".aileron" / "user-copy" / "codex" / "demo" / "bin" / "server"
+    initial = plan_codex_package(package, runtime_home)
+    payload_target = next(
+        item.runtime_path
+        for item in initial.resources
+        if item.resource_type == "dependency-payload"
     )
     write_text(payload_target, "#!/bin/sh\nexit 0\n")
     payload_target.chmod(0o600)
@@ -258,26 +205,25 @@ def test_non_public_blocked_resource_uses_opaque_safe_metadata(
     tmp_path: Path,
 ) -> None:
     runtime_home = tmp_path / "home"
-    profile = UserCopyProfile(
-        provider="codex",
+    profile = UserCopySourceProfile(
+        package_format=PluginPackageFormat.CODEX_NATIVE,
+        release_identity=PluginReleaseIdentity(
+            catalog_plugin_id="test/demo",
+            revision="a" * 64,
+        ),
         resources=(),
-        blocked_resources=(
-            BlockedUserCopyResource(
-                resource_type="settings",
+        diagnostics=(
+            UserCopySourceDiagnostic(
+                code="unsupported-resource",
                 source_locator=f"invalid-source/{'0' * 64}",
-                reason=UserCopyBlockReason.UNSUPPORTED_RESOURCE,
             ),
         ),
     )
 
-    plan = _planner(runtime_home).plan_preview(
+    plan = _planner(runtime_home).plan_source_profile(
         profile,
-        source_digests={},
-        dependency_payload_required={},
-        dependency_payload_projectable={},
-        dependency_payloads=[],
-        structured_value_types={},
-        structured_value_templates={},
+        target_client="codex",
+        package_root=None,
         inventory=UserCopyInventory(complete=True),
     )
 
@@ -290,6 +236,134 @@ def test_non_public_blocked_resource_uses_opaque_safe_metadata(
     assert issue.source_locator == f"invalid-source/{'0' * 64}"
 
 
+def test_nonempty_profile_blocked_during_projection_is_not_reported_as_empty(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "package"
+    runtime_home = tmp_path / "home"
+    write_text(package / "skills" / "review" / "SKILL.md", "# Review\n")
+    profile = extract_user_copy_source_profile(
+        "codex-native",
+        package,
+        release=PluginReleaseIdentity(
+            catalog_plugin_id="test/demo",
+            revision="a" * 64,
+        ),
+    )
+    planner = _planner(runtime_home)
+
+    def reject_target(*_args: object, **_kwargs: object) -> object:
+        raise UserCopyAdapterError("target-root-escape", "skills/review")
+
+    monkeypatch.setattr(planner, "_plan_source_resource", reject_target)
+
+    plan = planner.plan_source_profile(
+        profile,
+        target_client="codex",
+        package_root=None,
+        inventory=UserCopyInventory(complete=True),
+    )
+
+    assert [issue.code for issue in plan.blocking_issues] == [
+        "marketplace.user_copy.target_not_writable"
+    ]
+
+
+def test_codex_native_portability_diagnostics_require_partial_confirmation(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "package"
+    runtime_home = tmp_path / "home"
+    write_text(
+        package / ".codex-plugin" / "plugin.json",
+        '{"name":"demo","apps":"./.app.json"}',
+    )
+    write_text(package / ".app.json", '{"apps":{"demo":{"id":"connector"}}}')
+    write_text(package / "skills" / "review" / "SKILL.md", "# Review\n")
+
+    plan = plan_codex_package(package, runtime_home)
+
+    assert plan.status is UserCopyPlanStatus.CONFIRMATION_REQUIRED
+    assert [item.code for item in plan.skipped_resources] == [
+        "unsupported-resource"
+    ]
+    assert [item.resource_type for item in plan.resources] == ["skill"]
+    assert plan.blocking_issues == ()
+
+
+def test_codex_home_override_produces_a_valid_logical_target(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "package"
+    runtime_home = tmp_path / "home"
+    write_text(package / "skills" / "review" / "SKILL.md", "# Review\n")
+    profile = extract_user_copy_source_profile(
+        "codex-native",
+        package,
+        release=PluginReleaseIdentity(
+            catalog_plugin_id="test/demo",
+            revision="a" * 64,
+        ),
+    )
+    planner = UserCopyPlanner(
+        package_id="demo",
+        release_revision="a" * 64,
+        paths=UserScopePathResolver(
+            user_home=runtime_home,
+            codex_home=runtime_home / ".codex",
+        ),
+    )
+
+    plan = planner.plan_source_profile(
+        profile,
+        target_client="codex",
+        package_root=None,
+        inventory=UserCopyInventory(complete=True),
+    )
+
+    assert plan.status is UserCopyPlanStatus.READY
+    assert plan.resources[0].target_locator == "$CODEX_HOME/skills/review"
+
+
+def test_agent_plugin_unsupported_component_requires_confirmation(
+    tmp_path: Path,
+) -> None:
+    profile = UserCopySourceProfile(
+        package_format=PluginPackageFormat.AGENT_PLUGIN_V1,
+        release_identity=PluginReleaseIdentity(
+            catalog_plugin_id="test/demo",
+            revision="a" * 64,
+        ),
+        resources=(),
+        diagnostics=(
+            UserCopySourceDiagnostic(
+                code="extension-unsupported",
+                source_locator="plugin.json",
+                resource_type="extension",
+                resource_id="com.example.review",
+            ),
+        ),
+    )
+
+    plan = _planner(tmp_path / "home").plan_source_profile(
+        profile,
+        target_client="codex",
+        package_root=None,
+        inventory=UserCopyInventory(complete=True),
+    )
+
+    assert plan.status is UserCopyPlanStatus.CONFIRMATION_REQUIRED
+    assert [item.canonical_dict() for item in plan.skipped_resources] == [
+        {
+            "code": "extension-unsupported",
+            "resourceType": "extension",
+            "resourceId": "com.example.review",
+            "sourceLocator": "plugin.json",
+        }
+    ]
+
+
 def test_dynamic_runtime_home_is_resolved_at_planner_creation(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -299,11 +373,21 @@ def test_dynamic_runtime_home_is_resolved_at_planner_creation(
     write_text(package / "AGENTS.md", "# Instructions\n")
     runtime_home.mkdir()
     monkeypatch.setenv("HOME", str(runtime_home))
-    profile = resolve_user_copy_profile("codex", package)
-
-    plan = UserCopyPlanner(package_id="demo").plan(
-        profile,
+    profile = extract_user_copy_source_profile(
+        "codex-native",
         package,
+        release=PluginReleaseIdentity(
+            catalog_plugin_id="test/demo",
+            revision="a" * 64,
+        ),
+    )
+
+    plan = UserCopyPlanner(
+        package_id="demo", release_revision="a" * 64
+    ).plan_source_profile(
+        profile,
+        target_client="codex",
+        package_root=package,
         inventory=UserCopyInventory(complete=True),
     )
 

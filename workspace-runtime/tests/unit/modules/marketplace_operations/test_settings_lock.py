@@ -12,43 +12,43 @@ import pytest
 from fastapi import APIRouter, FastAPI, Response
 from fastapi.testclient import TestClient
 
-from app.middleware import provider_settings_lock
-from app.middleware.provider_settings_lock import ProviderSettingsMutationMiddleware
+from app.middleware import target_client_settings_lock
+from app.middleware.target_client_settings_lock import TargetClientSettingsMutationMiddleware
 from app.modules.claude_code.router import router as claude_code_router
 from app.modules.cli_settings.router import router as cli_settings_router
 from app.modules.marketplace_operations.errors import MarketplaceOperationError
-from app.modules.marketplace_operations.gate import MarketplaceProviderGate
+from app.modules.marketplace_operations.gate import MarketplaceTargetClientGate
 from app.modules.marketplace_operations.state import MarketplaceMutationStore
 
 
 _METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 
-def _provider_route_cases() -> list[tuple[str, str, str]]:
+def _target_client_route_cases() -> list[tuple[str, str, str]]:
     cases: list[tuple[str, str, str]] = []
     for router in (claude_code_router, cli_settings_router):
         for route in router.routes:
             path = getattr(route, "path", "")
-            provider = (
+            target_client = (
                 "claude-code"
                 if "/claude-code" in path
                 else "codex" if "/codex" in path else None
             )
-            if provider is None:
+            if target_client is None:
                 continue
             concrete = re.sub(r"\{[^}]+\}", "sample", path)
             for method in sorted(set(getattr(route, "methods", ())) & _METHODS):
-                cases.append((method, concrete, provider))
+                cases.append((method, concrete, target_client))
     return sorted(set(cases))
 
 
 class _BlockingGate:
     def __init__(self) -> None:
-        self.providers: list[str] = []
+        self.target_clients: list[str] = []
 
     @contextmanager
-    def settings_mutation_scope(self, provider: str) -> Iterator[None]:
-        self.providers.append(provider)
+    def settings_mutation_scope(self, target_client: str) -> Iterator[None]:
+        self.target_clients.append(target_client)
         raise MarketplaceOperationError(
             "marketplace.install.lock_timeout",
             http_status=409,
@@ -58,7 +58,7 @@ class _BlockingGate:
 
 def _catch_all_app() -> FastAPI:
     app = FastAPI()
-    app.add_middleware(ProviderSettingsMutationMiddleware)
+    app.add_middleware(TargetClientSettingsMutationMiddleware)
     router = APIRouter()
 
     @router.api_route(
@@ -73,19 +73,19 @@ def _catch_all_app() -> FastAPI:
 
 
 @pytest.mark.parametrize(
-    ("method", "path", "provider"),
-    _provider_route_cases(),
+    ("method", "path", "target_client"),
+    _target_client_route_cases(),
 )
-def test_only_public_provider_mutations_take_the_provider_lock(
+def test_only_public_target_client_mutations_take_the_target_client_lock(
     monkeypatch: pytest.MonkeyPatch,
     method: str,
     path: str,
-    provider: str,
+    target_client: str,
 ) -> None:
     gate = _BlockingGate()
     monkeypatch.setattr(
-        provider_settings_lock,
-        "get_marketplace_provider_gate",
+        target_client_settings_lock,
+        "get_marketplace_target_client_gate",
         lambda: gate,
     )
 
@@ -97,26 +97,26 @@ def test_only_public_provider_mutations_take_the_provider_lock(
     bypasses_lock = method == "GET" or path.endswith("/codex/rules/validate")
     if bypasses_lock:
         assert response.status_code == 200
-        assert gate.providers == []
+        assert gate.target_clients == []
     else:
         assert response.status_code == 409
         assert response.json() == {"errorCode": "marketplace.install.lock_timeout"}
-        assert gate.providers == [provider]
+        assert gate.target_clients == [target_client]
 
 
 def _mutation_app(
-    gate: MarketplaceProviderGate,
+    gate: MarketplaceTargetClientGate,
     *,
-    provider: str,
+    target_client: str,
     inner_mutation: bool = False,
 ) -> tuple[FastAPI, list[int]]:
     app = FastAPI()
-    app.add_middleware(ProviderSettingsMutationMiddleware)
+    app.add_middleware(TargetClientSettingsMutationMiddleware)
     active = 0
     maximum = [0]
     active_lock = threading.Lock()
 
-    @app.post(f"/api/v1/workspaces/{{workspace_id}}/{provider}/test-mutation")
+    @app.post(f"/api/v1/workspaces/{{workspace_id}}/{target_client}/test-mutation")
     def mutate(workspace_id: str) -> dict[str, str]:
         nonlocal active
         _ = workspace_id
@@ -131,12 +131,12 @@ def _mutation_app(
                 active -= 1
 
         if inner_mutation:
-            gate.run_settings_mutation(provider, write)
+            gate.run_settings_mutation(target_client, write)
         else:
             write()
         return {"status": "ok"}
 
-    @app.post(f"/api/v1/workspaces/{{workspace_id}}/{provider}/test-failure")
+    @app.post(f"/api/v1/workspaces/{{workspace_id}}/{target_client}/test-failure")
     def fail(workspace_id: str) -> Response:
         _ = workspace_id
         return Response(status_code=409)
@@ -144,25 +144,25 @@ def _mutation_app(
     return app, maximum
 
 
-@pytest.mark.parametrize("provider", ["claude-code", "codex"])
-def test_concurrent_public_mutations_share_provider_lock_and_generation(
+@pytest.mark.parametrize("target_client", ["claude-code", "codex"])
+def test_concurrent_public_mutations_share_target_client_lock_and_generation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    provider: str,
+    target_client: str,
 ) -> None:
     store = MarketplaceMutationStore(tmp_path / "state")
-    gate = MarketplaceProviderGate(store)
+    gate = MarketplaceTargetClientGate(store)
     monkeypatch.setattr(
-        provider_settings_lock,
-        "get_marketplace_provider_gate",
+        target_client_settings_lock,
+        "get_marketplace_target_client_gate",
         lambda: gate,
     )
-    app, maximum = _mutation_app(gate, provider=provider)
+    app, maximum = _mutation_app(gate, target_client=target_client)
 
     def request() -> int:
         return (
             TestClient(app)
-            .post(f"/api/v1/workspaces/workspace-1/{provider}/test-mutation")
+            .post(f"/api/v1/workspaces/workspace-1/{target_client}/test-mutation")
             .status_code
         )
 
@@ -171,73 +171,73 @@ def test_concurrent_public_mutations_share_provider_lock_and_generation(
 
     assert statuses == [200, 200]
     assert maximum == [1]
-    assert gate.generation(provider) == 2
+    assert gate.generation(target_client) == 2
 
 
-@pytest.mark.parametrize("provider", ["claude-code", "codex"])
+@pytest.mark.parametrize("target_client", ["claude-code", "codex"])
 def test_inner_settings_mutation_does_not_double_advance_generation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    provider: str,
+    target_client: str,
 ) -> None:
-    gate = MarketplaceProviderGate(MarketplaceMutationStore(tmp_path / "state"))
+    gate = MarketplaceTargetClientGate(MarketplaceMutationStore(tmp_path / "state"))
     monkeypatch.setattr(
-        provider_settings_lock,
-        "get_marketplace_provider_gate",
+        target_client_settings_lock,
+        "get_marketplace_target_client_gate",
         lambda: gate,
     )
     app, _maximum = _mutation_app(
         gate,
-        provider=provider,
+        target_client=target_client,
         inner_mutation=True,
     )
 
     response = TestClient(app).post(
-        f"/api/v1/workspaces/workspace-1/{provider}/test-mutation"
+        f"/api/v1/workspaces/workspace-1/{target_client}/test-mutation"
     )
 
     assert response.status_code == 200
-    assert gate.generation(provider) == 1
+    assert gate.generation(target_client) == 1
 
 
-@pytest.mark.parametrize("provider", ["claude-code", "codex"])
+@pytest.mark.parametrize("target_client", ["claude-code", "codex"])
 def test_failed_public_mutation_does_not_advance_generation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    provider: str,
+    target_client: str,
 ) -> None:
-    gate = MarketplaceProviderGate(MarketplaceMutationStore(tmp_path / "state"))
+    gate = MarketplaceTargetClientGate(MarketplaceMutationStore(tmp_path / "state"))
     monkeypatch.setattr(
-        provider_settings_lock,
-        "get_marketplace_provider_gate",
+        target_client_settings_lock,
+        "get_marketplace_target_client_gate",
         lambda: gate,
     )
-    app, _maximum = _mutation_app(gate, provider=provider)
+    app, _maximum = _mutation_app(gate, target_client=target_client)
 
     response = TestClient(app).post(
-        f"/api/v1/workspaces/workspace-1/{provider}/test-failure"
+        f"/api/v1/workspaces/workspace-1/{target_client}/test-failure"
     )
 
     assert response.status_code == 409
-    assert gate.generation(provider) == 0
+    assert gate.generation(target_client) == 0
 
 
-@pytest.mark.parametrize("provider", ["claude-code", "codex"])
+@pytest.mark.parametrize("target_client", ["claude-code", "codex"])
 def test_settings_request_and_marketplace_operation_share_same_flock(
     tmp_path: Path,
-    provider: str,
+    target_client: str,
 ) -> None:
     store = MarketplaceMutationStore(tmp_path / "state")
-    gate = MarketplaceProviderGate(store)
+    gate = MarketplaceTargetClientGate(store)
     acquired = threading.Event()
 
     def acquire_operation_lock() -> None:
-        with store.provider_lock(
-            provider=provider,
+        with store.target_client_lock(
+            target_client=target_client,
         ):
             acquired.set()
 
-    with gate.settings_mutation_scope(provider):
+    with gate.settings_mutation_scope(target_client):
         thread = threading.Thread(target=acquire_operation_lock)
         thread.start()
         assert acquired.wait(0.1) is False

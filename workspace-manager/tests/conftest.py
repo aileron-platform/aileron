@@ -17,8 +17,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-# Tests must force using standalone SQLite to avoid container environment variables directing tests to shared PostgreSQL.
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+# Tests must force standalone SQLite instead of the container integration database.
+_TEST_DATABASE_URL_FILE = Path("/tmp/aileron-pytest-database-url")
+_TEST_DATABASE_URL_FILE.write_text("sqlite:///:memory:\n", encoding="utf-8")
+os.environ["DATABASE_URL_FILE"] = str(_TEST_DATABASE_URL_FILE)
 os.environ["ENV"] = "testing"
 os.environ["PLATFORM_PUBLIC_ORIGIN"] = "https://aileron.test"
 os.environ["OIDC_ISSUER_URL"] = "https://oidc.test.example"

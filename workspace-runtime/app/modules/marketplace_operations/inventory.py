@@ -1,4 +1,4 @@
-"""Provider-wide effective resource inventory for user-copy planning."""
+"""Target client-wide effective resource inventory for user-copy planning."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Mapping
 
-from aileron_marketplace_core import UserCopyProfile
+from aileron_marketplace_core import UserCopySourceProfile
 
 from app.config.settings import Settings
 from app.modules.claude_code.plugins.catalog import ClaudePluginsService
@@ -30,7 +30,7 @@ from app.modules.cli_settings.user_scope.planner import (
 )
 
 
-class FilesystemUserCopyInventoryProvider:
+class FilesystemUserCopyInventoryReader:
     """Enumerate every documented effective identity outside the user target."""
 
     def __init__(self, settings: Settings) -> None:
@@ -38,21 +38,23 @@ class FilesystemUserCopyInventoryProvider:
 
     def inventory(
         self,
-        provider: str,
+        target_client: str,
         *,
-        profile: UserCopyProfile | None = None,
+        profile: UserCopySourceProfile | None = None,
     ) -> UserCopyInventory:
-        if profile is None or profile.provider != provider:
+        if profile is None or target_client not in {"codex", "claude-code"}:
             return UserCopyInventory(complete=False)
         try:
             toml_documents: dict[Path, dict[str, Any]] = {}
             identities = self._project_and_local_identities(
                 profile,
+                target_client=target_client,
                 toml_documents=toml_documents,
             )
             identities.extend(
                 self._plugin_identities(
                     profile,
+                    target_client=target_client,
                     toml_documents=toml_documents,
                 )
             )
@@ -60,7 +62,7 @@ class FilesystemUserCopyInventoryProvider:
             return UserCopyInventory(complete=False)
         unique = {
             (
-                item.provider,
+                item.target_client,
                 item.resource_type,
                 item.resource_id,
                 item.scope,
@@ -82,8 +84,9 @@ class FilesystemUserCopyInventoryProvider:
 
     def _project_and_local_identities(
         self,
-        profile: UserCopyProfile,
+        profile: UserCopySourceProfile,
         *,
+        target_client: str,
         toml_documents: dict[Path, dict[str, Any]],
     ) -> list[EffectiveUserCopyIdentity]:
         workspace_root = Path(self._settings.AILERON_WORKSPACE_PATH)
@@ -91,7 +94,7 @@ class FilesystemUserCopyInventoryProvider:
             user_home=get_user_scope_path_resolver().user_home,
             workspace_root=workspace_root,
         )
-        agent = UserScopeAgent(profile.provider)
+        agent = UserScopeAgent(target_client)
         identities: list[EffectiveUserCopyIdentity] = []
         for resource in profile.resources:
             project_path = _project_resource_path(
@@ -99,14 +102,14 @@ class FilesystemUserCopyInventoryProvider:
                 agent,
                 resource.resource_type.value,
                 resource.resource_id,
-                resource.relative_target,
+                _source_relative_target(resource.source_locator),
             )
             if project_path is not None and (
                 project_path.exists() or project_path.is_symlink()
             ):
                 identities.append(
                     _identity(
-                        profile.provider,
+                        target_client,
                         resource.resource_type.value,
                         resource.resource_id,
                         "project",
@@ -123,7 +126,7 @@ class FilesystemUserCopyInventoryProvider:
             for resource in profile.resources
             if resource.resource_type.value == "hook"
         ]
-        if profile.provider == "claude-code":
+        if target_client == "claude-code":
             project_mcp = _json_mapping(
                 paths.resolve(
                     agent,
@@ -133,7 +136,7 @@ class FilesystemUserCopyInventoryProvider:
                 "mcpServers",
             )
             identities.extend(
-                _identity(profile.provider, "mcp", name, "project")
+                _identity(target_client, "mcp", name, "project")
                 for name in sorted(desired_mcp & set(project_mcp))
             )
             local_mcp = _claude_local_mcp(
@@ -145,7 +148,7 @@ class FilesystemUserCopyInventoryProvider:
                 workspace_root,
             )
             identities.extend(
-                _identity(profile.provider, "mcp", name, "local")
+                _identity(target_client, "mcp", name, "local")
                 for name in sorted(desired_mcp & set(local_mcp))
             )
             project_hooks = _json_hooks(
@@ -164,12 +167,12 @@ class FilesystemUserCopyInventoryProvider:
             )
             if project_hooks:
                 identities.extend(
-                    _identity(profile.provider, "hook", resource_id, "project")
+                    _identity(target_client, "hook", resource_id, "project")
                     for resource_id in desired_hooks
                 )
             if local_hooks:
                 identities.extend(
-                    _identity(profile.provider, "hook", resource_id, "local")
+                    _identity(target_client, "hook", resource_id, "local")
                     for resource_id in desired_hooks
                 )
         else:
@@ -183,7 +186,7 @@ class FilesystemUserCopyInventoryProvider:
             )
             project_mcp = _mapping(project_config.get("mcp_servers"))
             identities.extend(
-                _identity(profile.provider, "mcp", name, "project")
+                _identity(target_client, "mcp", name, "project")
                 for name in sorted(desired_mcp & set(project_mcp))
             )
             if _json_hooks(
@@ -194,18 +197,19 @@ class FilesystemUserCopyInventoryProvider:
                 )
             ):
                 identities.extend(
-                    _identity(profile.provider, "hook", resource_id, "project")
+                    _identity(target_client, "hook", resource_id, "project")
                     for resource_id in desired_hooks
                 )
         return identities
 
     def _plugin_identities(
         self,
-        profile: UserCopyProfile,
+        profile: UserCopySourceProfile,
         *,
+        target_client: str,
         toml_documents: dict[Path, dict[str, Any]],
     ) -> list[EffectiveUserCopyIdentity]:
-        if profile.provider == "claude-code":
+        if target_client == "claude-code":
             roots = self._enabled_claude_plugin_roots()
         else:
             roots = self._enabled_codex_plugin_roots(toml_documents)
@@ -216,14 +220,14 @@ class FilesystemUserCopyInventoryProvider:
             if resource.resource_type.value == "hook"
         ]
         for root in roots:
-            identities.extend(_native_plugin_file_identities(profile.provider, root))
+            identities.extend(_native_plugin_file_identities(target_client, root))
             desired_mcp = {
                 resource.resource_id
                 for resource in profile.resources
                 if resource.resource_type.value == "mcp"
             }
             mcp_servers = _json_mapping(root / ".mcp.json", "mcpServers")
-            if profile.provider == "codex":
+            if target_client == "codex":
                 manifest = _json_document(root / ".codex-plugin" / "plugin.json")
                 declared = manifest.get("mcpServers")
                 if isinstance(declared, str):
@@ -233,12 +237,12 @@ class FilesystemUserCopyInventoryProvider:
                         {str(key): value for key, value in declared.items()}
                     )
             identities.extend(
-                _identity(profile.provider, "mcp", name, "plugin")
+                _identity(target_client, "mcp", name, "plugin")
                 for name in sorted(desired_mcp & set(mcp_servers))
             )
-            if _plugin_has_hooks(profile.provider, root):
+            if _plugin_has_hooks(target_client, root):
                 identities.extend(
-                    _identity(profile.provider, "hook", resource_id, "plugin")
+                    _identity(target_client, "hook", resource_id, "plugin")
                     for resource_id in desired_hooks
                 )
         return identities
@@ -255,7 +259,7 @@ class FilesystemUserCopyInventoryProvider:
         )
         if plugin_state.exists():
             _json_document(plugin_state)
-        snapshot = ClaudePluginsService().read_provider_inventory(
+        snapshot = ClaudePluginsService().read_plugin_inventory(
             self._settings.AILERON_WORKSPACE_ID
         )
         return snapshot.enabled_roots()
@@ -291,13 +295,13 @@ class FilesystemUserCopyInventoryProvider:
 
 
 def _identity(
-    provider: str,
+    target_client: str,
     resource_type: str,
     resource_id: str,
     scope: str,
 ) -> EffectiveUserCopyIdentity:
     return EffectiveUserCopyIdentity(
-        provider=provider,
+        target_client=target_client,
         resource_type=resource_type,
         resource_id=resource_id,
         scope=scope,
@@ -343,8 +347,23 @@ def _project_resource_path(
     return directory / relative
 
 
+def _source_relative_target(source_locator: str) -> str | None:
+    prefixes = (
+        "skills/",
+        "agents/",
+        "commands/",
+        "output-styles/",
+        "prompts/",
+        "rules/",
+    )
+    for prefix in prefixes:
+        if source_locator.startswith(prefix):
+            return source_locator.removeprefix(prefix)
+    return None
+
+
 def _native_plugin_file_identities(
-    provider: str,
+    target_client: str,
     root: Path,
 ) -> list[EffectiveUserCopyIdentity]:
     definitions = (
@@ -353,7 +372,7 @@ def _native_plugin_file_identities(
             ("subagent", root / "agents", ".md"),
             ("output-style", root / "output-styles", ".md"),
         )
-        if provider == "claude-code"
+        if target_client == "claude-code"
         else (("subagent", root / "agents", ".toml"),)
     )
     identities: list[EffectiveUserCopyIdentity] = []
@@ -364,7 +383,7 @@ def _native_plugin_file_identities(
             if path.is_file():
                 identities.append(
                     _identity(
-                        provider,
+                        target_client,
                         resource_type,
                         path.relative_to(directory).as_posix().removesuffix(suffix),
                         "plugin",
@@ -373,17 +392,17 @@ def _native_plugin_file_identities(
     skill_root = root / "skills"
     if skill_root.is_dir():
         identities.extend(
-            _identity(provider, "skill", path.parent.name, "plugin")
+            _identity(target_client, "skill", path.parent.name, "plugin")
             for path in sorted(skill_root.glob("*/SKILL.md"))
             if path.is_file()
         )
     return identities
 
 
-def _plugin_has_hooks(provider: str, root: Path) -> bool:
+def _plugin_has_hooks(target_client: str, root: Path) -> bool:
     candidates = (
         (root / "hooks" / "hooks.json",)
-        if provider == "claude-code"
+        if target_client == "claude-code"
         else (
             root / "hooks.json",
             root / ".codex-plugin" / "hooks.json",
@@ -448,4 +467,4 @@ def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
 
 
-__all__ = ["FilesystemUserCopyInventoryProvider"]
+__all__ = ["FilesystemUserCopyInventoryReader"]

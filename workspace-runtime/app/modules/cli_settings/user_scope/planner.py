@@ -10,16 +10,17 @@ from dataclasses import dataclass
 from enum import Enum
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable
 
 from aileron_marketplace_core import (
-    USER_COPY_PAYLOAD_ROOT_SENTINEL,
-    build_user_copy_profile_preview,
+    PluginPackageFormat,
+    TargetClient,
+    UserCopySourceProfile,
 )
 
 from .adapter import (
     CoreProfileResource,
-    ProviderUserCopyAdapter,
+    TargetClientUserScopeAdapter,
     ResolvedUserCopyTarget,
     StructuredDocumentKind,
     StructuredEntryMode,
@@ -27,8 +28,6 @@ from .adapter import (
     UserCopyOperation,
     UserCopyTargetKind,
     canonical_value_digest,
-    enum_value,
-    extract_json_pointer,
     normalized_file_identity,
     normalize_package_locator,
     rewrite_known_placeholders,
@@ -41,6 +40,7 @@ from .codecs import (
     file_bytes_revision,
 )
 from .paths import UserScopePathResolver, get_user_scope_path_resolver
+from .projection import UserCopyProjectionRegistry
 
 _PACKAGE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _MAX_USER_COPY_FIELD_LENGTH = 1024
@@ -88,19 +88,19 @@ class UserCopyAction(str, Enum):
 class EffectiveUserCopyIdentity:
     """One effective resource outside the planned user target."""
 
-    provider: str
+    target_client: str
     resource_type: str
     resource_id: str
     scope: str
 
     @property
     def normalized_identity(self) -> str:
-        return f"{self.provider}:{self.resource_type}:{self.resource_id}".casefold()
+        return f"{self.target_client}:{self.resource_type}:{self.resource_id}".casefold()
 
 
 @dataclass(frozen=True)
 class UserCopyInventory:
-    """Provider-wide semantic identities used by preflight."""
+    """Target client-wide semantic identities used by preflight."""
 
     complete: bool
     effective_identities: tuple[EffectiveUserCopyIdentity, ...] = ()
@@ -175,7 +175,7 @@ class UserCopyBlockingIssue:
 class PlannedUserCopyResource:
     """One source-to-user-scope target in a deterministic plan."""
 
-    provider: str
+    target_client: str
     resource_type: str
     resource_id: str
     source_kind: str
@@ -207,7 +207,7 @@ class PlannedUserCopyResource:
 
     def canonical_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
-            "provider": self.provider,
+            "targetClient": self.target_client,
             "resourceType": self.resource_type,
             "resourceId": self.resource_id,
             "sourceKind": self.source_kind,
@@ -240,19 +240,23 @@ class PlannedUserCopyResource:
 class UserCopyMaterializationPlan:
     """Sanitized one-shot plan plus Runtime-only resolved paths."""
 
-    provider: str
+    package_format: str
+    target_client: str
     profile_version: int
     profile_digest: str
     status: UserCopyPlanStatus
     resources: tuple[PlannedUserCopyResource, ...]
     conflicts: tuple[UserCopyPlanConflict, ...]
     blocking_issues: tuple[UserCopyBlockingIssue, ...]
+    projection_digest: str
     materialization_digest: str
+    skipped_resources: tuple[SkippedUserCopyPlanResource, ...] = ()
 
     def canonical_dict(self, *, include_digest: bool = True) -> dict[str, Any]:
         result: dict[str, Any] = {
             "status": self.status.value,
-            "provider": self.provider,
+            "packageFormat": self.package_format,
+            "targetClient": self.target_client,
             "profileVersion": self.profile_version,
             "profileDigest": self.profile_digest,
             "resources": [resource.canonical_dict() for resource in self.resources],
@@ -260,17 +264,53 @@ class UserCopyMaterializationPlan:
             "blockingIssues": [
                 issue.canonical_dict() for issue in self.blocking_issues
             ],
+            "projectionDigest": self.projection_digest,
+            "skippedResources": [
+                item.canonical_dict() for item in self.skipped_resources
+            ],
         }
         if include_digest:
             result["materializationDigest"] = self.materialization_digest
         return result
 
 
+@dataclass(frozen=True)
+class SkippedUserCopyPlanResource:
+    """A source resource intentionally omitted by an exact projection."""
+
+    code: str
+    resource_type: str
+    resource_id: str
+    source_locator: str
+
+    def canonical_dict(self) -> dict[str, str]:
+        return {
+            "code": self.code,
+            "resourceType": self.resource_type,
+            "resourceId": self.resource_id,
+            "sourceLocator": self.source_locator,
+        }
+
+
+def compute_projection_digest(plan: UserCopyMaterializationPlan) -> str:
+    payload = plan.canonical_dict(include_digest=False)
+    payload.pop("projectionDigest", None)
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return sha256(encoded).hexdigest()
+
+
 def compute_materialization_digest(plan: UserCopyMaterializationPlan) -> str:
     """Recompute a plan proof without trusting its supplied digest."""
 
+    payload = plan.canonical_dict(include_digest=False)
+    payload["projectionDigest"] = compute_projection_digest(plan)
     encoded = json.dumps(
-        plan.canonical_dict(include_digest=False),
+        payload,
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
@@ -305,7 +345,7 @@ def validate_overwrite_approvals(
 
 @dataclass(frozen=True)
 class _AdaptedProfile:
-    provider: str
+    target_client: str
     profile_version: int
     profile_digest: str
     resources: tuple[CoreProfileResource, ...]
@@ -326,6 +366,7 @@ class UserCopyPlanner:
         self,
         *,
         package_id: str,
+        release_revision: str = "0" * 64,
         paths: UserScopePathResolver | None = None,
     ) -> None:
         if not isinstance(package_id, str) or _PACKAGE_ID.fullmatch(package_id) is None:
@@ -334,350 +375,324 @@ class UserCopyPlanner:
                 "package-id-invalid",
             )
         self._package_id = package_id
+        self._release_revision = validate_sha256_digest(release_revision)
         self._paths = paths or get_user_scope_path_resolver()
 
-    def plan(
+    def plan_source_profile(
         self,
-        profile: object,
-        package_root: Path,
+        profile: UserCopySourceProfile,
         *,
+        target_client: TargetClient | str,
+        package_root: Path | None,
         inventory: UserCopyInventory,
     ) -> UserCopyMaterializationPlan:
-        preview = build_user_copy_profile_preview(package_root, profile)  # type: ignore[arg-type]
-        dependency_required = {
-            f"{item['resourceType']}:{item['resourceId']}": bool(
-                item["dependencyPayloadRequired"]
-            )
-            for item in preview["resources"]
-        }
-        dependency_projectable = {
-            f"{item['resourceType']}:{item['resourceId']}": bool(
-                item["dependencyPayloadProjectable"]
-            )
-            for item in preview["resources"]
-        }
-        return self._build_plan(
-            _adapt_core_profile(profile),
-            inventory=inventory,
-            package_root=package_root,
-            dependency_payloads=_adapt_dependency_payloads(
-                preview["dependencyPayloads"]
-            ),
-            dependency_payload_required=dependency_required,
-            dependency_payload_projectable=dependency_projectable,
-            structured_value_templates={
-                f"{item['resourceType']}:{item['resourceId']}": item[
-                    "structuredValueTemplate"
-                ]
-                for item in preview["resources"]
-                if "structuredValueTemplate" in item
-            },
-        )
+        """Project a package-format profile into one target client's user scope."""
 
-    def plan_preview(
-        self,
-        profile: object,
-        *,
-        source_digests: Mapping[str, str],
-        dependency_payload_required: Mapping[str, bool],
-        dependency_payload_projectable: Mapping[str, bool],
-        dependency_payloads: Iterable[Mapping[str, Any]],
-        structured_value_types: Mapping[str, str],
-        structured_value_templates: Mapping[str, Any],
-        inventory: UserCopyInventory,
-    ) -> UserCopyMaterializationPlan:
-        """Plan from Manager source proofs without reading a snapshot."""
+        client = TargetClient(target_client)
+        try:
+            projection = UserCopyProjectionRegistry().resolve(
+                profile.package_format,
+                client,
+            )
+        except ValueError:
+            return self._finish_source_plan(
+                profile,
+                client,
+                resources=[],
+                conflicts=[],
+                blocking=[UserCopyBlockingIssue(
+                    code="marketplace.user_copy.projection_not_supported"
+                )],
+                skipped=[],
+            )
 
-        adapted = _adapt_core_profile(profile)
-        expected_ids = {
-            f"{resource.resource_type}:{resource.resource_id}"
-            for resource in adapted.resources
-        }
-        expected_structured_ids = {
-            f"{resource.resource_type}:{resource.resource_id}"
-            for resource in adapted.resources
-            if resource.copy_semantics == "merge-config-entry"
-        }
-        if (
-            set(source_digests) != expected_ids
-            or set(dependency_payload_required) != expected_ids
-            or set(dependency_payload_projectable) != expected_ids
-            or set(structured_value_types) != expected_structured_ids
-            or set(structured_value_templates)
-            != {
-                stable_id
-                for stable_id in expected_structured_ids
-                if dependency_payload_required.get(stable_id) is True
-                and dependency_payload_projectable.get(stable_id) is True
-            }
-        ):
-            raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                "preview-resource-proof-mismatch",
-            )
-        validated_digests = {
-            stable_id: validate_sha256_digest(digest)
-            for stable_id, digest in source_digests.items()
-        }
-        if any(
-            type(required) is not bool
-            for required in dependency_payload_required.values()
-        ) or any(
-            type(projectable) is not bool
-            for projectable in dependency_payload_projectable.values()
-        ):
-            raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                "preview-dependency-proof-invalid",
-            )
-        adapted_payloads = _adapt_dependency_payloads(dependency_payloads)
-        template_payload_locators: set[str] = set()
-        for template in structured_value_templates.values():
-            template_payload_locators.update(
-                _structured_template_payload_locators(template)
-            )
-        if not _dependency_payload_coverage_valid(
-            template_payload_locators,
-            adapted_payloads,
-        ):
-            raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                "preview-dependency-proof-mismatch",
-            )
-        return self._build_plan(
-            adapted,
-            inventory=inventory,
-            source_digests=validated_digests,
-            dependency_payload_required=dependency_payload_required,
-            dependency_payload_projectable=dependency_payload_projectable,
-            dependency_payloads=adapted_payloads,
-            structured_value_types=structured_value_types,
-            structured_value_templates=structured_value_templates,
-        )
-
-    def _build_plan(
-        self,
-        adapted: _AdaptedProfile,
-        *,
-        inventory: UserCopyInventory,
-        package_root: Path | None = None,
-        source_digests: Mapping[str, str] | None = None,
-        dependency_payload_required: Mapping[str, bool] | None = None,
-        dependency_payload_projectable: Mapping[str, bool] | None = None,
-        dependency_payloads: tuple[_DependencyPayload, ...] = (),
-        structured_value_types: Mapping[str, str] | None = None,
-        structured_value_templates: Mapping[str, Any] | None = None,
-    ) -> UserCopyMaterializationPlan:
-        adapter = self._adapter(adapted.provider)
-        conflicts: list[UserCopyPlanConflict] = []
-        blocking = list(adapted.blocked_resources)
+        adapter = self._adapter(client.value)
         resources: list[PlannedUserCopyResource] = []
+        conflicts: list[UserCopyPlanConflict] = []
+        blocking: list[UserCopyBlockingIssue] = []
+        skipped: list[SkippedUserCopyPlanResource] = []
+        payloads: dict[str, _DependencyPayload] = {}
 
         if not inventory.complete:
-            blocking.append(
-                UserCopyBlockingIssue(
-                    code="marketplace.user_copy.inventory_unavailable"
+            blocking.append(UserCopyBlockingIssue(
+                code="marketplace.user_copy.inventory_unavailable"
+            ))
+        for diagnostic in profile.diagnostics:
+            is_portability_diagnostic = (
+                diagnostic.resource_type is not None
+                and (
+                    profile.package_format is PluginPackageFormat.AGENT_PLUGIN_V1
+                    or diagnostic.code in {
+                        "format-unsupported",
+                        "source-not-allowed",
+                        "unsupported-resource",
+                    }
                 )
             )
+            if is_portability_diagnostic:
+                skipped.append(SkippedUserCopyPlanResource(
+                    code=diagnostic.code,
+                    resource_type=diagnostic.resource_type,
+                    resource_id=(diagnostic.resource_id or Path(
+                        diagnostic.source_locator
+                    ).stem or diagnostic.resource_type),
+                    source_locator=diagnostic.source_locator,
+                ))
+            else:
+                blocking.append(UserCopyBlockingIssue(
+                    code=f"marketplace.user_copy.{diagnostic.code.replace('-', '_')}",
+                    resource_type=diagnostic.resource_type,
+                    resource_id=diagnostic.resource_id,
+                    source_locator=diagnostic.source_locator,
+                ))
 
         seen_resource_ids: set[str] = set()
-        for resource in adapted.resources:
+        for source in profile.resources:
+            projected_result = projection.project(source)
+            if projected_result.skipped is not None:
+                skipped.append(SkippedUserCopyPlanResource(
+                    code=projected_result.skipped.code,
+                    resource_type=source.resource_type.value,
+                    resource_id=source.resource_id,
+                    source_locator=source.source_locator,
+                ))
+                continue
+            projected = projected_result.projected
+            if projected is None:
+                continue
+            resource = CoreProfileResource(
+                resource_type=source.resource_type.value,
+                resource_id=source.resource_id,
+                source_kind=source.source_kind.value,
+                source_locator=source.source_locator,
+                target_resource=projected.target_resource,
+                copy_semantics=projected.copy_semantics,
+                relative_target=projected.relative_target,
+                json_pointer=source.source_json_pointer,
+            )
             stable_identity = (
-                f"{adapted.provider}:{resource.resource_type}:{resource.resource_id}"
+                f"{client.value}:{resource.resource_type}:{resource.resource_id}"
             ).casefold()
             if stable_identity in seen_resource_ids:
-                blocking.append(
-                    _blocking_for_resource(
-                        "marketplace.user_copy.duplicate_target",
-                        resource,
-                    )
-                )
+                blocking.append(_blocking_for_resource(
+                    "marketplace.user_copy.duplicate_target", resource
+                ))
                 continue
             seen_resource_ids.add(stable_identity)
             try:
-                if package_root is not None:
-                    if (
-                        dependency_payload_required is None
-                        or dependency_payload_projectable is None
-                    ):
-                        raise UserCopyAdapterError(
-                            "profile-contract-invalid",
-                            "dependency-proof-missing",
-                        )
-                    resource_stable_id = (
-                        f"{resource.resource_type}:{resource.resource_id}"
-                    )
-                    planned, resource_conflict, resource_issues = self._plan_resource(
-                        adapted.provider,
-                        adapter,
-                        resource,
-                        package_root,
-                        dependency_payload_required=(
-                            dependency_payload_required[resource_stable_id]
-                        ),
-                        dependency_payload_projectable=(
-                            dependency_payload_projectable[resource_stable_id]
-                        ),
-                    )
-                else:
-                    if (
-                        source_digests is None
-                        or dependency_payload_required is None
-                        or dependency_payload_projectable is None
-                        or structured_value_types is None
-                        or structured_value_templates is None
-                    ):
-                        raise UserCopyAdapterError(
-                            "profile-contract-invalid",
-                            "preview-resource-proof-missing",
-                        )
-                    resource_stable_id = (
-                        f"{resource.resource_type}:{resource.resource_id}"
-                    )
-                    planned, resource_conflict, resource_issues = (
-                        self._plan_preview_resource(
-                            adapted.provider,
-                            adapter,
-                            resource,
-                            source_digest=source_digests[resource_stable_id],
-                            dependency_payload_required=(
-                                dependency_payload_required[resource_stable_id]
-                            ),
-                            dependency_payload_projectable=(
-                                dependency_payload_projectable[resource_stable_id]
-                            ),
-                            structured_value_type=structured_value_types.get(
-                                resource_stable_id
-                            ),
-                            structured_value_template=(
-                                structured_value_templates.get(resource_stable_id)
-                            ),
-                        )
-                    )
-            except UserCopyAdapterError as exc:
-                blocking.append(
-                    _blocking_for_resource(
-                        _adapter_error_code(exc.code),
-                        resource,
-                    )
-                )
-                continue
-            resources.append(planned)
-            if resource_conflict is not None:
-                conflicts.append(resource_conflict)
-            blocking.extend(resource_issues)
-            blocking.extend(
-                self._effective_identity_issues(
-                    adapted.provider,
+                planned, conflict, issues = self._plan_source_resource(
+                    client.value,
+                    adapter,
                     resource,
-                    inventory=inventory,
-                    target_locator=planned.target_locator,
-                )
-            )
-
-        for payload in dependency_payloads:
-            try:
-                planned, payload_conflict, payload_issues = self._plan_payload(
-                    adapted.provider,
-                    payload,
+                    source_digest=source.source_digest,
+                    structured_value=projected.structured_value,
                     package_root=package_root,
+                    has_dependencies=bool(source.dependency_references),
                 )
             except UserCopyAdapterError as exc:
-                blocking.append(
-                    UserCopyBlockingIssue(
-                        code=_adapter_error_code(exc.code),
-                        resource_type="dependency-payload",
-                        resource_id=payload.source_locator,
-                        source_locator=payload.source_locator,
-                    )
-                )
+                blocking.append(_blocking_for_resource(
+                    _adapter_error_code(exc.code), resource
+                ))
                 continue
             resources.append(planned)
-            if payload_conflict is not None:
-                conflicts.append(payload_conflict)
-            blocking.extend(payload_issues)
+            if conflict is not None:
+                conflicts.append(conflict)
+            blocking.extend(issues)
+            blocking.extend(self._effective_identity_issues(
+                client.value,
+                resource,
+                inventory=inventory,
+                target_locator=planned.target_locator,
+            ))
+            for reference in source.dependency_references:
+                payloads.setdefault(reference.source_locator, _DependencyPayload(
+                    source_locator=reference.source_locator,
+                    source_kind=reference.source_kind,
+                    content_digest=reference.source_digest,
+                ))
+
+        for payload in payloads.values():
+            try:
+                planned, conflict, issues = self._plan_payload(
+                    client.value, payload, package_root=package_root
+                )
+            except UserCopyAdapterError as exc:
+                blocking.append(UserCopyBlockingIssue(
+                    code=_adapter_error_code(exc.code),
+                    resource_type="dependency-payload",
+                    resource_id=payload.source_locator,
+                    source_locator=payload.source_locator,
+                ))
+                continue
+            resources.append(planned)
+            if conflict is not None:
+                conflicts.append(conflict)
+            blocking.extend(issues)
 
         self._detect_duplicate_targets(resources, blocking)
-        if not resources:
-            blocking.append(
-                UserCopyBlockingIssue(code="marketplace.user_copy.profile_empty")
-            )
+        if not profile.resources and not skipped:
+            blocking.append(UserCopyBlockingIssue(
+                code="marketplace.user_copy.profile_empty"
+            ))
+        return self._finish_source_plan(
+            profile,
+            client,
+            resources=resources,
+            conflicts=conflicts,
+            blocking=blocking,
+            skipped=skipped,
+        )
 
+    def _plan_source_resource(
+        self,
+        target_client: str,
+        adapter: TargetClientUserScopeAdapter,
+        resource: CoreProfileResource,
+        *,
+        source_digest: str,
+        structured_value: Any | None,
+        package_root: Path | None,
+        has_dependencies: bool,
+    ) -> tuple[
+        PlannedUserCopyResource,
+        UserCopyPlanConflict | None,
+        list[UserCopyBlockingIssue],
+    ]:
+        source_digest = validate_sha256_digest(source_digest)
+        source_relative = normalize_package_locator(resource.source_locator)
+        source_path = (
+            package_root.joinpath(*source_relative.parts)
+            if package_root is not None
+            else Path(*source_relative.parts)
+        )
+        value = structured_value
+        if resource.copy_semantics == "merge-config-entry" and has_dependencies:
+            value, used_payload = rewrite_known_placeholders(
+                value,
+                tokens=adapter.placeholder_tokens,
+                payload_root=self._dependency_payload_root(target_client),
+                validate_payload_reference=False,
+            )
+            if not used_payload:
+                raise UserCopyAdapterError(
+                    "profile-contract-invalid",
+                    "dependency-template-mismatch",
+                )
+        target = adapter.resolve_target(
+            resource,
+            source_value=value,
+            source_digest=(
+                canonical_value_digest(value)
+                if resource.resource_type == "hook" and value is not None
+                else None
+            ),
+        )
+        content_digest = (
+            canonical_value_digest(value)
+            if resource.copy_semantics == "merge-config-entry"
+            else source_digest
+        )
+        return self._planned_target(
+            target_client,
+            resource,
+            target,
+            source_digest=source_digest,
+            content_digest=content_digest,
+            source_path=source_path,
+        )
+
+    def _finish_source_plan(
+        self,
+        profile: UserCopySourceProfile,
+        target_client: TargetClient,
+        *,
+        resources: list[PlannedUserCopyResource],
+        conflicts: list[UserCopyPlanConflict],
+        blocking: list[UserCopyBlockingIssue],
+        skipped: list[SkippedUserCopyPlanResource],
+    ) -> UserCopyMaterializationPlan:
         resources_tuple = tuple(sorted(resources, key=_planned_resource_sort_key))
-        conflicts_tuple = tuple(
-            sorted(
-                set(conflicts),
-                key=lambda item: (
-                    item.target_identity,
-                    item.resource_type,
-                    item.resource_id,
-                ),
-            )
-        )
-        blocking_tuple = tuple(
-            sorted(
-                set(blocking),
-                key=lambda item: (
-                    item.code,
-                    item.resource_type or "",
-                    item.resource_id or "",
-                    item.target_locator or "",
-                ),
-            )
-        )
+        conflicts_tuple = tuple(sorted(set(conflicts), key=lambda item: (
+            item.target_identity, item.resource_type, item.resource_id
+        )))
+        blocking_tuple = tuple(sorted(set(blocking), key=lambda item: (
+            item.code, item.resource_type or "", item.resource_id or "",
+            item.target_locator or "",
+        )))
+        skipped_tuple = tuple(sorted(set(skipped), key=lambda item: (
+            item.code, item.resource_type, item.resource_id, item.source_locator
+        )))
         status = (
-            UserCopyPlanStatus.BLOCKED
-            if blocking_tuple
-            else (
-                UserCopyPlanStatus.CONFIRMATION_REQUIRED
-                if conflicts_tuple
-                else UserCopyPlanStatus.READY
-            )
+            UserCopyPlanStatus.BLOCKED if blocking_tuple else
+            UserCopyPlanStatus.CONFIRMATION_REQUIRED
+            if conflicts_tuple or skipped_tuple else
+            UserCopyPlanStatus.READY
         )
-        plan = UserCopyMaterializationPlan(
-            provider=adapted.provider,
-            profile_version=adapted.profile_version,
-            profile_digest=adapted.profile_digest,
+        initial = UserCopyMaterializationPlan(
+            package_format=profile.package_format.value,
+            target_client=target_client.value,
+            profile_version=profile.profile_version,
+            profile_digest=profile.profile_digest,
             status=status,
             resources=resources_tuple,
             conflicts=conflicts_tuple,
             blocking_issues=blocking_tuple,
+            projection_digest="",
             materialization_digest="",
+            skipped_resources=skipped_tuple,
+        )
+        projection_digest = compute_projection_digest(initial)
+        with_projection = UserCopyMaterializationPlan(
+            package_format=initial.package_format,
+            target_client=initial.target_client,
+            profile_version=initial.profile_version,
+            profile_digest=initial.profile_digest,
+            status=initial.status,
+            resources=initial.resources,
+            conflicts=initial.conflicts,
+            blocking_issues=initial.blocking_issues,
+            projection_digest=projection_digest,
+            materialization_digest="",
+            skipped_resources=initial.skipped_resources,
         )
         return UserCopyMaterializationPlan(
-            provider=plan.provider,
-            profile_version=plan.profile_version,
-            profile_digest=plan.profile_digest,
-            status=plan.status,
-            resources=plan.resources,
-            conflicts=plan.conflicts,
-            blocking_issues=plan.blocking_issues,
-            materialization_digest=compute_materialization_digest(plan),
+            package_format=with_projection.package_format,
+            target_client=with_projection.target_client,
+            profile_version=with_projection.profile_version,
+            profile_digest=with_projection.profile_digest,
+            status=with_projection.status,
+            resources=with_projection.resources,
+            conflicts=with_projection.conflicts,
+            blocking_issues=with_projection.blocking_issues,
+            projection_digest=with_projection.projection_digest,
+            materialization_digest=compute_materialization_digest(with_projection),
+            skipped_resources=with_projection.skipped_resources,
         )
 
-    def _adapter(self, provider: str) -> ProviderUserCopyAdapter:
-        if provider == "codex":
+    def _adapter(self, target_client: str) -> TargetClientUserScopeAdapter:
+        if target_client == "codex":
             from .codex import get_codex_user_copy_adapter
 
             return get_codex_user_copy_adapter(self._paths)
-        if provider == "claude-code":
+        if target_client == "claude-code":
             from .claude import get_claude_user_copy_adapter
 
             return get_claude_user_copy_adapter(self._paths)
-        raise UserCopyAdapterError("provider-not-supported", provider)
+        raise UserCopyAdapterError("target_client-not-supported", target_client)
 
-    def _dependency_payload_root(self, provider: str) -> Path:
+    def _dependency_payload_root(self, target_client: str) -> Path:
         return (
             self._paths.user_home
             / ".aileron"
-            / "user-copy"
-            / provider
+            / "user-copy-payloads"
+            / target_client
             / self._package_id
+            / self._release_revision
         )
 
     def _plan_payload(
         self,
-        provider: str,
+        target_client: str,
         payload: _DependencyPayload,
         *,
         package_root: Path | None,
@@ -700,14 +715,15 @@ class UserCopyPlanner:
                 expected_digest=payload.content_digest,
             )
         logical_locator = (
-            f"~/.aileron/user-copy/{provider}/{self._package_id}/"
+            f"~/.aileron/user-copy-payloads/{target_client}/{self._package_id}/"
+            f"{self._release_revision}/"
             f"{relative.as_posix()}"
         )
         target = ResolvedUserCopyTarget(
-            agent=self._adapter(provider).agent,
+            agent=self._adapter(target_client).agent,
             target_kind=target_kind,
             operation=UserCopyOperation.CREATE,
-            runtime_path=self._dependency_payload_root(provider).joinpath(
+            runtime_path=self._dependency_payload_root(target_client).joinpath(
                 *relative.parts
             ),
             logical_locator=logical_locator,
@@ -728,7 +744,7 @@ class UserCopyPlanner:
             json_pointer=None,
         )
         return self._planned_target(
-            provider,
+            target_client,
             resource,
             target,
             source_digest=payload.content_digest,
@@ -736,146 +752,10 @@ class UserCopyPlanner:
             source_path=source_path,
         )
 
-    def _plan_resource(
-        self,
-        provider: str,
-        adapter: ProviderUserCopyAdapter,
-        resource: CoreProfileResource,
-        package_root: Path,
-        *,
-        dependency_payload_required: bool,
-        dependency_payload_projectable: bool,
-    ) -> tuple[
-        PlannedUserCopyResource,
-        UserCopyPlanConflict | None,
-        list[UserCopyBlockingIssue],
-    ]:
-        source_path = _resolve_source_path(package_root, resource.source_locator)
-        source_value = (
-            _structured_source_value(source_path, resource.json_pointer)
-            if resource.copy_semantics == "merge-config-entry"
-            else None
-        )
-        target_source_value = source_value
-        structured_content_digest: str | None = None
-        if resource.copy_semantics == "merge-config-entry":
-            structured_content_digest = canonical_value_digest(source_value)
-            if dependency_payload_required and dependency_payload_projectable:
-                target_source_value, used_payload = rewrite_known_placeholders(
-                    source_value,
-                    tokens=adapter.placeholder_tokens,
-                    payload_root=self._dependency_payload_root(provider),
-                    validate_payload_reference=False,
-                )
-                if not used_payload:
-                    raise UserCopyAdapterError(
-                        "profile-contract-invalid",
-                        "dependency-template-mismatch",
-                    )
-                structured_content_digest = canonical_value_digest(target_source_value)
-        target = adapter.resolve_target(
-            resource,
-            source_value=target_source_value,
-            source_digest=(
-                structured_content_digest if resource.resource_type == "hook" else None
-            ),
-        )
-        _validate_source_shape(resource, source_path, target.target_kind)
-        source_digest = _source_digest(
-            source_path,
-            target.target_kind,
-            source_value,
-        )
-        content_digest = source_digest
-        if target.target_kind is UserCopyTargetKind.CONFIG_ENTRY:
-            content_digest = structured_content_digest or source_digest
-        planned, conflict, issues = self._planned_target(
-            provider,
-            resource,
-            target,
-            source_digest=source_digest,
-            content_digest=content_digest,
-            source_path=source_path,
-        )
-        if dependency_payload_required and not dependency_payload_projectable:
-            issues.append(
-                _blocking_for_resource(
-                    "marketplace.user_copy.dependency_payload_unprojectable",
-                    resource,
-                    target_locator=target.logical_locator,
-                )
-            )
-        return planned, conflict, issues
-
-    def _plan_preview_resource(
-        self,
-        provider: str,
-        adapter: ProviderUserCopyAdapter,
-        resource: CoreProfileResource,
-        *,
-        source_digest: str,
-        dependency_payload_required: bool,
-        dependency_payload_projectable: bool,
-        structured_value_type: str | None,
-        structured_value_template: Any | None,
-    ) -> tuple[
-        PlannedUserCopyResource,
-        UserCopyPlanConflict | None,
-        list[UserCopyBlockingIssue],
-    ]:
-        source_locator = normalize_package_locator(resource.source_locator)
-        source_value = (
-            (
-                _materialize_structured_template(
-                    structured_value_template,
-                    payload_root=self._dependency_payload_root(provider),
-                )
-                if dependency_payload_required and dependency_payload_projectable
-                else _structured_value_placeholder(structured_value_type)
-            )
-            if resource.copy_semantics == "merge-config-entry"
-            else None
-        )
-        target = adapter.resolve_target(
-            resource,
-            source_value=source_value,
-            source_digest=(
-                (
-                    canonical_value_digest(source_value)
-                    if dependency_payload_required and dependency_payload_projectable
-                    else source_digest
-                )
-                if resource.resource_type == "hook"
-                else None
-            ),
-        )
-        planned, conflict, issues = self._planned_target(
-            provider,
-            resource,
-            target,
-            source_digest=source_digest,
-            content_digest=(
-                canonical_value_digest(source_value)
-                if resource.copy_semantics == "merge-config-entry"
-                and dependency_payload_required
-                and dependency_payload_projectable
-                else source_digest
-            ),
-            source_path=Path(*source_locator.parts),
-        )
-        if dependency_payload_required and not dependency_payload_projectable:
-            issues.append(
-                _blocking_for_resource(
-                    "marketplace.user_copy.dependency_payload_unprojectable",
-                    resource,
-                    target_locator=target.logical_locator,
-                )
-            )
-        return planned, conflict, issues
 
     def _planned_target(
         self,
-        provider: str,
+        target_client: str,
         resource: CoreProfileResource,
         target: ResolvedUserCopyTarget,
         *,
@@ -907,7 +787,7 @@ class UserCopyPlanner:
         )
         return (
             PlannedUserCopyResource(
-                provider=provider,
+                target_client=target_client,
                 resource_type=resource.resource_type,
                 resource_id=resource.resource_id,
                 source_kind=resource.source_kind,
@@ -1141,14 +1021,14 @@ class UserCopyPlanner:
 
     @staticmethod
     def _effective_identity_issues(
-        provider: str,
+        target_client: str,
         resource: CoreProfileResource,
         *,
         inventory: UserCopyInventory,
         target_locator: str,
     ) -> list[UserCopyBlockingIssue]:
         expected = (
-            f"{provider}:{resource.resource_type}:{resource.resource_id}"
+            f"{target_client}:{resource.resource_type}:{resource.resource_id}"
         ).casefold()
         return [
             _blocking_for_resource(
@@ -1183,287 +1063,49 @@ class UserCopyPlanner:
                 identities[folded] = resource
 
 
-def _adapt_core_profile(profile: object) -> _AdaptedProfile:
-    try:
-        provider = enum_value(getattr(profile, "provider"))
-        profile_version = getattr(profile, "profile_version")
-        profile_digest = getattr(profile, "profile_digest")
-        raw_resources = tuple(getattr(profile, "resources"))
-        raw_blocked = tuple(getattr(profile, "blocked_resources", ()))
-    except (AttributeError, TypeError, ValueError) as exc:
-        raise UserCopyAdapterError(
-            "profile-contract-invalid",
-            type(profile).__name__,
-        ) from exc
-    if provider not in {"claude-code", "codex"}:
-        raise UserCopyAdapterError("provider-not-supported", provider)
-    if (
-        type(profile_version) is not int
-        or profile_version != 1
-        or not isinstance(profile_digest, str)
-        or len(profile_digest) != 64
-        or any(character not in "0123456789abcdef" for character in profile_digest)
+
+def _directory_source_digest(root: Path) -> str:
+    digest = sha256()
+    for path in sorted(
+        root.rglob("*"),
+        key=lambda item: item.relative_to(root).as_posix(),
     ):
-        raise UserCopyAdapterError("profile-contract-invalid", profile_digest)
-
-    resources: list[CoreProfileResource] = []
-    for raw in raw_resources:
-        try:
-            resource_id = getattr(raw, "resource_id")
-            source_locator = getattr(raw, "source_locator")
-            relative_target = getattr(raw, "relative_target", None)
-            json_pointer = getattr(raw, "json_pointer", None)
-            if (
-                not isinstance(resource_id, str)
-                or not resource_id
-                or len(resource_id) > _MAX_USER_COPY_FIELD_LENGTH
-                or not isinstance(source_locator, str)
-                or not source_locator
-                or len(source_locator) > _MAX_USER_COPY_FIELD_LENGTH
-                or (
-                    relative_target is not None
-                    and (
-                        not isinstance(relative_target, str)
-                        or len(relative_target) > _MAX_USER_COPY_FIELD_LENGTH
-                    )
-                )
-                or (
-                    json_pointer is not None
-                    and (
-                        not isinstance(json_pointer, str)
-                        or len(json_pointer) > _MAX_USER_COPY_FIELD_LENGTH
-                    )
-                )
-            ):
-                raise TypeError("invalid user-copy profile resource")
-            resources.append(
-                CoreProfileResource(
-                    resource_type=enum_value(getattr(raw, "resource_type")),
-                    resource_id=resource_id,
-                    source_kind=enum_value(getattr(raw, "source_kind")),
-                    source_locator=source_locator,
-                    target_resource=enum_value(getattr(raw, "target_resource")),
-                    copy_semantics=enum_value(getattr(raw, "copy_semantics")),
-                    relative_target=relative_target,
-                    json_pointer=json_pointer,
-                )
-            )
-        except (AttributeError, TypeError, ValueError) as exc:
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        if path.is_symlink():
             raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                type(raw).__name__,
-            ) from exc
-
-    blocked_items: list[UserCopyBlockingIssue] = []
-    for raw in raw_blocked:
-        raw_resource_type = getattr(raw, "resource_type", None)
-        resource_type = (
-            raw_resource_type
-            if isinstance(raw_resource_type, str)
-            and raw_resource_type in _PUBLIC_USER_COPY_RESOURCE_TYPES
-            else None
-        )
-        raw_locator = getattr(raw, "source_locator", None)
-        source_locator = _safe_blocking_locator(raw_locator)
-        blocked_items.append(
-            UserCopyBlockingIssue(
-                code="marketplace.user_copy.unsupported_resource",
-                resource_type=resource_type,
-                source_locator=source_locator,
+                "source-reference-invalid",
+                relative.decode("utf-8", errors="replace"),
             )
-        )
-    blocked = tuple(blocked_items)
-    return _AdaptedProfile(
-        provider=provider,
-        profile_version=profile_version,
-        profile_digest=profile_digest,
-        resources=tuple(resources),
-        blocked_resources=blocked,
+        if path.is_dir():
+            entry_type, mode, content = b"directory", 0o700, b""
+        elif path.is_file():
+            entry_type = b"file"
+            mode = 0o700 if stat.S_IMODE(path.stat().st_mode) & 0o111 else 0o600
+            content = path.read_bytes()
+        else:
+            raise UserCopyAdapterError(
+                "source-reference-invalid",
+                relative.decode("utf-8", errors="replace"),
+            )
+        for field in (entry_type, f"{mode:o}".encode("ascii"), relative, content):
+            digest.update(len(field).to_bytes(8, "big"))
+            digest.update(field)
+    return digest.hexdigest()
+
+
+def _dependency_file_digest(path: Path) -> str:
+    normalized_mode = (
+        0o700 if stat.S_IMODE(path.stat().st_mode) & 0o111 else 0o600
     )
-
-
-def _adapt_dependency_payloads(
-    raw_payloads: Iterable[Mapping[str, Any]],
-) -> tuple[_DependencyPayload, ...]:
-    payloads: list[_DependencyPayload] = []
-    seen: set[str] = set()
-    previous_sort_key: tuple[str, str] | None = None
-    for raw in raw_payloads:
-        if not isinstance(raw, Mapping) or set(raw) != {
-            "sourceLocator",
-            "sourceKind",
-            "contentDigest",
-        }:
-            raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                "dependency-payload-invalid",
-            )
-        locator = raw.get("sourceLocator")
-        source_kind = raw.get("sourceKind")
-        digest = raw.get("contentDigest")
-        if (
-            not isinstance(locator, str)
-            or len(locator) > _MAX_USER_COPY_FIELD_LENGTH
-            or not isinstance(source_kind, str)
-            or source_kind not in {"file", "directory"}
-            or not isinstance(digest, str)
-        ):
-            raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                "dependency-payload-invalid",
-            )
-        try:
-            normalized = normalize_package_locator(locator).as_posix()
-            validated_digest = validate_sha256_digest(digest)
-        except UserCopyAdapterError as exc:
-            raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                "dependency-payload-invalid",
-            ) from exc
-        if normalized != locator:
-            raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                "dependency-payload-invalid",
-            )
-        folded = locator.casefold()
-        sort_key = (locator, source_kind)
-        if folded in seen or (
-            previous_sort_key is not None and sort_key <= previous_sort_key
-        ):
-            raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                "dependency-payload-order-invalid",
-            )
-        seen.add(folded)
-        previous_sort_key = sort_key
-        payloads.append(
-            _DependencyPayload(
-                source_locator=locator,
-                source_kind=source_kind,
-                content_digest=validated_digest,
-            )
-        )
-
-    for index, payload in enumerate(payloads):
-        prefix = f"{payload.source_locator}/".casefold()
-        if any(
-            other.source_locator.casefold().startswith(prefix)
-            for other in payloads[index + 1 :]
-        ):
-            raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                "dependency-payload-overlap-invalid",
-            )
-    return tuple(payloads)
-
-
-def _materialize_structured_template(
-    template: Any,
-    *,
-    payload_root: Path,
-) -> Any:
-    found_sentinel = False
-
-    def visit(value: Any) -> Any:
-        nonlocal found_sentinel
-        if isinstance(value, dict):
-            return {str(key): visit(child) for key, child in value.items()}
-        if isinstance(value, list):
-            return [visit(child) for child in value]
-        if isinstance(value, str):
-            prefix = f"{USER_COPY_PAYLOAD_ROOT_SENTINEL}/"
-            if value.startswith(prefix):
-                found_sentinel = True
-                suffix = value.removeprefix(prefix)
-                relative = normalize_package_locator(suffix)
-                if relative.as_posix() != suffix:
-                    raise UserCopyAdapterError(
-                        "profile-contract-invalid",
-                        "dependency-template-invalid",
-                    )
-                return payload_root.joinpath(*relative.parts).as_posix()
-            if USER_COPY_PAYLOAD_ROOT_SENTINEL in value:
-                raise UserCopyAdapterError(
-                    "profile-contract-invalid",
-                    "dependency-template-invalid",
-                )
-        return value
-
-    materialized = visit(template)
-    if not found_sentinel:
-        raise UserCopyAdapterError(
-            "profile-contract-invalid",
-            "dependency-template-invalid",
-        )
-    return materialized
-
-
-def _structured_template_payload_locators(template: Any) -> set[str]:
-    locators: set[str] = set()
-
-    def visit(value: Any) -> None:
-        if isinstance(value, dict):
-            if any(USER_COPY_PAYLOAD_ROOT_SENTINEL in str(key) for key in value):
-                raise UserCopyAdapterError(
-                    "profile-contract-invalid",
-                    "dependency-template-invalid",
-                )
-            for child in value.values():
-                visit(child)
-            return
-        if isinstance(value, list):
-            for child in value:
-                visit(child)
-            return
-        if not isinstance(value, str) or USER_COPY_PAYLOAD_ROOT_SENTINEL not in value:
-            return
-        prefix = f"{USER_COPY_PAYLOAD_ROOT_SENTINEL}/"
-        if not value.startswith(prefix):
-            raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                "dependency-template-invalid",
-            )
-        suffix = value.removeprefix(prefix)
-        relative = normalize_package_locator(suffix)
-        locator = relative.as_posix()
-        if (
-            locator != suffix
-            or len(locator) > _MAX_USER_COPY_FIELD_LENGTH
-            or USER_COPY_PAYLOAD_ROOT_SENTINEL in suffix
-        ):
-            raise UserCopyAdapterError(
-                "profile-contract-invalid",
-                "dependency-template-invalid",
-            )
-        locators.add(locator)
-
-    visit(template)
-    return locators
-
-
-def _dependency_payload_coverage_valid(
-    referenced_locators: set[str],
-    dependency_payloads: tuple[_DependencyPayload, ...],
-) -> bool:
-    if bool(referenced_locators) != bool(dependency_payloads):
-        return False
-
-    def payload_covers(
-        payload: _DependencyPayload,
-        referenced: str,
-    ) -> bool:
-        return referenced == payload.source_locator or (
-            payload.source_kind == "directory"
-            and referenced.startswith(f"{payload.source_locator}/")
-        )
-
-    return all(
-        any(payload_covers(payload, referenced) for payload in dependency_payloads)
-        for referenced in referenced_locators
-    ) and all(
-        any(payload_covers(payload, referenced) for referenced in referenced_locators)
-        for payload in dependency_payloads
-    )
+    digest = sha256()
+    for component in (
+        b"file",
+        f"{normalized_mode:o}".encode("ascii"),
+        path.read_bytes(),
+    ):
+        digest.update(len(component).to_bytes(8, "big"))
+        digest.update(component)
+    return digest.hexdigest()
 
 
 def _validate_payload_source(
@@ -1509,16 +1151,6 @@ def _validate_payload_source(
         )
 
 
-def _resolve_source_path(package_root: Path, locator: str) -> Path:
-    relative = normalize_package_locator(locator)
-    try:
-        root = package_root.resolve(strict=True)
-        candidate = package_root.joinpath(*relative.parts)
-        candidate.resolve(strict=True).relative_to(root)
-    except (OSError, ValueError) as exc:
-        raise UserCopyAdapterError("source-reference-invalid", locator) from exc
-    return candidate
-
 
 def _safe_blocking_locator(value: Any) -> str | None:
     if (
@@ -1533,100 +1165,6 @@ def _safe_blocking_locator(value: Any) -> str | None:
         return None
     return value if normalized == value else None
 
-
-def _structured_source_value(source_path: Path, pointer: str | None) -> Any:
-    if not source_path.is_file():
-        raise UserCopyAdapterError("source-not-allowed", source_path.name)
-    try:
-        document = json.loads(source_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise UserCopyAdapterError(
-            "source-document-invalid",
-            source_path.name,
-        ) from exc
-    return extract_json_pointer(document, pointer)
-
-
-def _validate_source_shape(
-    resource: CoreProfileResource,
-    source_path: Path,
-    target_kind: UserCopyTargetKind,
-) -> None:
-    if target_kind is UserCopyTargetKind.DIRECTORY:
-        if not source_path.is_dir() or source_path.is_symlink():
-            raise UserCopyAdapterError(
-                "source-not-allowed",
-                resource.source_locator,
-            )
-        return
-    if not source_path.is_file() or source_path.is_symlink():
-        raise UserCopyAdapterError(
-            "source-not-allowed",
-            resource.source_locator,
-        )
-
-
-def _source_digest(
-    source_path: Path,
-    target_kind: UserCopyTargetKind,
-    source_value: Any | None,
-) -> str:
-    if target_kind is UserCopyTargetKind.DIRECTORY:
-        return _directory_source_digest(source_path)
-    if target_kind is UserCopyTargetKind.CONFIG_ENTRY:
-        return canonical_value_digest(source_value)
-    return file_bytes_revision(source_path)
-
-
-def _directory_source_digest(root: Path) -> str:
-    digest = sha256()
-    for path in sorted(
-        root.rglob("*"),
-        key=lambda item: item.relative_to(root).as_posix(),
-    ):
-        relative = path.relative_to(root).as_posix().encode("utf-8")
-        if path.is_symlink():
-            raise UserCopyAdapterError(
-                "source-reference-invalid",
-                relative.decode("utf-8", errors="replace"),
-            )
-        if path.is_dir():
-            entry_type = b"directory"
-            mode = 0o700
-            content = b""
-        elif path.is_file():
-            entry_type = b"file"
-            source_mode = stat.S_IMODE(path.stat().st_mode)
-            mode = 0o700 if source_mode & 0o111 else 0o600
-            content = path.read_bytes()
-        else:
-            raise UserCopyAdapterError(
-                "source-reference-invalid",
-                relative.decode("utf-8", errors="replace"),
-            )
-        for field in (
-            entry_type,
-            f"{mode:o}".encode("ascii"),
-            relative,
-            content,
-        ):
-            digest.update(len(field).to_bytes(8, "big"))
-            digest.update(field)
-    return digest.hexdigest()
-
-
-def _dependency_file_digest(path: Path) -> str:
-    source_mode = stat.S_IMODE(path.stat().st_mode)
-    normalized_mode = 0o700 if source_mode & 0o111 else 0o600
-    digest = sha256()
-    for component in (
-        b"file",
-        f"{normalized_mode:o}".encode("ascii"),
-        path.read_bytes(),
-    ):
-        digest.update(len(component).to_bytes(8, "big"))
-        digest.update(component)
-    return digest.hexdigest()
 
 
 def _read_target_document(
@@ -1726,22 +1264,6 @@ def _initial_action(target_kind: UserCopyTargetKind) -> UserCopyAction:
         else UserCopyAction.CREATE
     )
 
-
-def _structured_value_placeholder(value_type: str | None) -> Any:
-    placeholders: dict[str, Any] = {
-        "object": {},
-        "array": [],
-        "string": "",
-        "number": 0,
-        "boolean": False,
-        "null": None,
-    }
-    if value_type not in placeholders:
-        raise UserCopyAdapterError(
-            "profile-contract-invalid",
-            str(value_type),
-        )
-    return placeholders[value_type]
 
 
 def _planned_resource_sort_key(

@@ -303,7 +303,7 @@ class TURNReachabilityProfile:
             raise TURNReachabilityProfileError("relayPortRange is invalid")
 
         issuer_kind = _string(credential.get("kind"), "credentialIssuer.kind")
-        if issuer_kind not in {"turnRest", "staticSecret"}:
+        if issuer_kind != "turnRest":
             raise TURNReachabilityProfileError("credentialIssuer.kind is unsupported")
         credential_ttl_seconds = _positive_integer(
             credential.get("ttlSeconds"), "credentialIssuer.ttlSeconds"

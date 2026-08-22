@@ -22,9 +22,6 @@ from app.modules.workspace.custom_resources import (
     WorkspaceKnowledgeBasePreflightError,
     _storage_observation,
 )
-from app.modules.workspace.execution_plane import (
-    activate_runtime_generation,
-)
 from app.modules.workspace.orchestrator.base import (
     WorkspaceRuntimeTerminationUnconfirmedError,
 )
@@ -32,7 +29,7 @@ from app.modules.workspace.runtime.database import RuntimeDatabaseCredential
 
 RUNTIME_INSTANCE_ID = "11111111-1111-4111-8111-111111111111"
 NEXT_RUNTIME_INSTANCE_ID = "22222222-2222-4222-8222-222222222222"
-RUNTIME_SECRET_NAME = "workspace-runtime-db-test"
+RUNTIME_SECRET_NAME = "workspace-generation-0123456789abcdef"
 KNOWLEDGE_BASE_ID_1 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 KNOWLEDGE_BASE_ID_2 = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 KNOWLEDGE_BASE_ID_3 = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
@@ -127,6 +124,9 @@ def mock_settings(tmp_path: Path):
     settings.RUNTIME_ASSERTION_PUBLIC_KEY_SET_SECRET_NAME = (
         "runtime-assertion-public-jwks"
     )
+    settings.RUNTIME_DATABASE_CA_SECRET_NAME = ""
+    settings.RUNTIME_DATABASE_CA_SECRET_KEY = ""
+    settings.RUNTIME_DATABASE_CA_REVISION = ""
     settings.RUNTIME_K8S_BROWSER_IMAGE = BROWSER_IMAGE
     settings.RUNTIME_K8S_CANVAS_IMAGE = CANVAS_IMAGE
     settings.RUNTIME_K8S_RUNTIME_RESOURCES = {
@@ -277,6 +277,7 @@ def test_build_workspace_custom_resource_manifest(
     }
     assert "privateKey" not in manifest["spec"]["runtime"]["assertion"]
     assert manifest["spec"]["runtime"]["runtimeSecretName"] == RUNTIME_SECRET_NAME
+    assert "databaseTrust" not in manifest["spec"]["runtime"]
     assert "controlAssertion" not in manifest["spec"]["runtime"]
     assert "stateDatabaseSecretName" not in manifest["spec"]["runtime"]
     assert manifest["spec"]["worktreeSubdir"] == ".worktrees"
@@ -292,6 +293,30 @@ def test_build_workspace_custom_resource_manifest(
     assert manifest["spec"]["firewall"]["browser"]["allowedDomains"] == []
     assert manifest["spec"]["knowledgeBases"] == []
     assert "git" not in manifest["spec"]
+
+
+@pytest.mark.unit
+@pytest.mark.workspace
+def test_runtime_database_trust_reference_reaches_workspace_manifest(
+    custom_resource_service,
+    sample_workspace,
+):
+    custom_resource_service.settings.RUNTIME_DATABASE_CA_SECRET_NAME = (
+        "platform-database-ca"
+    )
+    custom_resource_service.settings.RUNTIME_DATABASE_CA_SECRET_KEY = "ca.pem"
+    custom_resource_service.settings.RUNTIME_DATABASE_CA_REVISION = "ca-2026-08"
+
+    manifest = custom_resource_service._build_workspace_custom_resource(
+        sample_workspace,
+        runtime_secret_name=RUNTIME_SECRET_NAME,
+    )
+
+    assert manifest["spec"]["runtime"]["databaseTrust"] == {
+        "secretName": "platform-database-ca",
+        "secretKey": "ca.pem",
+        "revision": "ca-2026-08",
+    }
 
 
 @pytest.mark.unit
@@ -463,7 +488,7 @@ def test_runtime_component_apply_requires_exact_full_plane_observed_evidence(
     sample_workspace,
     stale_field,
 ):
-    plan = custom_resource_service.prepare_execution_plane(
+    plan = custom_resource_service._prepare_generation(
         sample_workspace,
         runtime_instance_id=NEXT_RUNTIME_INSTANCE_ID,
     )
@@ -569,6 +594,21 @@ def test_build_workspace_custom_resource_rejects_mutable_image_reference(
 
 @pytest.mark.unit
 @pytest.mark.workspace
+def test_build_workspace_custom_resource_requires_firewall_delivery_identity(
+    custom_resource_service,
+    sample_workspace,
+):
+    sample_workspace.firewall_target_delivery_id = None
+
+    with pytest.raises(ValueError, match="Firewall delivery identifier is required"):
+        custom_resource_service._build_workspace_custom_resource(
+            sample_workspace,
+            runtime_secret_name=RUNTIME_SECRET_NAME,
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.workspace
 def test_build_workspace_custom_resource_manifest_uses_canonical_candidate_snapshot(
     custom_resource_service, sample_workspace
 ):
@@ -606,16 +646,19 @@ def test_execution_only_api_applies_full_generation_without_job_or_commit(
     mock_db_session,
     sample_workspace,
 ):
-    plan = custom_resource_service.prepare_execution_plane(
+    plan = custom_resource_service._prepare_generation(
         sample_workspace,
         runtime_instance_id=NEXT_RUNTIME_INSTANCE_ID,
     )
+    assert plan.manifest["metadata"]["annotations"] == {
+        "platform.aileron.io/firewall-delivery-id": "delivery-8"
+    }
     assert plan.observed_mount_revision == 6
     assert plan.runtime_control_token not in str(plan.manifest)
+    assert sample_workspace.runtime_instance_id == NEXT_RUNTIME_INSTANCE_ID
     assert sample_workspace.runtime_control_instance_id == NEXT_RUNTIME_INSTANCE_ID
     assert len(sample_workspace.runtime_control_token_hash) == 64
     assert plan.runtime_control_token != sample_workspace.runtime_control_token_hash
-    activate_runtime_generation(sample_workspace, plan)
     custom_resource = {
         "spec": plan.manifest["spec"],
         "status": {
@@ -663,7 +706,7 @@ def test_execution_only_api_applies_full_generation_without_job_or_commit(
             return_value=custom_resource,
         ),
     ):
-        result = custom_resource_service.apply_execution_plane(
+        result = custom_resource_service._apply_generation(
             plan,
             assert_claim=Mock(),
             max_attempts=1,
@@ -681,7 +724,7 @@ def test_execution_only_api_applies_full_generation_without_job_or_commit(
     mock_db_session.add.assert_not_called()
     mock_db_session.commit.assert_not_called()
 
-    custom_resource_service.apply_execution_plane_result(sample_workspace, result)
+    custom_resource_service._stage_generation(sample_workspace, result)
 
     assert sample_workspace.runtime_instance_id == NEXT_RUNTIME_INSTANCE_ID
     assert sample_workspace.runtime_container_id == "runtime-pod-uid"
@@ -690,9 +733,99 @@ def test_execution_only_api_applies_full_generation_without_job_or_commit(
     assert sample_workspace.knowledge_base_mount_observed_revision == 7
     assert sample_workspace.runtime_access_observed_revision == 3
     assert sample_workspace.terminal_internal_url == (
-        "http://runtime-workspace-123.workspace-system.svc.cluster.local:3004"
+        "http://workspace-runtime-workspace-123.workspace-system.svc.cluster.local:3004"
     )
     mock_db_session.commit.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.workspace
+def test_prepare_execution_plane_keeps_generation_pair_valid_at_autoflush(
+    test_app,
+    mock_settings,
+) -> None:
+    _, session_factory = test_app
+    owner_id = "owner-runtime-generation-autoflush"
+    workspace_id = "workspace-runtime-generation-autoflush"
+
+    with session_factory() as db:
+        db.add(
+            db_models.User(
+                id=owner_id,
+                oidc_subject=f"kc-{owner_id}",
+                username=owner_id,
+                email=f"{owner_id}@example.com",
+                platform_role="member",
+                role_status="valid",
+                sync_status="synced",
+                identity_enabled=True,
+                is_active=True,
+            )
+        )
+        db.add(
+            db_models.Workspace(
+                id=workspace_id,
+                owner_id=owner_id,
+                name="Runtime generation autoflush",
+                runtime="universal",
+                provisioner="kubernetes",
+                runtime_status="running",
+                runtime_desired_state="running",
+                runtime_instance_id=RUNTIME_INSTANCE_ID,
+                runtime_control_instance_id=RUNTIME_INSTANCE_ID,
+                runtime_control_token_hash="a" * 64,
+                browser_instance_id=RUNTIME_INSTANCE_ID,
+                canvas_instance_id=RUNTIME_INSTANCE_ID,
+                env_vars=[],
+                knowledge_base_mount_active_snapshot=[],
+                workspace_firewall_allowed_domains=[],
+                browser_firewall_allowed_domains=[],
+                firewall_target_delivery_id="delivery-autoflush",
+            )
+        )
+        db.commit()
+
+    runtime_database_service = Mock()
+    runtime_database_service.prepare.return_value = RuntimeDatabaseCredential(
+        workspace_id=workspace_id,
+        runtime_instance_id=NEXT_RUNTIME_INSTANCE_ID,
+        schema_name="ws_autoflush",
+        role_name="wsr_autoflush_generation",
+        role_prefix="wsr_autoflush_",
+        password="scoped-password",
+        database_url="postgresql://runtime:scoped@postgres/app",
+        secret_name=RUNTIME_SECRET_NAME,
+    )
+
+    with session_factory() as db:
+        db.autoflush = True
+        workspace = db.get(db_models.Workspace, workspace_id)
+        assert workspace is not None
+        service = WorkspaceCustomResourceService(
+            db,
+            runtime_database_service=runtime_database_service,
+        )
+        service.settings = mock_settings
+        service.capacity.settings = mock_settings
+
+        plan = service._prepare_generation(
+            workspace,
+            runtime_instance_id=NEXT_RUNTIME_INSTANCE_ID,
+        )
+
+        assert plan.runtime_instance_id == NEXT_RUNTIME_INSTANCE_ID
+        assert workspace.runtime_instance_id == NEXT_RUNTIME_INSTANCE_ID
+        assert workspace.runtime_control_instance_id == NEXT_RUNTIME_INSTANCE_ID
+        assert plan.manifest["spec"]["runtime"]["instanceId"] == (
+            NEXT_RUNTIME_INSTANCE_ID
+        )
+        db.rollback()
+
+    with session_factory() as db:
+        workspace = db.get(db_models.Workspace, workspace_id)
+        assert workspace is not None
+        assert workspace.runtime_instance_id == RUNTIME_INSTANCE_ID
+        assert workspace.runtime_control_instance_id == RUNTIME_INSTANCE_ID
 
 
 @pytest.mark.unit
@@ -716,7 +849,7 @@ def test_runtime_secret_contains_only_scoped_runtime_credentials(
 
     body = core_api.create_namespaced_secret.call_args.kwargs["body"]
     assert body.string_data == {
-        "state-database-url": credential.database_url,
+        "runtime-database-connection": credential.database_url,
         "runtime-control-token": "generation-token",
         "custom-setup.sh": "printf 'configured\\n'\n",
     }
@@ -807,7 +940,7 @@ def test_abandon_accepts_missing_cr_and_proves_old_pods_absent(
         ),
         patch("app.modules.workspace.custom_resources.time.sleep") as sleep,
     ):
-        custom_resource_service.abandon_execution_plane_generation(
+        custom_resource_service._discard_generation(
             _execution_identity(),
             assert_claim=assert_claim,
             max_attempts=2,
@@ -865,7 +998,7 @@ def test_abandon_cas_stops_only_matching_runtime_generation(
             return_value=core_api,
         ),
     ):
-        custom_resource_service.abandon_execution_plane_generation(
+        custom_resource_service._discard_generation(
             _execution_identity(),
             assert_claim=assert_claim,
             max_attempts=1,
@@ -923,7 +1056,7 @@ def test_abandon_does_not_stop_replaced_generation(
             return_value=core_api,
         ),
     ):
-        custom_resource_service.abandon_execution_plane_generation(
+        custom_resource_service._discard_generation(
             _execution_identity(),
             assert_claim=Mock(),
             max_attempts=1,
@@ -968,7 +1101,7 @@ def test_abandon_fails_closed_when_stop_precondition_conflicts(
         ),
         pytest.raises(WorkspaceRuntimeTerminationUnconfirmedError) as exc_info,
     ):
-        custom_resource_service.abandon_execution_plane_generation(
+        custom_resource_service._discard_generation(
             _execution_identity(),
             assert_claim=Mock(),
             max_attempts=1,
@@ -989,7 +1122,7 @@ def test_failed_apply_stops_candidate_without_deleting_workspace(
     custom_resource_service,
     sample_workspace,
 ):
-    plan = custom_resource_service.prepare_execution_plane(
+    plan = custom_resource_service._prepare_generation(
         sample_workspace,
         runtime_instance_id=NEXT_RUNTIME_INSTANCE_ID,
     )
@@ -1002,11 +1135,11 @@ def test_failed_apply_stops_candidate_without_deleting_workspace(
         patch.object(custom_resource_service, "_upsert_runtime_secret"),
         patch.object(
             custom_resource_service,
-            "abandon_execution_plane_generation",
+            "_discard_generation",
         ) as abandon,
         pytest.raises(RuntimeError, match="apply failed"),
     ):
-        custom_resource_service.apply_execution_plane(
+        custom_resource_service._apply_generation(
             plan,
             assert_claim=Mock(),
             max_attempts=1,
@@ -1026,9 +1159,9 @@ def test_stop_persisted_workspace_revokes_generation_but_preserves_storage(
 ):
     with patch.object(
         custom_resource_service,
-        "abandon_execution_plane_generation",
+        "_discard_generation",
     ) as abandon:
-        custom_resource_service.stop_persisted_execution_plane(
+        custom_resource_service._stop_persisted_generation(
             sample_workspace,
             assert_claim=Mock(),
         )
@@ -1066,7 +1199,7 @@ def test_prove_execution_plane_absent_times_out_with_stable_error(
         patch("app.modules.workspace.custom_resources.time.sleep"),
         pytest.raises(WorkspaceRuntimeTerminationUnconfirmedError) as exc_info,
     ):
-        custom_resource_service.prove_execution_plane_absent(
+        custom_resource_service._prove_generation_absent(
             _execution_identity(),
             assert_claim=Mock(),
             max_attempts=2,
@@ -1114,7 +1247,7 @@ def test_delete_persisted_stopped_workspace_deletes_cr_and_waits_for_finalizer(
             return_value=core_api,
         ),
     ):
-        custom_resource_service.delete_persisted_workspace(
+        custom_resource_service._delete_persisted_workspace(
             _stopped_execution_identity(),
             assert_claim=assert_claim,
             max_attempts=1,
@@ -1183,7 +1316,7 @@ def test_prove_execution_plane_absent_accepts_disabled_component_identity(
             return_value=core_api,
         ),
     ):
-        custom_resource_service.prove_execution_plane_absent(
+        custom_resource_service._prove_generation_absent(
             identity,
             assert_claim=Mock(),
             max_attempts=1,
@@ -1468,16 +1601,16 @@ def test_reconcile_workspace_status_derives_adapter_internal_urls(
     )
     assert sample_workspace.runtime_status == "running"
     assert sample_workspace.runtime_internal_url == (
-        "http://runtime-workspace-123.workspace-system.svc.cluster.local:3002"
+        "http://workspace-runtime-workspace-123.workspace-system.svc.cluster.local:3002"
     )
     assert sample_workspace.runtime_internal_port == 3002
     assert sample_workspace.browser_status == "running"
     assert sample_workspace.browser_webrtc_internal_url == (
-        "http://browser-workspace-123.workspace-system.svc.cluster.local:6080"
+        "http://workspace-browser-workspace-123.workspace-system.svc.cluster.local:6080"
     )
     assert sample_workspace.canvas_status == "stopped"
     assert sample_workspace.canvas_internal_url == (
-        "http://canvas-workspace-123.workspace-system.svc.cluster.local:3003"
+        "http://workspace-canvas-workspace-123.workspace-system.svc.cluster.local:3003"
     )
     custom_resource_service.db.commit.assert_called()
 
@@ -1624,7 +1757,7 @@ def test_reconcile_workspace_status_preserves_durable_lifecycle_status(
     assert changed is True
     assert sample_workspace.runtime_status == durable_status
     assert sample_workspace.runtime_internal_url == (
-        "http://runtime-workspace-123.workspace-system.svc.cluster.local:3002"
+        "http://workspace-runtime-workspace-123.workspace-system.svc.cluster.local:3002"
     )
     custom_resource_service.db.commit.assert_called()
 
@@ -2006,7 +2139,7 @@ def test_reconcile_workspace_status_refreshes_stale_orm_before_phase_guard(
     )
     assert sample_workspace.runtime_status == "restarting"
     assert sample_workspace.runtime_internal_url == (
-        "http://runtime-workspace-123.workspace-system.svc.cluster.local:3002"
+        "http://workspace-runtime-workspace-123.workspace-system.svc.cluster.local:3002"
     )
     assert stale_workspace.runtime_status == "running"
     assert stale_workspace.runtime_internal_url == "http://stale-runtime:3002"
@@ -2138,13 +2271,13 @@ def test_reconcile_workspace_status_derives_namespace_qualified_service_dns(
 
     assert changed is True
     assert workspace.runtime_internal_url == (
-        "http://runtime-workspace-example.workspace-system.svc.cluster.local:3002"
+        "http://workspace-runtime-workspace-example.workspace-system.svc.cluster.local:3002"
     )
     assert workspace.browser_webrtc_internal_url == (
-        "http://browser-workspace-example.workspace-system.svc.cluster.local:6080"
+        "http://workspace-browser-workspace-example.workspace-system.svc.cluster.local:6080"
     )
     assert workspace.canvas_internal_url == (
-        "http://canvas-workspace-example.workspace-system.svc.cluster.local:3003"
+        "http://workspace-canvas-workspace-example.workspace-system.svc.cluster.local:3003"
     )
 
 

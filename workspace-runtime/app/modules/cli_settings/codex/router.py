@@ -2,22 +2,27 @@
 
 from __future__ import annotations
 
+import mimetypes
+from pathlib import Path as FilePath
 from typing import Callable, NoReturn, TypeVar
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 
-from app.core.openapi import build_responses
+from app.core.openapi import APIErrorDetail, build_responses
 from app.core.resource_envelope import raise_resource_error
 
 from .models import (
     CodexAppResponse,
     CodexAppsResponse,
+    CodexCollectionScope,
     CodexConfigDocument,
     CodexConfigSectionResponse,
     CodexConfigSectionUpdateRequest,
     CodexConfigSectionUpdateResponse,
     CodexConfigUpdateRequest,
-    CodexCollectionScope,
     CodexEditableLayer,
     CodexEditableScope,
     CodexFeatureEnableResponse,
@@ -62,6 +67,20 @@ from .settings import (
 
 router = APIRouter(prefix="/codex", tags=["Codex Settings"])
 T = TypeVar("T")
+_RAW_BINARY_MEDIA_TYPES = (
+    "application/octet-stream",
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/svg+xml",
+    "image/*",
+    "text/*",
+    "audio/*",
+    "video/*",
+    "*/*",
+)
 
 _CAPABILITY_PATHS = [
     ("overview", "overview", True),
@@ -114,6 +133,29 @@ def _codex_resource_call(operation: Callable[[], T]) -> T:
         raise _raise_codex_http_error(e) from e
     except Exception as e:
         raise _raise_codex_internal_error(e) from e
+
+
+def _raw_file_response(path: str, content: bytes) -> Response:
+    mime_type, _ = mimetypes.guess_type(path)
+    filename = FilePath(path).name
+    encoded_filename = quote(filename, safe="")
+    disposition = (
+        f"inline; filename*=utf-8''{encoded_filename}"
+        if encoded_filename != filename
+        else f'inline; filename="{filename}"'
+    )
+    return Response(
+        content=content,
+        media_type=mime_type or "application/octet-stream",
+        headers={"Content-Disposition": disposition},
+    )
+
+
+def _raw_binary_openapi_content() -> dict[str, dict[str, dict[str, str]]]:
+    return {
+        media_type: {"schema": {"type": "string", "format": "binary"}}
+        for media_type in _RAW_BINARY_MEDIA_TYPES
+    }
 
 
 @router.get("", response_model=CodexSettingsCapabilitiesResponse)
@@ -792,7 +834,24 @@ async def list_codex_files(
     "/{resource}/file",
     response_model=CodexTextFileResponse,
     response_model_exclude_none=True,
-    responses=build_responses(400, 401, 404, 422, 500),
+    responses={
+        **build_responses(400, 401, 404, 422, 500),
+        200: {
+            "description": "JSON file content or raw binary preview content.",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "$ref": "#/components/schemas/CodexTextFileResponse",
+                    }
+                },
+                **_raw_binary_openapi_content(),
+            },
+        },
+        413: {
+            "model": APIErrorDetail,
+            "description": "Raw preview exceeds the configured size limit.",
+        },
+    },
 )
 async def get_codex_file(
     resource: str,
@@ -802,9 +861,27 @@ async def get_codex_file(
     pluginId: str | None = Query(
         default=None, description="Plugin ID for plugin scope files"
     ),
+    raw: bool = Query(
+        default=False, description="Whether to return raw binary content"
+    ),
     service: CodexAgentSettings = Depends(get_codex_agent_settings),
-) -> CodexTextFileResponse:
+) -> CodexTextFileResponse | Response:
     """Return a Codex skills or prompts file."""
+
+    if raw:
+
+        def read_binary() -> bytes:
+            return service.execute(
+                CodexSettingsIntent.GET_FILE_BINARY,
+                workspace_id,
+                scope,
+                resource,
+                path,
+                plugin_id=pluginId,
+            )
+
+        content = await run_in_threadpool(_codex_resource_call, read_binary)
+        return _raw_file_response(path, content)
 
     if resource == "skills":
         return _codex_resource_call(
