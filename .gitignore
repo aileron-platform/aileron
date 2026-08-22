@@ -78,20 +78,22 @@ workspace-runtime/tests/mock_workspace/
 workspace-runtime/app/tests/mock_workspace/
 .services.pid
 tmp/
-/docs/*
-!/docs/agents/
-!/docs/agents/*.md
-!/docs/adr/
-!/docs/adr/*.md
 docs-site/.docusaurus/
+
+# ─── Working docs (docs-site is the only official documentation) ───
+# Everything below is agent/spec tooling output and must never be committed.
+/docs/
+/CONTEXT.md
+/CONTEXT-MAP.md
+/openspec/
+/.specify/
+**/docs/superpowers/
+**/docs/openspec/
 
 # ─── Data directories (runtime workspaces) ───
 data/*
 !data/README.md
 !data/**/README.md
-
-# ─── Superpowers working docs (never commit) ───
-**/docs/superpowers/
 
 # ─── Root-level dot-directories (tooling/cache) ───
 /.*/
