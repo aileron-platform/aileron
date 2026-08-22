@@ -18,7 +18,7 @@ member 與 admin 可瀏覽、匯出及安裝；建立、匯入、編輯與刪除
 
 ## 相關文件
 
-- [瀏覽與安裝](./browse-and-install)
-- [建立與匯入](./author-and-publish)
-- [Registry 與治理](./registry-and-governance)
+- [瀏覽與安裝](./browse-and-install.md)
+- [建立與匯入](./author-and-publish.md)
+- [Registry 與治理](./registry-and-governance.md)
 - [Manager API](/api/manager-api)

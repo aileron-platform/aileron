@@ -72,11 +72,11 @@ Manager creates the following containers dynamically for each Workspace; they ar
 Git version control is optional for each Knowledge Base. The Manager environment needs the `git lfs` command only when a Knowledge Base enables Git LFS. To track large PDFs, images, archives, or other `raw/` source files with LFS, confirm that Git LFS is installed in the `workspace-manager` image.
 :::
 
-See [Install and Start](./getting-started) for first startup, service-status checks, stopping, and cleanup. `docker buildx bake --load local` builds all images required by the control plane and execution planes. `docker compose up --no-build` starts only the control plane; Manager still creates Runtime, Browser, and Canvas dynamically.
+See [Install and Start](./getting-started.md) for first startup, service-status checks, stopping, and cleanup. `docker buildx bake --load local` builds all images required by the control plane and execution planes. `docker compose up --no-build` starts only the control plane; Manager still creates Runtime, Browser, and Canvas dynamically.
 
 In Aileron, the complete Docker Compose stack is both a deployment option and the default local development mode. Daily module development assumes that the full service set is running, with development mounts and each service's reload mechanism reflecting source changes.
 
-See [Service Endpoints and Accounts](./service-endpoints) for service URLs, default accounts, and health-check endpoints.
+See [Service Endpoints and Accounts](./service-endpoints.md) for service URLs, default accounts, and health-check endpoints.
 
 ## Version and Dependency Ownership
 
@@ -103,7 +103,7 @@ The RKE2 release script resolves toolchain versions through the same Bake target
 
 ## Environment Variables
 
-See [Environment Variable Reference](./environment-variables) for the complete list. The variables below can be set in the shell or an `.env` file and affect overall Docker Compose behavior. Refer to the full environment-variable page for service-specific settings.
+See [Environment Variable Reference](./environment-variables.md) for the complete list. The variables below can be set in the shell or an `.env` file and affect overall Docker Compose behavior. Refer to the full environment-variable page for service-specific settings.
 
 | Variable | Default | Description |
 |------|--------|------|
@@ -376,4 +376,4 @@ Manager lifecycle reconciliation owns dynamic execution-plane health and each co
 | Authentication | Required (external OIDC or bundled Keycloak) | Required (external OIDC or the independent bundled Keycloak Identity Plane) |
 | Best suited for | Development, testing, demos | Production and multi-user collaboration |
 
-For Kubernetes deployment, see [Kubernetes Mode](./kubernetes).
+For Kubernetes deployment, see [Kubernetes Mode](./kubernetes.md).

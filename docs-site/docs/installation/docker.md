@@ -75,11 +75,11 @@ Flower 不是獨立 Compose service，而是由 `workspace-manager` 容器內的
 知識庫的 Git 版本控制是每個 Knowledge Base 的選項；只有在知識庫啟用 Git LFS 時，manager 執行環境才需要可用的 `git lfs` 指令。Docker 映像若要支援大型 PDF、圖片、壓縮檔或其他 `raw/` 來源檔案的 LFS tracking，請確認 `workspace-manager` image 內已安裝 Git LFS。
 :::
 
-首次啟動、TURN readiness bundle、確認服務狀態與停止／清理流程請見 [安裝與啟動](./getting-started)。`docker buildx bake --load local` 建置專案 image；`docker compose up --no-build` 只使用既有 image，Runtime、Browser、Canvas 與每個 Browser probe 仍由 Manager 動態建立。
+首次啟動、TURN readiness bundle、確認服務狀態與停止／清理流程請見 [安裝與啟動](./getting-started.md)。`docker buildx bake --load local` 建置專案 image；`docker compose up --no-build` 只使用既有 image，Runtime、Browser、Canvas 與每個 Browser probe 仍由 Manager 動態建立。
 
 在 Aileron 中，這個完整的 Docker Compose stack 不只是部署方式，也是預設的本地開發模式。日常模組開發應以整套服務一起啟動為前提，再透過開發用掛載與各服務內建的 reload 機制，即時反映程式碼變更。
 
-服務 URL、預設帳號與健康檢查端點請見 [服務位址與帳號](./service-endpoints)。
+服務 URL、預設帳號與健康檢查端點請見 [服務位址與帳號](./service-endpoints.md)。
 
 ## 版本與依賴責任
 
@@ -106,7 +106,7 @@ RKE2 發佈腳本也透過相同 Bake target 解析工具鏈版號，再套用 r
 
 ## 環境變數配置
 
-完整的環境變數參考請見 [環境變數參考](./environment-variables)。以下環境變數可透過 shell 或 `.env` 檔案設定，影響整體 docker compose 行為（其餘各服務變數請直接查閱環境變數參考頁）：
+完整的環境變數參考請見 [環境變數參考](./environment-variables.md)。以下環境變數可透過 shell 或 `.env` 檔案設定，影響整體 docker compose 行為（其餘各服務變數請直接查閱環境變數參考頁）：
 
 | 變數 | 預設值 | 說明 |
 |------|--------|------|
@@ -392,4 +392,4 @@ root Compose 的 control-plane service 設定了健康檢查：
 | 認證 | 必要（external OIDC 或 bundled Keycloak） | 必要（external OIDC 或獨立 bundled Keycloak Identity Plane） |
 | 適合場景 | 開發、測試、Demo | 正式環境、多人協作 |
 
-若需要 Kubernetes 部署，請參閱 [Kubernetes 模式](./kubernetes)。
+若需要 Kubernetes 部署，請參閱 [Kubernetes 模式](./kubernetes.md)。

@@ -18,7 +18,7 @@ Members and admins can browse, export, and install. Creating, importing, editing
 
 ## Related pages
 
-- [Browse and Install](./browse-and-install)
-- [Create and Import](./author-and-publish)
-- [Registry and Governance](./registry-and-governance)
+- [Browse and Install](./browse-and-install.md)
+- [Create and Import](./author-and-publish.md)
+- [Registry and Governance](./registry-and-governance.md)
 - [Manager API](/api/manager-api)
