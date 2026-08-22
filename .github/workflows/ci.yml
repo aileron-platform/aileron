@@ -32,14 +32,14 @@ jobs:
 
       - name: Render default chart
         run: >-
-          docker run --rm -v "$PWD:/workspace" -w /workspace alpine/helm:3.16.4
+          docker run --rm -v "$PWD:/workspace" -w /workspace alpine/helm:3.19.0@sha256:e4e787415a4964fc6559cba60ed13f7b46e435c2f91529894bca7a7a33a0841e
           template aileron helm/aileron --namespace workspace-system
           --output-dir /tmp/rendered-default
 
       - name: Validate Kubernetes platform contracts
         run: >-
           docker run --rm --entrypoint /bin/sh
-          -v "$PWD:/workspace" -w /workspace alpine/helm:3.16.4
+          -v "$PWD:/workspace" -w /workspace alpine/helm:3.19.0@sha256:e4e787415a4964fc6559cba60ed13f7b46e435c2f91529894bca7a7a33a0841e
           ./scripts/test/helm/assert-kubernetes-platform-contracts.sh
 
   platform-service-image-contract:
