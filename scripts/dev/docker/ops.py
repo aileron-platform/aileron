@@ -9,7 +9,9 @@ owning image or package versions.
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -44,6 +46,14 @@ DATA_DIRS = (
     "data/turn-secrets",
 )
 PRESERVED_FILENAMES = {".gitkeep", "README.md"}
+PLATFORM_SECRETS_DIR = "data/platform-secrets"
+TURN_REACHABILITY_PROFILE_SOURCE = Path(
+    "contracts/browser-connectivity/turn-reachability-profile.json"
+)
+BUNDLED_POSTGRES_HOST = "postgres"
+BUNDLED_REDIS_HOST = "redis"
+BUNDLED_POSTGRES_DATABASE = "aileron"
+PLATFORM_LOGIN_USERNAME = "platform_login"
 
 BLUE = "\033[0;34m"
 GREEN = "\033[0;32m"
@@ -218,6 +228,9 @@ def build_compose_env() -> dict[str, str]:
                     data_root / "runtime-assertions" / "jwks.json",
                 )
             ),
+            "HOST_PLATFORM_SECRETS_DIR": str(
+                env.get("HOST_PLATFORM_SECRETS_DIR", data_root / PLATFORM_SECRETS_DIR.split("/")[-1])
+            ),
             "HOST_TURN_CONFIG_DIR": str(
                 env.get("HOST_TURN_CONFIG_DIR", data_root / "turn-config")
             ),
@@ -227,6 +240,204 @@ def build_compose_env() -> dict[str, str]:
         }
     )
     return env
+
+
+def _resolve_host_dir(repo_root: Path, env: dict[str, str], variable_name: str) -> Path:
+    directory = Path(env[variable_name])
+    if not directory.is_absolute():
+        directory = (repo_root / directory).resolve()
+    return directory
+
+
+def _random_token() -> str:
+    return secrets.token_hex(32)
+
+
+def _random_admin_password() -> str:
+    return f"Local-{secrets.token_hex(16)}-Aa9!"
+
+
+def _ensure_secret_file(
+    path: Path, factory, *, mode: int = 0o600, force: bool = False
+) -> str:
+    """Create the secret only when missing; return the effective value.
+
+    Bootstrapping must be idempotent so that re-running it never rotates an
+    existing credential that running services already depend on.
+    """
+
+    if path.exists() and not force:
+        return path.read_text().strip()
+    value = factory()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"{value}\n")
+    os.chmod(path, mode)
+    print_success(f"已產生 {path.name}")
+    return value
+
+
+def ensure_platform_secrets(
+    repo_root: Path, env: dict[str, str], *, force: bool = False
+) -> None:
+    secrets_dir = _resolve_host_dir(repo_root, env, "HOST_PLATFORM_SECRETS_DIR")
+    secrets_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(secrets_dir, 0o700)
+
+    _ensure_secret_file(
+        secrets_dir / "postgres-bootstrap-superuser-password",
+        _random_token,
+        force=force,
+    )
+    platform_username = _ensure_secret_file(
+        secrets_dir / "postgres-platform-username",
+        lambda: PLATFORM_LOGIN_USERNAME,
+        force=force,
+    )
+    platform_password = _ensure_secret_file(
+        secrets_dir / "postgres-platform-password", _random_token, force=force
+    )
+
+    database_url = (
+        f"postgresql://{platform_username}:{platform_password}"
+        f"@{BUNDLED_POSTGRES_HOST}:5432/{BUNDLED_POSTGRES_DATABASE}"
+    )
+    database_url_file = secrets_dir / "platform-database-url"
+    existing_url = _ensure_secret_file(
+        database_url_file, lambda: database_url, force=force
+    )
+    if existing_url != database_url:
+        print_warning(
+            "platform-database-url 指向 bundled data services 以外的資料庫，保留現有內容。"
+        )
+
+    for name, logical_database in (
+        ("redis-general-url", 0),
+        ("redis-job-queue-url", 1),
+        ("redis-job-result-url", 2),
+    ):
+        _ensure_secret_file(
+            secrets_dir / name,
+            lambda index=logical_database: f"redis://{BUNDLED_REDIS_HOST}:6379/{index}",
+            force=force,
+        )
+
+    _ensure_secret_file(secrets_dir / "oidc-client-secret", _random_token, force=force)
+    _ensure_secret_file(
+        secrets_dir / "local-oidc-platform-admin-password",
+        _random_admin_password,
+        force=force,
+    )
+    keycloak_admin_file = secrets_dir / "keycloak-bootstrap-admin-password"
+    _ensure_secret_file(
+        keycloak_admin_file, _random_admin_password, mode=0o400, force=force
+    )
+    if hasattr(os, "chown"):
+        try:
+            os.chown(keycloak_admin_file, 1000, 1000)
+        except PermissionError:
+            print_warning(
+                f"無法將 {keycloak_admin_file.name} chown 為 1000:1000，保留現有擁有者。"
+            )
+
+
+def ensure_turn_secrets(
+    repo_root: Path, env: dict[str, str], *, force: bool = False
+) -> None:
+    config_dir = _resolve_host_dir(repo_root, env, "HOST_TURN_CONFIG_DIR")
+    secrets_dir = _resolve_host_dir(repo_root, env, "HOST_TURN_SECRETS_DIR")
+    for directory in (config_dir, secrets_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+        os.chmod(directory, 0o700)
+
+    profile_source = repo_root / TURN_REACHABILITY_PROFILE_SOURCE
+    if not profile_source.is_file():
+        raise OpsError(f"找不到 TURN reachability 契約: {profile_source}")
+    profile_target = config_dir / profile_source.name
+    if force or not profile_target.exists():
+        shutil.copyfile(profile_source, profile_target)
+        os.chmod(profile_target, 0o600)
+        print_success(f"已寫入 {profile_target.name}")
+    profile = json.loads(profile_target.read_text())
+
+    # The TURN REST issuer and coturn must share one secret or credential
+    # validation fails, so derive the second file from the first.
+    turn_secret = _ensure_secret_file(
+        secrets_dir / "turn-rest-shared-secret", _random_token, force=force
+    )
+    _ensure_secret_file(
+        secrets_dir / "coturn-auth-secret", lambda: turn_secret, force=force
+    )
+    _ensure_secret_file(
+        secrets_dir / "gateway-internal-token", _random_token, force=force
+    )
+    agent_token = _ensure_secret_file(
+        secrets_dir / "host-agent-token", _random_token, force=force
+    )
+    _ensure_secret_file(
+        secrets_dir / "connectivity-agent-tokens.json",
+        lambda: json.dumps({"host": agent_token}),
+        force=force,
+    )
+    for name, vantage in (
+        ("turn-backend-ice-servers.json", "backend"),
+        ("turn-frontend-ice-servers.json", "frontend"),
+    ):
+        _ensure_secret_file(
+            secrets_dir / name,
+            lambda key=vantage: json.dumps([{"urls": profile[key]["urls"]}]),
+            force=force,
+        )
+
+
+ENV_FILE_HOST_PATHS = {
+    "HOST_PROJECT_ROOT": "",
+    "HOST_PLATFORM_SECRETS_DIR": "data/platform-secrets",
+    "HOST_TURN_CONFIG_DIR": "data/turn-config",
+    "HOST_TURN_SECRETS_DIR": "data/turn-secrets",
+}
+
+
+def ensure_env_file(repo_root: Path, *, force: bool = False) -> None:
+    """Materialise .env from .env.example with real host paths.
+
+    Compose reads .env for the non-path settings the stack requires, and it is
+    git-ignored, so a fresh clone has none and every ``${VAR:?}`` guard fails.
+    """
+
+    env_file = repo_root / ".env"
+    if env_file.exists() and not force:
+        return
+    example_file = repo_root / ".env.example"
+    if not example_file.is_file():
+        raise OpsError(f"找不到 .env 範本: {example_file}")
+
+    lines = []
+    for line in example_file.read_text().splitlines():
+        name, separator, _ = line.partition("=")
+        if separator and name in ENV_FILE_HOST_PATHS:
+            relative = ENV_FILE_HOST_PATHS[name]
+            resolved = repo_root / relative if relative else repo_root
+            line = f"{name}={resolved}"
+        lines.append(line)
+    env_file.write_text("\n".join(lines) + "\n")
+    print_success("已從 .env.example 產生 .env")
+
+
+def bootstrap_local_inputs(
+    repo_root: Path, env: dict[str, str], *, force: bool = False
+) -> None:
+    """Create every operator-supplied input the local compose stack mounts.
+
+    Compose binds these files into containers, so a missing file fails at
+    container creation before any preflight service can report a diagnosis.
+    """
+
+    print_info("準備本機 compose 啟動輸入...")
+    ensure_env_file(repo_root, force=force)
+    ensure_host_storage_directories(repo_root, env)
+    ensure_platform_secrets(repo_root, env, force=force)
+    ensure_turn_secrets(repo_root, env, force=force)
+    print_success("本機啟動輸入已就緒")
 
 
 def ensure_host_storage_directories(repo_root: Path, env: dict[str, str]) -> None:
@@ -371,7 +582,7 @@ def compose_up(
     bundled_file = repo_root / "docker-compose.bundled-data-services.yml"
     if not compose_file.is_file() or not bundled_file.is_file():
         raise OpsError("未找到 docker-compose.yml，無法啟動 compose stack。")
-    ensure_host_storage_directories(repo_root, env)
+    bootstrap_local_inputs(repo_root, env)
     command = [
         "docker",
         "compose",
@@ -608,6 +819,18 @@ def list_project_image_ids(repo_root: Path) -> list[str]:
     return list(seen)
 
 
+def _preserved_names(target_dir: Path, path: Path) -> set[str]:
+    """Preserve placeholders owned by the data directory itself.
+
+    A recursive name match would also keep files such as a stale workspace's
+    vendored plugin READMEs, which are container output rather than scaffolding.
+    """
+
+    if path.parent == target_dir:
+        return PRESERVED_FILENAMES
+    return set()
+
+
 def clean_data_directories(repo_root: Path) -> int:
     cleaned = 0
     for relative_dir in DATA_DIRS:
@@ -618,7 +841,9 @@ def clean_data_directories(repo_root: Path) -> int:
         for path in sorted(
             target_dir.rglob("*"), key=lambda item: len(item.parts), reverse=True
         ):
-            if path.is_file() and path.name not in PRESERVED_FILENAMES:
+            if path.is_symlink() or (
+                path.is_file() and path.name not in _preserved_names(target_dir, path)
+            ):
                 path.unlink(missing_ok=True)
             elif path.is_dir():
                 try:
@@ -640,9 +865,9 @@ def list_data_residuals(repo_root: Path) -> list[Path]:
         if not target_dir.is_dir():
             continue
         for path in target_dir.rglob("*"):
-            if path.is_dir():
+            if path.is_dir() and not path.is_symlink():
                 continue
-            if path.is_file() and path.name in PRESERVED_FILENAMES:
+            if path.is_file() and path.name in _preserved_names(target_dir, path):
                 continue
             residuals.append(path)
     return residuals
@@ -666,6 +891,14 @@ def clean_temp_directories(repo_root: Path) -> int:
     else:
         print_info("沒有找到需要清理的臨時文件")
     return cleaned
+
+
+def compose_project_name(repo_root: Path) -> str:
+    """Match Compose's default project name derived from the directory name."""
+
+    return os.environ.get("COMPOSE_PROJECT_NAME") or repo_root.name.lower().replace(
+        " ", ""
+    )
 
 
 def full_reset(
@@ -697,7 +930,15 @@ def full_reset(
 
     print_info("步驟 3: 清理 volumes")
     volumes = list_named_resources(
-        ["docker", "volume", "ls", "--filter", "name=aileron", "--format", "{{.Name}}"],
+        [
+            "docker",
+            "volume",
+            "ls",
+            "--filter",
+            f"label=com.docker.compose.project={compose_project_name(repo_root)}",
+            "--format",
+            "{{.Name}}",
+        ],
         repo_root,
     )
     remove_named_resources("volumes", volumes, ["docker", "volume", "rm"], repo_root)
@@ -707,6 +948,19 @@ def full_reset(
         ["docker", "network", "ls", "--filter", "name=aileron", "--format", "{{.ID}}"],
         repo_root,
     )
+    networks += list_named_resources(
+        [
+            "docker",
+            "network",
+            "ls",
+            "--filter",
+            f"label=com.docker.compose.project={compose_project_name(repo_root)}",
+            "--format",
+            "{{.ID}}",
+        ],
+        repo_root,
+    )
+    networks = list(dict.fromkeys(networks))
     remove_named_resources("networks", networks, ["docker", "network", "rm"], repo_root)
 
     print_info("步驟 5: 清理 Docker images")
@@ -775,6 +1029,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Aileron host-side Docker operations CLI",
         epilog=(
             "常用範例:\n"
+            "  python scripts/dev/docker/ops.py bootstrap          # Create local secrets only\n"
             "  python scripts/dev/docker/ops.py up                 # Start from existing local images\n"
             "  python scripts/dev/docker/ops.py up --build         # Build all images with Bake before startup\n"
             "  python scripts/dev/docker/ops.py down\n"
@@ -808,6 +1063,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--foreground",
         action="store_true",
         help="Run docker compose up in foreground mode",
+    )
+
+    bootstrap_parser = subparsers.add_parser(
+        "bootstrap",
+        help="Create the operator-supplied inputs the local stack mounts",
+        description=(
+            "產生本機 compose stack 掛載的部署者輸入（platform secrets、TURN secrets\n"
+            "與 reachability profile）。預設為冪等：既有檔案一律保留不覆寫。"
+        ),
+    )
+    bootstrap_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="重新產生所有輸入，會輪替既有憑證",
     )
 
     down_parser = subparsers.add_parser(
@@ -885,6 +1154,9 @@ def main() -> int:
                 detach=not args.foreground,
                 env=env,
             )
+            return 0
+        if args.command == "bootstrap":
+            bootstrap_local_inputs(repo_root, build_compose_env(), force=args.force)
             return 0
         if args.command == "down":
             ensure_docker_available()

@@ -1,4 +1,4 @@
-.PHONY: help build build-test-support build-k3s-e2e \
+.PHONY: help bootstrap build build-test-support build-k3s-e2e \
         build-kubernetes-contract build-release push-release \
         start up down full-reset verify-local test-manager-cli \
         test-all test-unit test-integration test-runtime test-manager \
@@ -17,6 +17,8 @@
 BAKE := docker buildx bake
 COMPOSE := docker compose
 LOCAL_COMPOSE := $(COMPOSE) -f docker-compose.yml -f docker-compose.bundled-data-services.yml
+# ops.py is the single startup path: it creates the mounted inputs before compose runs.
+OPS := python3 scripts/dev/docker/ops.py
 
 CYAN := \033[0;36m
 GREEN := \033[0;32m
@@ -49,16 +51,20 @@ build-release: ## Build and load release images into the local image store
 push-release: ## Push release images with an immutable RELEASE_TAG
 	@$(BAKE) --push release
 
-start: ## Start the local stack from existing images without building
-	@$(LOCAL_COMPOSE) up --remove-orphans --no-build -d
+bootstrap: ## Create the operator-supplied inputs the local stack mounts
+	@$(OPS) bootstrap
 
-up: build start ## Build once and then start the local stack
+start: ## Start the local stack from existing images without building
+	@$(OPS) up
+
+up: ## Build once and then start the local stack
+	@$(OPS) up --build
 
 down: ## Stop the local stack
-	@$(LOCAL_COMPOSE) down --remove-orphans
+	@$(OPS) down
 
 full-reset: ## Remove the stack, dynamic workspaces, and local data
-	@python3 scripts/dev/docker/ops.py full-reset
+	@$(OPS) full-reset
 
 verify-local: build test-all start ## Build once, reuse images for tests, and start the final stack
 

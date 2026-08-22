@@ -127,7 +127,14 @@ cd aileron
 python scripts/dev/docker/ops.py up --build
 ```
 
-> The first build may take **5–10 minutes**.
+`up` first materialises the inputs Compose mounts — `.env` from `.env.example`,
+plus the platform and TURN secrets — then builds and starts the stack. It is
+idempotent, so an existing `.env` or secret is never rotated. Run
+`python scripts/dev/docker/ops.py bootstrap` on its own to create those inputs
+without starting anything.
+
+> A cold first build produces 11 images and can take **45–60 minutes**.
+> Subsequent builds reuse the Bake cache and finish in minutes.
 
 ### Workspace Runtime Base Selection
 
