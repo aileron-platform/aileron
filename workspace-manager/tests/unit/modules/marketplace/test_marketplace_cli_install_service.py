@@ -32,17 +32,6 @@ def _request() -> MarketplacePluginInstallRequest:
     )
 
 
-def _source_request() -> MarketplacePluginInstallRequest:
-    return MarketplacePluginInstallRequest(
-        target_client="codex",
-        package_format="codex-native",
-        package_id="superpowers",
-        source_id="codex:openai-curated",
-        revision="b" * 40,
-        workspace_id="workspace-1",
-    )
-
-
 def _result(*, status: str = "installed") -> dict[str, object]:
     return {
         "status": status,
@@ -141,49 +130,11 @@ def test_install_resolves_published_package_then_calls_runtime_with_minimal_cont
         operation_id=OPERATION_ID,
         workspace_id="workspace-1",
         marketplace_id="private-marketplace",
-        source_id=None,
         error_code=None,
         commands=[],
         now=NOW,
     )
     db.commit.assert_called_once_with()
-
-
-def test_install_resolves_registered_marketplace_source_plugin() -> None:
-    service, _db, registry, runtime_client, _activities, _workspace_access = _service()
-    registry.resolve_marketplace_source_plugin.return_value = SimpleNamespace(
-        marketplace_id="openai-curated",
-        remote_url="https://github.com/openai/plugins/",
-        revision="b" * 40,
-    )
-    runtime_client.install_plugin.return_value = {
-        **_result(),
-        "packageId": "superpowers",
-        "marketplaceId": "openai-curated",
-    }
-
-    result = service.install("user-1", _source_request())
-
-    registry.resolve_marketplace_source_plugin.assert_called_once_with(
-        "user-1",
-        source_id="codex:openai-curated",
-        target_client="codex",
-        package_format="codex-native",
-        package_id="superpowers",
-        revision="b" * 40,
-    )
-    registry.resolve_managed_package_for_install.assert_not_called()
-    assert runtime_client.install_plugin.call_args.kwargs["payload"] == {
-        "operationId": OPERATION_ID,
-        "targetClient": "codex",
-        "packageId": "superpowers",
-        "marketplaceId": "openai-curated",
-        "remoteUrl": "https://github.com/openai/plugins/",
-        "registryRef": "b" * 40,
-        "workspaceId": "workspace-1",
-        "runtimeInstanceId": "11111111-1111-4111-8111-111111111111",
-    }
-    assert result.status == "installed"
 
 
 def test_default_operation_id_is_runtime_compatible_lowercase_hex() -> None:

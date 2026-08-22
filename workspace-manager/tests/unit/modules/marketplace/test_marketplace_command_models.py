@@ -109,19 +109,8 @@ def test_plugin_request_has_no_installation_mode_compatibility_field() -> None:
         )
     with pytest.raises(ValidationError):
         MarketplacePluginInstallRequest.model_validate(
-            {**payload, "version": None, "revision": "a" * 40}
+            {**payload, "sourceId": "codex:tools:repository", "revision": "a" * 40}
         )
-    source_request = MarketplacePluginInstallRequest.model_validate(
-        {
-            "targetClient": "codex",
-            "packageFormat": "codex-native",
-            "packageId": "review-helper",
-            "sourceId": "codex:tools:repository",
-            "revision": "b" * 40,
-            "workspaceId": "workspace-1",
-        }
-    )
-    assert source_request.revision == "b" * 40
 
 
 def test_user_copy_request_and_approval_proofs_are_bounded() -> None:

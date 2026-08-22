@@ -593,7 +593,6 @@ def test_catalog_lists_agent_plugin_artifact_without_codex_native_wrapper(
     assert package.package_format == "agent-plugin/1.0.0"
     assert package.user_copy_target_client == "codex"
     assert package.catalog_plugin_id == "aileron-internal/portable-review"
-    assert package.lifecycle_status == "ready"
     assert package.indexed_resource_names == ["skill", "skills"]
 
 
