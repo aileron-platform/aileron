@@ -157,7 +157,7 @@ oidc:
 
 With built-in TURN and Secret-based Registry authentication, Coturn runs in a
 separate `coturn.namespace`; the selected `global.imagePullSecrets` name must
-exist in both the Runtime and Coturn namespaces. RKE2 HomeLab must prepare them
+exist in both the Runtime and Coturn namespaces. RKE2 must prepare them
 through [Kubernetes Installation — `prepare-cluster`](./kubernetes.md#prepare-cluster),
 without manually creating copies.
 
@@ -377,7 +377,7 @@ Bundled Keycloak uses explicit `aileron-identity` backup and restore operations 
 PostgreSQL and the realm. Backup and restore cannot run together, and a normal install never
 restores implicitly. External OIDC follows its provider's supported backup contract. Aileron Core
 does not provide a provider-specific administration API.
-The Identity chart owns the backup PVC; the HomeLab profile uses `aileron-nfs-rwx-retain` with
+The Identity chart owns the backup PVC; the cluster profile uses `aileron-nfs-rwx-retain` with
 `ReadWriteMany`. Restore acceptance must run the real dump/restore workflow in
 `identity-installation/backup_restore_smoke.py` with an exact destructive confirmation. Helm render
 output is not restore evidence.

@@ -45,18 +45,18 @@ Bundled Keycloak creates three accounts with separate responsibilities. An accou
 
 | Account | Default username | Password | Purpose and Aileron role |
 | --- | --- | --- | --- |
-| Aileron platform administrator | `admin` | General Kubernetes installations generate a strong random password; only the HomeLab/test deployment explicitly uses `admin123` | Signs in to Aileron through normal OIDC with `platform_role=admin` to manage users, platform resources, and Marketplace content |
+| Aileron platform administrator | `admin` | General Kubernetes installations generate a strong random password; only an isolated test deployment explicitly uses `admin123` | Signs in to Aileron through normal OIDC with `platform_role=admin` to manage users, platform resources, and Marketplace content |
 | Keycloak bootstrap administrator | `keycloak-admin` | Strong random password generated during installation; no fixed default | Signs in only to the Keycloak Admin Console to manage the realm and native users; it is not an Aileron platform administrator |
 | Break-glass | `local-emergency-admin` | Strong random password generated during installation; no fixed default | Emergency OIDC sign-in; it defaults to Aileron `member` unless a platform administrator explicitly promotes it |
 
-:::danger Never reuse the HomeLab password in a shared environment
-`admin123` exists only for convenient sign-in to an isolated HomeLab or local test deployment. Replace
+:::danger Never reuse the test password in a shared environment
+`admin123` exists only for convenient sign-in to an isolated local test deployment. Replace
 it with a unique strong password before allowing access from other users, networks, or the Internet.
 General Kubernetes and bundled installations must not reuse this value.
 :::
 
 The installer never writes random passwords to Git, documentation, logs, or acceptance reports. The
-installation-owned HomeLab artifacts are kept in the following mode-`0700` private tree, with
+installation-owned artifacts are kept in the following mode-`0700` private tree, with
 mode-`0600` credential files:
 
 ```text
@@ -90,7 +90,7 @@ endpoint. Aileron does not call a provider-specific administration API.
 In `externalOidc` mode, the installer does not render or install the Identity Plane. The external
 provider must pass the same standard OIDC conformance as Bundled Keycloak and is not a fallback for
 a failed bundled provider.
-The HomeLab acceptance bundle's `offlineOidcConformance` report validates only the provider-neutral
+The acceptance bundle's `offlineOidcConformance` report validates only the provider-neutral
 adapter and product data contract and is explicitly marked with `mode: offline`. It does not deploy,
 connect to, or claim certification of an external provider. Before production use of `externalOidc`,
 the installer must separately exercise Authorization Code with PKCE, JIT, and failed-login scenarios

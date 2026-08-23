@@ -80,7 +80,7 @@ docker buildx imagetools inspect \
 - CA trust 是節點責任；imagePullSecret 只負責 namespace 內的 Secret-based Registry 認證。
 - 不可用 insecure registry 或跳過 TLS 驗證。
 
-RKE2 HomeLab 的 namespace 與 Secret 準備只能透過 [Kubernetes 安裝 —
+RKE2 的 namespace 與 Secret 準備只能透過 [Kubernetes 安裝 —
 `prepare-cluster`](./kubernetes.md#prepare-cluster) 執行。更新 CA 或 Registry 設定後，先在
 每個 node 實際 pull digest，再依序重跑 `validate`、`prepare-cluster` 與 `apply`；不可直接
 建立 Secret 或執行 Helm upgrade。

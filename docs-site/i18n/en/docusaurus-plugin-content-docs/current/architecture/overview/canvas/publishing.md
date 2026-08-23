@@ -47,7 +47,7 @@ chart 是 Kubernetes 部署的 canonical unit，image 使用 registry digest，c
 
 1. Skill `check` 讀取 Workspace environment，確認 GitLab Project、AppProject policy、digest、
    hostname 固定值與 repository scaffold；namespace、DNS、TLS、IngressClass 與 registry
-   retention 由管理員準備並在 HomeLab E2E 驗收。
+   retention 由管理員準備並在 E2E 驗收。
 2. `publish` 從 `.aileron/canvas.json` 解析 static 或 Next.js standalone source，拒絕 symlink、
    credential-like file、`.env`、build cache 與 Workspace 外部路徑。
 3. Skill 以 Git API authentication 推送 `sites/<siteId>` branch，再用 GitLab API 以

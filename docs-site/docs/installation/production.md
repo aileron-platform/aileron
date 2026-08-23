@@ -151,7 +151,7 @@ oidc:
 - 定期掃描映像漏洞（Trivy、Snyk 等）
 
 使用 built-in TURN 時，Coturn 位於獨立的 `coturn.namespace`。同一個
-`global.imagePullSecrets` 名稱必須同時存在於 Runtime 與 Coturn namespace。RKE2 HomeLab
+`global.imagePullSecrets` 名稱必須同時存在於 Runtime 與 Coturn namespace。RKE2
 必須透過 [Kubernetes 安裝 — `prepare-cluster`](./kubernetes.md#prepare-cluster) 準備，不得
 手動建立副本。
 
@@ -369,7 +369,7 @@ restore drill 證據。
 Bundled Keycloak 使用 `aileron-identity` 的明確 backup／restore operation 保存 Identity
 PostgreSQL 與 realm；兩者不可同時啟用，也不會在一般 install 時隱含 restore。External OIDC
 則依 provider 自身的正式備份契約處理。Aileron Core 不提供 provider-specific admin API。
-Identity chart 會擁有備份 PVC；HomeLab profile 使用 `aileron-nfs-rwx-retain`、
+Identity chart 會擁有備份 PVC；叢集 profile 使用 `aileron-nfs-rwx-retain`、
 `ReadWriteMany`。正式還原驗證須執行 `identity-installation/backup_restore_smoke.py` 的真實
 dump／restore 流程，並提供完全相符的 destructive confirmation；Helm render 不構成還原證據。
 

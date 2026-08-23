@@ -41,16 +41,16 @@ Bundled Keycloak 會建立三個用途不同的帳號。帳號名稱含有 `admi
 
 | 帳號 | 預設使用者名稱 | 密碼 | 用途與 Aileron 角色 |
 | --- | --- | --- | --- |
-| Aileron 平台管理員 | `admin` | 一般 Kubernetes 安裝產生強隨機密碼；只有 HomeLab／測試部署明確使用 `admin123` | 透過正常 OIDC 登入 Aileron，並以 `platform_role=admin` 管理使用者、平台資源與 Marketplace |
+| Aileron 平台管理員 | `admin` | 一般 Kubernetes 安裝產生強隨機密碼；只有隔離測試部署明確使用 `admin123` | 透過正常 OIDC 登入 Aileron，並以 `platform_role=admin` 管理使用者、平台資源與 Marketplace |
 | Keycloak bootstrap administrator | `keycloak-admin` | 安裝時產生強隨機密碼，沒有固定預設值 | 只登入 Keycloak Admin Console 管理 realm 與 native users；不是 Aileron 平台管理員 |
 | Break-glass | `local-emergency-admin` | 安裝時產生強隨機密碼，沒有固定預設值 | 緊急 OIDC 登入；預設是 Aileron `member`，除非平台管理員另外升級角色 |
 
-:::danger HomeLab 密碼不得用於共享環境
-`admin123` 只為隔離的 HomeLab／本機測試提供簡單登入。任何多人共用、可被其他網段存取或對外
+:::danger 測試密碼不得用於共享環境
+`admin123` 只為隔離的本機測試提供簡單登入。任何多人共用、可被其他網段存取或對外
 暴露的環境，都必須在開放服務前改用獨立強密碼。一般 Kubernetes／bundled 安裝不得沿用此值。
 :::
 
-安裝器不會把隨機密碼寫入 Git、文件、log 或驗收報告。HomeLab 的 installation-owned 私密
+安裝器不會把隨機密碼寫入 Git、文件、log 或驗收報告。安裝器的 installation-owned 私密
 artifact 位於下列 mode `0700` private tree，credential files 為 mode `0600`：
 
 ```text
@@ -82,7 +82,7 @@ Provider 的 issuer、由 issuer 固定衍生的 Discovery 與 JWKS 必須由 Ma
 
 選用 `externalOidc` 時，Installer 不 render 或安裝 Identity Plane。External provider 必須通過與
 Bundled Keycloak 相同的標準 OIDC conformance；不得把 external provider 當作失敗時的 fallback。
-HomeLab acceptance bundle 的 `offlineOidcConformance` 僅驗證 provider-neutral adapter 與產品資料
+Acceptance bundle 的 `offlineOidcConformance` 僅驗證 provider-neutral adapter 與產品資料
 契約，report 會明確標示 `mode: offline`；它不會部署、連線或宣稱已驗證任何外部 provider。正式採用
 `externalOidc` 前，部署者仍須以目標 provider 執行真實 Authorization Code + PKCE、JIT 與登入失敗
 情境驗證。

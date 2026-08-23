@@ -52,7 +52,7 @@ DNS、Manager/OIDC provider 控制流量與 TURN 屬於 infrastructure egress，
 
 ## 明確 TURN Reachability Profile
 
-平台不從雲端名稱、Ingress controller 或 homelab 標籤推測 TURN。`turn.profile` 是唯一的
+平台不從雲端名稱、Ingress controller 或部署環境標籤推測 TURN。`turn.profile` 是唯一的
 machine-readable contract，必須明確列出 backend/frontend URL、policy backend、control 與
 relay destination、relay UDP range、credential issuer 及 evidence freshness：
 
@@ -223,7 +223,7 @@ Gateway protocol 使用 `POST /v1/challenges` 與 `POST /v1/evidence`；Operator
 required vantage 的 evidence 也必須在 `expiresAt` 前持續更新。
 
 正式部署應將 Agent 放在實際使用者網路、DMZ、企業出口或平台管理的外部地區。本機開發或
-明確分類的單站 homelab 可啟用 `hostAgent`，但 Kubernetes node 的 host network 證據不能宣稱
+明確分類的單站部署可啟用 `hostAgent`，但 Kubernetes node 的 host network 證據不能宣稱
 代表一般網際網路或所有使用者最後一哩。每個 production-required vantage 都必須有自己的
 token；缺少證據時 Gateway 不延長已到期 evidence 的 TTL。
 

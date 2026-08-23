@@ -105,9 +105,3 @@ python3 scripts/upgrade.py
 ```
 
 若 managed scaffold 被人工修改，Skill 會停止並回報 `MANAGED_SCAFFOLD_DRIFT`，不會靜默覆蓋。
-
-## HomeLab 驗收
-
-在 `develop` 合併後將版本同步至 `rke2-homelab`，所有測試先在 container 執行，再進行 static
-發佈、更新、隔離 namespace、撤下與失敗復原驗收。詳細步驟請讀 Skill 的
-`references/homelab-setup.md`。

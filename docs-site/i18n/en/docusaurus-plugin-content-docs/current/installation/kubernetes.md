@@ -1,11 +1,11 @@
 ---
-title: RKE2 HomeLab Installation
-description: Deploy and upgrade RKE2 HomeLab through its sole three-phase installer
+title: RKE2 Installation
+description: Deploy and upgrade RKE2 through its sole three-phase installer
 ---
 
-# RKE2 HomeLab Installation
+# RKE2 Installation
 
-This page documents only the verified RKE2 HomeLab production contract. The sole top-level entry point is
+This page documents only the verified RKE2 production contract. The sole top-level entry point is
 `scripts/deploy/rke2/install.py`; manual Namespace or Secret creation and direct Helm execution must not replace
 the installer. Other Kubernetes providers do not yet have the same complete installation and recovery proof, so
 this page does not present a speculative generic path.
@@ -34,7 +34,7 @@ Review these topics before deployment:
   `client-certificate`, `client-key`, `tokenFile`, `exec`, and `auth-provider` are rejected.
 - Every Aileron image is published as an immutable digest for the target commit, with a trusted published image
   inventory.
-- StorageClass, Cilium, Ingress, DNS, Apps TLS, OIDC TLS, TURN, and Registry trust satisfy the HomeLab profile.
+- StorageClass, Cilium, Ingress, DNS, Apps TLS, OIDC TLS, TURN, and Registry trust satisfy this page’s cluster profile.
   Registry CA, Apps ingress CA, and OIDC CA are independent inputs and never fall back to one another.
 
 The complete argument and private-input paths are defined by `scripts/deploy/rke2/INSTALL.md` in the repository.
@@ -48,7 +48,7 @@ The complete argument and private-input paths are defined by `scripts/deploy/rke
   standard OIDC Discovery and JWKS.
 
 Bundled mode creates separate Aileron platform-administrator, Keycloak Console administrator, and
-break-glass accounts. The HomeLab platform administrator defaults to `admin` / `admin123` for isolated
+break-glass accounts. An isolated test deployment defaults its platform administrator to `admin` / `admin123` for
 testing only; general Kubernetes installations generate a strong random password. See
 [OIDC and Identity Plane Installation](./oidc.md#bundled-accounts-and-passwords) for roles, password
 policy, and private-artifact locations.
@@ -56,7 +56,7 @@ policy, and private-artifact locations.
 Future LDAP support remains at the identity-provider federation boundary: LDAP owns account lifecycle, Keycloak
 or an external IdP exposes OIDC application login, and this project owns only application authorization while
 retaining a local emergency administrator. The installer does not bind directly to LDAP or pre-import an entire
-directory, so running Docker or HomeLab without LDAP does not close the future support path.
+directory, so running Docker or Kubernetes without LDAP does not close the future support path.
 
 ## Retained Backend Attestor Prerequisite
 
@@ -234,7 +234,7 @@ acceptance entry point, with causal order fixed by
 
 ### Bundled Keycloak Browser Input
 
-The current bundled-Keycloak HomeLab has no LDAP and uses `--use-break-glass-login` to build its Browser
+The current bundled-Keycloak installation has no LDAP and uses `--use-break-glass-login` to build its Browser
 acceptance input from the fixed, installation-owned Keycloak bootstrap-administrator and break-glass credential
 sources:
 

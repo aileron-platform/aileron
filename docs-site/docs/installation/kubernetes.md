@@ -1,11 +1,11 @@
 ---
-title: RKE2 HomeLab 安裝
-description: 以唯一的三階段安裝器部署及升級 RKE2 HomeLab
+title: RKE2 安裝
+description: 以唯一的三階段安裝器部署及升級 RKE2
 ---
 
-# RKE2 HomeLab 安裝
+# RKE2 安裝
 
-本頁只描述已驗證的 RKE2 HomeLab 正式契約。唯一頂層入口是
+本頁只描述已驗證的 RKE2 正式契約。唯一頂層入口是
 `scripts/deploy/rke2/install.py`；不得以手動建立 Namespace／Secret 或直接執行 Helm
 取代安裝器。其他 Kubernetes provider 尚未具備相同的完整安裝與復原驗證，因此本頁不提供
 推測性的通用安裝路徑。
@@ -35,7 +35,7 @@ description: 以唯一的三階段安裝器部署及升級 RKE2 HomeLab
 - 所有 Aileron 映像都已推送為目標 commit 的不可變 digest，且已產生受信任的 published image
   inventory。
 - 叢集的 StorageClass、Cilium、Ingress、DNS、Apps TLS、OIDC TLS、TURN 與 Registry trust
-  已依 HomeLab profile 完成。Registry CA、Apps ingress CA 與 OIDC CA 是三個獨立輸入，不得
+  已依本頁的叢集 profile 完成。Registry CA、Apps ingress CA 與 OIDC CA 是三個獨立輸入，不得
   fallback。
 
 完整參數與 private input 路徑以 repository 中的 `scripts/deploy/rke2/INSTALL.md` 為準。
@@ -49,13 +49,13 @@ description: 以唯一的三階段安裝器部署及升級 RKE2 HomeLab
   必須提供標準 OIDC Discovery／JWKS。
 
 Bundled 模式會建立用途分離的 Aileron 平台管理員、Keycloak Console 管理員與 break-glass
-帳號。HomeLab 的平台管理員預設為 `admin`／`admin123`，只適用於隔離測試環境；一般 Kubernetes
+帳號。隔離測試部署的平台管理員預設為 `admin`／`admin123`；一般 Kubernetes
 安裝會產生強隨機密碼。完整角色、密碼政策與私密 artifact 位置請見
 [OIDC 與 Identity Plane 安裝](./oidc.md#內建帳號與密碼)。
 
 未來 LDAP 支援位於 Identity provider federation 邊界：LDAP 管理帳號生命週期，Keycloak 或
 外部 IdP 透過 OIDC 提供應用登入，本專案只管理應用授權並保留本機緊急管理員。Installer 不會
-直接綁定 LDAP protocol 或預先匯入整個 directory，因此現行 Docker／HomeLab 不啟用 LDAP
+直接綁定 LDAP protocol 或預先匯入整個 directory，因此現行 Docker 與 Kubernetes 安裝不啟用 LDAP
 不會封死後續支援路徑。
 
 ## Retained backend attestor prerequisite
@@ -229,7 +229,7 @@ attestor 是 active lifecycle 驗收的唯一入口，其 causal order 由
 
 ### Bundled Keycloak browser input
 
-目前不含 LDAP 的 bundled Keycloak HomeLab 使用 `--use-break-glass-login`，由固定的 installation-owned
+目前不含 LDAP 的 bundled Keycloak 安裝使用 `--use-break-glass-login`，由固定的 installation-owned
 Keycloak bootstrap administrator 與 break-glass credential sources 產生 Browser 驗收 input：
 
 ```bash

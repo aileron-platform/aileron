@@ -28,8 +28,6 @@ GitLab API 觸發 Pipeline，產生不可變 site image 與 OCI Helm chart，最
 - [管理員設定與權限](./canvas-publishing-admin.md)：建立 GitLab、OCI、Argo CD、Kubernetes、
   DNS/TLS 與 Workspace environment contract。
 - [Workspace 使用者操作](./canvas-publishing-user.md)：從 Canvas 預覽發佈、查詢、回滾與撤下。
-- HomeLab 驗收請依 Skill repository 中的 `references/homelab-setup.md`，在 `rke2-homelab`
-  以 container 執行 E2E 檢查。
 
 ## 生命週期
 

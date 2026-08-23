@@ -45,7 +45,7 @@ When `cilium.enabled=true`, Operator creates policy from each Workspace firewall
 
 ## Explicit TURN Reachability Profile
 
-The platform does not infer TURN from a cloud name, Ingress controller, or homelab label. `turn.profile`
+The platform does not infer TURN from a cloud name, Ingress controller, or deployment label. `turn.profile`
 is the only machine-readable contract. It explicitly lists backend/frontend URLs, policy backend, control
 and relay destinations, relay UDP range, credential issuer, and evidence freshness:
 
@@ -221,7 +221,7 @@ success, and evidence for every required vantage in the Workspace CR must contin
 `expiresAt`.
 
 Production Agents belong in an actual user network, DMZ, enterprise egress, or platform-managed external
-region. Local development or an explicitly classified single-site homelab may enable `hostAgent`, but
+region. Local development or an explicitly classified single-site deployment may enable `hostAgent`, but
 Kubernetes node host-network evidence cannot represent the general Internet or every user's last mile.
 Each production-required vantage has its own token. Missing evidence never extends an expired evidence TTL.
 
