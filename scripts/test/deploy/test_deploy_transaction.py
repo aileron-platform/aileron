@@ -278,7 +278,7 @@ def _prepare_direct_deploy(
     apps_tls = _private(private_root / "inputs/apps-tls.crt")
     oidc_ca = _private(private_root / "inputs/oidc-ca.crt")
     install_secrets = _directory(private_root / "install-secrets")
-    homelab_secrets = _directory(install_secrets / "homelab")
+    homelab_secrets = _directory(install_secrets / "rke2")
     platform_artifacts = _directory(homelab_secrets / "platform-artifacts")
     install_root = _directory(private_root / "install")
     install_work = _directory(install_root / COMMIT)

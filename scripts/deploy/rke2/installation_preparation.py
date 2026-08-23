@@ -831,7 +831,7 @@ def _prepare_locked_inputs(
     if (
         ACCEPTANCE_CLUSTER.INSTALLATION_STATE.PRIVATE_ROOT != private_root
         or ACCEPTANCE_CLUSTER.INSTALLATION_STATE.SECRET_STORE
-        != private_root / "install-secrets/homelab"
+        != private_root / "install-secrets/rke2"
     ):
         raise InstallationPreparationError(
             "live acceptance trust private-state identity is inconsistent"

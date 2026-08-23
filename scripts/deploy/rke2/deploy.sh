@@ -301,7 +301,7 @@ python3 "${repository_root}/scripts/deploy/rke2/private_input.py" \
   validate-directory \
   --path "${platform_artifacts}" \
   --description "platform installation artifacts" \
-  --expected-relative-path "install-secrets/homelab/platform-artifacts" >/dev/null ||
+  --expected-relative-path "install-secrets/rke2/platform-artifacts" >/dev/null ||
   fail "platform installation artifacts are invalid"
 
 kubeconfig="${transaction_directory}/kubeconfig"

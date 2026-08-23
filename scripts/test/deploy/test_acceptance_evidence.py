@@ -96,7 +96,7 @@ BACKEND_PROFILE = {
 def _stable_store_anchor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     install_secrets = tmp_path / "install-secrets"
     install_secrets.mkdir(mode=0o700)
-    store = install_secrets / "homelab"
+    store = install_secrets / "rke2"
     store.mkdir(mode=0o700)
     anchor = store / "acceptance-trust-anchor.json"
     anchor.write_text(
@@ -401,7 +401,7 @@ def _browser_source_commands(
         "--rm",
         BROWSER_IMAGE_ID,
         "node",
-        "/app/e2e/homelab-acceptance.mjs",
+        "/app/e2e/acceptance.mjs",
         "--section",
         section,
     ]
@@ -415,7 +415,7 @@ def _browser_source_commands(
             BROWSER_IMAGE_ID,
             "sh",
             "-ec",
-            'exec node /app/e2e/homelab-acceptance.mjs "$@"',
+            'exec node /app/e2e/acceptance.mjs "$@"',
             "acceptance-browser",
             "--section",
             section,
@@ -454,7 +454,7 @@ def _browser_source_commands(
             ["docker", "image", "rm", "--force", image_tag],
         ],
         BROWSER_SCRIPT_DIGEST: [
-            ["git", "show", f"{COMMIT}:frontend/e2e/homelab-acceptance.mjs"],
+            ["git", "show", f"{COMMIT}:frontend/e2e/acceptance.mjs"],
             [
                 "docker",
                 "run",
@@ -465,7 +465,7 @@ def _browser_source_commands(
                 "-e",
                 (
                     'process.stdout.write(require("node:fs").readFileSync('
-                    '"/app/e2e/homelab-acceptance.mjs"))'
+                    '"/app/e2e/acceptance.mjs"))'
                 ),
             ],
         ],
@@ -1849,7 +1849,7 @@ def _evidence(
                 "--rm",
                 BROWSER_IMAGE_ID,
                 "node",
-                "/app/e2e/homelab-acceptance.mjs",
+                "/app/e2e/acceptance.mjs",
                 "--section",
                 section,
             ]
@@ -1931,7 +1931,7 @@ def _evidence(
                     }
                 )
             exact_source_commands = [
-                ["git", "show", f"{COMMIT}:frontend/e2e/homelab-acceptance.mjs"],
+                ["git", "show", f"{COMMIT}:frontend/e2e/acceptance.mjs"],
                 [
                     "docker",
                     "run",
@@ -1942,7 +1942,7 @@ def _evidence(
                     "-e",
                     (
                         'process.stdout.write(require("node:fs").readFileSync('
-                        '"/app/e2e/homelab-acceptance.mjs"))'
+                        '"/app/e2e/acceptance.mjs"))'
                     ),
                 ],
             ]

@@ -41,7 +41,7 @@ def _private_file(path: Path, value: str) -> Path:
 
 def _private_root(tmp_path: Path) -> Path:
     root = _private_directory(tmp_path / "private")
-    identity = root / "install-secrets/homelab/identity-artifacts"
+    identity = root / "install-secrets/rke2/identity-artifacts"
     _private_file(identity / "keycloak-break-glass/username", "emergency-user")
     _private_file(identity / "keycloak-break-glass/password", "emergency-secret")
     _private_file(identity / "keycloak-bootstrap-admin/username", "realm-admin")
@@ -80,7 +80,7 @@ def _request(
         login_mode=login_mode,
         login_driver=selected_driver,
         identity_artifacts_directory=(
-            root / "install-secrets/homelab/identity-artifacts"
+            root / "install-secrets/rke2/identity-artifacts"
             if authentication_mode == "bundledKeycloak"
             else None
         ),
@@ -98,7 +98,7 @@ def test_canonical_paths_bind_output_and_installation_credentials(
         expected_commit=COMMIT,
         deployment_run_id=RUN_ID,
         identity_artifacts_directory=(
-            root / "install-secrets/homelab/identity-artifacts"
+            root / "install-secrets/rke2/identity-artifacts"
         ),
         private_root=root,
     )
@@ -108,17 +108,17 @@ def test_canonical_paths_bind_output_and_installation_credentials(
     )
     assert paths.break_glass_username == (
         root
-        / "install-secrets/homelab/identity-artifacts"
+        / "install-secrets/rke2/identity-artifacts"
         / "keycloak-break-glass/username"
     )
     assert paths.admin_password == (
         root
-        / "install-secrets/homelab/identity-artifacts"
+        / "install-secrets/rke2/identity-artifacts"
         / "keycloak-bootstrap-admin/password"
     )
     assert paths.platform_admin_username == (
         root
-        / "install-secrets/homelab/identity-artifacts"
+        / "install-secrets/rke2/identity-artifacts"
         / "keycloak-platform-admin/username"
     )
 
@@ -162,7 +162,7 @@ def test_external_identity_postgres_uses_the_installed_identity_artifacts(
     root = _private_root(tmp_path)
     external = (
         root
-        / "install-secrets/homelab/identity-artifacts/postgres-disabled"
+        / "install-secrets/rke2/identity-artifacts/postgres-disabled"
     )
     _private_file(external / "keycloak-break-glass/username", "external-emergency")
     _private_file(external / "keycloak-break-glass/password", "external-secret")
@@ -331,7 +331,7 @@ def test_invalid_username_artifacts_are_rejected(tmp_path: Path, invalid: str) -
         expected_commit=COMMIT,
         deployment_run_id=RUN_ID,
         identity_artifacts_directory=(
-            root / "install-secrets/homelab/identity-artifacts"
+            root / "install-secrets/rke2/identity-artifacts"
         ),
         private_root=root,
     )
@@ -418,7 +418,7 @@ def test_private_root_lock_contention_fails_without_publication(tmp_path: Path) 
         expected_commit=COMMIT,
         deployment_run_id=RUN_ID,
         identity_artifacts_directory=(
-            root / "install-secrets/homelab/identity-artifacts"
+            root / "install-secrets/rke2/identity-artifacts"
         ),
         private_root=root,
     ).output.exists()
@@ -463,7 +463,7 @@ def test_login_pair_rotation_during_source_read_cannot_publish(
         expected_commit=COMMIT,
         deployment_run_id=RUN_ID,
         identity_artifacts_directory=(
-            root / "install-secrets/homelab/identity-artifacts"
+            root / "install-secrets/rke2/identity-artifacts"
         ),
         private_root=root,
     ).output.exists()
@@ -488,7 +488,7 @@ def test_existing_input_is_write_once_and_drift_is_rejected(tmp_path: Path) -> N
         expected_commit=COMMIT,
         deployment_run_id=RUN_ID,
         identity_artifacts_directory=(
-            root / "install-secrets/homelab/identity-artifacts"
+            root / "install-secrets/rke2/identity-artifacts"
         ),
         private_root=root,
     )
@@ -510,7 +510,7 @@ def test_invalid_commit_and_run_identity_are_rejected(tmp_path: Path) -> None:
             expected_commit="short",
             deployment_run_id=RUN_ID,
             identity_artifacts_directory=(
-                root / "install-secrets/homelab/identity-artifacts"
+                root / "install-secrets/rke2/identity-artifacts"
             ),
             private_root=root,
         )
@@ -519,7 +519,7 @@ def test_invalid_commit_and_run_identity_are_rejected(tmp_path: Path) -> None:
             expected_commit=COMMIT,
             deployment_run_id="run-invalid/escape",
             identity_artifacts_directory=(
-                root / "install-secrets/homelab/identity-artifacts"
+                root / "install-secrets/rke2/identity-artifacts"
             ),
             private_root=root,
         )

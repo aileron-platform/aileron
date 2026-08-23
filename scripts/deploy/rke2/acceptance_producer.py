@@ -89,7 +89,7 @@ CLUSTER_SCOPED_SECTIONS = {
     "identity",
 }
 WORKSPACE_SCOPED_SECTIONS = set(PRODUCER_IDS) - CLUSTER_SCOPED_SECTIONS
-BROWSER_PROBE_PATH = "frontend/e2e/homelab-acceptance.mjs"
+BROWSER_PROBE_PATH = "frontend/e2e/acceptance.mjs"
 BROWSER_IMAGE_REPOSITORY = "ailerondocker/workspace-ui-playwright"
 IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 KUBERNETES_STATUS_IMAGE = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -341,7 +341,7 @@ def _subprocess_runner(
     timeout = timeout_seconds
     if timeout is None:
         timeout = (
-            600 if "/app/e2e/homelab-acceptance.mjs" in " ".join(command) else 3600
+            600 if "/app/e2e/acceptance.mjs" in " ".join(command) else 3600
         )
     process = subprocess.Popen(
         command,
@@ -1093,7 +1093,7 @@ def build_browser_probe_command(
             )
         arguments.extend(["--workspace-id", targets.workspace_id])
     if browser_ca is None:
-        command.extend([image, "node", "/app/e2e/homelab-acceptance.mjs", *arguments])
+        command.extend([image, "node", "/app/e2e/acceptance.mjs", *arguments])
     else:
         command.extend(
             [
@@ -1118,7 +1118,7 @@ def build_browser_probe_command(
                     "-n aileron-acceptance -t C,, -a "
                     "-i /usr/local/share/ca-certificates/aileron-acceptance-ca.crt && "
                     "exec node "
-                    '/app/e2e/homelab-acceptance.mjs "$@"'
+                    '/app/e2e/acceptance.mjs "$@"'
                 ),
                 "acceptance-browser",
                 *arguments,
@@ -3962,7 +3962,7 @@ def _produce_browser_section(
         "-e",
         (
             'process.stdout.write(require("node:fs").readFileSync('
-            '"/app/e2e/homelab-acceptance.mjs"))'
+            '"/app/e2e/acceptance.mjs"))'
         ),
     ]
     image_script_result = _run_checked(runner, image_script_command)

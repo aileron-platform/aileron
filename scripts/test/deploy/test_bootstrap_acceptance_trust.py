@@ -224,7 +224,7 @@ def _private_root(tmp_path: Path) -> tuple[Path, Path]:
     kubeconfig.chmod(0o600)
     MODULE.INSTALLATION_STATE.PRIVATE_ROOT = private_root
     MODULE.INSTALLATION_STATE.SECRET_STORE = (
-        private_root / "install-secrets" / "homelab"
+        private_root / "install-secrets" / "rke2"
     )
     return private_root, kubeconfig
 
@@ -251,7 +251,7 @@ def test_fresh_bootstrap_creates_every_private_directory_as_owner_only(
 
     for directory in (
         private_root / "install-secrets",
-        private_root / "install-secrets" / "homelab",
+        private_root / "install-secrets" / "rke2",
         private_root / "acceptance-bootstrap",
         private_root / "acceptance-bootstrap" / COMMIT,
     ):
@@ -271,7 +271,7 @@ def test_bootstrap_rejects_a_hard_linked_existing_signing_key(
     private_root, kubeconfig = _private_root(tmp_path)
     install_secrets = private_root / "install-secrets"
     install_secrets.mkdir(mode=0o700)
-    store = install_secrets / "homelab"
+    store = install_secrets / "rke2"
     store.mkdir(mode=0o700)
     source = store / "shared-key-source"
     source.write_bytes(bytes(range(32)))
@@ -390,7 +390,7 @@ def test_dry_run_bootstraps_only_local_trust_state_and_server_validates_secret(
         installation_id_factory=lambda: INSTALLATION_ID,
     )
 
-    store = private_root / "install-secrets" / "homelab"
+    store = private_root / "install-secrets" / "rke2"
     key = store / "acceptance-hmac.key"
     identity = store / "installation-identity.json"
     assert key.read_bytes() == bytes(range(32))
@@ -507,7 +507,7 @@ def test_rejects_flattened_selected_identity_drift_before_cluster_access(
     assert runner.acceptance_namespace is None
     assert runner.acceptance_secret is None
     assert not (
-        private_root / "install-secrets" / "homelab" / "installation-identity.json"
+        private_root / "install-secrets" / "rke2" / "installation-identity.json"
     ).exists()
     assert [
         command for command, _ in runner.calls if command[0] == "kubectl"
@@ -588,7 +588,7 @@ def test_pre_secret_resume_requires_exact_installation_identity_bytes(
         key_factory=lambda: bytes(range(32)),
     )
     identity_path = (
-        private_root / "install-secrets" / "homelab" / "installation-identity.json"
+        private_root / "install-secrets" / "rke2" / "installation-identity.json"
     )
     canonical = identity_path.read_bytes()
     document = json.loads(canonical)
@@ -668,7 +668,7 @@ def test_apply_creates_immutable_secret_after_dry_run_and_binds_anchor(
     anchor_path = (
         private_root
         / "install-secrets"
-        / "homelab"
+        / "rke2"
         / "acceptance-trust-anchor.json"
     )
     anchor = json.loads(anchor_path.read_text(encoding="utf-8"))
@@ -710,7 +710,7 @@ def test_fresh_anchor_bind_rejects_live_resource_drift(
     anchor_path = (
         private_root
         / "install-secrets"
-        / "homelab"
+        / "rke2"
         / "acceptance-trust-anchor.json"
     )
     assert json.loads(anchor_path.read_bytes())["secretUid"] is None
@@ -746,7 +746,7 @@ def test_bootstrap_fsyncs_stable_private_store_publications(
         key_factory=lambda: b"k" * 32,
     )
 
-    store = private_root / "install-secrets" / "homelab"
+    store = private_root / "install-secrets" / "rke2"
     store_metadata = store.stat()
     assert (store_metadata.st_dev, store_metadata.st_ino) in fsynced_directories
     for filename in (

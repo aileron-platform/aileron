@@ -54,9 +54,9 @@ Bundled Keycloak 會建立三個用途不同的帳號。帳號名稱含有 `admi
 artifact 位於下列 mode `0700` private tree，credential files 為 mode `0600`：
 
 ```text
-<private-root>/install-secrets/homelab/identity-artifacts/keycloak-platform-admin/{subject,username,email,password,import.json}
-<private-root>/install-secrets/homelab/identity-artifacts/keycloak-bootstrap-admin/{username,password}
-<private-root>/install-secrets/homelab/identity-artifacts/keycloak-break-glass/{username,email,password}
+<private-root>/install-secrets/rke2/identity-artifacts/keycloak-platform-admin/{subject,username,email,password,import.json}
+<private-root>/install-secrets/rke2/identity-artifacts/keycloak-bootstrap-admin/{username,password}
+<private-root>/install-secrets/rke2/identity-artifacts/keycloak-break-glass/{username,email,password}
 ```
 
 預設 `<private-root>` 是 `/root/aileron-private`。Kubernetes 中對應資料位於

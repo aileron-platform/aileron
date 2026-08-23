@@ -18,7 +18,7 @@ from typing import Any, NamedTuple
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 FULL_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 RUN_ID_PATTERN = re.compile(r"^run-[a-z0-9][a-z0-9-]{6,57}[a-z0-9]$")
-SECRET_STORE_RELATIVE_PATH = Path("install-secrets/homelab")
+SECRET_STORE_RELATIVE_PATH = Path("install-secrets/rke2")
 
 
 def _load_private_input() -> Any:

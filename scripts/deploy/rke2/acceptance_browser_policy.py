@@ -391,7 +391,7 @@ class BrowserObservationPolicy:
         tracked_command = [
             "git",
             "show",
-            f"{context.commit}:frontend/e2e/homelab-acceptance.mjs",
+            f"{context.commit}:frontend/e2e/acceptance.mjs",
         ]
         image_script_command = [
             "docker",
@@ -403,7 +403,7 @@ class BrowserObservationPolicy:
             "-e",
             (
                 'process.stdout.write(require("node:fs").readFileSync('
-                '"/app/e2e/homelab-acceptance.mjs"))'
+                '"/app/e2e/acceptance.mjs"))'
             ),
         ]
         if not _source_has_command(
@@ -421,7 +421,7 @@ class BrowserObservationPolicy:
         if not any(
             command[:3] == ["docker", "run", "--rm"]
             and browser_probe["imageId"] in command
-            and "/app/e2e/homelab-acceptance.mjs" in " ".join(command)
+            and "/app/e2e/acceptance.mjs" in " ".join(command)
             and "--section" in command
             for command in commands
         ):
@@ -452,7 +452,7 @@ class BrowserObservationPolicy:
         recognized = (
             command[:3] == ["docker", "run", "--rm"]
             and any(
-                "/app/e2e/homelab-acceptance.mjs" in argument for argument in command
+                "/app/e2e/acceptance.mjs" in argument for argument in command
             )
             and _option_value(command, "--section") == section
         )

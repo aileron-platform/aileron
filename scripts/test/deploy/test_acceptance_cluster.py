@@ -164,7 +164,7 @@ def _secret_store(tmp_path: Path, **overrides: str) -> Path:
     install_secrets = tmp_path / "install-secrets"
     install_secrets.mkdir(mode=0o700, exist_ok=True)
     install_secrets.chmod(0o700)
-    store = install_secrets / "homelab"
+    store = install_secrets / "rke2"
     store.mkdir(mode=0o700, exist_ok=True)
     store.chmod(0o700)
     anchor = {

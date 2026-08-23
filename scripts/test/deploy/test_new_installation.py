@@ -135,7 +135,7 @@ def _private_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     kubeconfig = private_root / "kubeconfig"
     kubeconfig.write_bytes(_kubeconfig())
     kubeconfig.chmod(0o600)
-    store = private_root / "install-secrets" / "homelab"
+    store = private_root / "install-secrets" / "rke2"
     store.mkdir(mode=0o700, parents=True)
     (private_root / "install-secrets").chmod(0o700)
     identity_document = {

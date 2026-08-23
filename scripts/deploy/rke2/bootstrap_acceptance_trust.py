@@ -552,7 +552,7 @@ def _bootstrap_acceptance_trust_locked(
 ) -> None:
     """Run one trust bootstrap while the private-root descriptor is locked."""
 
-    expected_secret_store = private_root / "install-secrets" / "homelab"
+    expected_secret_store = private_root / "install-secrets" / "rke2"
     if secret_store != expected_secret_store:
         raise BootstrapError("installation Secret store path is not canonical")
     _ensure_private_directory(

@@ -105,7 +105,7 @@ def _canonical_backend_binding() -> dict:
 def _stable_store_anchor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     install_secrets = tmp_path / "install-secrets"
     install_secrets.mkdir(mode=0o700)
-    store = install_secrets / "homelab"
+    store = install_secrets / "rke2"
     store.mkdir(mode=0o700)
     anchor = store / "acceptance-trust-anchor.json"
     anchor.write_text(
@@ -1358,7 +1358,7 @@ def _browser_probe_fixture(
         "-e",
         (
             'process.stdout.write(require("node:fs").readFileSync('
-            '"/app/e2e/homelab-acceptance.mjs"))'
+            '"/app/e2e/acceptance.mjs"))'
         ),
     ]
     run = MODULE.build_browser_probe_command(
@@ -1730,7 +1730,7 @@ def test_browser_provenance_rejects_a_dirty_checkout(tmp_path: Path) -> None:
             runner=Runner(
                 {
                     tuple(MODULE.browser_git_status_command()): MODULE.CommandResult(
-                        b" M frontend/e2e/homelab-acceptance.mjs\n", b"", 0
+                        b" M frontend/e2e/acceptance.mjs\n", b"", 0
                     )
                 }
             ),
@@ -1750,7 +1750,7 @@ def test_subprocess_runner_terminates_a_hanging_acceptance_command() -> None:
 
 def test_browser_provenance_binds_head_and_tracked_script(tmp_path: Path) -> None:
     targets = _targets(tmp_path)
-    tracked = (ROOT / "frontend/e2e/homelab-acceptance.mjs").read_bytes()
+    tracked = (ROOT / "frontend/e2e/acceptance.mjs").read_bytes()
     commands = MODULE.browser_source_commands(targets.commit)
     runner = Runner(
         {
@@ -6040,8 +6040,11 @@ def test_root_compose_example_covers_every_interpolation_input() -> None:
         for line in (ROOT / ".env.example").read_text().splitlines()
         if line and not line.startswith("#") and "=" in line
     }
+    # Compose reads these itself instead of interpolating them into a service,
+    # so they are declared for the operator without appearing above.
+    compose_native_inputs = {"COMPOSE_PROFILES"}
 
-    assert compose_inputs == example_inputs
+    assert compose_inputs == example_inputs - compose_native_inputs
 
 
 def test_compose_suite_failure_still_cleans_project_and_rechecks_source(

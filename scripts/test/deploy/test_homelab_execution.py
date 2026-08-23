@@ -695,7 +695,7 @@ def test_external_identity_postgres_selects_its_installed_artifact_directory(
         identity_mode="bundledKeycloak",
     ) == (
         private_root
-        / "install-secrets/homelab/identity-artifacts/postgres-disabled"
+        / "install-secrets/rke2/identity-artifacts/postgres-disabled"
     )
 
 

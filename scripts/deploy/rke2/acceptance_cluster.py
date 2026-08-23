@@ -144,7 +144,7 @@ def _stable_store() -> Path:
         return PRIVATE_INPUT.validate_private_directory(
             path,
             "installation secret store",
-            expected_relative_path=Path("install-secrets/homelab"),
+            expected_relative_path=Path("install-secrets/rke2"),
             private_root=_private_root(),
         )
     except PRIVATE_INPUT.PrivateInputError as exc:

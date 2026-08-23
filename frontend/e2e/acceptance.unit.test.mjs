@@ -26,7 +26,7 @@ import {
   waitForAdminConsoleAuthentication,
   waitForAdminConsoleUserSwitch,
   waitForDisableConfirmationAction,
-} from './homelab-acceptance.mjs';
+} from './acceptance.mjs';
 
 const oidcWorkspaceOptions = {
   platformUrl: 'https://aileron.example.test',

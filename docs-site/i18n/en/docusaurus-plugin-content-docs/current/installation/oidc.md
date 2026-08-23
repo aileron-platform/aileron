@@ -60,9 +60,9 @@ installation-owned artifacts are kept in the following mode-`0700` private tree,
 mode-`0600` credential files:
 
 ```text
-<private-root>/install-secrets/homelab/identity-artifacts/keycloak-platform-admin/{subject,username,email,password,import.json}
-<private-root>/install-secrets/homelab/identity-artifacts/keycloak-bootstrap-admin/{username,password}
-<private-root>/install-secrets/homelab/identity-artifacts/keycloak-break-glass/{username,email,password}
+<private-root>/install-secrets/rke2/identity-artifacts/keycloak-platform-admin/{subject,username,email,password,import.json}
+<private-root>/install-secrets/rke2/identity-artifacts/keycloak-bootstrap-admin/{username,password}
+<private-root>/install-secrets/rke2/identity-artifacts/keycloak-break-glass/{username,email,password}
 ```
 
 The default `<private-root>` is `/root/aileron-private`. In Kubernetes, the corresponding data is in

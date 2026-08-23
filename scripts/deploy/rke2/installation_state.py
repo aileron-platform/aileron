@@ -12,7 +12,7 @@ from uuid import UUID
 
 
 PRIVATE_ROOT = Path("/root/aileron-private")
-SECRET_STORE = PRIVATE_ROOT / "install-secrets/homelab"
+SECRET_STORE = PRIVATE_ROOT / "install-secrets/rke2"
 BUNDLED_ISSUER_URL = "https://keycloak.apps.rke.soez.tw/realms/aileron"
 BUNDLED_CLIENT_ID = "aileron-frontend"
 ACCEPTANCE_SECRET_NAMESPACE = "aileron-acceptance-system"

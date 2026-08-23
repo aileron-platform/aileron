@@ -205,7 +205,7 @@ def _request(
         apps_ca=apps_ca,
         oidc_ca=oidc_ca,
         identity_artifacts_directory=(
-            private_root / "install-secrets/homelab/identity-artifacts"
+            private_root / "install-secrets/rke2/identity-artifacts"
             if authentication_mode == "bundledKeycloak"
             else None
         ),

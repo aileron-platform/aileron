@@ -214,7 +214,7 @@ python3 scripts/deploy/rke2/acceptance_evidence.py \
 ### Tracked OIDC Browser 驗收
 
 唯一 active Workspace 驗收流程由 `scripts/deploy/rke2/acceptance_producer.py` 固定執行 tracked
-`frontend/e2e/homelab-acceptance.mjs`。Producer 必須證明 checkout clean、HEAD 等於完整驗收 commit，
+`frontend/e2e/acceptance.mjs`。Producer 必須證明 checkout clean、HEAD 等於完整驗收 commit，
 且 probe bytes 等於該 commit 的 Git object，再以完整 SHA 建置並依 image ID 執行 Playwright image。
 `oidcWorkspace` 會走真實 OIDC Authorization Code／PKCE 登入並建立 Workspace；Frontend 完成 callback
 後只使用 opaque Manager session，所有 authenticated mutation 都帶同一 session 取得的 memory-only

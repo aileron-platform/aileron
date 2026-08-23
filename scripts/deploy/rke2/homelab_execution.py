@@ -542,7 +542,7 @@ def _identity_artifacts_directory(
         return None
     if identity_mode != "bundledKeycloak":
         raise _ExecutionFailure("executionInputsInvalid")
-    directory = inputs.private_root / "install-secrets/homelab/identity-artifacts"
+    directory = inputs.private_root / "install-secrets/rke2/identity-artifacts"
     if "identityDatabaseUsername" in inputs.paths:
         directory = directory / "postgres-disabled"
     return directory

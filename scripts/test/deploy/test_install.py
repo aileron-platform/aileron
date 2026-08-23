@@ -378,7 +378,7 @@ def test_top_level_installer_rejects_insecure_private_root_lock_target(
         target = tmp_path / "real-private"
         private_root.rename(target)
         private_root.symlink_to(target, target_is_directory=True)
-        MODULE.INSTALLATION_STATE.SECRET_STORE = target / "install-secrets/homelab"
+        MODULE.INSTALLATION_STATE.SECRET_STORE = target / "install-secrets/rke2"
     runner = FakeRunner()
 
     with pytest.raises(MODULE.InstallationError):
@@ -702,7 +702,7 @@ def _inputs(
     work.parent.mkdir(mode=0o700, exist_ok=True)
     work.parent.chmod(0o700)
     work.mkdir(mode=0o700)
-    secret_store = _private_directory(private_root / "install-secrets/homelab")
+    secret_store = _private_directory(private_root / "install-secrets/rke2")
     MODULE.INSTALLATION_STATE.PRIVATE_ROOT = private_root
     MODULE.INSTALLATION_STATE.SECRET_STORE = secret_store
     MODULE.INSTALLATION_STATE.BACKEND_ATTESTOR_PROFILE = (
@@ -1734,7 +1734,7 @@ def test_external_data_service_inputs_follow_rendered_postgres_switches(
         encoding="utf-8",
     )
     identity_path = (
-        private_root / "install-secrets/homelab/installation-identity.json"
+        private_root / "install-secrets/rke2/installation-identity.json"
     )
     signed_inventory = inputs["work_directory"] / "signed-image-inventory.json"
     signed_inventory.unlink()

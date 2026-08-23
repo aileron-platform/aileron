@@ -190,7 +190,7 @@ class FakeRunner:
 def _transaction(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     private_root = _directory(tmp_path / "private")
     work = _directory(private_root / "install" / COMMIT)
-    secret_store = _directory(private_root / "install-secrets/homelab")
+    secret_store = _directory(private_root / "install-secrets/rke2")
     monkeypatch.setattr(MODULE.INSTALLATION_STATE, "PRIVATE_ROOT", private_root)
     monkeypatch.setattr(MODULE.INSTALLATION_STATE, "SECRET_STORE", secret_store)
     return (

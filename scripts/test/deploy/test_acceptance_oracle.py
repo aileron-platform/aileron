@@ -521,7 +521,7 @@ def test_workspace_manager_kubernetes_image_contains_oracle_and_commit_marker() 
 
 def test_interactive_identity_sections_are_owned_by_tracked_browser_probe() -> None:
     oracle = _load(ORACLE_PATH, "acceptance_oracle_no_interactive_self_report")
-    source = (ROOT / "frontend/e2e/homelab-acceptance.mjs").read_text()
+    source = (ROOT / "frontend/e2e/acceptance.mjs").read_text()
 
     assert {
         "oidcWorkspace",

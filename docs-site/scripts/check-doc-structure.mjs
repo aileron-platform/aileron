@@ -297,7 +297,7 @@ for (const [locale, root] of localeRoots) {
     'kubeconfig.raw',
     'acceptance_bundle.py',
     'acceptance_evidence.py',
-    'frontend/e2e/homelab-acceptance.mjs',
+    'frontend/e2e/acceptance.mjs',
     'acceptance_producer.py',
     'oidcWorkspace',
     'workspaceLifecycle',

@@ -217,7 +217,7 @@ python3 scripts/deploy/rke2/acceptance_evidence.py \
 ### Tracked OIDC Browser Acceptance
 
 The sole active Workspace-acceptance flow is the tracked
-`frontend/e2e/homelab-acceptance.mjs` executed by the fixed
+`frontend/e2e/acceptance.mjs` executed by the fixed
 `scripts/deploy/rke2/acceptance_producer.py`. The Producer must prove a clean checkout, HEAD at the full
 acceptance commit, and probe bytes equal to that commit's Git object before building a full-SHA-tagged
 Playwright image and executing it by image ID. `oidcWorkspace` uses the real OIDC Authorization Code and PKCE

@@ -249,7 +249,7 @@ def prepared_inputs(
     private_root = tmp_path / "private"
     private_root.mkdir(mode=0o700)
     secret_store = _private_directory(
-        private_root / "install-secrets" / "homelab"
+        private_root / "install-secrets" / "rke2"
     )
     MODULE.INSTALLATION_STATE.PRIVATE_ROOT = private_root
     MODULE.INSTALLATION_STATE.SECRET_STORE = secret_store

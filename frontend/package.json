@@ -15,7 +15,7 @@
     "test": "vitest --config vite.config.test.ts",
     "test:ui": "vitest --ui --config vite.config.test.ts",
     "test:run": "vitest run --config vite.config.test.ts --pool=forks --maxWorkers=4",
-    "test:acceptance-script": "node --test e2e/homelab-acceptance.unit.test.mjs",
+    "test:acceptance-script": "node --test e2e/acceptance.unit.test.mjs",
     "test:install-script-policy": "node --test scripts/check-install-script-policy.mjs",
     "test:gateway": "vitest run --config vite.config.gateway-test.ts",
     "test:coverage": "vitest run --coverage --config vite.config.test.ts",
