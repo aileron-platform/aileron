@@ -347,12 +347,10 @@ def _marketplace_install_error_detail(
     category: str,
     extra: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    source = payload.source_id or (
+    source = (
         f"plugins/{payload.target_client}/"
         f"{package_format_storage_key(payload.package_format)}/"
         f"{payload.package_id}/v{payload.version}"
-        if payload.version
-        else None
     )
     return {
         "errorCode": code,

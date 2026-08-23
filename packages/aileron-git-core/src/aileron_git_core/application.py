@@ -297,7 +297,12 @@ class VersionControlApplication:
             return _mutation_result(target.root, command.command_id, branch=branch)
         if isinstance(command, BranchPublish):
             upstream = publish(target, command.remote, command.remote_name)
-            return _mutation_result(target.root, command.command_id, output=upstream)
+            return _mutation_result(
+                target.root,
+                command.command_id,
+                affected_total=1,
+                output=upstream,
+            )
         if isinstance(command, RemoteFetch):
             output = "\n".join(
                 fetch_remote(target.root, command.remote, env=target.environment)

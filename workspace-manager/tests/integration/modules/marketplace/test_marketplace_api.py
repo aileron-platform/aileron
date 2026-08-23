@@ -362,7 +362,7 @@ def test_marketplace_package_list_and_detail_scan_registry(test_app):
     assert readme_response.json()["content"] == "# Figma Context\n"
     assert skills_response.json()["nodes"][0]["path"] == "skills/review"
     assert mcp_response.json()[0]["name"] == "figma"
-    assert "server" not in mcp_response.json()[0]
+    assert mcp_response.json()[0]["server"] == {"command": "node"}
 
 
 def test_same_target_package_formats_are_addressed_as_distinct_variants(test_app):
