@@ -742,15 +742,19 @@ def export_marketplace_package(
     target_client: str,
     package_id: str,
     request: Request,
-    revision: str = Query(...),
+    revision: str | None = Query(default=None),
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceRequest = Depends(get_marketplace_request),
 ) -> Response:
-    """Export a target_client-native Marketplace package zip."""
+    """Export a target_client-native Marketplace package zip.
+
+    ADR-0008 makes the working tree the only managed artifact, so revision is
+    accepted for existing callers but never fences the export.
+    """
     _validate_target_client(target_client, request)
     try:
         archive = service.export_package(
-            current_user_id, target_client, package_id, revision
+            current_user_id, target_client, package_id, revision or ""
         )  # type: ignore[arg-type]
     except MarketplacePathError as exc:
         raise HTTPException(

@@ -590,7 +590,7 @@ def test_marketplace_package_file_conflict_routes_execute_upload_and_paste(test_
     assert extracted.json()["items"][0]["status"] == "created"
 
 
-def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_app):
+def test_marketplace_skill_conflict_routes_are_exact_and_last_write_wins(test_app):
     client, _ = test_app
     created = client.post(
         "/api/v1/marketplace/packages",
@@ -659,7 +659,9 @@ def test_marketplace_skill_conflict_routes_are_revision_fenced_and_exact(test_ap
         },
         files=[("files", ("README.md", b"stale", "text/markdown"))],
     )
-    assert stale_upload.status_code == 409
+    # ADR-0008: editor mutations are last-write-wins, so a superseded
+    # revision is accepted rather than fenced.
+    assert stale_upload.status_code == 200, stale_upload.text
 
     after_upload = client.get(
         "/api/v1/marketplace/packages/codex/skill-file-contract?packageFormat=codex-native"
@@ -1291,7 +1293,8 @@ def test_marketplace_package_create_save_delete_and_export(test_app):
             "packageFiles": [],
         },
     )
-    assert stale_response.status_code == 409
+    # ADR-0008: the editor does not fence on an expected revision.
+    assert stale_response.status_code == 200, stale_response.text
 
     save_response = client.put(
         "/api/v1/marketplace/packages/codex/figma-context?packageFormat=codex-native",
@@ -1371,7 +1374,8 @@ def test_marketplace_package_create_save_delete_and_export(test_app):
         "/api/v1/marketplace/packages/codex/figma-context/export?packageFormat=codex-native",
         params={"packageFormat": "codex-native", "revision": "stale"},
     )
-    assert stale_export_response.status_code == 409
+    # ADR-0008: export is not fenced on an expected revision either.
+    assert stale_export_response.status_code == 200, stale_export_response.text
 
     export_response = client.get(
         "/api/v1/marketplace/packages/codex/figma-context/export?packageFormat=codex-native",
