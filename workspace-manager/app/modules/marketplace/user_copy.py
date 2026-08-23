@@ -802,9 +802,6 @@ class MarketplaceUserCopyService:
                 release_revision=request.release_revision,
                 profile_digest=(preflight.profile_digest if preflight else None),
                 projection_digest=(preflight.projection_digest if preflight else None),
-                materialization_digest=(
-                    preflight.materialization_digest if preflight else None
-                ),
                 projected_count=(len(preflight.resources) if preflight else None),
                 skipped_count=(
                     result.skipped_count

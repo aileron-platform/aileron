@@ -1778,7 +1778,6 @@ class MarketplaceActivity(Base):
     release_revision: Mapped[Optional[str]] = mapped_column(String(64))
     profile_digest: Mapped[Optional[str]] = mapped_column(String(64))
     projection_digest: Mapped[Optional[str]] = mapped_column(String(64))
-    materialization_digest: Mapped[Optional[str]] = mapped_column(String(64))
     projected_count: Mapped[Optional[int]] = mapped_column(Integer)
     skipped_count: Mapped[Optional[int]] = mapped_column(Integer)
     conflict_count: Mapped[Optional[int]] = mapped_column(Integer)

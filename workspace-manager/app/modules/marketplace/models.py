@@ -616,9 +616,6 @@ class MarketplaceActivityDetail(MarketplaceActivityRecord):
     release_revision: str | None = Field(default=None, alias="releaseRevision")
     profile_digest: str | None = Field(default=None, alias="profileDigest")
     projection_digest: str | None = Field(default=None, alias="projectionDigest")
-    materialization_digest: str | None = Field(
-        default=None, alias="materializationDigest"
-    )
     projected_count: int | None = Field(default=None, alias="projectedCount")
     skipped_count: int | None = Field(default=None, alias="skippedCount")
     conflict_count: int | None = Field(default=None, alias="conflictCount")

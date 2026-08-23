@@ -811,7 +811,6 @@ CREATE TABLE IF NOT EXISTS marketplace_activities (
     release_revision varchar(64),
     profile_digest varchar(64),
     projection_digest varchar(64),
-    materialization_digest varchar(64),
     projected_count integer,
     skipped_count integer,
     conflict_count integer,

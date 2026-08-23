@@ -317,7 +317,6 @@ def test_copy_activity_uses_catalog_and_target_identity_without_target_client() 
             "release_revision": "a" * 64,
             "profile_digest": None,
             "projection_digest": None,
-            "materialization_digest": None,
             "projected_count": None,
             "skipped_count": None,
             "conflict_count": None,
